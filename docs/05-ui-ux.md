@@ -1,0 +1,1475 @@
+Dashboard Economização
+
+05 — UI/UX Blueprint
+
+Status: Em elaboração
+Projeto: Dashboard Economização
+Tipo: Contrato de experiência, navegação e interface
+Observação: Este documento não define framework, biblioteca de componentes ou tecnologia de gráficos.
+
+⸻
+
+1. Objetivo
+
+Este documento define a experiência funcional e visual do Dashboard Economização.
+
+Seu objetivo é estabelecer:
+
+* estrutura de navegação;
+* mapa de telas;
+* hierarquia das informações;
+* comportamento dos filtros;
+* organização da dashboard;
+* comportamento do Consultor Financeiro;
+* painel administrativo;
+* modo suporte;
+* branding;
+* responsividade;
+* estados de loading, erro e ausência de dados.
+
+A implementação visual deverá seguir este documento sem criar novos fluxos por conta própria.
+
+⸻
+
+2. Direção Geral da Experiência
+
+O Dashboard Economização deverá transmitir uma percepção de:
+
+* tecnologia;
+* confiança;
+* clareza;
+* inteligência;
+* modernidade;
+* organização;
+* controle financeiro.
+
+A interface não deverá parecer um sistema contábil antigo.
+
+Também não deverá parecer excessivamente lúdica.
+
+O objetivo visual será combinar:
+
+tecnologia + sofisticação + leitura financeira simples.
+
+⸻
+
+3. Princípio Principal da UX
+
+O usuário não deverá precisar interpretar dezenas de tabelas para descobrir a situação financeira da empresa.
+
+A interface deverá priorizar a sequência:
+
+Resumo
+↓
+Comparação
+↓
+Tendência
+↓
+Detalhamento
+↓
+Ação
+
+Primeiro o usuário entende o que está acontecendo.
+
+Depois, caso queira, aprofunda a análise.
+
+⸻
+
+4. Estrutura Geral da Aplicação
+
+A aplicação será dividida conceitualmente em três experiências principais:
+
+1. Área pública/autenticação.
+2. Painel do cliente.
+3. Painel administrativo.
+
+Existe ainda um quarto contexto especial:
+
+4. Modo suporte.
+
+⸻
+
+5. Área Pública
+
+5.1 Tela de Login
+
+A tela de login deverá conter:
+
+* logo principal do Dashboard Economização;
+* identificação visual da plataforma;
+* campo de e-mail;
+* campo de senha;
+* ação de entrar;
+* ação de recuperação de senha;
+* mensagens de erro;
+* loading durante autenticação.
+
+A experiência deverá ser simples, limpa e profissional.
+
+⸻
+
+5.2 Branding no Login
+
+A tela de login utilizará a identidade principal da plataforma.
+
+Não será necessário identificar previamente o tenant antes do login.
+
+Após autenticação, o sistema carrega a identidade visual da empresa correspondente.
+
+⸻
+
+5.3 Recuperação de Senha
+
+Fluxo:
+
+Login
+↓
+Esqueci minha senha
+↓
+Informar e-mail
+↓
+Confirmação de solicitação
+↓
+Link seguro
+↓
+Nova senha
+↓
+Retorno ao login
+
+Mensagens não deverão revelar desnecessariamente se determinado e-mail existe na plataforma.
+
+⸻
+
+6. Shell do Painel do Cliente
+
+Após login, o usuário deverá entrar em uma estrutura persistente de navegação.
+
+Elementos principais:
+
+* menu lateral;
+* cabeçalho superior;
+* conteúdo principal;
+* Consultor Financeiro flutuante;
+* área de notificações;
+* menu do usuário.
+
+⸻
+
+7. Menu Lateral
+
+Itens iniciais previstos:
+
+* Dashboard;
+* Relatórios;
+* Consultor;
+* Notificações;
+* Minha Conta.
+
+Itens que não possuírem funcionalidade no MVP não deverão ser exibidos apenas como placeholders.
+
+⸻
+
+8. Cabeçalho
+
+O cabeçalho deverá possuir, quando aplicável:
+
+* identificação da empresa;
+* logo;
+* período ativo;
+* última atualização dos dados;
+* notificações;
+* menu do usuário.
+
+Não deverá ficar visualmente sobrecarregado.
+
+⸻
+
+9. Última Atualização
+
+O usuário deverá conseguir identificar quando os dados foram atualizados pela última vez.
+
+Exemplo conceitual:
+
+Atualizado há 8 minutos
+
+ou equivalente.
+
+Esse dado representa a última sincronização bem-sucedida relevante.
+
+⸻
+
+10. Estado de Sincronização
+
+Quando houver atualização em background, a interface poderá indicar discretamente:
+
+Atualizando dados...
+
+A dashboard não deverá bloquear o uso durante sincronização.
+
+Quando novos dados estiverem disponíveis, os componentes poderão ser atualizados de forma controlada.
+
+⸻
+
+11. Dashboard Principal
+
+A dashboard será a principal experiência do cliente.
+
+Estrutura conceitual:
+
+Cabeçalho da Dashboard
+↓
+Filtros Globais
+↓
+Resumo Executivo
+↓
+Indicadores Principais
+↓
+Gráficos de Evolução
+↓
+Receitas e Despesas
+↓
+Contas a Receber / Pagar
+↓
+Fluxo de Caixa
+↓
+Insights
+
+A composição final poderá ser refinada durante design visual, desde que preserve a hierarquia funcional.
+
+⸻
+
+12. Resumo Executivo
+
+A parte superior da dashboard deverá responder rapidamente:
+
+Como está minha empresa agora?
+
+Deverá priorizar os indicadores mais importantes.
+
+KPIs iniciais:
+
+* faturamento;
+* contas a receber;
+* contas a pagar;
+* inadimplência;
+* saldo ou posição financeira quando confirmado;
+* resultado do período quando confirmado.
+
+Cada card deverá apresentar, quando aplicável:
+
+* valor;
+* título;
+* comparação;
+* direção da variação;
+* período;
+* contexto visual.
+
+⸻
+
+13. Cards de KPI
+
+Um card de KPI deverá evitar exibir apenas um número isolado.
+
+Exemplo conceitual:
+
+Faturamento
+R$ 186.420
+↑ 12,4%
+vs. mês anterior
+
+A comparação deve possuir significado claro.
+
+⸻
+
+14. Cores de Indicadores
+
+Cores de crescimento ou queda não deverão assumir automaticamente que:
+
+verde = aumento bom
+
+vermelho = queda ruim.
+
+Exemplo:
+
+Aumento de despesa pode ser negativo.
+
+Queda de inadimplência pode ser positiva.
+
+Portanto, o sistema deverá considerar o significado do indicador antes de definir semântica visual.
+
+⸻
+
+15. Filtros Globais
+
+A dashboard deverá possuir área clara de filtros.
+
+Filtro principal:
+
+Período
+
+Opções iniciais:
+
+* Hoje;
+* Ontem;
+* Últimos 7 dias;
+* Últimos 30 dias;
+* Mês atual;
+* Mês anterior;
+* Últimos 12 meses;
+* Ano atual;
+* Ano anterior;
+* Personalizado.
+
+⸻
+
+16. Período Personalizado
+
+Ao selecionar Personalizado, deverá ser possível escolher:
+
+* data inicial;
+* data final.
+
+A interface deverá validar intervalos inválidos.
+
+⸻
+
+17. Persistência Temporária dos Filtros
+
+Durante a navegação normal dentro de uma mesma sessão, a aplicação deverá evitar resetar filtros desnecessariamente.
+
+Ao abrir detalhes relacionados a um indicador, o contexto temporal deverá ser preservado quando aplicável.
+
+⸻
+
+18. Comparação Temporal
+
+Indicadores compatíveis deverão mostrar comparação.
+
+Exemplos:
+
+* vs. mês anterior;
+* vs. mesmo período anterior;
+* vs. ano anterior.
+
+A comparação deverá estar claramente identificada para evitar interpretação incorreta.
+
+⸻
+
+19. Gráfico de Faturamento
+
+Deverá existir visualização de evolução do faturamento.
+
+Objetivos:
+
+* identificar crescimento;
+* identificar queda;
+* identificar sazonalidade;
+* comparar períodos.
+
+O tipo de gráfico será escolhido durante design visual.
+
+⸻
+
+20. Receita x Despesa
+
+Quando os dados permitirem, deverá existir gráfico comparativo entre:
+
+* receitas;
+* despesas.
+
+O usuário deverá conseguir compreender rapidamente a relação entre entrada e saída financeira.
+
+⸻
+
+21. Receita por Categoria
+
+Deverá existir visualização da composição das receitas.
+
+A interface deverá permitir:
+
+* identificar principais categorias;
+* visualizar valor;
+* visualizar participação percentual quando adequado;
+* aprofundar dados quando aplicável.
+
+⸻
+
+22. Despesas por Categoria
+
+Deverá existir visualização equivalente para despesas.
+
+Objetivo:
+
+responder rapidamente:
+
+Onde a empresa está gastando mais?
+
+⸻
+
+23. Despesas Fixas e Variáveis
+
+Quando essa classificação estiver disponível de maneira confiável, deverá existir visualização da relação entre:
+
+* despesas fixas;
+* despesas variáveis.
+
+Caso a classificação ainda não esteja disponível, o componente não deverá inventar valores nem ser exibido com dados fictícios.
+
+⸻
+
+24. Contas a Receber
+
+A dashboard deverá permitir visão resumida e detalhamento.
+
+Resumo poderá apresentar:
+
+* total em aberto;
+* vencido;
+* a vencer;
+* recebido no período.
+
+⸻
+
+25. Detalhamento de Contas a Receber
+
+O usuário deverá poder aprofundar a análise.
+
+Informações candidatas:
+
+* cliente;
+* descrição;
+* vencimento;
+* valor original;
+* valor aberto;
+* situação;
+* categoria.
+
+Campos finais dependem da API.
+
+⸻
+
+26. Contas a Pagar
+
+Estrutura equivalente às contas a receber.
+
+Resumo:
+
+* total em aberto;
+* vencido;
+* a vencer;
+* pago no período.
+
+⸻
+
+27. Inadimplência
+
+A interface deverá tratar inadimplência como indicador de atenção.
+
+Deverá permitir:
+
+* valor atual;
+* percentual quando definido;
+* evolução;
+* comparação;
+* detalhamento por cliente;
+* títulos vencidos.
+
+⸻
+
+28. Fluxo de Caixa
+
+O fluxo de caixa deverá ser uma das principais visualizações do produto.
+
+A interface deverá diferenciar claramente:
+
+* realizado;
+* previsto.
+
+⸻
+
+29. Fluxo de Caixa Realizado
+
+Representa movimentações efetivamente ocorridas.
+
+A visualização deverá permitir compreender:
+
+* entradas;
+* saídas;
+* saldo/resultante;
+* evolução.
+
+⸻
+
+30. Fluxo de Caixa Previsto
+
+Representa expectativa futura baseada nos dados financeiros disponíveis.
+
+Deverá diferenciar visualmente projeção de valores efetivamente realizados.
+
+O usuário nunca deverá interpretar projeção como fato ocorrido.
+
+⸻
+
+31. Detalhamento
+
+Gráficos e cards relevantes poderão possuir ação equivalente a:
+
+Ver detalhes
+
+Essa ação deverá abrir:
+
+* drawer;
+* modal;
+* página específica;
+
+conforme decisão posterior de UX.
+
+O comportamento deverá ser consistente entre componentes.
+
+⸻
+
+32. Tabelas
+
+Tabelas deverão ser utilizadas para detalhamento, não como elemento dominante da dashboard principal.
+
+Devem permitir, quando aplicável:
+
+* ordenação;
+* paginação;
+* filtros;
+* busca;
+* estados vazios.
+
+⸻
+
+33. Relatórios
+
+O menu Relatórios deverá permitir acesso às análises exportáveis.
+
+Estrutura inicial:
+
+Relatórios
+├── Financeiro
+├── Contas a Receber
+├── Contas a Pagar
+├── Inadimplência
+├── Categorias
+└── Fluxo de Caixa
+
+A lista final deverá refletir somente relatórios efetivamente implementados.
+
+⸻
+
+34. Construção de Relatório
+
+Fluxo conceitual:
+
+Escolher relatório
+↓
+Definir período
+↓
+Aplicar filtros
+↓
+Visualizar
+↓
+Exportar
+
+Formatos:
+
+* PDF;
+* Excel;
+* impressão.
+
+⸻
+
+35. Estado de Geração
+
+Quando um relatório exigir processamento assíncrono:
+
+Gerando relatório...
+
+A interface deverá informar:
+
+* processamento;
+* sucesso;
+* falha.
+
+Não deverá parecer que a tela travou.
+
+⸻
+
+36. Consultor Financeiro — Botão Flutuante
+
+O Consultor Financeiro deverá possuir botão flutuante persistente no canto inferior direito.
+
+O componente deverá permanecer disponível nas principais telas do painel do cliente.
+
+⸻
+
+37. Estados do Botão do Consultor
+
+Estados previstos:
+
+* normal;
+* nova mensagem;
+* insight importante;
+* aberto;
+* indisponível temporariamente.
+
+⸻
+
+38. Nova Mensagem
+
+Quando existir mensagem proativa não lida, o botão deverá possuir indicação clara.
+
+Exemplo:
+
+* badge;
+* ponto;
+* contador;
+* animação discreta.
+
+Não deverá utilizar animação excessiva ou invasiva.
+
+⸻
+
+39. Abertura do Consultor
+
+Ao clicar no botão, deverá abrir uma área de conversa.
+
+Em desktop, a preferência conceitual é um painel lateral ou janela sobreposta que permita manter contexto da dashboard.
+
+Em mobile, o Consultor poderá ocupar maior parte ou toda a tela.
+
+A decisão visual final será feita posteriormente.
+
+⸻
+
+40. Primeira Experiência do Consultor
+
+Quando não houver conversa ativa, o Consultor poderá apresentar:
+
+* saudação;
+* resumo curto;
+* sugestões de perguntas;
+* insights recentes.
+
+Exemplo conceitual:
+
+Olá.
+Analisei os dados atualizados da sua empresa.
+Sua inadimplência caiu neste mês, mas as despesas aumentaram.
+O que você gostaria de entender melhor?
+
+O texto real deverá ser produzido conforme regras da IA e dados existentes.
+
+⸻
+
+41. Sugestões de Perguntas
+
+A interface poderá sugerir perguntas contextuais.
+
+Exemplos:
+
+* Como está minha empresa?
+* Por que minhas despesas aumentaram?
+* Como está minha inadimplência?
+* Meu fluxo de caixa está saudável?
+* O que merece minha atenção?
+
+Essas sugestões não deverão limitar a conversa.
+
+⸻
+
+42. Consultor Proativo
+
+Quando um insight relevante for detectado:
+
+Insight criado
+↓
+Consultor possui nova mensagem
+↓
+Badge no botão
+↓
+Usuário abre
+↓
+Consultor apresenta contexto
+
+Exemplo:
+
+Identifiquei um aumento relevante nas despesas deste mês.
+
+⸻
+
+43. Severidade Visual de Insights
+
+Insights poderão possuir diferenças visuais de prioridade.
+
+Categorias conceituais:
+
+* informativo;
+* atenção;
+* importante;
+* crítico.
+
+A interface não deverá alarmar excessivamente o usuário.
+
+⸻
+
+44. Origem dos Insights
+
+Quando útil, o usuário deverá conseguir compreender por que determinado insight foi gerado.
+
+Exemplo:
+
+Baseado em:
+Despesas de julho x agosto
+
+Não será necessário expor detalhes técnicos da IA.
+
+⸻
+
+45. Histórico do Consultor
+
+O usuário deverá conseguir recuperar conversas anteriores quando essa funcionalidade estiver implementada.
+
+Estrutura possível:
+
+* conversa atual;
+* histórico;
+* insights.
+
+A experiência final será refinada posteriormente.
+
+⸻
+
+46. Notificações Internas
+
+A interface deverá possuir mecanismo de notificações.
+
+Acesso preferencial no cabeçalho.
+
+⸻
+
+47. Central de Notificações
+
+A central deverá permitir visualizar:
+
+* notificações não lidas;
+* notificações lidas;
+* alertas;
+* mensagens administrativas;
+* insights quando apropriado.
+
+⸻
+
+48. Tipos de Notificação
+
+Categorias visuais poderão incluir:
+
+* sistema;
+* financeiro;
+* Consultor;
+* administrativo.
+
+⸻
+
+49. Branding por Empresa
+
+Após login, o sistema deverá aplicar a identidade visual do tenant.
+
+Variáveis conceituais:
+
+* logo;
+* cor principal;
+* cor secundária;
+* fundo;
+* texto;
+* botões;
+* destaques.
+
+⸻
+
+50. Preservação da Legibilidade
+
+O administrador poderá configurar cores, mas a interface deverá possuir proteções contra combinações que comprometam seriamente a leitura.
+
+A estratégia técnica será definida posteriormente.
+
+⸻
+
+51. Fallback de Branding
+
+Quando uma configuração não estiver presente:
+
+Tenant Branding
+↓
+valor ausente
+↓
+Platform Branding
+
+A interface nunca deverá ficar sem estilo.
+
+⸻
+
+52. Painel Administrativo
+
+A administração deverá possuir navegação própria.
+
+Itens iniciais:
+
+Visão Geral
+Empresas
+Usuários
+Integrações
+Consultor
+Logs
+Auditoria
+Configurações
+
+Itens poderão ser agrupados posteriormente para simplificar navegação.
+
+⸻
+
+53. Dashboard Administrativo
+
+O painel admin deverá oferecer visão operacional da plataforma.
+
+Indicadores candidatos:
+
+* empresas ativas;
+* usuários;
+* empresas conectadas;
+* empresas com erro de integração;
+* sincronizações com falha;
+* empresas necessitando atenção.
+
+Não deverá expor dados financeiros agregados de clientes sem necessidade operacional.
+
+⸻
+
+54. Gestão de Empresas
+
+Tela de empresas deverá permitir:
+
+* listar;
+* buscar;
+* filtrar;
+* criar;
+* editar;
+* ativar;
+* desativar;
+* acessar detalhes;
+* entrar em modo suporte.
+
+⸻
+
+55. Detalhe da Empresa
+
+A empresa deverá possuir área própria de administração.
+
+Estrutura conceitual:
+
+Empresa
+├── Geral
+├── Usuários
+├── Branding
+├── Conta Azul
+├── Consultor
+├── Sincronizações
+├── Regras
+├── Notificações
+└── Auditoria
+
+Somente abas implementadas deverão ser exibidas.
+
+⸻
+
+56. Configuração de Branding
+
+A tela deverá permitir:
+
+* upload de logo;
+* definição das cores;
+* preview;
+* salvar;
+* restaurar padrão.
+
+A experiência deverá mostrar visualmente o resultado antes de salvar quando viável.
+
+⸻
+
+57. Gestão de Usuários
+
+O administrador deverá conseguir:
+
+* listar usuários;
+* criar;
+* editar informações permitidas;
+* ativar;
+* desativar;
+* solicitar ou permitir redefinição de acesso conforme fluxo definido.
+
+⸻
+
+58. Integração Conta Azul no Admin
+
+A área deverá mostrar:
+
+* status da conexão;
+* empresa Conta Azul identificada;
+* última sincronização;
+* último erro;
+* ação de conectar;
+* ação de reconectar;
+* ação de desconectar quando permitido;
+* sincronização manual administrativa.
+
+Tokens nunca deverão ser exibidos.
+
+⸻
+
+59. Sincronizações
+
+A empresa deverá possuir histórico operacional de sincronização acessível aos administradores autorizados.
+
+Colunas candidatas:
+
+* início;
+* fim;
+* status;
+* duração;
+* registros;
+* origem;
+* erro resumido.
+
+Usuário cliente não precisa visualizar o histórico técnico completo.
+
+⸻
+
+60. Configuração do Consultor
+
+Dentro da empresa, o administrador deverá conseguir configurar o Consultor.
+
+Campos iniciais:
+
+* ramo;
+* descrição da empresa;
+* prompt administrativo;
+* tom;
+* conhecimento adicional;
+* status.
+
+⸻
+
+61. Base de Conhecimento
+
+A área de conhecimento deverá permitir adicionar entradas de forma organizada.
+
+MVP inicial poderá utilizar:
+
+* título;
+* conteúdo textual;
+* status.
+
+Evoluções futuras poderão incluir arquivos.
+
+⸻
+
+62. Regras do Consultor
+
+A administração deverá possuir local reservado para regras de comportamento proativo.
+
+O MVP poderá começar com regras disponibilizadas pelo sistema.
+
+Editor avançado de regras poderá ser implementado depois.
+
+⸻
+
+63. Modo Suporte
+
+Na lista ou detalhe de uma empresa deverá existir ação:
+
+Acessar em modo suporte
+
+⸻
+
+64. Entrada no Modo Suporte
+
+Ao entrar, a interface deverá apresentar sinalização persistente.
+
+Exemplo conceitual:
+
+MODO SUPORTE
+Você está visualizando:
+Empresa XYZ
+Sair do modo suporte
+
+⸻
+
+65. Segurança Visual do Modo Suporte
+
+A sinalização não deverá desaparecer durante navegação interna.
+
+O objetivo é evitar que o operador esqueça que está agindo dentro do ambiente de um cliente.
+
+⸻
+
+66. Saída do Modo Suporte
+
+A ação para sair deverá ser facilmente acessível.
+
+Após sair, o administrador retorna ao contexto administrativo original.
+
+⸻
+
+67. Superadmin
+
+O superadmin poderá possuir elementos administrativos adicionais quando necessário.
+
+A interface comum não deverá exibir controles de superadmin para outros perfis.
+
+⸻
+
+68. Estados de Loading
+
+Toda área que depende de carregamento deverá possuir estado visual apropriado.
+
+Evitar:
+
+* tela branca;
+* layout pulando excessivamente;
+* ausência de feedback.
+
+Preferir skeletons ou mecanismos equivalentes quando adequados.
+
+⸻
+
+69. Estados Vazios
+
+Ausência de dados deverá ser tratada como estado válido.
+
+Exemplos:
+
+* nenhum título vencido;
+* nenhuma notificação;
+* nenhum relatório;
+* nenhuma conversa.
+
+O sistema não deverá tratar ausência de dado como erro.
+
+⸻
+
+70. Estados de Erro
+
+Erros deverão informar:
+
+* que algo não funcionou;
+* o que o usuário pode fazer;
+* quando tentar novamente, quando aplicável.
+
+Mensagens técnicas não deverão ser mostradas diretamente ao cliente.
+
+⸻
+
+71. Dados Desatualizados
+
+Se a última sincronização estiver além do limite considerado saudável, a dashboard deverá indicar que os dados podem estar desatualizados.
+
+Exemplo:
+
+Dados atualizados pela última vez há 3 horas.
+
+Isso não deverá impedir acesso aos dados existentes.
+
+⸻
+
+72. Responsividade
+
+Todas as telas do MVP deverão ser desenvolvidas com comportamento responsivo desde sua criação.
+
+Breakpoints específicos serão definidos na implementação.
+
+⸻
+
+73. Dashboard em Telas Menores
+
+Em larguras menores:
+
+* cards poderão empilhar;
+* gráficos ocuparão largura maior;
+* tabelas deverão utilizar estratégia adequada;
+* filtros poderão ser recolhidos;
+* menu lateral poderá virar drawer;
+* Consultor poderá abrir em tela cheia.
+
+⸻
+
+74. Mobile Futuro
+
+A versão responsiva deverá servir de base futura para PWA.
+
+Não deverá existir dependência estrutural de hover ou mouse para funções essenciais.
+
+⸻
+
+75. Acessibilidade
+
+A interface deverá considerar:
+
+* contraste;
+* navegação por teclado quando aplicável;
+* labels;
+* foco visível;
+* semântica de elementos;
+* não depender exclusivamente de cor para comunicar informação.
+
+⸻
+
+76. Formatação Financeira
+
+Valores deverão ser apresentados de forma consistente.
+
+No contexto inicial brasileiro:
+
+R$ 123.456,78
+
+A estratégia de internacionalização poderá ser expandida futuramente.
+
+⸻
+
+77. Datas
+
+Datas deverão possuir padrão consistente na interface.
+
+Exemplo inicial:
+
+11/08/2026
+
+Períodos e gráficos poderão utilizar formatos mais compactos quando apropriado.
+
+⸻
+
+78. Percentuais
+
+Percentuais deverão apresentar quantidade de casas adequada ao indicador.
+
+Evitar precisão visual desnecessária.
+
+⸻
+
+79. Gráficos
+
+Todos os gráficos deverão:
+
+* possuir título;
+* possuir contexto temporal;
+* possuir tooltip quando necessário;
+* possuir legenda quando necessário;
+* evitar excesso de informação;
+* funcionar em telas menores;
+* tratar ausência de dados.
+
+⸻
+
+80. Animações
+
+Animações deverão ser discretas.
+
+Poderão ser utilizadas para:
+
+* transições;
+* atualização de valores;
+* abertura do Consultor;
+* feedback.
+
+Não deverão comprometer performance nem tornar o sistema cansativo.
+
+⸻
+
+81. Densidade de Informação
+
+A dashboard deverá apresentar informação suficiente para tomada de decisão sem transformar a tela em uma grade excessivamente densa.
+
+Detalhamento deverá existir sob demanda.
+
+⸻
+
+82. Consistência
+
+Componentes equivalentes deverão possuir comportamento equivalente.
+
+Exemplos:
+
+* filtros;
+* dropdowns;
+* tabelas;
+* modais;
+* estados vazios;
+* mensagens;
+* ações destrutivas.
+
+⸻
+
+83. Confirmações
+
+Ações destrutivas ou sensíveis deverão solicitar confirmação adequada.
+
+Exemplos:
+
+* desativar empresa;
+* desconectar Conta Azul;
+* desativar usuário.
+
+⸻
+
+84. Feedback de Operações
+
+Após alterações administrativas:
+
+* sucesso deverá ser indicado;
+* falha deverá ser indicada;
+* usuário deverá saber se operação foi salva.
+
+⸻
+
+85. Diretrizes para Tema
+
+A implementação deverá utilizar sistema de tema centralizado.
+
+Não deverão existir cores de tenant espalhadas manualmente em componentes.
+
+Fluxo:
+
+Platform Theme
++
+Tenant Overrides
+↓
+Resolved Theme
+↓
+Componentes
+
+⸻
+
+86. Não Permitido na Interface
+
+A implementação não deverá:
+
+* inventar dados para preencher gráficos;
+* mostrar valores fictícios em produção;
+* misturar dados de tenants;
+* mostrar token Conta Azul;
+* mostrar prompts internos sensíveis ao usuário comum;
+* permitir que branding quebre completamente a legibilidade;
+* esconder modo suporte;
+* bloquear dashboard aguardando sincronização externa;
+* exibir funcionalidades futuras como se estivessem disponíveis.
+
+⸻
+
+87. Mapa de Rotas Conceitual
+
+A nomenclatura final poderá mudar durante implementação, mas o mapa funcional previsto é:
+
+/login
+/forgot-password
+/reset-password
+/app
+/app/dashboard
+/app/reports
+/app/consultant
+/app/notifications
+/app/account
+/admin
+/admin/dashboard
+/admin/companies
+/admin/companies/:id
+/admin/companies/:id/users
+/admin/companies/:id/branding
+/admin/companies/:id/integration
+/admin/companies/:id/consultant
+/admin/companies/:id/syncs
+/admin/companies/:id/rules
+/admin/companies/:id/notifications
+/admin/companies/:id/audit
+/admin/users
+/admin/logs
+/admin/audit
+/admin/settings
+
+Rotas não implementadas não deverão ser criadas apenas para satisfazer este mapa antecipadamente.
+
+⸻
+
+88. Fluxo Principal do Cliente
+
+Login
+↓
+Dashboard
+↓
+Analisa KPIs
+↓
+Aplica período
+↓
+Identifica variação
+↓
+Abre detalhe
+↓
+Consulta Consultor
+↓
+Recebe interpretação
+↓
+Gera relatório se necessário
+
+⸻
+
+89. Fluxo Proativo
+
+Sincronização
+↓
+Motor Analítico
+↓
+Regra identifica situação
+↓
+Insight
+↓
+Nova mensagem no Consultor
+↓
+Badge
+↓
+Usuário abre
+↓
+Recebe contexto e recomendação
+
+⸻
+
+90. Fluxo Administrativo de Nova Empresa
+
+Administrador
+↓
+Cadastrar empresa
+↓
+Configurar usuários
+↓
+Configurar branding
+↓
+Conectar Conta Azul
+↓
+Primeira sincronização
+↓
+Configurar Consultor
+↓
+Empresa disponível
+
+⸻
+
+91. Fluxo de Suporte
+
+Admin/Superadmin
+↓
+Seleciona empresa
+↓
+Acessar em modo suporte
+↓
+Banner persistente
+↓
+Visualiza painel do cliente
+↓
+Realiza suporte
+↓
+Sai do modo suporte
+↓
+Retorna ao admin
+
+⸻
+
+92. Critérios de Aceite de UX
+
+Uma tela somente poderá ser considerada concluída quando:
+
+1. possuir loading quando aplicável;
+2. possuir erro quando aplicável;
+3. possuir estado vazio quando aplicável;
+4. respeitar tenant;
+5. respeitar branding;
+6. funcionar em desktop;
+7. funcionar em largura mobile compatível;
+8. não depender de dados fictícios;
+9. possuir feedback de ações;
+10. manter consistência com demais telas.
+
+⸻
+
+93. Decisões Consolidadas de UX
+
+UX-001 — Login utiliza branding da plataforma.
+
+UX-002 — Após login, branding do tenant é aplicado.
+
+UX-003 — Dashboard é a primeira tela do cliente.
+
+UX-004 — Período funciona como filtro global.
+
+UX-005 — Cards principais deverão mostrar contexto e comparação quando aplicável.
+
+UX-006 — Tabelas serão utilizadas principalmente para detalhamento.
+
+UX-007 — Consultor ficará disponível por botão flutuante.
+
+UX-008 — Consultor poderá sinalizar mensagens proativas.
+
+UX-009 — Modo suporte terá sinalização persistente.
+
+UX-010 — Sincronização não bloqueará a dashboard.
+
+UX-011 — Usuário poderá visualizar idade dos dados.
+
+UX-012 — Painel administrativo terá navegação própria.
+
+UX-013 — Branding será baseado em sistema central de tema.
+
+UX-014 — Interface será responsiva desde o MVP.
+
+UX-015 — Funcionalidades futuras não serão exibidas como disponíveis.
+
+⸻
+
+94. Itens Pendentes para Design Visual
+
+Ainda deverão ser definidos posteriormente:
+
+* referência visual final;
+* paleta padrão;
+* tipografia;
+* grid;
+* espaçamentos;
+* bordas;
+* sombras;
+* estilo de cards;
+* estilo dos gráficos;
+* ícones;
+* navegação desktop;
+* navegação mobile;
+* comportamento exato do painel do Consultor;
+* sistema visual de severidade;
+* estilo da tela de login;
+* dark mode, caso venha a existir.
+
+Essas decisões não alteram o contrato funcional definido neste documento.
+
+⸻
+
+95. Diretriz Final
+
+A interface do Dashboard Economização deverá reduzir a distância entre:
+
+DADO
+↓
+ENTENDIMENTO
+↓
+DECISÃO
+
+O usuário não deverá precisar ser especialista em finanças para compreender o que o sistema está mostrando.
+
+⸻
+
