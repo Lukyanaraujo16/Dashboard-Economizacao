@@ -3,3 +3,5 @@ packages:
   - backend
   - worker
   - packages/*
+allowBuilds:
+  esbuild: true

@@ -41,7 +41,8 @@ A documentação oficial está disponível em [`docs/`](docs/).
 O projeto utiliza Node.js LTS como runtime esperado e pnpm como gerenciador oficial de pacotes,
 em um workspace simples com pnpm.
 
-As instruções de execução dos aplicativos serão adicionadas nas próximas subfases.
+O backend Fastify inicial está disponível como workspace e expõe o endpoint técnico `GET /health`.
+Ele ainda não possui regras de negócio.
 
 ## Segurança
 
@@ -49,6 +50,6 @@ Segredos reais nunca deverão ser versionados.
 
 ## Estado atual
 
-A fundação do workspace está configurada e o frontend Next.js foi inicializado. Ainda não existe
-funcionalidade de produto; o desenvolvimento da fundação está em andamento. Backend e worker ainda
-não foram inicializados.
+A fundação do workspace está configurada, com o frontend Next.js e o backend Fastify inicializados.
+Ainda não existe funcionalidade de produto; o desenvolvimento da Fase 0 está em andamento. O worker
+ainda não foi inicializado.
