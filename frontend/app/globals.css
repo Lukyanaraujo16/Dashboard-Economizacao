@@ -2,11 +2,30 @@
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
+html {
+  color-scheme: light;
 }
 
-main {
-  padding: 2rem;
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-background, #f6f7fb);
+  color: var(--color-text-primary, #0f172a);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

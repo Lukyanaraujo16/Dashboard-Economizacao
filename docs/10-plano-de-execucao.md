@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1E
+1.1F-A
 
 Último checkpoint:
 
-1.1E — Middleware de Autenticação
+1.1F-A — Fundação Visual
 
 Último commit:
 
-Registrado no histórico pelo checkpoint 1.1E
+Registrado no histórico pelo checkpoint 1.1F-A
 
 Estado atual
 
@@ -41,6 +41,8 @@ Estado atual
 ✔ Login administrativo
 
 ✔ Middleware e contexto autenticado
+
+✔ Fundação visual e sistema de temas
 
 ✔ Health Checks
 
@@ -147,8 +149,17 @@ Status: Concluída
 1.1E — Middleware de Autenticação
 Status: Concluída
 
-1.1F — Frontend de Login
+1.1F-A — Fundação Visual
+Status: Concluída
+
+1.1F-B — Componentes Base
 Status: Próxima
+
+1.1F-C — Theme Engine / Branding Runtime
+Status: Pendente
+
+1.1F-D — Tela de Login
+Status: Pendente
 
 1.1G — Logout
 Status: Pendente
