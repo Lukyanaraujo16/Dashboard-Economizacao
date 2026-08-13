@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1F-C
+1.1F-E.2
 
 Último checkpoint:
 
-1.1F-C — Theme Engine / Branding Runtime
+1.1F-E.2 — Login Funcional no Frontend
 
 Último commit:
 
-Registrado no histórico pelo checkpoint visual consolidado até 1.1F-C
+Registrado no histórico pelo checkpoint da integração funcional do login
 
 Estado atual
 
@@ -47,6 +47,8 @@ Estado atual
 ✔ Componentes Base, UI Polish e Visual Freeze Candidate
 
 ✔ Theme Engine e Branding Runtime mock
+
+✔ Rota /login funcional com sessão baseada em cookie HttpOnly
 
 ✔ Health Checks
 
@@ -179,7 +181,12 @@ Status: Em andamento
 1.1F-E.1 — Auditoria da autenticação existente
 Status: Concluída
 
-1.1F-E.2 — Integração funcional do login
+1.1F-E.2 — Login Funcional no Frontend
+Status: Concluída
+
+A rota /login está funcional com sessão baseada em cookie HttpOnly. O redirect atual para / permanece temporário, e o frontend ainda não possui AuthProvider ou guards.
+
+1.1F-E.3 — Sessão do Usuário: /me e Logout
 Status: Próxima
 
 1.1G — Logout

@@ -321,6 +321,12 @@
   text-align: start;
 }
 
+.formError {
+  margin: 0;
+  color: var(--color-danger);
+  text-align: center;
+}
+
 .form input {
   min-height: calc(2.5rem + 2px);
   border-radius: calc(var(--radius-lg) + 2px);

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useRef, useState, type FormEvent } from 'react';
 
 import {
   Badge,
@@ -13,8 +14,14 @@ import {
   Stack,
   Typography,
 } from '../components/ui';
+import { login, LoginRequestError } from '../services/auth/login';
 import { ThemeProvider } from '../theme';
 import type { ResolvedColorScheme } from '../theme/types/theme';
+import {
+  mapLoginValidationDetails,
+  validateLoginFields,
+  type LoginFieldErrors,
+} from './login-form-validation';
 import styles from './login-experience.module.css';
 import { PlatformBrandMark } from './platform-brand-mark';
 
@@ -125,40 +132,87 @@ function HighlightIcon({ kind }: { readonly kind: HighlightIconKind }) {
   );
 }
 
+type LoginStatus = 'idle' | 'submitting' | 'success';
+
 type LoginExperienceProps = {
-  /** Controles DEV de tema; omitidos em uso futuro da rota de produto. */
+  /** Controles DEV de tema; omitidos na rota de produto. */
   readonly showThemeControls?: boolean;
   /**
    * Asset oficial futuro (Theme Default / admin).
    * Quando omitido, usa placeholder Accent temporário.
    */
   readonly brandLogoUrl?: string | null;
+  /** Injeção para testes; default: serviço HTTP real. */
+  readonly loginAction?: typeof login;
 };
 
 /**
- * Experiência visual da tela de login (1.1F-D).
- * Sem autenticação, sem API, sem sessão, sem validação funcional.
+ * Login Experience Freeze v1 (ADR-044) + integração funcional 1.1F-E.2.
+ * Sem redesenho visual; autenticação via cookie HttpOnly (sem JWT/storage).
  */
 export function LoginExperience({
   showThemeControls = false,
   brandLogoUrl = null,
+  loginAction = login,
 }: LoginExperienceProps) {
+  const router = useRouter();
   const [scheme, setScheme] = useState<ResolvedColorScheme>('light');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [status, setStatus] = useState<LoginStatus>('idle');
+  const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
 
-  useEffect(() => {
-    if (window.parent === window) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (submittingRef.current || status === 'submitting' || status === 'success') {
       return;
     }
 
-    window.parent.postMessage(
-      {
-        type: 'mockup-theme',
-        background: 'transparent',
-        isDark: scheme === 'dark',
-      },
-      window.location.origin,
-    );
-  }, [scheme]);
+    const clientErrors = validateLoginFields({ email, password });
+    if (clientErrors.email || clientErrors.password) {
+      setFieldErrors(clientErrors);
+      setFormError(null);
+      return;
+    }
+
+    submittingRef.current = true;
+    setStatus('submitting');
+    setFieldErrors({});
+    setFormError(null);
+
+    try {
+      await loginAction({
+        email: email.trim(),
+        password,
+      });
+      setStatus('success');
+      router.replace('/');
+    } catch (error) {
+      submittingRef.current = false;
+      setStatus('idle');
+
+      if (error instanceof LoginRequestError) {
+        if (error.kind === 'validation') {
+          const mapped = mapLoginValidationDetails(error.details);
+          setFieldErrors(mapped.fieldErrors);
+          setFormError(mapped.formError ?? null);
+          return;
+        }
+
+        setFieldErrors({});
+        setFormError(error.message);
+        return;
+      }
+
+      setFieldErrors({});
+      setFormError('Não foi possível conectar ao serviço. Tente novamente.');
+    }
+  }
+
+  const isSubmitting = status === 'submitting' || status === 'success';
 
   return (
     <ThemeProvider preference={scheme}>
@@ -275,35 +329,61 @@ export function LoginExperience({
 
                 <Divider />
 
-                {/* Campos estáticos — sem submit, validação ou integração. */}
-                <form
-                  className={styles.form}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                  }}
-                  noValidate
-                >
+                <form className={styles.form} onSubmit={handleSubmit} noValidate>
                   <Stack gap={4}>
-                    <FormField label="E-mail">
+                    {formError ? (
+                      <Typography
+                        as="p"
+                        variant="caption"
+                        className={styles.formError}
+                        role="alert"
+                      >
+                        {formError}
+                      </Typography>
+                    ) : null}
+
+                    <FormField label="E-mail" error={fieldErrors.email} required>
                       <Input
                         type="email"
                         name="email"
                         autoComplete="username"
                         placeholder="voce@empresa.com"
                         inputMode="email"
+                        value={email}
+                        disabled={isSubmitting}
+                        onChange={(event) => {
+                          setEmail(event.target.value);
+                          if (fieldErrors.email) {
+                            setFieldErrors((current) => ({ ...current, email: undefined }));
+                          }
+                        }}
                       />
                     </FormField>
 
-                    <FormField label="Senha">
+                    <FormField label="Senha" error={fieldErrors.password} required>
                       <PasswordInput
                         name="password"
                         autoComplete="current-password"
                         placeholder="Sua senha"
+                        value={password}
+                        disabled={isSubmitting}
+                        onChange={(event) => {
+                          setPassword(event.target.value);
+                          if (fieldErrors.password) {
+                            setFieldErrors((current) => ({ ...current, password: undefined }));
+                          }
+                        }}
                       />
                     </FormField>
 
                     <Stack gap={3}>
-                      <Button type="button" variant="primary" size="lg" className={styles.submit}>
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="lg"
+                        className={styles.submit}
+                        loading={isSubmitting}
+                      >
                         Entrar
                       </Button>
                       <Button type="button" variant="ghost" size="sm" className={styles.forgot}>
