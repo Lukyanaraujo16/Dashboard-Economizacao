@@ -12,7 +12,11 @@ export {
   isPasswordLengthValid,
 } from './password-policy.js';
 export { AuthDomainError, assertUserTenantRoleConsistency } from './user-invariants.js';
-export type { AuthenticatedPrincipal, AuthenticationContext } from './authentication-context.js';
+export type {
+  AuthenticatedPrincipal,
+  AuthenticatedRequestContext,
+  AuthenticationContext,
+} from './authentication-context.js';
 export type {
   CreateTenantInput,
   CreateUserInput,

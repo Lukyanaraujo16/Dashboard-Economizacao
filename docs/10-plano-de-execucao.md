@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1D
+1.1E
 
 Último checkpoint:
 
-1.1D — Login Administrativo
+1.1E — Middleware de Autenticação
 
 Último commit:
 
-Registrado no histórico pelo checkpoint 1.1D
+Registrado no histórico pelo checkpoint 1.1E
 
 Estado atual
 
@@ -39,6 +39,8 @@ Estado atual
 ✔ Modelo persistente de autenticação
 
 ✔ Login administrativo
+
+✔ Middleware e contexto autenticado
 
 ✔ Health Checks
 
@@ -143,10 +145,10 @@ Status: Concluída
 Status: Concluída
 
 1.1E — Middleware de Autenticação
-Status: Próxima
+Status: Concluída
 
-1.1F — Frontend
-Status: Pendente
+1.1F — Frontend de Login
+Status: Próxima
 
 1.1G — Logout
 Status: Pendente

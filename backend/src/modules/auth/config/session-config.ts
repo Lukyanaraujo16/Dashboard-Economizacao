@@ -18,6 +18,9 @@ export function buildSessionCookieOptions(environment: Environment) {
     secret: environment.authSecret,
     cookieName: SESSION_COOKIE_NAME,
     saveUninitialized: false,
+    // Sliding inactivity é aplicado apenas em requireAuthentication (1.1E),
+    // via Session#options({ maxAge }) + save(). Não usar rolling:true:
+    // renovaria cookie também em requests públicas que carregam a sessão.
     rolling: false,
     cookie: {
       path: '/',

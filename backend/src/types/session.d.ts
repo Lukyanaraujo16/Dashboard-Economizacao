@@ -1,3 +1,4 @@
+import type { AuthenticatedRequestContext } from '../modules/auth/domain/authentication-context.js';
 import type { UserRole } from '../modules/auth/domain/types.js';
 
 declare module 'fastify' {
@@ -13,6 +14,14 @@ declare module 'fastify' {
     lastAccess?: string;
     ip?: string | null;
     userAgent?: string | null;
+  }
+
+  interface FastifyRequest {
+    /**
+     * Contexto autenticado tipado (1.1E).
+     * Preenchido somente por requireAuthentication; null quando ausente.
+     */
+    auth: AuthenticatedRequestContext | null;
   }
 }
 
