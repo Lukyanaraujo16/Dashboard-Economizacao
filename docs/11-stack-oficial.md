@@ -28,7 +28,8 @@ Nenhuma biblioteca relevante poderá ser adicionada ao projeto sem atualização
 | TypeScript | Linguagem oficial do backend | Obrigatório | ADR-006 |
 | Fastify | Framework HTTP da API | Obrigatório | ADR-032 |
 | @fastify/cookie | Parsing e serialização segura de cookies, incluindo suporte à infraestrutura de cookies HttpOnly da autenticação | Obrigatório | Plugin oficial Fastify adotado para Fastify 5 |
-| @fastify/session | Infraestrutura de sessão server-side da aplicação | Obrigatório | Plugin oficial Fastify. O mecanismo definitivo de persistência/store das sessões será definido na fase funcional correspondente e não deverá depender de armazenamento transitório em produção |
+| @fastify/session | Infraestrutura de sessão server-side da aplicação | Obrigatório | Plugin oficial Fastify. Persistência via store Redis (`createRedisSessionStore`); não utilizar MemoryStore em runtime |
+| @fastify/redis | Conexão Redis oficial compartilhada no backend | Obrigatório | Plugin oficial Fastify. Primeiro uso: persistência de sessão. Futuramente poderá dar suporte a cache e infraestrutura de filas conforme fases específicas |
 | Processo Worker independente | Execução de jobs assíncronos | Obrigatório | ADR-011; implementação conforme Épico 5 |
 | Scheduler | Planejamento de tarefas recorrentes; preferência por enfileirar | Obrigatório | ADR-012; implementação conforme Épico 5 |
 | BullMQ | Filas de sincronização, analytics, insights, relatórios e notificações | Aprovado | ADR-010; fase futura no plano (Épico 5) |
@@ -71,7 +72,7 @@ Nenhuma biblioteca relevante poderá ser adicionada ao projeto sem atualização
 | Nginx | Proxy reverso, HTTP/HTTPS e roteamento | Obrigatório | ADR-013 |
 | HTTPS | TLS obrigatório em produção | Obrigatório | ADR-014 |
 | Let’s Encrypt (ou equivalente compatível) | Certificados e renovação | Aprovado | ADR-015 |
-| Redis | Cache, locks e backend do BullMQ | Aprovado | ADR-009; não é fonte definitiva de dados financeiros; Épico 5 |
+| Redis | Cache, locks, sessões e backend futuro do BullMQ | Obrigatório | ADR-009; não é fonte definitiva de dados financeiros; sessão a partir da 1.1B; BullMQ permanece Futuro (Épico 5) |
 | Storage com abstração | Logos, relatórios, arquivos de conhecimento | Em avaliação | ADR-029 (local vs S3-compatível pendente) |
 | install.sh / update.sh / backup.sh / restore.sh | Operação automatizada | Aprovado | ADR-016 a ADR-024 |
 | Deploy modular em 1 VPS | Escala inicial do MVP | Obrigatório | ADR-026, ADR-027 |
@@ -134,7 +135,7 @@ Nenhuma biblioteca relevante poderá ser adicionada ao projeto sem atualização
 | VPS Linux + Docker Compose | Runtime de produção do MVP | Obrigatório | ADR-001, ADR-003, ADR-004 |
 | Nginx + HTTPS | Entrada pública segura | Obrigatório | ADR-013, ADR-014 |
 | PostgreSQL em volume persistente | Dados de negócio | Obrigatório | ADR-007, ADR-025 |
-| Redis (quando ativado) | Filas/cache/locks | Aprovado | ADR-009; Épico 5 |
+| Redis | Filas/cache/locks/sessão | Obrigatório | ADR-009; sessão ativa; BullMQ Futuro |
 | Scripts install/update/backup/restore | Operação | Aprovado | ADR-016 a ADR-024 |
 | Backend como autoridade | Autorização, tenant e regras | Obrigatório | ADR-031; `docs/09.8`, `docs/09.9` |
 | Política de backup e retenção | Continuidade e compliance operacional | Em avaliação | Pendente em `docs/08` §3 |
@@ -145,8 +146,8 @@ Nenhuma biblioteca relevante poderá ser adicionada ao projeto sem atualização
 
 | Tecnologia | Finalidade | Status | Observações |
 |---|---|---|---|
-| Redis + BullMQ + Worker + Scheduler | Processamento assíncrono completo | Futuro | Aprovados em ADR; execução no Épico 5 |
-| Autenticação / sessão | Login, middleware e store persistente de sessão | Em avaliação | `@fastify/cookie` e `@fastify/session` já obrigatórios na seção Backend; login, middleware e store definitivo seguem no Épico 1.1 |
+| Redis + BullMQ + Worker + Scheduler | Processamento assíncrono completo | Futuro | Redis já obrigatório para sessão; BullMQ/Worker/Scheduler no Épico 5 |
+| Autenticação / sessão | Login e middleware | Em avaliação | Cookies, sessão e store Redis já obrigatórios; login/middleware seguem no Épico 1.1 |
 | OAuth Conta Azul | Integração ERP | Futuro | Épico 2; regras em `docs/04` |
 | Biblioteca de UI | Interface do painel | Em avaliação | `docs/08` §3 |
 | Biblioteca de gráficos | Dashboard | Em avaliação | `docs/08` §3 |

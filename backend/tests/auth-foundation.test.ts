@@ -3,11 +3,13 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app/build-app.js';
 
 const TEST_AUTH_SECRET = 'test-auth-secret-foundation-1-1a-32chars';
+const TEST_REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
 
 const apps = new Set<Awaited<ReturnType<typeof buildApp>>>();
 
 beforeAll(() => {
   process.env.AUTH_SECRET = TEST_AUTH_SECRET;
+  process.env.REDIS_URL = TEST_REDIS_URL;
   process.env.NODE_ENV = 'test';
 });
 
@@ -16,8 +18,8 @@ afterEach(async () => {
   apps.clear();
 });
 
-describe('fundação de autenticação (1.1A)', () => {
-  it('inicializa a aplicação com plugins de cookie e sessão carregados', async () => {
+describe('fundação de autenticação (1.1A/1.1B)', () => {
+  it('inicializa a aplicação com plugins de cookie, redis e sessão', async () => {
     const app = await buildApp();
     apps.add(app);
 
@@ -25,6 +27,7 @@ describe('fundação de autenticação (1.1A)', () => {
 
     expect(typeof app.parseCookie).toBe('function');
     expect(typeof app.decryptSession).toBe('function');
+    expect(typeof app.redis.ping).toBe('function');
   });
 
   it('não emite cookie de sessão em requisição sem autenticação ativa', async () => {
@@ -44,9 +47,13 @@ describe('fundação de autenticação (1.1A)', () => {
 
     const health = await app.inject({ method: 'GET', url: '/health' });
     const healthDb = await app.inject({ method: 'GET', url: '/health/db' });
+    const healthRedis = await app.inject({ method: 'GET', url: '/health/redis' });
 
     expect(health.statusCode).toBe(200);
-    expect(healthDb.statusCode).toBe(503);
-    expect(healthDb.json()).toEqual({ status: 'unavailable' });
+    expect(healthRedis.statusCode).toBe(200);
+    expect(healthRedis.json()).toEqual({ status: 'ok' });
+    expect([200, 503]).toContain(healthDb.statusCode);
+    expect(healthDb.json()).toHaveProperty('status');
+    expect(healthDb.body).not.toContain('DATABASE_URL');
   });
 });

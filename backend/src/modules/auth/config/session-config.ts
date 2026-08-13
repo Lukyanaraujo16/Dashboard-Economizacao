@@ -1,14 +1,17 @@
 import type { Environment } from '../../../config/env.js';
 
-const SESSION_COOKIE_NAME = 'dashboard.sid';
-const ONE_DAY_IN_MILLISECONDS = 60 * 60 * 24 * 1000;
+export const SESSION_COOKIE_NAME = 'dashboard.sid';
+
+/** Duração centralizada da sessão em desenvolvimento/fundação (1 dia). */
+export const SESSION_MAX_AGE_MILLISECONDS = 60 * 60 * 24 * 1000;
+
+export const SESSION_TTL_SECONDS = SESSION_MAX_AGE_MILLISECONDS / 1000;
 
 /**
- * Opções base de sessão para a fundação da autenticação.
- * Store em memória é apenas temporário para a fase 1.1A; persistência
- * definitiva será definida nas subfases seguintes.
+ * Opções base de cookie/sessão.
+ * O store Redis é injetado em register-session (1.1B).
  */
-export function buildSessionOptions(environment: Environment) {
+export function buildSessionCookieOptions(environment: Environment) {
   const isProduction = environment.nodeEnv === 'production';
 
   return {
@@ -21,7 +24,7 @@ export function buildSessionOptions(environment: Environment) {
       httpOnly: true,
       secure: isProduction,
       sameSite: 'lax' as const,
-      maxAge: ONE_DAY_IN_MILLISECONDS,
+      maxAge: SESSION_MAX_AGE_MILLISECONDS,
     },
   };
 }

@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-0.5A
+1.1B
 
 Último checkpoint:
 
-0.5A — Docker + PostgreSQL Local
+1.1B — Persistência de Sessão com Redis
 
 Último commit:
 
-138e5a604f15eeeb29374e37bf12d1575e14642d
+Registrado no histórico pelo checkpoint 1.1B
 
 Estado atual
 
@@ -31,6 +31,10 @@ Estado atual
 ✔ Prisma configurado
 
 ✔ PostgreSQL Docker
+
+✔ Redis Docker
+
+✔ Persistência de sessão com Redis
 
 ✔ Health Checks
 
@@ -118,29 +122,39 @@ Fases
 1.1 Infraestrutura de Autenticação
 
 Status:
-Próxima
+Em andamento
 
 Subfases:
 
-1.1A Fundação
+1.1A — Fundação da Autenticação
+Status: Concluída
 
-1.1B Login
+1.1B — Persistência de Sessão com Redis
+Status: Concluída
 
-1.1C Sessão
+1.1C — Modelo de Autenticação
+Status: Próxima
 
-1.1D Middleware
+1.1D — Login
+Status: Pendente
 
-1.1E Frontend
+1.1E — Middleware
+Status: Pendente
 
-1.1F Logout
+1.1F — Frontend
+Status: Pendente
 
-1.1G Testes
+1.1G — Logout
+Status: Pendente
 
-1.1H Auditoria
+1.1H — Testes finais
+Status: Pendente
 
-1.1I Correções
+1.1I — Auditoria
+Status: Pendente
 
-1.1J Commit
+1.1J — Checkpoint final da fase
+Status: Pendente
 
 ----------------------------------------
 

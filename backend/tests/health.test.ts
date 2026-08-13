@@ -3,11 +3,13 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app/build-app.js';
 
 const TEST_AUTH_SECRET = 'test-auth-secret-foundation-1-1a-32chars';
+const TEST_REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
 
 const apps = new Set<Awaited<ReturnType<typeof buildApp>>>();
 
 beforeAll(() => {
   process.env.AUTH_SECRET = TEST_AUTH_SECRET;
+  process.env.REDIS_URL = TEST_REDIS_URL;
   process.env.NODE_ENV = 'test';
 });
 

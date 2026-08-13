@@ -8,6 +8,7 @@ export interface Environment {
   host: string;
   nodeEnv: NodeEnvironment;
   port: number;
+  redisUrl: string;
 }
 
 function isNodeEnvironment(value: string): value is NodeEnvironment {
@@ -44,6 +45,16 @@ function parseAuthSecret(value: string | undefined): string {
   return authSecret;
 }
 
+function parseRedisUrl(value: string | undefined): string {
+  const redisUrl = value?.trim() ?? '';
+
+  if (!redisUrl.startsWith('redis://') && !redisUrl.startsWith('rediss://')) {
+    throw new Error('REDIS_URL deve ser uma URL redis:// ou rediss:// válida.');
+  }
+
+  return redisUrl;
+}
+
 export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Environment {
   return {
     authSecret: parseAuthSecret(source.AUTH_SECRET),
@@ -51,5 +62,6 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
     host: source.HOST ?? '127.0.0.1',
     nodeEnv: parseNodeEnvironment(source.NODE_ENV),
     port: parsePort(source.PORT),
+    redisUrl: parseRedisUrl(source.REDIS_URL),
   };
 }
