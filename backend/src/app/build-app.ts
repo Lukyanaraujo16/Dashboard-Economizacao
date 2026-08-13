@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 
 import { loadEnvironment } from '../config/env.js';
 import { registerErrorHandlers } from '../http/errors/register-error-handlers.js';
+import { registerAuthFoundation } from '../modules/auth/index.js';
 import { registerRoutes } from './register-routes.js';
 
 const redactedLogPaths = [
@@ -13,9 +14,10 @@ const redactedLogPaths = [
   'refreshToken',
   'client_secret',
   'apiKey',
+  'authSecret',
 ];
 
-export function buildApp(): FastifyInstance {
+export async function buildApp(): Promise<FastifyInstance> {
   const environment = loadEnvironment();
   const app = Fastify({
     logger:
@@ -31,7 +33,8 @@ export function buildApp(): FastifyInstance {
   });
 
   registerErrorHandlers(app);
-  void app.register(registerRoutes);
+  await registerAuthFoundation(app, environment);
+  await app.register(registerRoutes);
 
   return app;
 }

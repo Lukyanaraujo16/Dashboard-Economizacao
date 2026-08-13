@@ -3,6 +3,7 @@ const nodeEnvironments = ['development', 'test', 'production'] as const;
 type NodeEnvironment = (typeof nodeEnvironments)[number];
 
 export interface Environment {
+  authSecret: string;
   databaseUrl: string | undefined;
   host: string;
   nodeEnv: NodeEnvironment;
@@ -33,8 +34,19 @@ function parsePort(value: string | undefined): number {
   return port;
 }
 
+function parseAuthSecret(value: string | undefined): string {
+  const authSecret = value?.trim() ?? '';
+
+  if (authSecret.length < 32) {
+    throw new Error('AUTH_SECRET deve ter no mínimo 32 caracteres.');
+  }
+
+  return authSecret;
+}
+
 export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Environment {
   return {
+    authSecret: parseAuthSecret(source.AUTH_SECRET),
     databaseUrl: source.DATABASE_URL,
     host: source.HOST ?? '127.0.0.1',
     nodeEnv: parseNodeEnvironment(source.NODE_ENV),

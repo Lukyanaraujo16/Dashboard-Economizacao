@@ -2,7 +2,7 @@ import { buildApp } from './app/build-app.js';
 import { loadEnvironment } from './config/env.js';
 
 const environment = loadEnvironment();
-const app = buildApp();
+const app = await buildApp();
 
 try {
   await app.listen({ host: environment.host, port: environment.port });
