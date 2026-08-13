@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1F-E.2
+1.1F-E.3
 
 Último checkpoint:
 
-1.1F-E.2 — Login Funcional no Frontend
+1.1F-E.3 — Sessão do Usuário: /me e Logout
 
 Último commit:
 
-Registrado no histórico pelo checkpoint da integração funcional do login
+Registrado no histórico pelo checkpoint de sessão do usuário e logout
 
 Estado atual
 
@@ -49,6 +49,8 @@ Estado atual
 ✔ Theme Engine e Branding Runtime mock
 
 ✔ Rota /login funcional com sessão baseada em cookie HttpOnly
+
+✔ AuthProvider mínimo, /me e logout funcionais
 
 ✔ Health Checks
 
@@ -184,9 +186,14 @@ Status: Concluída
 1.1F-E.2 — Login Funcional no Frontend
 Status: Concluída
 
-A rota /login está funcional com sessão baseada em cookie HttpOnly. O redirect atual para / permanece temporário, e o frontend ainda não possui AuthProvider ou guards.
+A rota /login está funcional com sessão baseada em cookie HttpOnly.
 
 1.1F-E.3 — Sessão do Usuário: /me e Logout
+Status: Concluída
+
+AuthProvider mínimo implementado, com /me e logout funcionais. O redirect atual para / permanece temporário até o shell/dashboard.
+
+1.1F-E.4 — Proteção de Rotas e Shell Autenticado
 Status: Próxima
 
 1.1G — Logout

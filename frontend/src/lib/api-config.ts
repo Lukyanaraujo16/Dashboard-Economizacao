@@ -11,3 +11,11 @@ export const AUTH_API_PREFIX = '/auth';
 export function authLoginPath(): string {
   return `${AUTH_API_PREFIX}/login`;
 }
+
+export function authMePath(): string {
+  return `${AUTH_API_PREFIX}/me`;
+}
+
+export function authLogoutPath(): string {
+  return `${AUTH_API_PREFIX}/logout`;
+}

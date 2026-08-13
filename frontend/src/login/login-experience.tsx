@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent } from 'react';
 
+import { useAuth } from '../auth';
 import {
   Badge,
   Button,
@@ -147,8 +148,9 @@ type LoginExperienceProps = {
 };
 
 /**
- * Login Experience Freeze v1 (ADR-044) + integração funcional 1.1F-E.2.
+ * Login Experience Freeze v1 (ADR-044) + integração funcional 1.1F-E.2/E.3.
  * Sem redesenho visual; autenticação via cookie HttpOnly (sem JWT/storage).
+ * Fonte de verdade do usuário após login: GET /auth/me via AuthProvider.
  */
 export function LoginExperience({
   showThemeControls = false,
@@ -156,6 +158,7 @@ export function LoginExperience({
   loginAction = login,
 }: LoginExperienceProps) {
   const router = useRouter();
+  const { refreshSession } = useAuth();
   const [scheme, setScheme] = useState<ResolvedColorScheme>('light');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -188,6 +191,13 @@ export function LoginExperience({
         email: email.trim(),
         password,
       });
+      const session = await refreshSession();
+      if (session !== 'authenticated') {
+        submittingRef.current = false;
+        setStatus('idle');
+        setFormError('Não foi possível verificar a sessão. Tente novamente.');
+        return;
+      }
       setStatus('success');
       router.replace('/');
     } catch (error) {

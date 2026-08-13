@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LoginExperience } from '../src/login/login-experience';
 import { LoginRequestError } from '../src/services/auth/login';
+import {
+  createAuthenticatedGetCurrentUser,
+  createUnauthenticatedGetCurrentUser,
+  mockAuthenticatedUser,
+  renderWithAuth,
+} from './helpers/render-with-auth';
 
 const replaceMock = vi.fn();
 
@@ -26,7 +32,7 @@ beforeEach(() => {
 
 describe('LoginExperience (visual freeze)', () => {
   it('renderiza hierarquia de marca e card de acesso', () => {
-    render(<LoginExperience />);
+    renderWithAuth(<LoginExperience />);
 
     expect(screen.getByRole('main')).toBeTruthy();
     expect(screen.getByRole('heading', { name: /inteligência financeira/i })).toBeTruthy();
@@ -41,14 +47,14 @@ describe('LoginExperience (visual freeze)', () => {
   });
 
   it('mantém autocomplete adequado a password managers', () => {
-    render(<LoginExperience />);
+    renderWithAuth(<LoginExperience />);
 
     expect(screen.getByLabelText(/e-mail/i).getAttribute('autocomplete')).toBe('username');
     expect(screen.getByLabelText(/^senha/i).getAttribute('autocomplete')).toBe('current-password');
   });
 
   it('controles DEV de tema quando solicitados', () => {
-    render(<LoginExperience showThemeControls />);
+    renderWithAuth(<LoginExperience showThemeControls />);
 
     expect(screen.getByText('DEV')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Light' })).toBeTruthy();
@@ -56,7 +62,7 @@ describe('LoginExperience (visual freeze)', () => {
   });
 
   it('alterna atributo de esquema Light/Dark', () => {
-    const { container } = render(<LoginExperience showThemeControls />);
+    const { container } = renderWithAuth(<LoginExperience showThemeControls />);
 
     const shell = () => container.querySelector('[data-scheme]');
     expect(shell()?.getAttribute('data-scheme')).toBe('light');
@@ -69,20 +75,31 @@ describe('LoginExperience (visual freeze)', () => {
   });
 
   it('usa placeholder de marca preparado para asset futuro', () => {
-    const { container, rerender } = render(<LoginExperience />);
+    const { container, rerender, getCurrentUserAction, logoutAction } = renderWithAuth(
+      <LoginExperience />,
+    );
     expect(container.querySelector('[data-brand-placeholder="true"]')).toBeTruthy();
 
     rerender(<LoginExperience brandLogoUrl="/brand/future-logo.svg" />);
-    expect(container.querySelector('[data-brand-placeholder="true"]')).toBeNull();
-    expect(container.querySelector('img[src="/brand/future-logo.svg"]')).toBeTruthy();
+    // rerender without provider loses context — remount with helper
+    cleanup();
+    const again = renderWithAuth(<LoginExperience brandLogoUrl="/brand/future-logo.svg" />, {
+      getCurrentUserAction,
+      logoutAction,
+    });
+    expect(again.container.querySelector('[data-brand-placeholder="true"]')).toBeNull();
+    expect(again.container.querySelector('img[src="/brand/future-logo.svg"]')).toBeTruthy();
   });
 });
 
-describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
-  it('submit válido chama serviço só com email/password e redireciona', async () => {
+describe('LoginExperience (integração funcional)', () => {
+  it('submit válido chama serviço, hidrata /me e redireciona', async () => {
     const loginAction = vi.fn().mockResolvedValue({ status: 'ok' });
+    const getCurrentUserAction = createAuthenticatedGetCurrentUser();
 
-    render(<LoginExperience loginAction={loginAction} />);
+    renderWithAuth(<LoginExperience loginAction={loginAction} />, {
+      getCurrentUserAction,
+    });
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: 'user@empresa.com' },
@@ -106,6 +123,7 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
     ]);
 
     await waitFor(() => {
+      expect(getCurrentUserAction).toHaveBeenCalled();
       expect(replaceMock).toHaveBeenCalledWith('/');
     });
 
@@ -122,7 +140,9 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
         }),
     );
 
-    render(<LoginExperience loginAction={loginAction} />);
+    renderWithAuth(<LoginExperience loginAction={loginAction} />, {
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(),
+    });
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: 'user@empresa.com' },
@@ -159,7 +179,7 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
         ),
       );
 
-    render(<LoginExperience loginAction={loginAction} />);
+    renderWithAuth(<LoginExperience loginAction={loginAction} />);
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: 'user@empresa.com' },
@@ -187,7 +207,7 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
       }),
     );
 
-    render(<LoginExperience loginAction={loginAction} />);
+    renderWithAuth(<LoginExperience loginAction={loginAction} />);
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: 'user@empresa.com' },
@@ -211,7 +231,9 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
         ),
       );
 
-    const { rerender } = render(<LoginExperience loginAction={loginAction} />);
+    const { rerender, getCurrentUserAction, logoutAction } = renderWithAuth(
+      <LoginExperience loginAction={loginAction} />,
+    );
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: 'user@empresa.com' },
@@ -233,7 +255,11 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
       ),
     );
 
-    rerender(<LoginExperience loginAction={loginAction} />);
+    cleanup();
+    renderWithAuth(<LoginExperience loginAction={loginAction} />, {
+      getCurrentUserAction,
+      logoutAction,
+    });
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: 'user@empresa.com' },
     });
@@ -247,12 +273,13 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
     ).toBeTruthy();
     expect(screen.queryByText(/redis/i)).toBeNull();
     expect(screen.queryByText(/fastify/i)).toBeNull();
+    expect(rerender).toBeTypeOf('function');
   });
 
   it('validação client-side impede submit inválido', async () => {
     const loginAction = vi.fn();
 
-    render(<LoginExperience loginAction={loginAction} />);
+    renderWithAuth(<LoginExperience loginAction={loginAction} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }));
 
@@ -264,7 +291,9 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
   it('não persiste senha nem token em storage', async () => {
     const loginAction = vi.fn().mockResolvedValue({ status: 'ok' });
 
-    render(<LoginExperience loginAction={loginAction} />);
+    renderWithAuth(<LoginExperience loginAction={loginAction} />, {
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(mockAuthenticatedUser),
+    });
 
     fireEvent.change(screen.getByLabelText(/e-mail/i), {
       target: { value: 'user@empresa.com' },
@@ -282,5 +311,17 @@ describe('LoginExperience (integração funcional 1.1F-E.2)', () => {
     expect(sessionStorage.length).toBe(0);
     expect(JSON.stringify(localStorage)).not.toContain('Password#12345');
     expect(JSON.stringify(sessionStorage)).not.toContain('Password#12345');
+  });
+
+  it('exige AuthProvider', () => {
+    expect(() => render(<LoginExperience />)).toThrow(/AuthProvider/);
+  });
+
+  it('sem autenticação prévia permanece na Login Experience', () => {
+    renderWithAuth(<LoginExperience />, {
+      getCurrentUserAction: createUnauthenticatedGetCurrentUser(),
+    });
+    expect(screen.getByRole('heading', { name: /bem-vindo de volta/i })).toBeTruthy();
+    expect(replaceMock).not.toHaveBeenCalled();
   });
 });

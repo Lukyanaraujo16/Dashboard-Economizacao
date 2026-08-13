@@ -37,7 +37,7 @@ function destroySession(
 
 /**
  * POST /auth/login — autenticação administrativa/usuário (1.1D).
- * Sem logout, /me ou middleware global.
+ * /me e logout são registrados em rotas dedicadas (1.1F-E.3).
  */
 export async function registerLoginRoutes(app: FastifyInstance): Promise<void> {
   const prisma = getPrismaClient();

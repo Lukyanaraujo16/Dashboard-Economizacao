@@ -1,9 +1,28 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+import { useAuth } from '../../src/auth';
 import { LoginExperience } from '../../src/login/login-experience';
 
 /**
  * Rota de produção do login.
- * Experiência visual congelada (ADR-044) + integração funcional 1.1F-E.2.
+ * Usuário autenticado é redirecionado para `/` (destino temporário).
  */
 export default function LoginPage() {
+  const router = useRouter();
+  const { status } = useAuth();
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      router.replace('/');
+    }
+  }, [status, router]);
+
+  if (status === 'loading' || status === 'authenticated') {
+    return null;
+  }
+
   return <LoginExperience />;
 }
