@@ -48,6 +48,16 @@ PostgreSQL é o banco oficial e Prisma é o ORM oficial. A fundação de persist
 mas a migration e a conectividade reais dependem de uma instância PostgreSQL local disponível. O
 modelo de negócio ainda não foi criado.
 
+### PostgreSQL local
+
+1. Copie `.env.example` para `.env` e substitua os placeholders de PostgreSQL por valores locais.
+2. Suba somente o banco com `docker compose up -d postgres`.
+3. Confirme o estado saudável com `docker compose ps`.
+4. Pare o serviço sem apagar seus dados com `docker compose stop postgres`.
+
+Os dados ficam no volume nomeado `postgres_data`. Remover volumes é uma ação destrutiva deliberada e
+não faz parte do fluxo normal de desenvolvimento.
+
 ## Segurança
 
 Segredos reais nunca deverão ser versionados.
