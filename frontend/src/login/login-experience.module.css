@@ -1,0 +1,642 @@
+.shell {
+  --login-motion: 160ms;
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+.atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      150% 110% at 10% 8%,
+      color-mix(in srgb, var(--color-primary) 11%, transparent) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      120% 95% at 90% 88%,
+      color-mix(in srgb, var(--color-accent) 8%, transparent) 0%,
+      transparent 54%
+    ),
+    linear-gradient(
+      168deg,
+      color-mix(in srgb, var(--color-surface) 78%, var(--color-background)) 0%,
+      var(--color-background) 46%,
+      color-mix(in srgb, var(--color-primary) 5%, var(--color-background)) 100%
+    );
+}
+
+.accentWash {
+  position: absolute;
+  inset: auto auto 8% -6%;
+  z-index: 0;
+  width: min(42vw, 28rem);
+  height: min(42vw, 28rem);
+  pointer-events: none;
+  border-radius: var(--radius-full);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-accent) 12%, transparent) 0%,
+    transparent 68%
+  );
+  opacity: 0.5;
+  filter: blur(2px);
+}
+
+.gridOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.14;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-border) 45%, transparent) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-border) 45%, transparent) 1px,
+      transparent 1px
+    ),
+    repeating-linear-gradient(
+      135deg,
+      transparent 0,
+      transparent 11px,
+      color-mix(in srgb, var(--color-border) 18%, transparent) 11px,
+      color-mix(in srgb, var(--color-border) 18%, transparent) 12px
+    );
+  background-size:
+    52px 52px,
+    52px 52px,
+    24px 24px;
+  mask-image: radial-gradient(ellipse 78% 72% at 48% 40%, #000 16%, transparent 80%);
+}
+
+.shell[data-scheme='dark'] .atmosphere {
+  background:
+    radial-gradient(
+      140% 100% at 14% 6%,
+      color-mix(in srgb, var(--color-primary) 20%, transparent) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      110% 85% at 86% 92%,
+      color-mix(in srgb, var(--color-accent) 9%, transparent) 0%,
+      transparent 52%
+    ),
+    linear-gradient(180deg, var(--color-background) 0%, var(--color-surface) 100%);
+}
+
+.shell[data-scheme='dark'] .accentWash {
+  opacity: 0.32;
+}
+
+.shell[data-scheme='dark'] .gridOverlay {
+  opacity: 0.09;
+}
+
+.devControls {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.devBadge {
+  min-height: 1.125rem;
+  padding: 0 0.4rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+}
+
+.layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-8);
+  min-height: 100vh;
+  width: 100%;
+  max-width: 92rem; /* ~1472px — presença em large display sem crescer infinito */
+  margin-inline: auto;
+  padding: var(--space-8) var(--space-4);
+  align-items: center;
+}
+
+.brandColumn,
+.authColumn {
+  animation: loginEnter var(--login-motion) ease both;
+}
+
+.brandColumn {
+  animation-delay: 20ms;
+}
+
+.authColumn {
+  animation-delay: 70ms;
+}
+
+.brandInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  max-width: 34rem;
+}
+
+.brandIntro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.brandLockup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.logoRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.brandName {
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+
+.brandTag {
+  color: var(--color-text-muted);
+}
+
+.brandAccentRule {
+  display: block;
+  width: 2.75rem;
+  height: 3px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    90deg,
+    var(--color-accent) 0%,
+    color-mix(in srgb, var(--color-accent) 20%, transparent) 100%
+  );
+}
+
+.brandCopyBlock {
+  max-width: 30rem;
+}
+
+.brandHeadline {
+  max-width: 22ch;
+  line-height: 1.18;
+}
+
+.headlineMobile,
+.copyMobile {
+  display: none;
+}
+
+.brandCopy {
+  max-width: 36ch;
+}
+
+.highlights {
+  max-width: 26rem;
+}
+
+.highlightCard {
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  box-shadow: none;
+  transition:
+    border-color var(--login-motion) ease,
+    transform var(--login-motion) ease,
+    background-color var(--login-motion) ease;
+}
+
+.highlightCard:hover {
+  border-color: color-mix(in srgb, var(--color-border) 45%, var(--color-primary));
+  background: var(--color-surface);
+  transform: translateY(-1px);
+}
+
+.highlightIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
+}
+
+.accentDot {
+  fill: var(--color-accent);
+}
+
+.highlightCopy {
+  min-width: 0;
+}
+
+.highlightTitle {
+  color: var(--color-text-primary);
+}
+
+.authColumn {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.authCard {
+  width: min(100%, 26rem);
+  padding: var(--space-6);
+  animation: loginCard var(--login-motion) ease both;
+  animation-delay: 90ms;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--color-shadow) 70%, transparent),
+    0 10px 28px color-mix(in srgb, var(--color-shadow) 42%, transparent),
+    0 28px 56px color-mix(in srgb, var(--color-shadow) 22%, transparent);
+}
+
+.authHeader {
+  width: 100%;
+  text-align: center;
+}
+
+.authIntro {
+  width: 100%;
+}
+
+.authSupport {
+  max-width: 28ch;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.authLogoWrap {
+  position: relative;
+  display: inline-flex;
+  margin-inline: auto;
+}
+
+.authAccentPip {
+  position: absolute;
+  right: -0.15rem;
+  bottom: -0.1rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+
+.authTitle {
+  letter-spacing: -0.025em;
+  text-align: center;
+}
+
+.form {
+  margin: 0;
+  text-align: start;
+}
+
+.form input {
+  min-height: calc(2.5rem + 2px);
+  border-radius: calc(var(--radius-lg) + 2px);
+}
+
+.form input::placeholder {
+  opacity: 0.78;
+}
+
+.submit {
+  width: 100%;
+}
+
+.shell[data-scheme='light'] .submit {
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 90%, var(--color-on-primary)) 0%,
+    var(--color-primary) 100%
+  );
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--color-primary) 14%, transparent),
+    0 3px 8px color-mix(in srgb, var(--color-primary) 8%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-on-primary) 8%, transparent);
+}
+
+.shell[data-scheme='light'] .submit:hover:not(:disabled) {
+  box-shadow:
+    0 1px 3px color-mix(in srgb, var(--color-primary) 16%, transparent),
+    0 4px 10px color-mix(in srgb, var(--color-primary) 10%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-on-primary) 10%, transparent);
+}
+
+.forgot {
+  width: 100%;
+  opacity: 0.72;
+  font-weight: 450;
+  color: var(--color-text-muted);
+}
+
+.forgot:hover:not(:disabled),
+.forgot:focus-visible {
+  opacity: 1;
+  color: var(--color-text-secondary);
+}
+
+@keyframes loginEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loginCard {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 768px) {
+  .layout {
+    padding: var(--space-10) var(--space-8);
+  }
+
+  .authCard {
+    padding: var(--space-8);
+  }
+
+  .brandInner {
+    gap: var(--space-8);
+  }
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    /* Coluna esquerda com mais presença; auth enxuta — reduz vazio central. */
+    grid-template-columns: minmax(0, 1.35fr) minmax(26rem, 0.72fr);
+    gap: var(--space-5);
+    padding: var(--space-12) clamp(var(--space-8), 3.5vw, var(--space-16));
+    align-items: center;
+  }
+
+  .brandColumn {
+    padding-inline-end: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .brandInner {
+    transform: translateY(-3.25rem);
+    gap: var(--space-8);
+    max-width: none;
+    width: min(100%, 46rem);
+  }
+
+  .brandIntro {
+    gap: var(--space-6);
+  }
+
+  .brandCopyBlock {
+    max-width: 44rem;
+  }
+
+  .brandHeadline {
+    max-width: 28ch;
+  }
+
+  .brandCopy {
+    max-width: 44ch;
+  }
+
+  .highlights {
+    max-width: min(100%, 38rem);
+  }
+
+  .authColumn {
+    /* Evita empurrar o card para a borda direita (corredor vazio). */
+    justify-content: flex-start;
+    align-self: center;
+    padding-inline-start: var(--space-2);
+  }
+
+  .authCard {
+    transform: translateY(-1.75rem);
+    width: min(100%, 26rem);
+  }
+}
+
+@media (min-width: 1440px) {
+  .layout {
+    /* Espaço extra → margens externas; gap permanece contido. */
+    padding-inline: clamp(var(--space-10), 4vw, var(--space-16));
+    gap: var(--space-6);
+  }
+
+  .brandInner {
+    width: min(100%, 50rem);
+  }
+
+  .brandHeadline {
+    max-width: 30ch;
+  }
+
+  .brandCopy {
+    max-width: 46ch;
+  }
+
+  .highlights {
+    max-width: min(100%, 42rem);
+  }
+}
+
+@media (min-width: 1680px) {
+  .layout {
+    gap: var(--space-6);
+  }
+
+  .brandInner {
+    width: min(100%, 52rem);
+  }
+}
+
+@media (min-width: 1920px) {
+  .layout {
+    padding-inline: clamp(var(--space-12), 5vw, 5rem);
+    gap: var(--space-6);
+  }
+}
+
+@media (max-width: 767px) {
+  /* Login First — somente mobile. Desktop/tablet intactos. */
+  .layout {
+    gap: var(--space-5);
+    padding: var(--space-5) var(--space-4) var(--space-6);
+    align-items: start;
+    min-height: 100svh;
+  }
+
+  .brandInner {
+    gap: var(--space-4);
+  }
+
+  .brandIntro {
+    gap: var(--space-3);
+  }
+
+  .brandLockup {
+    gap: var(--space-2);
+  }
+
+  .logoRow {
+    gap: var(--space-3);
+  }
+
+  .brandMark {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+
+  .brandMark svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  .brandName {
+    font-size: 1.125rem;
+  }
+
+  .brandAccentRule {
+    width: 2rem;
+    height: 2px;
+  }
+
+  .brandCopyBlock {
+    gap: var(--space-2) !important;
+    max-width: 100%;
+  }
+
+  .headlineDesktop,
+  .copyDesktop {
+    display: none;
+  }
+
+  .headlineMobile,
+  .copyMobile {
+    display: inline;
+  }
+
+  .brandHeadline {
+    max-width: none;
+    font-size: 1.5rem;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+
+  .brandCopy {
+    max-width: none;
+  }
+
+  .highlights {
+    display: none;
+  }
+
+  .authColumn {
+    width: 100%;
+  }
+
+  .authCard {
+    width: 100%;
+    padding: var(--space-5);
+    animation: none;
+  }
+
+  .authLogoWrap {
+    display: none;
+  }
+
+  .authStack {
+    gap: var(--space-4) !important;
+  }
+
+  .authHeader {
+    gap: var(--space-2) !important;
+  }
+
+  .authTitle {
+    font-size: 1.35rem;
+  }
+
+  .authSupport {
+    max-width: none;
+    font-size: 0.875rem;
+  }
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brandColumn,
+  .authColumn,
+  .authCard,
+  .highlightCard {
+    animation: none;
+    transition: none;
+  }
+
+  .highlightCard:hover {
+    transform: none;
+  }
+
+  .authCard,
+  .brandInner {
+    transform: none;
+  }
+
+  @media (min-width: 1024px) {
+    .brandInner {
+      transform: translateY(-3.25rem);
+    }
+
+    .authCard {
+      transform: translateY(-1.75rem);
+    }
+  }
+}

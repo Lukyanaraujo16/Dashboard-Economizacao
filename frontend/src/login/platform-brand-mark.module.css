@@ -1,0 +1,17 @@
+.placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-lg);
+  color: var(--color-accent);
+  background: var(--color-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 55%, transparent);
+}
+
+.asset {
+  display: block;
+  border-radius: var(--radius-lg);
+  object-fit: contain;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 70%, transparent);
+}

@@ -168,7 +168,18 @@ Rodadas concluídas:
 1.1F-C — Theme Engine / Branding Runtime
 Status: Concluída
 
-1.1F-D — Tela de Login
+1.1F-D — Login Experience
+Status: Concluída
+
+Ciclo visual D.1–D.6 concluído e congelado pela ADR-044 (Login Experience Freeze v1).
+
+1.1F-E — Integração Funcional da Autenticação
+Status: Em andamento
+
+1.1F-E.1 — Auditoria da autenticação existente
+Status: Concluída
+
+1.1F-E.2 — Integração funcional do login
 Status: Próxima
 
 1.1G — Logout
