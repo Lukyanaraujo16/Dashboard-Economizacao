@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1B
+1.1C
 
 Último checkpoint:
 
-1.1B — Persistência de Sessão com Redis
+1.1C — Modelo de Autenticação
 
 Último commit:
 
-Registrado no histórico pelo checkpoint 1.1B
+Registrado no histórico pelo checkpoint 1.1C
 
 Estado atual
 
@@ -35,6 +35,8 @@ Estado atual
 ✔ Redis Docker
 
 ✔ Persistência de sessão com Redis
+
+✔ Modelo persistente de autenticação
 
 ✔ Health Checks
 
@@ -133,10 +135,10 @@ Status: Concluída
 Status: Concluída
 
 1.1C — Modelo de Autenticação
-Status: Próxima
+Status: Concluída
 
 1.1D — Login
-Status: Pendente
+Status: Próxima
 
 1.1E — Middleware
 Status: Pendente

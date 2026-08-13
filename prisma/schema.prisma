@@ -7,3 +7,75 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum TenantStatus {
+  ACTIVE
+  DISABLED
+
+  @@map("tenant_status")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  BLOCKED
+  DISABLED
+
+  @@map("user_status")
+}
+
+/// USER = tenant_user (docs/09.7); ADMIN = admin; SUPER_ADMIN = superadmin.
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+
+  @@map("user_role")
+}
+
+model Tenant {
+  id            String       @id @default(uuid()) @db.Uuid
+  name          String
+  displayName   String       @map("display_name")
+  status        TenantStatus
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deactivatedAt DateTime?    @map("deactivated_at") @db.Timestamptz(3)
+  users         User[]
+
+  @@map("tenants")
+}
+
+model User {
+  id                     String          @id @default(uuid()) @db.Uuid
+  tenantId               String?         @map("tenant_id") @db.Uuid
+  name                   String
+  email                  String          @unique(map: "uq_users_email")
+  status                 UserStatus
+  role                   UserRole
+  lastLoginAt            DateTime?       @map("last_login_at") @db.Timestamptz(3)
+  failedLoginAttempts    Int             @default(0) @map("failed_login_attempts")
+  lockedUntil            DateTime?       @map("locked_until") @db.Timestamptz(3)
+  passwordConfiguredAt   DateTime?       @map("password_configured_at") @db.Timestamptz(3)
+  firstAccessCompletedAt DateTime?       @map("first_access_completed_at") @db.Timestamptz(3)
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deactivatedAt          DateTime?       @map("deactivated_at") @db.Timestamptz(3)
+  tenant                 Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  credential             UserCredential?
+
+  @@index([tenantId], map: "idx_users_tenant_id")
+  @@map("users")
+}
+
+/// Credencial de senha 1:1. Usuário PENDING pode existir sem registro.
+model UserCredential {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique(map: "uq_user_credentials_user_id") @map("user_id") @db.Uuid
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_credentials")
+}
