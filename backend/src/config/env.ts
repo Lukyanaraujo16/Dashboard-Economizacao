@@ -3,6 +3,7 @@ const nodeEnvironments = ['development', 'test', 'production'] as const;
 type NodeEnvironment = (typeof nodeEnvironments)[number];
 
 export interface Environment {
+  databaseUrl: string | undefined;
   host: string;
   nodeEnv: NodeEnvironment;
   port: number;
@@ -34,6 +35,7 @@ function parsePort(value: string | undefined): number {
 
 export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Environment {
   return {
+    databaseUrl: source.DATABASE_URL,
     host: source.HOST ?? '127.0.0.1',
     nodeEnv: parseNodeEnvironment(source.NODE_ENV),
     port: parsePort(source.PORT),

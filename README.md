@@ -44,6 +44,10 @@ em um workspace simples com pnpm.
 O backend Fastify inicial está disponível como workspace e expõe o endpoint técnico `GET /health`.
 Ele ainda não possui regras de negócio.
 
+PostgreSQL é o banco oficial e Prisma é o ORM oficial. A fundação de persistência foi inicializada,
+mas a migration e a conectividade reais dependem de uma instância PostgreSQL local disponível. O
+modelo de negócio ainda não foi criado.
+
 ## Segurança
 
 Segredos reais nunca deverão ser versionados.
