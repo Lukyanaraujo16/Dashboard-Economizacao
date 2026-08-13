@@ -1,0 +1,33 @@
+.root {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--space-4);
+}
+
+.sm {
+  max-width: 40rem;
+}
+
+.md {
+  max-width: 48rem;
+}
+
+.lg {
+  max-width: 64rem;
+}
+
+.xl {
+  max-width: 80rem;
+}
+
+@media (min-width: 768px) {
+  .root {
+    padding-inline: var(--space-6);
+  }
+}
+
+@media (min-width: 1024px) {
+  .root {
+    padding-inline: var(--space-8);
+  }
+}

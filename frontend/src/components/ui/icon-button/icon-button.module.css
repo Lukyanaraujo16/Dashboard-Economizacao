@@ -1,0 +1,123 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) ease,
+    background-image var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease,
+    filter var(--duration-fast) ease,
+    opacity var(--duration-fast) ease;
+}
+
+.root:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.root:disabled,
+.root[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+  box-shadow: none;
+}
+
+.sm {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.md {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.lg {
+  width: 3rem;
+  height: 3rem;
+}
+
+.primary {
+  background-color: var(--color-primary);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-primary) 78%, var(--color-on-primary)) 0%,
+    var(--color-primary) 100%
+  );
+  color: var(--color-on-primary);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.primary:hover:not(:disabled) {
+  background-image: none;
+  background-color: var(--color-secondary);
+}
+
+.secondary {
+  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text-muted) 11%, transparent);
+  color: var(--color-text-primary);
+}
+
+.ghost:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text-muted) 16%, transparent);
+}
+
+.danger {
+  background-color: var(--color-danger);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-danger) 80%, var(--color-on-danger)) 0%,
+    var(--color-danger) 100%
+  );
+  color: var(--color-on-danger);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-danger) 18%, transparent);
+}
+
+.danger:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
+.spinner {
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1.5px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-top-color: currentColor;
+  border-right-color: color-mix(in srgb, currentColor 55%, transparent);
+  border-radius: var(--radius-full);
+  animation: spin var(--duration-slow) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    transition: none;
+  }
+
+  .spinner {
+    animation: none;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

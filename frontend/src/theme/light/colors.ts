@@ -1,27 +1,29 @@
 import type { ColorTokens } from '../types/colors';
 
 /**
- * Tema claro padrão da plataforma.
- * Valores inspirados na identidade Economização, expressos apenas como tokens semânticos.
+ * Tema claro padrão da plataforma (Economização = theme default).
+ * Componentes consomem apenas tokens semânticos — agnósticos de marca.
  */
 export const lightColorTokens = {
-  background: '#F6F7FB',
+  background: '#E7E7EF',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  primary: '#1F2C6D',
-  secondary: '#3A4A8C',
-  accent: '#C9A227',
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#64748B',
-  border: '#E2E8F0',
-  success: '#15803D',
+  primary: '#141452',
+  onPrimary: '#FFFFFF',
+  secondary: '#2D2D74',
+  accent: '#F2C200',
+  textPrimary: '#141452',
+  textSecondary: '#7A7A8C',
+  textMuted: '#9494A3',
+  border: '#D8D8E4',
+  success: '#1E9E5A',
   warning: '#B45309',
-  danger: '#B91C1C',
-  info: '#1D4ED8',
-  focus: '#2563EB',
-  disabled: '#94A3B8',
-  overlay: 'rgba(15, 23, 42, 0.44)',
-  shadow: 'rgba(15, 23, 42, 0.08)',
-  divider: '#E8ECF2',
+  danger: '#C7402F',
+  onDanger: '#FFFFFF',
+  info: '#5B5BA6',
+  focus: '#5B5BA6',
+  disabled: '#A0A0B0',
+  overlay: 'rgba(20, 20, 82, 0.44)',
+  shadow: 'rgba(20, 20, 82, 0.08)',
+  divider: '#DDDDE8',
 } as const satisfies ColorTokens;

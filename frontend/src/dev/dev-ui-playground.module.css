@@ -1,0 +1,55 @@
+.page {
+  min-height: 100vh;
+  padding-block: var(--space-8);
+  padding-inline: var(--space-4);
+  background: var(--color-background);
+  color: var(--color-text-primary);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.sectionBody {
+  display: block;
+}
+
+.devBadge {
+  min-height: 1.125rem;
+  padding: 0 0.4rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--color-text-muted) 6%, var(--color-surface));
+  color: var(--color-text-muted);
+  border-color: color-mix(in srgb, var(--color-divider) 80%, transparent);
+  opacity: 0.85;
+}
+
+.accentNumeric {
+  color: var(--color-accent);
+}
+
+@media (min-width: 768px) {
+  .page {
+    padding-inline: var(--space-8);
+  }
+}
+
+@media (min-width: 1024px) {
+  .page {
+    padding-block: var(--space-10);
+    padding-inline: var(--space-12);
+  }
+}

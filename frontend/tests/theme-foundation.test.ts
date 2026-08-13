@@ -61,16 +61,20 @@ describe('resolveTheme', () => {
 });
 
 describe('applyColorOverrides', () => {
-  it('ignora overrides vazios e protegidos', () => {
+  it('ignora overrides vazios, protegidos e fora do allowlist', () => {
     const next = applyColorOverrides(lightColorTokens, {
       primary: '  ',
       warning: '#111111',
       textMuted: '#222222',
+      focus: '#333333',
+      accent: '#ABCDEF',
     });
 
     expect(next.primary).toBe(lightColorTokens.primary);
     expect(next.warning).toBe(lightColorTokens.warning);
-    expect(next.textMuted).toBe('#222222');
+    expect(next.textMuted).toBe(lightColorTokens.textMuted);
+    expect(next.focus).toBe(lightColorTokens.focus);
+    expect(next.accent).toBe('#ABCDEF');
   });
 });
 
@@ -88,5 +92,36 @@ describe('themeToCssVariables', () => {
     const serialized = JSON.stringify(variables);
     expect(serialized.toLowerCase()).not.toContain('economizacao');
     expect(serialized.toLowerCase()).not.toContain('felipe');
+  });
+
+  it('gera onPrimary e onDanger como tokens semânticos', () => {
+    const light = resolveTheme({ preference: 'light' });
+    const dark = resolveTheme({ preference: 'dark' });
+    const lightVars = themeToCssVariables(light);
+    const darkVars = themeToCssVariables(dark);
+
+    expect(light.colors.onPrimary).toBe(lightColorTokens.onPrimary);
+    expect(light.colors.onDanger).toBe(lightColorTokens.onDanger);
+    expect(dark.colors.onPrimary).toBe(darkColorTokens.onPrimary);
+    expect(dark.colors.onDanger).toBe(darkColorTokens.onDanger);
+    expect(lightVars['--color-on-primary']).toBe(lightColorTokens.onPrimary);
+    expect(darkVars['--color-on-danger']).toBe(darkColorTokens.onDanger);
+  });
+});
+
+describe('onDanger protection', () => {
+  it('protege onDanger de overrides de branding', () => {
+    const resolved = resolveTheme({
+      preference: 'light',
+      branding: {
+        light: {
+          onDanger: '#00FF00',
+          danger: '#00FF00',
+        },
+      },
+    });
+
+    expect(resolved.colors.onDanger).toBe(lightColorTokens.onDanger);
+    expect(resolved.colors.danger).toBe(lightColorTokens.danger);
   });
 });

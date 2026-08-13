@@ -1,0 +1,68 @@
+.root {
+  display: block;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  transition:
+    border-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease,
+    background-color var(--duration-fast) ease;
+}
+
+.root::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.9;
+}
+
+.root:hover:not(:disabled):not(:focus-visible):not(:focus) {
+  border-color: color-mix(in srgb, var(--color-border) 40%, var(--color-text-muted));
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-background));
+}
+
+.root:focus,
+.root:focus-visible {
+  outline: none;
+  border-color: var(--color-focus);
+  background: var(--color-surface);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-focus) 16%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+
+.root:disabled {
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--color-disabled) 8%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-border) 75%, var(--color-disabled));
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+.invalid {
+  border-color: color-mix(in srgb, var(--color-danger) 70%, var(--color-border));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-danger) 14%, transparent);
+}
+
+.invalid:hover:not(:disabled):not(:focus-visible):not(:focus) {
+  border-color: var(--color-danger);
+}
+
+.invalid:focus,
+.invalid:focus-visible {
+  border-color: var(--color-danger);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--color-danger) 16%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-danger) 6%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    transition: none;
+  }
+}

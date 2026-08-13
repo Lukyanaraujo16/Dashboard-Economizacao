@@ -1,0 +1,58 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.visual {
+  display: block;
+  box-sizing: border-box;
+  border: 1.5px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-top-color: currentColor;
+  border-right-color: color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: var(--radius-full);
+  animation: spin var(--duration-slow) linear infinite;
+}
+
+.sm .visual {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.md .visual {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.lg .visual {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visual {
+    animation: none;
+    border-color: color-mix(in srgb, currentColor 35%, transparent);
+    border-top-color: currentColor;
+    opacity: 0.9;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

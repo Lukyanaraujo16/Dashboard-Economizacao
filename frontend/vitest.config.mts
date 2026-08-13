@@ -1,11 +1,19 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  esbuild: {
-    jsx: 'automatic',
+  // Next usa jsx:preserve; Vitest/Vite precisam transformar JSX nos testes.
+  oxc: {
+    jsx: {
+      runtime: 'automatic',
+    },
+  },
+  css: {
+    modules: {
+      classNameStrategy: 'non-scoped',
+    },
   },
   test: {
-    environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    environment: 'jsdom',
+    include: ['tests/**/*.{test,spec}.{ts,tsx}'],
   },
 });

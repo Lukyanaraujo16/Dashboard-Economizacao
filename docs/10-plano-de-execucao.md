@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1F-A
+1.1F-C
 
 Último checkpoint:
 
-1.1F-A — Fundação Visual
+1.1F-C — Theme Engine / Branding Runtime
 
 Último commit:
 
-Registrado no histórico pelo checkpoint 1.1F-A
+Registrado no histórico pelo checkpoint visual consolidado até 1.1F-C
 
 Estado atual
 
@@ -43,6 +43,10 @@ Estado atual
 ✔ Middleware e contexto autenticado
 
 ✔ Fundação visual e sistema de temas
+
+✔ Componentes Base, UI Polish e Visual Freeze Candidate
+
+✔ Theme Engine e Branding Runtime mock
 
 ✔ Health Checks
 
@@ -153,13 +157,19 @@ Status: Concluída
 Status: Concluída
 
 1.1F-B — Componentes Base
-Status: Próxima
+Status: Concluída
+
+Rodadas concluídas:
+
+1.1F-B.1 — UI Polish
+
+1.1F-B.2 — Visual Freeze Candidate
 
 1.1F-C — Theme Engine / Branding Runtime
-Status: Pendente
+Status: Concluída
 
 1.1F-D — Tela de Login
-Status: Pendente
+Status: Próxima
 
 1.1G — Logout
 Status: Pendente

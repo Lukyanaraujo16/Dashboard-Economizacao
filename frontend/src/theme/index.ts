@@ -5,6 +5,21 @@ export { lightColorTokens } from './light/colors';
 export { lightTheme } from './light/theme';
 export { ThemeProvider } from './provider/theme-provider';
 export { resolveTheme } from './resolver/resolve-theme';
+export { runThemeEngine } from './engine/theme-engine';
+export {
+  ALLOWED_BRANDING_COLOR_TOKEN_NAMES,
+  getMockTenantBranding,
+  isAllowedBrandingColorToken,
+  isProtectedBrandingColorToken,
+  mergeBrandingColors,
+  MOCK_TENANT_BRANDINGS,
+  normalizeBrandingInput,
+} from './branding/index';
+export type {
+  AllowedBrandingColorTokenName,
+  MockTenantBranding,
+  MockTenantBrandingId,
+} from './branding/index';
 export {
   durationTokens,
   elevationTokens,

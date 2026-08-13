@@ -23,10 +23,12 @@ export type ThemeFoundation = {
 };
 
 /**
- * Overrides futuros de branding por tenant.
- * Apenas tokens permitidos; semânticas críticas são ignoradas no resolver.
+ * Overrides de branding por tenant (runtime).
+ * Apenas tokens allowlisted; semânticas críticas e estruturais são ignoradas.
  */
 export type TenantBrandingInput = {
+  /** Nome exibido do tenant (mock / futuro backend). */
+  readonly name?: string | null;
   readonly logoUrl?: string | null;
   readonly light?: Partial<ColorTokens>;
   readonly dark?: Partial<ColorTokens>;
@@ -44,4 +46,6 @@ export type ResolvedTheme = ThemeFoundation & {
   readonly preference: ThemeModePreference;
   /** null = usar logo padrão da plataforma na camada de UI futura. */
   readonly logoUrl: string | null;
+  /** null = Theme Default sem nome de tenant. */
+  readonly brandName: string | null;
 };
