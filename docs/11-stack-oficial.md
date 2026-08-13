@@ -30,6 +30,7 @@ Nenhuma biblioteca relevante poderá ser adicionada ao projeto sem atualização
 | @fastify/cookie | Parsing e serialização segura de cookies, incluindo suporte à infraestrutura de cookies HttpOnly da autenticação | Obrigatório | Plugin oficial Fastify adotado para Fastify 5 |
 | @fastify/session | Infraestrutura de sessão server-side da aplicação | Obrigatório | Plugin oficial Fastify. Persistência via store Redis (`createRedisSessionStore`); não utilizar MemoryStore em runtime |
 | @fastify/redis | Conexão Redis oficial compartilhada no backend | Obrigatório | Plugin oficial Fastify. Primeiro uso: persistência de sessão. Futuramente poderá dar suporte a cache e infraestrutura de filas conforme fases específicas |
+| argon2 | Hash e verificação de senhas com Argon2id | Obrigatório | Utilizado exclusivamente através da abstração de password hashing do módulo de autenticação |
 | Processo Worker independente | Execução de jobs assíncronos | Obrigatório | ADR-011; implementação conforme Épico 5 |
 | Scheduler | Planejamento de tarefas recorrentes; preferência por enfileirar | Obrigatório | ADR-012; implementação conforme Épico 5 |
 | BullMQ | Filas de sincronização, analytics, insights, relatórios e notificações | Aprovado | ADR-010; fase futura no plano (Épico 5) |

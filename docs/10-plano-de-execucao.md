@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1C
+1.1D
 
 Último checkpoint:
 
-1.1C — Modelo de Autenticação
+1.1D — Login Administrativo
 
 Último commit:
 
-Registrado no histórico pelo checkpoint 1.1C
+Registrado no histórico pelo checkpoint 1.1D
 
 Estado atual
 
@@ -37,6 +37,8 @@ Estado atual
 ✔ Persistência de sessão com Redis
 
 ✔ Modelo persistente de autenticação
+
+✔ Login administrativo
 
 ✔ Health Checks
 
@@ -137,11 +139,11 @@ Status: Concluída
 1.1C — Modelo de Autenticação
 Status: Concluída
 
-1.1D — Login
-Status: Próxima
+1.1D — Login Administrativo
+Status: Concluída
 
-1.1E — Middleware
-Status: Pendente
+1.1E — Middleware de Autenticação
+Status: Próxima
 
 1.1F — Frontend
 Status: Pendente

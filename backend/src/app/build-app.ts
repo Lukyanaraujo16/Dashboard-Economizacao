@@ -9,6 +9,7 @@ const redactedLogPaths = [
   'req.headers.authorization',
   'req.headers.cookie',
   'password',
+  'passwordHash',
   'token',
   'accessToken',
   'refreshToken',

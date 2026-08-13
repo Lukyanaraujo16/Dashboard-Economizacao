@@ -15,7 +15,16 @@ beforeAll(() => {
 });
 
 afterEach(async () => {
-  await Promise.all([...apps].map(async (app) => app.close()));
+  await Promise.all(
+    [...apps].map(async (app) => {
+      const prefix = buildSessionKeyPrefix('test');
+      const keys = await app.redis.keys(`${prefix}*`);
+      if (keys.length > 0) {
+        await app.redis.del(...keys);
+      }
+      await app.close();
+    }),
+  );
   apps.clear();
 });
 
@@ -84,13 +93,16 @@ describe('persistência de sessão Redis (1.1B)', () => {
     const keys = await app.redis.keys(`${prefix}*`);
     expect(keys.length).toBeGreaterThan(0);
 
-    const stored = await app.redis.get(keys[0]!);
-    expect(stored).toBeTruthy();
-    expect(stored).toContain('redis-1-1b');
-    expect(stored).not.toContain(TEST_AUTH_SECRET);
-    expect(stored).not.toContain('password');
+    const payloads = await Promise.all(
+      keys.map(async (key) => ({ key, value: await app.redis.get(key) })),
+    );
+    const matched = payloads.find((entry) => entry.value?.includes('redis-1-1b'));
+    expect(matched?.value).toBeTruthy();
+    expect(matched!.value).toContain('redis-1-1b');
+    expect(matched!.value).not.toContain(TEST_AUTH_SECRET);
+    expect(matched!.value).not.toContain('password');
 
-    const ttl = await app.redis.ttl(keys[0]!);
+    const ttl = await app.redis.ttl(matched!.key);
     expect(ttl).toBeGreaterThan(0);
 
     const recovered = await app.inject({
@@ -113,6 +125,6 @@ describe('persistência de sessão Redis (1.1B)', () => {
     });
 
     expect(destroyed.statusCode).toBe(200);
-    expect(await app.redis.get(keys[0]!)).toBeNull();
+    expect(await app.redis.get(matched!.key)).toBeNull();
   });
 });
