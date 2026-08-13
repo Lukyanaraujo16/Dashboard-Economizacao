@@ -5,8 +5,7 @@ import { useContext } from 'react';
 import { ThemeContext, type ThemeContextValue } from '../provider/theme-context';
 
 /**
- * API mínima de leitura do tema resolvido.
- * Sem alternância visual nesta subfase.
+ * Acesso ao tema resolvido e à preferência ativa.
  */
 export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);

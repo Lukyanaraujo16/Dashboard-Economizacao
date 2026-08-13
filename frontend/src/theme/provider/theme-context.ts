@@ -8,6 +8,7 @@ export type ThemeContextValue = {
   readonly theme: ResolvedTheme;
   readonly preference: ThemeModePreference;
   readonly branding: TenantBrandingInput | null;
+  readonly setPreference: (preference: ThemeModePreference) => void;
 };
 
 export const ThemeContext = createContext<ThemeContextValue | null>(null);

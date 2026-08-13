@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1F-E.3
+1.1F-E.4
 
 Último checkpoint:
 
-1.1F-E.3 — Sessão do Usuário: /me e Logout
+1.1F-E.4 — Proteção de Rotas e Shell Autenticado
 
 Último commit:
 
-Registrado no histórico pelo checkpoint de sessão do usuário e logout
+Registrado no histórico pelo checkpoint de proteção de rotas e shell autenticado
 
 Estado atual
 
@@ -51,6 +51,8 @@ Estado atual
 ✔ Rota /login funcional com sessão baseada em cookie HttpOnly
 
 ✔ AuthProvider mínimo, /me e logout funcionais
+
+✔ Proteção de rotas e shell autenticado
 
 ✔ Health Checks
 
@@ -194,6 +196,12 @@ Status: Concluída
 AuthProvider mínimo implementado, com /me e logout funcionais. O redirect atual para / permanece temporário até o shell/dashboard.
 
 1.1F-E.4 — Proteção de Rotas e Shell Autenticado
+Status: Concluída
+
+Route group autenticado e RequireSession implementados. Shell autenticado criado com logout e
+controle Light/Dark/System. A home atual é temporária e não constitui dashboard financeiro.
+
+1.1F-E.5 — Hardening da Experiência Autenticada
 Status: Próxima
 
 1.1G — Logout

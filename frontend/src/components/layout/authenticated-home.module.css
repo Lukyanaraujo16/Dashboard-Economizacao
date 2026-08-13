@@ -1,0 +1,37 @@
+.root {
+  width: min(100%, 48rem);
+}
+
+.intro {
+  max-width: 40rem;
+}
+
+.greeting {
+  margin: 0;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.support {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.panel {
+  padding: var(--space-5);
+}
+
+.panelTitle {
+  margin: 0;
+}
+
+.panelCopy {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 767px) {
+  .greeting {
+    font-size: 1.75rem;
+  }
+}

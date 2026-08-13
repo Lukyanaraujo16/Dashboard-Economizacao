@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import { resolveTheme } from '../resolver/resolve-theme';
 import type { ResolvedColorScheme, TenantBrandingInput, ThemeModePreference } from '../types/theme';
@@ -37,13 +37,11 @@ function getServerSystemSchemeSnapshot(): ResolvedColorScheme {
 
 /**
  * Fornece ResolvedTheme e aplica CSS variables no documentElement.
- * Não expõe UI de alternância nesta subfase.
+ * Pode operar de forma controlada ou manter a preferência localmente.
  */
-export function ThemeProvider({
-  children,
-  preference = 'system',
-  branding = null,
-}: ThemeProviderProps) {
+export function ThemeProvider({ children, preference, branding = null }: ThemeProviderProps) {
+  const [internalPreference, setInternalPreference] = useState<ThemeModePreference>('system');
+  const resolvedPreference = preference ?? internalPreference;
   const systemScheme = useSyncExternalStore(
     subscribeToSystemScheme,
     getSystemSchemeSnapshot,
@@ -51,14 +49,14 @@ export function ThemeProvider({
   );
 
   const theme = resolveTheme({
-    preference,
+    preference: resolvedPreference,
     systemScheme,
     branding,
   });
 
   useEffect(() => {
     const resolved = resolveTheme({
-      preference,
+      preference: resolvedPreference,
       systemScheme,
       branding,
     });
@@ -66,14 +64,15 @@ export function ThemeProvider({
     applyCssVariables(root, themeToCssVariables(resolved));
     root.dataset.theme = resolved.colorScheme;
     root.style.colorScheme = resolved.colorScheme;
-  }, [preference, systemScheme, branding]);
+  }, [resolvedPreference, systemScheme, branding]);
 
   return (
     <ThemeContext.Provider
       value={{
         theme,
-        preference,
+        preference: resolvedPreference,
         branding,
+        setPreference: setInternalPreference,
       }}
     >
       {children}

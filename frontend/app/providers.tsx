@@ -12,7 +12,7 @@ type AppProvidersProps = {
 /** Providers de infraestrutura (tema + sessão mínima 1.1F-E.3). */
 export function AppProviders({ children }: AppProvidersProps) {
   return (
-    <ThemeProvider preference="system">
+    <ThemeProvider>
       <AuthProvider>{children}</AuthProvider>
     </ThemeProvider>
   );
