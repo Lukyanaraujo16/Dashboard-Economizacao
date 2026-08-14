@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1F-E.4
+1.1F-E.5.1
 
 Último checkpoint:
 
-1.1F-E.4 — Proteção de Rotas e Shell Autenticado
+1.1F-E.5.1 — Correção de Regressão Visual / Shell Polish
 
 Último commit:
 
-Registrado no histórico pelo checkpoint de proteção de rotas e shell autenticado
+Registrado no histórico pelo checkpoint de refinamentos do shell autenticado
 
 Estado atual
 
@@ -202,7 +202,15 @@ Route group autenticado e RequireSession implementados. Shell autenticado criado
 controle Light/Dark/System. A home atual é temporária e não constitui dashboard financeiro.
 
 1.1F-E.5 — Hardening da Experiência Autenticada
-Status: Próxima
+Status: Concluída
+
+1.1F-E.5.1 — Correção de Regressão Visual / Shell Polish
+Status: Concluída
+
+Sidebar desktop consolidada em 220px; header reduzido; gutter/conteúdo refinado;
+Theme Control compacto; Light/Dark/System funcionais. Shell aprovado visualmente em
+desktop. Mobile atual funcional; futura experiência mobile app-like será tratada em
+fase própria.
 
 1.1G — Logout
 Status: Pendente
