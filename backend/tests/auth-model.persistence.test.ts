@@ -14,6 +14,7 @@ import {
   PASSWORD_MAX_LENGTH,
   PASSWORD_MIN_LENGTH,
 } from '../src/modules/auth/index.js';
+import { cleanTestDatabase } from './helpers/test-database.js';
 
 const PLACEHOLDER_PASSWORD_HASH =
   '$argon2id$v=19$m=65536,t=3,p=4$cGxhY2Vob2xkZXJzYWx0$cGxhY2Vob2xkZXJoYXNo';
@@ -55,9 +56,7 @@ describe('persistência auth — User / Tenant / UserCredential', () => {
   });
 
   afterEach(async () => {
-    await prisma.userCredential.deleteMany();
-    await prisma.user.deleteMany();
-    await prisma.tenant.deleteMany();
+    await cleanTestDatabase(prisma);
   });
 
   afterAll(async () => {

@@ -13,6 +13,7 @@ import {
   SESSION_TTL_SECONDS,
 } from '../src/modules/auth/config/session-config.js';
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
+import { cleanTestDatabase } from './helpers/test-database.js';
 
 const TEST_AUTH_SECRET = 'test-auth-secret-foundation-1-1a-32chars';
 const TEST_REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
@@ -29,9 +30,6 @@ beforeAll(() => {
   process.env.AUTH_SECRET = TEST_AUTH_SECRET;
   process.env.REDIS_URL = TEST_REDIS_URL;
   process.env.NODE_ENV = 'test';
-  process.env.DATABASE_URL =
-    process.env.DATABASE_URL ??
-    'postgresql://dashboard_dev:dashboard_dev@127.0.0.1:5432/dashboard_economizacao_dev';
 });
 
 afterEach(async () => {
@@ -54,9 +52,7 @@ afterEach(async () => {
     }),
   );
   apps.clear();
-  await prisma.userCredential.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.tenant.deleteMany();
+  await cleanTestDatabase(prisma);
 });
 
 afterAll(async () => {
