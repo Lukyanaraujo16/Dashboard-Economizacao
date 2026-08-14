@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createArgon2idPasswordHasher } from '../crypto/password-hasher.js';
 import type { AuthenticationContext } from '../domain/authentication-context.js';
+import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createUserCredentialRepository } from '../repositories/user-credential.repository.js';
 import { createUserRepository } from '../repositories/user.repository.js';
 import { parseLoginRequestBody } from '../schemas/login.schema.js';
@@ -42,10 +43,12 @@ function destroySession(
 export async function registerLoginRoutes(app: FastifyInstance): Promise<void> {
   const prisma = getPrismaClient();
   const users = createUserRepository(prisma);
+  const tenants = createTenantRepository(prisma);
   const credentials = createUserCredentialRepository(prisma);
   const passwordHasher = createArgon2idPasswordHasher();
   const loginService = createLoginService({
     users,
+    tenants,
     credentials,
     passwordHasher,
   });

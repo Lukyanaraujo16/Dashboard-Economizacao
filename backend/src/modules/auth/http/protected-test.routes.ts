@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createUserRepository } from '../repositories/user.repository.js';
 import { createRequireAuthentication } from './require-authentication.js';
 
@@ -9,8 +10,10 @@ import { createRequireAuthentication } from './require-authentication.js';
  * Não existem em produção.
  */
 export async function registerProtectedTestRoutes(app: FastifyInstance): Promise<void> {
-  const users = createUserRepository(getPrismaClient());
-  const requireAuthentication = createRequireAuthentication({ users });
+  const prisma = getPrismaClient();
+  const users = createUserRepository(prisma);
+  const tenants = createTenantRepository(prisma);
+  const requireAuthentication = createRequireAuthentication({ users, tenants });
 
   app.get('/__test__/protected', { preHandler: requireAuthentication }, async (request, reply) => {
     const auth = request.auth;

@@ -43,6 +43,7 @@ model Tenant {
   deactivatedAt DateTime?    @map("deactivated_at") @db.Timestamptz(3)
   users         User[]
 
+  @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
 }
 

@@ -10,10 +10,6 @@ export const USER_STATUSES = ['PENDING', 'ACTIVE', 'BLOCKED', 'DISABLED'] as con
 
 export type UserStatus = (typeof USER_STATUSES)[number];
 
-export const TENANT_STATUSES = ['ACTIVE', 'DISABLED'] as const;
-
-export type TenantStatus = (typeof TENANT_STATUSES)[number];
-
 /** Leitura pública do usuário — nunca inclui passwordHash. */
 export type UserRecord = {
   readonly id: string;
@@ -32,16 +28,6 @@ export type UserRecord = {
   readonly deactivatedAt: Date | null;
 };
 
-export type TenantRecord = {
-  readonly id: string;
-  readonly name: string;
-  readonly displayName: string;
-  readonly status: TenantStatus;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-  readonly deactivatedAt: Date | null;
-};
-
 /** Uso interno apenas — não retornar em DTO/API. */
 export type UserCredentialRecord = {
   readonly id: string;
@@ -49,12 +35,6 @@ export type UserCredentialRecord = {
   readonly passwordHash: string;
   readonly createdAt: Date;
   readonly updatedAt: Date;
-};
-
-export type CreateTenantInput = {
-  readonly name: string;
-  readonly displayName: string;
-  readonly status?: TenantStatus;
 };
 
 export type CreateUserInput = {

@@ -1,0 +1,37 @@
+export const TENANT_STATUSES = ['ACTIVE', 'DISABLED'] as const;
+
+export type TenantStatus = (typeof TENANT_STATUSES)[number];
+
+export type TenantRecord = {
+  readonly id: string;
+  readonly name: string;
+  readonly displayName: string;
+  readonly status: TenantStatus;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly deactivatedAt: Date | null;
+};
+
+export type CreateTenantInput = {
+  readonly name: string;
+  readonly displayName: string;
+  readonly status?: TenantStatus;
+};
+
+export type UpdateTenantInput = {
+  readonly name?: string;
+  readonly displayName?: string;
+};
+
+export type ListTenantsFilter = {
+  readonly status?: TenantStatus;
+  readonly limit?: number;
+  readonly offset?: number;
+};
+
+export type ListTenantsResult = {
+  readonly items: readonly TenantRecord[];
+  readonly total: number;
+  readonly limit: number;
+  readonly offset: number;
+};

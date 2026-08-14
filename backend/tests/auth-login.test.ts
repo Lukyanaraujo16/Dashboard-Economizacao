@@ -137,6 +137,7 @@ describe('LoginService — domínio', () => {
     const clock = { now: new Date('2026-08-13T12:00:00.000Z') };
     const service = createLoginService({
       users,
+      tenants,
       credentials,
       passwordHasher,
       clock: () => clock.now,
@@ -183,6 +184,7 @@ describe('LoginService — domínio', () => {
     const now = new Date('2026-08-13T12:00:00.000Z');
     const service = createLoginService({
       users,
+      tenants,
       credentials,
       passwordHasher,
       clock: () => now,
@@ -213,6 +215,7 @@ describe('LoginService — domínio', () => {
     const now = new Date('2026-08-13T15:00:00.000Z');
     const service = createLoginService({
       users,
+      tenants,
       credentials,
       passwordHasher,
       clock: () => now,

@@ -17,14 +17,13 @@ export type {
   AuthenticatedRequestContext,
   AuthenticationContext,
 } from './authentication-context.js';
+export type { CreateTenantInput, TenantRecord, TenantStatus } from '../../tenant/domain/types.js';
+export { TENANT_STATUSES } from '../../tenant/domain/types.js';
 export type {
-  CreateTenantInput,
   CreateUserInput,
-  TenantRecord,
-  TenantStatus,
   UserCredentialRecord,
   UserRecord,
   UserRole,
   UserStatus,
 } from './types.js';
-export { TENANT_STATUSES, USER_ROLES, USER_STATUSES } from './types.js';
+export { USER_ROLES, USER_STATUSES } from './types.js';

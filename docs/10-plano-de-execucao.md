@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1J
+1.2B
 
 Último checkpoint:
 
-1.1J — Checkpoint Final da Fase 1.1
+1.2B — Persistência e Domínio de Empresas
 
 Último commit:
 
-docs(project): encerra fase 1.1 de fundacao
+feat(tenant): adiciona dominio e persistencia de empresas
 
 Próxima fase executável:
 
-1.2 Empresas (Tenants)
+1.2C — API Administrativa de Empresas
 
 Estado atual
 
@@ -65,6 +65,10 @@ Estado atual
 ✔ Infraestrutura de autenticação (1.1) — subfases F–G concluídas; plano sincronizado (1.1H)
 
 ✔ Fase 1.1 — Infraestrutura de Autenticação encerrada (1.1J)
+
+✔ 1.2A — Arquitetura de Empresas/Tenants concluída (ADR-045)
+
+✔ 1.2B — Persistência e Domínio de Empresas concluída
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -273,10 +277,29 @@ Gates format/lint/typecheck/test/build verdes. Nenhuma entrega da 1.1 pendente n
 1.2 Empresas (Tenants)
 
 Status:
-Próxima
+Em andamento
 
-Observação de continuidade: a próxima fase deverá tratar Empresa/Tenant como núcleo de contexto
-da plataforma. Decisão arquitetural sobre nomenclatura Workspace vs Tenant será analisada na 1.2.
+Decisão arquitetural (ADR-045): Tenant = entidade técnica/domínio/persistência; Empresa = termo de
+produto/UX; Workspace não é entidade.
+
+Subfases:
+
+1.2A — Arquitetura de Empresas/Tenants
+Status: Concluída
+
+Documentação em docs/13-arquitetura-empresas-workspace.md e ADR-045. Tenant permanece entidade
+oficial; Empresa é sinônimo de produto; Workspace restrito a metáfora de UX/layout.
+
+1.2B — Persistência e Domínio de Empresas
+Status: Concluída
+
+TenantRepository expandido (create, findById, findByName, existsByName, list, update, disable,
+reactivate). name único e normalizado slug-like; displayName normalizado para exibição. Regras
+ACTIVE/DISABLED com deactivatedAt coerente. TENANT-003 implementado no login e requireAuthentication.
+Migration 20260814100000_tenant_domain_foundation aplicada em DEV/TEST. metadata adiado.
+
+1.2C — API Administrativa de Empresas
+Status: Próxima
 
 ----------------------------------------
 

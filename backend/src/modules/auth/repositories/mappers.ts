@@ -1,24 +1,5 @@
-import type { Tenant, User, UserCredential } from '../../../generated/prisma/client.js';
-import type {
-  TenantRecord,
-  TenantStatus,
-  UserCredentialRecord,
-  UserRecord,
-  UserRole,
-  UserStatus,
-} from '../domain/types.js';
-
-export function mapTenantRecord(row: Tenant): TenantRecord {
-  return {
-    id: row.id,
-    name: row.name,
-    displayName: row.displayName,
-    status: row.status as TenantStatus,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    deactivatedAt: row.deactivatedAt,
-  };
-}
+import type { User, UserCredential } from '../../../generated/prisma/client.js';
+import type { UserCredentialRecord, UserRecord, UserRole, UserStatus } from '../domain/types.js';
 
 export function mapUserRecord(row: User): UserRecord {
   return {

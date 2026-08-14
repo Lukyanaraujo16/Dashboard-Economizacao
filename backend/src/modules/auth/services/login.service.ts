@@ -1,9 +1,11 @@
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
+import { canRoleUseTenantOperationalContext } from '../../tenant/domain/tenant-invariants.js';
 import type { PasswordHasher } from '../crypto/password-hasher.js';
 import { verifyWithTimingProtection } from '../crypto/timing-dummy-hash.js';
 import { isTemporaryLockoutActive, isTemporaryLockoutExpired } from '../domain/auth-lockout.js';
 import type { AuthenticatedPrincipal } from '../domain/authentication-context.js';
 import { normalizeEmail } from '../domain/email.js';
+import type { TenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import type { UserCredentialRepository } from '../repositories/user-credential.repository.js';
 import type { UserRepository } from '../repositories/user.repository.js';
 
@@ -19,6 +21,7 @@ export type LoginService = {
 export type LoginServiceDependencies = {
   readonly users: UserRepository;
   readonly credentials: UserCredentialRepository;
+  readonly tenants: TenantRepository;
   readonly passwordHasher: PasswordHasher;
   readonly clock?: () => Date;
 };
@@ -82,6 +85,17 @@ export function createLoginService(deps: LoginServiceDependencies): LoginService
       if (!matches) {
         await deps.users.registerFailedPasswordAttempt(current.id, at);
         throw new UnauthenticatedError();
+      }
+
+      if (current.role === 'USER') {
+        if (current.tenantId === null) {
+          return rejectGeneric(password, passwordHash);
+        }
+
+        const tenant = await deps.tenants.findById(current.tenantId);
+        if (!canRoleUseTenantOperationalContext(current.role, tenant)) {
+          return rejectGeneric(password, passwordHash);
+        }
       }
 
       return {

@@ -1,6 +1,8 @@
 import type { preHandlerAsyncHookHandler } from 'fastify';
 
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
+import { canRoleUseTenantOperationalContext } from '../../tenant/domain/tenant-invariants.js';
+import type { TenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { SESSION_MAX_AGE_MILLISECONDS } from '../config/session-config.js';
 import { isTemporaryLockoutExpired } from '../domain/auth-lockout.js';
 import type { AuthenticatedRequestContext } from '../domain/authentication-context.js';
@@ -9,6 +11,7 @@ import { parseSessionAuthenticationContext } from './parse-session-authenticatio
 
 export type RequireAuthenticationDependencies = {
   readonly users: UserRepository;
+  readonly tenants: TenantRepository;
   readonly clock?: () => Date;
 };
 
@@ -60,6 +63,17 @@ export function createRequireAuthentication(
     // Sessão não pode divergir do estado persistido (role/tenant).
     if (user.role !== sessionAuth.role || user.tenantId !== sessionAuth.tenantId) {
       throw new UnauthenticatedError();
+    }
+
+    if (user.role === 'USER') {
+      if (user.tenantId === null) {
+        throw new UnauthenticatedError();
+      }
+
+      const tenant = await deps.tenants.findById(user.tenantId);
+      if (!canRoleUseTenantOperationalContext(user.role, tenant)) {
+        throw new UnauthenticatedError();
+      }
     }
 
     const lastAccess = at.toISOString();

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
+import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createUserRepository } from '../repositories/user.repository.js';
 import { createRequireAuthentication } from './require-authentication.js';
 import { toPublicAuthenticatedUser } from './public-authenticated-user.js';
@@ -12,7 +13,8 @@ import { toPublicAuthenticatedUser } from './public-authenticated-user.js';
  */
 export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
   const users = createUserRepository(getPrismaClient());
-  const requireAuthentication = createRequireAuthentication({ users });
+  const tenants = createTenantRepository(getPrismaClient());
+  const requireAuthentication = createRequireAuthentication({ users, tenants });
 
   app.get('/auth/me', { preHandler: requireAuthentication }, async (request, reply) => {
     const auth = request.auth;
