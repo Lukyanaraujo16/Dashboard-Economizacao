@@ -34,17 +34,31 @@ enum UserRole {
 }
 
 model Tenant {
-  id            String       @id @default(uuid()) @db.Uuid
+  id            String          @id @default(uuid()) @db.Uuid
   name          String
-  displayName   String       @map("display_name")
+  displayName   String          @map("display_name")
   status        TenantStatus
-  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deactivatedAt DateTime?    @map("deactivated_at") @db.Timestamptz(3)
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deactivatedAt DateTime?       @map("deactivated_at") @db.Timestamptz(3)
   users         User[]
+  branding      TenantBranding?
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
+}
+
+/// Overrides visuais por empresa (1:1). Ausência = fallback da plataforma (ADR-046).
+model TenantBranding {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @unique @map("tenant_id") @db.Uuid
+  lightColors Json?    @map("light_colors")
+  darkColors  Json?    @map("dark_colors")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_branding")
 }
 
 model User {

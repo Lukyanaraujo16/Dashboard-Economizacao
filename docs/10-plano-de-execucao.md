@@ -338,7 +338,27 @@ implementados.
 1.3 Branding
 
 Status:
-Pendente
+Em andamento
+
+Subfases:
+
+1.3A — Arquitetura de Branding por Empresa
+Status: Concluída
+
+Documentação em docs/14-arquitetura-branding-tenant.md e ADR-046. TenantBranding separado de Tenant;
+overrides limitados; login usa plataforma; USER pós-login usará branding do tenant; assets/storage
+adiados.
+
+1.3B — Persistência e Domínio de Branding
+Status: Concluída
+
+TenantBranding 1:1 separado de Tenant (lightColors/darkColors JSONB). Allowlist
+primary/onPrimary/secondary/accent. Sem defaults persistidos; sem assets/storage. Cascade
+exclusivamente Tenant → TenantBranding. Repository find/upsert/delete. Migration
+20260814092616_tenant_branding aplicada em DEV/TEST.
+
+1.3C — API Administrativa de Branding
+Status: Próxima
 
 ----------------------------------------
 
