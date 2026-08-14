@@ -1,0 +1,38 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+}
+
+.content {
+  width: 100%;
+}
+
+.default {
+  /* ~140px */
+  min-height: 8.75rem;
+}
+
+.list {
+  /* ~140px */
+  min-height: 8.75rem;
+}
+
+.chart {
+  /* ~232px — faixa 220–240px */
+  min-height: 14.5rem;
+}
+
+@media (max-width: 767px) {
+  .chart {
+    min-height: 12.5rem;
+  }
+
+  .list,
+  .default {
+    min-height: 8rem;
+  }
+}

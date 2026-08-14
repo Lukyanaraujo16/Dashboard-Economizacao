@@ -1,0 +1,12 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-border) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  flex-shrink: 0;
+}

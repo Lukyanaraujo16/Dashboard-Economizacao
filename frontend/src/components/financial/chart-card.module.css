@@ -1,0 +1,52 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+}
+
+.header {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.default {
+  min-height: 8.75rem;
+}
+
+.list {
+  min-height: 8.75rem;
+}
+
+.chart {
+  min-height: 14.5rem;
+}
+
+.content {
+  width: 100%;
+  min-height: inherit;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+@media (max-width: 767px) {
+  .chart {
+    min-height: 12.5rem;
+  }
+
+  .list,
+  .default {
+    min-height: 8rem;
+  }
+}

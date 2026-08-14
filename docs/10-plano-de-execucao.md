@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1F-E.5.1
+3.2
 
 Último checkpoint:
 
-1.1F-E.5.1 — Correção de Regressão Visual / Shell Polish
+3.2 — Biblioteca de Componentes Financeiros
 
 Último commit:
 
-Registrado no histórico pelo checkpoint de refinamentos do shell autenticado
+feat(dashboard): adiciona estrutura e componentes financeiros base
 
 Estado atual
 
@@ -53,6 +53,10 @@ Estado atual
 ✔ AuthProvider mínimo, /me e logout funcionais
 
 ✔ Proteção de rotas e shell autenticado
+
+✔ Shell autenticado com estrutura definitiva do Dashboard (empty state)
+
+✔ Biblioteca de componentes financeiros reutilizáveis (frontend)
 
 ✔ Health Checks
 
@@ -284,9 +288,28 @@ Dashboard
 
 Status:
 
-Pendente
+Em andamento
 
 Fases
+
+3.1 — Estrutura do Dashboard
+Status: Concluída
+
+Estrutura definitiva da tela inicial em empty state (boas-vindas, resumo financeiro,
+fluxo de caixa, movimentações, alertas e rodapé). Sem dados financeiros, gráficos,
+APIs ou valores fictícios.
+
+3.1.1 — Dashboard Empty State Polish
+Status: Concluída
+
+Refinamento visual dos painéis empty (alturas, KPIs preparados, ícones neutros,
+espaçamentos e rodapé discreto). Sem alteração funcional.
+
+3.2 — Biblioteca de Componentes Financeiros
+Status: Concluída
+
+KpiCard, ChartCard, FinancialSection, FinancialGrid, StateWrapper e PanelIcon —
+desacoplados de backend/API, orientados por props, reutilizáveis por módulos futuros.
 
 KPIs
 

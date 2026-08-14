@@ -1,0 +1,45 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.center {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.start {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.iconSlot {
+  margin-bottom: var(--space-1);
+}
+
+.message {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  max-width: 28rem;
+}
+
+.center .message {
+  max-width: 26rem;
+}
+
+.errorMessage {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  max-width: 28rem;
+}
+
+.retry {
+  margin-top: var(--space-1);
+}

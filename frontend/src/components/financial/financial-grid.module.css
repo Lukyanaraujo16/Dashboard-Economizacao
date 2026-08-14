@@ -1,0 +1,7 @@
+.root {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--financial-grid-min, 14rem)), 1fr));
+}
