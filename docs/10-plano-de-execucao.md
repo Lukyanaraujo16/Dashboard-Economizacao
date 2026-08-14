@@ -8,15 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-3.2
+1.1H
 
 Último checkpoint:
 
-3.2 — Biblioteca de Componentes Financeiros
+1.1H — Saneamento do Plano de Execução
 
 Último commit:
 
-feat(dashboard): adiciona estrutura e componentes financeiros base
+docs(roadmap): sincroniza plano com implementacoes atuais
+
+Próxima fase executável:
+
+1.2 Empresas (Tenants)
 
 Estado atual
 
@@ -57,6 +61,8 @@ Estado atual
 ✔ Shell autenticado com estrutura definitiva do Dashboard (empty state)
 
 ✔ Biblioteca de componentes financeiros reutilizáveis (frontend)
+
+✔ Infraestrutura de autenticação (1.1) — subfases F–G concluídas; plano sincronizado (1.1H)
 
 ✔ Health Checks
 
@@ -146,6 +152,8 @@ Fases
 Status:
 Em andamento
 
+Subfases concluídas até 1.1I; encerramento formal pendente em 1.1J.
+
 Subfases:
 
 1.1A — Fundação da Autenticação
@@ -169,6 +177,8 @@ Status: Concluída
 1.1F-B — Componentes Base
 Status: Concluída
 
+Design System Freeze v1 conforme ADR-043.
+
 Rodadas concluídas:
 
 1.1F-B.1 — UI Polish
@@ -178,13 +188,15 @@ Rodadas concluídas:
 1.1F-C — Theme Engine / Branding Runtime
 Status: Concluída
 
+Theme Engine e Branding Runtime mock conforme ADR-042.
+
 1.1F-D — Login Experience
 Status: Concluída
 
 Ciclo visual D.1–D.6 concluído e congelado pela ADR-044 (Login Experience Freeze v1).
 
 1.1F-E — Integração Funcional da Autenticação
-Status: Em andamento
+Status: Concluída
 
 1.1F-E.1 — Auditoria da autenticação existente
 Status: Concluída
@@ -197,13 +209,16 @@ A rota /login está funcional com sessão baseada em cookie HttpOnly.
 1.1F-E.3 — Sessão do Usuário: /me e Logout
 Status: Concluída
 
-AuthProvider mínimo implementado, com /me e logout funcionais. O redirect atual para / permanece temporário até o shell/dashboard.
+AuthProvider mínimo implementado, com GET /auth/me e POST /auth/logout funcionais. Login redireciona
+para / (Dashboard) após autenticação; logout redireciona para /login. Entrega registrada no commit
+86830d2.
 
 1.1F-E.4 — Proteção de Rotas e Shell Autenticado
 Status: Concluída
 
-Route group autenticado e RequireSession implementados. Shell autenticado criado com logout e
-controle Light/Dark/System. A home atual é temporária e não constitui dashboard financeiro.
+Route group autenticado e RequireSession implementados. Shell autenticado com botão Sair (logout),
+controle Light/Dark/System e home autenticada em `/` via DashboardPage (empty state — ÉPICO 3, 3.1).
+Entrega registrada no commit e238c3f.
 
 1.1F-E.5 — Hardening da Experiência Autenticada
 Status: Concluída
@@ -217,23 +232,35 @@ desktop. Mobile atual funcional; futura experiência mobile app-like será trata
 fase própria.
 
 1.1G — Logout
-Status: Pendente
+Status: Concluída
 
-1.1H — Testes finais
-Status: Pendente
+Escopo entregue em 1.1F-E.3 (endpoint, Redis, cookie, idempotência, preservação de outras sessões)
+e integrado ao Shell em 1.1F-E.4. Linha mantida por rastreabilidade com o plano original (1.1F Logout).
+
+1.1H — Saneamento do Plano de Execução
+Status: Concluída
+
+Sincronização do docs/10 com implementações reais (Login Experience, login funcional, AuthProvider,
+/me, logout, shell, Dashboard Foundation 3.1–3.2, biblioteca Financial). Antes rotulada como
+"Testes finais"; cobertura de auth/logout/shell permanece nas fases de implementação (1.1F-E.3–E.5.1).
 
 1.1I — Auditoria
-Status: Pendente
+Status: Concluída
+
+Auditoria de continuidade realizada antes do saneamento: 1.1G validada como completa no código;
+sequência do plano e próxima fase executável identificadas.
 
 1.1J — Checkpoint final da fase
-Status: Pendente
+Status: Próxima
+
+Encerramento formal da fase 1.1 Infraestrutura de Autenticação (atualização de status e checkpoint).
 
 ----------------------------------------
 
 1.2 Empresas (Tenants)
 
 Status:
-Pendente
+Próxima
 
 ----------------------------------------
 
