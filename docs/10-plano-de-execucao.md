@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.2C
+1.2D.1
 
 Último checkpoint:
 
-1.2C — API Administrativa de Empresas
+1.2D.1 — Polish Funcional de Empresas
 
 Último commit:
 
-feat(tenant): adiciona api administrativa de empresas
+feat(tenant): adiciona administracao visual de empresas
 
 Próxima fase executável:
 
-1.2D — UI Administrativa de Empresas
+1.3 — Branding
 
 Estado atual
 
@@ -71,6 +71,10 @@ Estado atual
 ✔ 1.2B — Persistência e Domínio de Empresas concluída
 
 ✔ 1.2C — API Administrativa de Empresas concluída
+
+✔ 1.2D — UI Administrativa de Empresas concluída
+
+✔ 1.2D.1 — Polish Funcional de Empresas concluída
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -310,7 +314,24 @@ filtro por status. TENANT-003 integrado via testes (disable/reactivate via API).
 400/401/403/404/409/422/500 conforme docs/09.6 e docs/09.10. Sem frontend.
 
 1.2D — UI Administrativa de Empresas
-Status: Próxima
+Status: Concluída
+
+Rotas /empresas, /empresas/nova e /empresas/[companyId]/editar. Nav Empresas para ADMIN/SUPER_ADMIN.
+Listagem com filtro por status, paginação, criação, edição, disable/reactivate, loading/empty/error.
+Serviço HTTP same-origin com credentials. RequirePlatformRole no frontend. Responsividade desktop/mobile.
+Light/Dark via tokens existentes.
+
+1.2D.1 — Polish Funcional de Empresas
+Status: Concluída
+
+Identificador automático assistido na criação (override manual preservado; edição não renormaliza).
+Ações iconográficas na listagem desktop (SVG inline + IconButton). Exclusão permanente com confirmação
+forte (digitação do identificador). DELETE /admin/tenants/:tenantId — 204 quando elegível; Tenant com
+usuários vinculados → 409 CONFLICT; sem cascade genérico nem migration.
+
+Política atual de exclusão permanente: permitida apenas quando não existem dependências impeditivas.
+A política de remoção integral será estendida por domínio conforme novos módulos tenant-scoped forem
+implementados.
 
 ----------------------------------------
 

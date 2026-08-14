@@ -19,6 +19,7 @@ vi.mock('next/navigation', () => ({
     replace: replaceMock,
     push: vi.fn(),
   }),
+  usePathname: () => '/',
 }));
 
 vi.mock('next/link', () => ({
@@ -134,7 +135,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     expect(system.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('exibe somente o módulo documentado que já possui rota funcional', async () => {
+  it('exibe somente módulos permitidos para USER', async () => {
     renderShell({
       getCurrentUserAction: createAuthenticatedGetCurrentUser(),
       hydrateOnMount: true,

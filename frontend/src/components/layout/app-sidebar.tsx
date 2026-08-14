@@ -2,16 +2,27 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
-import { useAuth } from '../../auth';
+import { isPlatformRole, useAuth } from '../../auth';
 import { PlatformBrandMark } from '../../login/platform-brand-mark';
 import { Button, Typography } from '../ui';
 import styles from './app-shell.module.css';
 
+const NAV_ITEMS = [
+  { href: '/', label: 'Dashboard', platformOnly: false },
+  { href: '/empresas', label: 'Empresas', platformOnly: true },
+] as const;
+
 export function AppSidebar() {
+  const pathname = usePathname();
   const { user, logout } = useAuth();
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => !item.platformOnly || (user && isPlatformRole(user.role)),
+  );
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -40,9 +51,23 @@ export function AppSidebar() {
       </div>
 
       <nav className={styles.nav} aria-label="Seções">
-        <Link href="/" className={styles.navItem} aria-current="page">
-          Dashboard
-        </Link>
+        {visibleItems.map((item) => {
+          const isActive =
+            item.href === '/'
+              ? pathname === '/'
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={styles.navItem}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className={styles.sidebarFooter}>

@@ -651,4 +651,156 @@ describe('API administrativa /admin/tenants (1.2C)', () => {
       expect(response.json().error.code).toBe('VALIDATION_ERROR');
     });
   });
+
+  describe('DELETE /admin/tenants/:tenantId', () => {
+    it('rejeita sem sessão', async () => {
+      const tenant = await tenants.create({ name: 'delete-unauth', displayName: 'Delete Unauth' });
+      const app = await buildTestApp();
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}`,
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe('UNAUTHENTICATED');
+    });
+
+    it('rejeita USER', async () => {
+      const tenant = await tenants.create({ name: 'delete-user', displayName: 'Delete User' });
+      await createPlatformUser({ email: 'user-delete@api.test', role: 'USER' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'user-delete@api.test');
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}`,
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.code).toBe('FORBIDDEN');
+    });
+
+    it('ADMIN exclui tenant sem usuários vinculados', async () => {
+      await createPlatformUser({ email: 'admin-delete@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-delete@api.test');
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/admin/tenants',
+        headers: { cookie },
+        payload: { name: 'delete-me', displayName: 'Delete Me' },
+      });
+      const tenantId = created.json().id as string;
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenantId}`,
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(await tenants.findById(tenantId)).toBeNull();
+    });
+
+    it('SUPER_ADMIN exclui tenant sem usuários vinculados', async () => {
+      await createPlatformUser({ email: 'super-delete@api.test', role: 'SUPER_ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'super-delete@api.test');
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/admin/tenants',
+        headers: { cookie },
+        payload: { name: 'delete-super', displayName: 'Delete Super' },
+      });
+      const tenantId = created.json().id as string;
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenantId}`,
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(204);
+    });
+
+    it('tenant inexistente retorna 404', async () => {
+      await createPlatformUser({ email: 'admin-delete-404@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-delete-404@api.test');
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${NON_EXISTENT_TENANT_ID}`,
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error.code).toBe('NOT_FOUND');
+    });
+
+    it('exclusão remove apenas tenant alvo', async () => {
+      await createPlatformUser({ email: 'admin-delete-scope@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-delete-scope@api.test');
+
+      const keep = await tenants.create({ name: 'keep-co', displayName: 'Keep Co' });
+      const remove = await tenants.create({ name: 'remove-co', displayName: 'Remove Co' });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${remove.id}`,
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(await tenants.findById(remove.id)).toBeNull();
+      expect(await tenants.findById(keep.id)).not.toBeNull();
+    });
+
+    it('bloqueia exclusão com usuários vinculados', async () => {
+      const tenant = await tenants.create({ name: 'has-users', displayName: 'Has Users' });
+      await createPlatformUser({
+        email: 'user-linked@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      await createPlatformUser({ email: 'admin-delete-block@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-delete-block@api.test');
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}`,
+        headers: { cookie },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.code).toBe('CONFLICT');
+      expect(await tenants.findById(tenant.id)).not.toBeNull();
+    });
+
+    it('tenantId no body não altera alvo da exclusão', async () => {
+      await createPlatformUser({ email: 'admin-delete-body@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-delete-body@api.test');
+
+      const target = await tenants.create({ name: 'target-co', displayName: 'Target Co' });
+      const decoy = await tenants.create({ name: 'decoy-co', displayName: 'Decoy Co' });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${target.id}`,
+        headers: { cookie },
+        payload: { tenantId: decoy.id },
+      });
+
+      expect(response.statusCode).toBe(204);
+      expect(await tenants.findById(target.id)).toBeNull();
+      expect(await tenants.findById(decoy.id)).not.toBeNull();
+    });
+  });
 });

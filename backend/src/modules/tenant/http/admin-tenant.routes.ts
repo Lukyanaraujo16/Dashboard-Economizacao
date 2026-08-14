@@ -85,4 +85,11 @@ export async function registerAdminTenantRoutes(app: FastifyInstance): Promise<v
       return reply.status(200).send(toPublicTenantResponse(tenant));
     },
   );
+
+  app.delete('/admin/tenants/:tenantId', { preHandler: adminGuard }, async (request, reply) => {
+    const tenantId = parseTenantIdParam(request.params);
+    await adminTenants.delete(tenantId);
+
+    return reply.status(204).send();
+  });
 }

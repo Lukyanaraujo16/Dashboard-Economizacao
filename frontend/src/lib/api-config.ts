@@ -19,3 +19,22 @@ export function authMePath(): string {
 export function authLogoutPath(): string {
   return `${AUTH_API_PREFIX}/logout`;
 }
+
+/** Prefixo same-origin das rotas administrativas de plataforma. */
+export const ADMIN_API_PREFIX = '/admin';
+
+export function adminTenantsPath(): string {
+  return `${ADMIN_API_PREFIX}/tenants`;
+}
+
+export function adminTenantPath(tenantId: string): string {
+  return `${adminTenantsPath()}/${tenantId}`;
+}
+
+export function adminTenantDisablePath(tenantId: string): string {
+  return `${adminTenantPath(tenantId)}/disable`;
+}
+
+export function adminTenantReactivatePath(tenantId: string): string {
+  return `${adminTenantPath(tenantId)}/reactivate`;
+}

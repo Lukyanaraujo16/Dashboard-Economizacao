@@ -16,6 +16,7 @@ export type AdminTenantService = {
   update(id: string, input: UpdateTenantInput): Promise<TenantRecord>;
   disable(id: string): Promise<TenantRecord>;
   reactivate(id: string): Promise<TenantRecord>;
+  delete(id: string): Promise<void>;
 };
 
 export function createAdminTenantService(deps: {
@@ -56,6 +57,10 @@ export function createAdminTenantService(deps: {
 
     async reactivate(id) {
       return withTenantDomainError(() => deps.tenants.reactivate(id));
+    },
+
+    async delete(id) {
+      return withTenantDomainError(() => deps.tenants.delete(id));
     },
   };
 }

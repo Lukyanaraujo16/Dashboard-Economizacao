@@ -15,6 +15,7 @@ export function mapTenantDomainError(error: TenantDomainError): never {
       });
     case 'TENANT_ALREADY_DISABLED':
     case 'TENANT_ALREADY_ACTIVE':
+    case 'TENANT_HAS_DEPENDENTS':
       throw new ConflictError(error.message);
     case 'TENANT_NAME_REQUIRED':
     case 'TENANT_NAME_INVALID':

@@ -48,6 +48,7 @@ export type TenantRepository = {
   update(id: string, input: UpdateTenantInput): Promise<TenantRecord>;
   disable(id: string, at?: Date): Promise<TenantRecord>;
   reactivate(id: string): Promise<TenantRecord>;
+  delete(id: string): Promise<void>;
 };
 
 export function createTenantRepository(prisma: PrismaClient): TenantRepository {
@@ -186,6 +187,36 @@ export function createTenantRepository(prisma: PrismaClient): TenantRepository {
       });
 
       return mapTenantRecord(row);
+    },
+
+    async delete(id) {
+      const existing = await prisma.tenant.findUnique({ where: { id } });
+      if (!existing) {
+        throw new TenantDomainError('TENANT_NOT_FOUND', 'Empresa não encontrada.');
+      }
+
+      const dependentUsers = await prisma.user.count({
+        where: { tenantId: id },
+      });
+
+      if (dependentUsers > 0) {
+        throw new TenantDomainError(
+          'TENANT_HAS_DEPENDENTS',
+          'Esta empresa possui usuários vinculados e não pode ser excluída permanentemente.',
+        );
+      }
+
+      try {
+        await prisma.tenant.delete({ where: { id } });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+          throw new TenantDomainError(
+            'TENANT_HAS_DEPENDENTS',
+            'Esta empresa possui usuários vinculados e não pode ser excluída permanentemente.',
+          );
+        }
+        throw error;
+      }
     },
   };
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 
 import { AppHeader } from './app-header';
 import { AppSidebar } from './app-sidebar';
@@ -11,16 +12,32 @@ type AppShellProps = {
   readonly title?: string;
 };
 
+function resolveShellTitle(pathname: string): string {
+  if (pathname === '/empresas') {
+    return 'Empresas';
+  }
+  if (pathname === '/empresas/nova') {
+    return 'Nova empresa';
+  }
+  if (pathname.startsWith('/empresas/') && pathname.endsWith('/editar')) {
+    return 'Editar empresa';
+  }
+  return 'Dashboard';
+}
+
 /**
  * Shell autenticado inicial (1.1F-E.4).
  * Anatomia de navegação — sem dashboard financeiro.
  */
-export function AppShell({ children, title = 'Dashboard' }: AppShellProps) {
+export function AppShell({ children, title }: AppShellProps) {
+  const pathname = usePathname();
+  const pageTitle = title ?? resolveShellTitle(pathname);
+
   return (
     <div className={styles.shell}>
       <AppSidebar />
       <div className={styles.workspace}>
-        <AppHeader title={title} />
+        <AppHeader title={pageTitle} />
         <main className={styles.main} id="conteudo-principal">
           <div className={styles.content}>{children}</div>
         </main>
