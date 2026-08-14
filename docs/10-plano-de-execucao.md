@@ -8,15 +8,15 @@ Fundação:
 Concluída
 
 Versão atual:
-1.1H
+1.1J
 
 Último checkpoint:
 
-1.1H — Saneamento do Plano de Execução
+1.1J — Checkpoint Final da Fase 1.1
 
 Último commit:
 
-docs(roadmap): sincroniza plano com implementacoes atuais
+docs(project): encerra fase 1.1 de fundacao
 
 Próxima fase executável:
 
@@ -63,6 +63,14 @@ Estado atual
 ✔ Biblioteca de componentes financeiros reutilizáveis (frontend)
 
 ✔ Infraestrutura de autenticação (1.1) — subfases F–G concluídas; plano sincronizado (1.1H)
+
+✔ Fase 1.1 — Infraestrutura de Autenticação encerrada (1.1J)
+
+✔ Autenticação, sessão, shell autenticado e logout operacionais
+
+✔ Design System Freeze v1 (ADR-043) e Login Experience Freeze v1 (ADR-044)
+
+✔ Isolamento DEV x TEST concluído
 
 ✔ Health Checks
 
@@ -150,9 +158,12 @@ Fases
 1.1 Infraestrutura de Autenticação
 
 Status:
-Em andamento
+Concluída
 
-Subfases concluídas até 1.1I; encerramento formal pendente em 1.1J.
+Fase 1.1 encerrada em 1.1J. Autenticação, sessão server-side (Redis + cookie HttpOnly), AuthProvider,
+/me, logout, proteção de rotas e Shell autenticado operacionais. Design System e Login Experience
+congelados (ADR-043, ADR-044). Isolamento DEV x TEST validado. Dashboard Foundation (ÉPICO 3) existe
+em paralelo, fora do escopo funcional desta fase.
 
 Subfases:
 
@@ -251,9 +262,11 @@ Auditoria de continuidade realizada antes do saneamento: 1.1G validada como comp
 sequência do plano e próxima fase executável identificadas.
 
 1.1J — Checkpoint final da fase
-Status: Próxima
+Status: Concluída
 
-Encerramento formal da fase 1.1 Infraestrutura de Autenticação (atualização de status e checkpoint).
+Encerramento formal da Fase 1.1 — Infraestrutura de Autenticação. Auditoria final contra código,
+testes (86 frontend / 55 backend), documentação (docs/10, docs/11, docs/12) e histórico Git.
+Gates format/lint/typecheck/test/build verdes. Nenhuma entrega da 1.1 pendente na working tree.
 
 ----------------------------------------
 
@@ -261,6 +274,9 @@ Encerramento formal da fase 1.1 Infraestrutura de Autenticação (atualização 
 
 Status:
 Próxima
+
+Observação de continuidade: a próxima fase deverá tratar Empresa/Tenant como núcleo de contexto
+da plataforma. Decisão arquitetural sobre nomenclatura Workspace vs Tenant será analisada na 1.2.
 
 ----------------------------------------
 
