@@ -97,21 +97,49 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     expect(screen.queryByText(/receita|despesa|saldo|kpi|gráfico/i)).toBeNull();
   });
 
-  it('alterna entre os temas claro e escuro pelo Theme Engine', async () => {
+  it('oferece Light, Dark e System com estado ativo evidente', async () => {
     renderShell({
       getCurrentUserAction: createAuthenticatedGetCurrentUser(),
       hydrateOnMount: true,
     });
 
-    const toggle = await screen.findByRole('button', { name: 'Ativar tema escuro' });
+    const system = await screen.findByRole('button', { name: 'Sistema' });
+    const light = screen.getByRole('button', { name: 'Claro' });
+    const dark = screen.getByRole('button', { name: 'Escuro' });
+
+    expect(system.getAttribute('aria-pressed')).toBe('true');
     expect(document.documentElement.dataset.theme).toBe('light');
 
-    fireEvent.click(toggle);
+    fireEvent.click(dark);
 
     await waitFor(() => {
       expect(document.documentElement.dataset.theme).toBe('dark');
     });
-    expect(screen.getByRole('button', { name: 'Ativar tema claro' })).toBeTruthy();
+    expect(dark.getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(light);
+
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe('light');
+    });
+    expect(light.getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(system);
+    expect(system.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('exibe somente o módulo documentado que já possui rota funcional', async () => {
+    renderShell({
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(),
+      hydrateOnMount: true,
+    });
+
+    const navigation = await screen.findByRole('navigation', { name: 'Seções' });
+    expect(screen.getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(navigation.textContent).not.toMatch(/Relatórios|Consultor|Notificações|Minha Conta/);
+    expect(navigation.textContent).not.toMatch(/Empresas|Usuários|Integrações|Configurações/);
   });
 
   it('unauthenticated redireciona /login', async () => {
@@ -213,7 +241,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
 
     expect(await screen.findByRole('main')).toBeTruthy();
     expect(screen.getByRole('navigation', { name: /seções/i })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Início' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Sair' })).toBeTruthy();
   });
 

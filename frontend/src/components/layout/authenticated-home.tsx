@@ -18,7 +18,7 @@ export function AuthenticatedHome() {
           Olá, {displayName}.
         </Typography>
         <Typography variant="body" className={styles.support}>
-          Seu ambiente financeiro está sendo preparado.
+          Acompanhe este espaço: os módulos do produto serão adicionados aqui nas próximas etapas.
         </Typography>
       </Stack>
 
@@ -28,8 +28,8 @@ export function AuthenticatedHome() {
             Em preparação
           </Typography>
           <Typography variant="body" className={styles.panelCopy}>
-            Esta área autenticada já está protegida pela sua sessão. Os módulos financeiros serão
-            adicionados nas próximas fases, sem alterar a fundação visual.
+            Sua área autenticada está pronta. O conteúdo do Dashboard será construído sem dados de
+            demonstração ou informações financeiras fictícias.
           </Typography>
         </Stack>
       </Card>
