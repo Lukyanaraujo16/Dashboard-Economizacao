@@ -21,3 +21,6 @@ export type {
 } from './domain/types.js';
 export { createTenantBrandingRepository } from './repositories/tenant-branding.repository.js';
 export type { TenantBrandingRepository } from './repositories/tenant-branding.repository.js';
+export { registerAdminBrandingRoutes } from './http/admin-branding.routes.js';
+export type { PublicTenantBrandingResponse } from './http/to-public-branding-response.js';
+export { toPublicBrandingResponse } from './http/to-public-branding-response.js';

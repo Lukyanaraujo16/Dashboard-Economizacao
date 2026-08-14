@@ -358,6 +358,14 @@ exclusivamente Tenant → TenantBranding. Repository find/upsert/delete. Migrati
 20260814092616_tenant_branding aplicada em DEV/TEST.
 
 1.3C — API Administrativa de Branding
+Status: Concluída
+
+GET/PATCH/DELETE `/admin/tenants/:tenantId/branding`. Guard ADMIN/SUPER_ADMIN. PATCH com merge
+parcial da allowlist (primary/onPrimary/secondary/accent). GET sem branding retorna light/dark null
+sem materializar defaults. DELETE reset idempotente (204); Tenant permanece. Sem upload/storage;
+sem frontend.
+
+1.3D — Storage e Upload de Logo
 Status: Próxima
 
 ----------------------------------------
