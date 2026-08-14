@@ -77,3 +77,52 @@ export class UnauthenticatedError extends ApplicationError {
     super(message, options);
   }
 }
+
+export class ForbiddenError extends ApplicationError {
+  readonly category = 'autorizacao' as const;
+  readonly code = 'FORBIDDEN' as const;
+  readonly httpStatus = 403;
+  readonly recoverable = false;
+
+  constructor(
+    message = 'Operação não permitida.',
+    options?: {
+      cause?: unknown;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
+export class NotFoundError extends ApplicationError {
+  readonly category = 'dominio' as const;
+  readonly code = 'NOT_FOUND' as const;
+  readonly httpStatus = 404;
+  readonly recoverable = false;
+
+  constructor(
+    message = 'Registro não encontrado.',
+    options?: {
+      cause?: unknown;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
+export class ConflictError extends ApplicationError {
+  readonly category = 'dominio' as const;
+  readonly code = 'CONFLICT' as const;
+  readonly httpStatus = 409;
+  readonly recoverable = false;
+
+  constructor(
+    message: string,
+    options?: {
+      cause?: unknown;
+      details?: ReadonlyArray<{ field: string; issue: string }>;
+    },
+  ) {
+    super(message, options);
+  }
+}

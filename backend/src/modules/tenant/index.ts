@@ -26,3 +26,6 @@ export type {
 export { TENANT_STATUSES } from './domain/types.js';
 export { createTenantRepository } from './repositories/tenant.repository.js';
 export type { TenantRepository } from './repositories/tenant.repository.js';
+export { registerAdminTenantRoutes } from './http/admin-tenant.routes.js';
+export type { PublicTenantResponse } from './http/to-public-tenant-response.js';
+export { toPublicTenantResponse } from './http/to-public-tenant-response.js';

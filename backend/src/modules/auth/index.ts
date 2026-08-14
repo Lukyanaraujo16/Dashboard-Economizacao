@@ -16,6 +16,7 @@ export { createLoginService } from './services/login.service.js';
 export type { LoginInput, LoginService } from './services/login.service.js';
 export { createRequireAuthentication } from './http/require-authentication.js';
 export type { RequireAuthenticationDependencies } from './http/require-authentication.js';
+export { createRequirePlatformRole } from './http/require-platform-role.js';
 export { parseSessionAuthenticationContext } from './http/parse-session-authentication.js';
 export type { PublicAuthenticatedUser } from './http/public-authenticated-user.js';
 

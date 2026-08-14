@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.2B
+1.2C
 
 Último checkpoint:
 
-1.2B — Persistência e Domínio de Empresas
+1.2C — API Administrativa de Empresas
 
 Último commit:
 
-feat(tenant): adiciona dominio e persistencia de empresas
+feat(tenant): adiciona api administrativa de empresas
 
 Próxima fase executável:
 
-1.2C — API Administrativa de Empresas
+1.2D — UI Administrativa de Empresas
 
 Estado atual
 
@@ -69,6 +69,8 @@ Estado atual
 ✔ 1.2A — Arquitetura de Empresas/Tenants concluída (ADR-045)
 
 ✔ 1.2B — Persistência e Domínio de Empresas concluída
+
+✔ 1.2C — API Administrativa de Empresas concluída
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -299,6 +301,15 @@ ACTIVE/DISABLED com deactivatedAt coerente. TENANT-003 implementado no login e r
 Migration 20260814100000_tenant_domain_foundation aplicada em DEV/TEST. metadata adiado.
 
 1.2C — API Administrativa de Empresas
+Status: Concluída
+
+CRUD administrativo sem DELETE físico (GET/POST/PATCH list/detail/create/update; disable/reactivate).
+Guard requirePlatformRole para ADMIN/SUPER_ADMIN; USER recebe 403. DTO público (id, name, displayName,
+status, createdAt, updatedAt, deactivatedAt). Listagem com paginação (limit/offset/total/hasMore) e
+filtro por status. TENANT-003 integrado via testes (disable/reactivate via API). Erros
+400/401/403/404/409/422/500 conforme docs/09.6 e docs/09.10. Sem frontend.
+
+1.2D — UI Administrativa de Empresas
 Status: Próxima
 
 ----------------------------------------
