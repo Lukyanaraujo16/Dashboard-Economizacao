@@ -16,7 +16,7 @@ Versão atual:
 
 Último commit:
 
-feat(users): adiciona dominio e api administrativa
+docs(branding): define arquitetura de branding da plataforma
 
 Próxima fase executável:
 
