@@ -56,6 +56,7 @@ export function resolveUpsertBrandColorSchemes(
 export function shouldPersistTenantBranding(
   lightColors: BrandColorOverrides | null,
   darkColors: BrandColorOverrides | null,
+  logoFileId?: string | null,
 ): boolean {
-  return hasAnyBrandColorOverrides(lightColors, darkColors);
+  return hasAnyBrandColorOverrides(lightColors, darkColors) || Boolean(logoFileId);
 }

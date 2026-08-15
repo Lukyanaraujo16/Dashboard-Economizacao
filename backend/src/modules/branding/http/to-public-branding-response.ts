@@ -2,11 +2,16 @@ import type { BrandColorOverrides, TenantBrandingRecord } from '../domain/types.
 
 export type PublicTenantBrandingResponse = {
   readonly tenantId: string;
+  readonly logoUrl: string | null;
   readonly light: BrandColorOverrides | null;
   readonly dark: BrandColorOverrides | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
 };
+
+export function toPublicLogoUrl(fileId: string | null | undefined): string | null {
+  return fileId ? `/files/${fileId}` : null;
+}
 
 export function toPublicBrandingResponse(
   tenantId: string,
@@ -15,6 +20,7 @@ export function toPublicBrandingResponse(
   if (!record) {
     return {
       tenantId,
+      logoUrl: null,
       light: null,
       dark: null,
       createdAt: null,
@@ -24,6 +30,7 @@ export function toPublicBrandingResponse(
 
   return {
     tenantId: record.tenantId,
+    logoUrl: toPublicLogoUrl(record.logoFileId),
     light: record.lightColors,
     dark: record.darkColors,
     createdAt: record.createdAt.toISOString(),

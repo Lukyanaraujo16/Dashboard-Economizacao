@@ -2,6 +2,7 @@ type TestDatabaseCleaner = {
   readonly userCredential: { deleteMany: () => Promise<unknown> };
   readonly user: { deleteMany: () => Promise<unknown> };
   readonly tenantBranding: { deleteMany: () => Promise<unknown> };
+  readonly storedFile: { deleteMany: () => Promise<unknown> };
   readonly tenant: { deleteMany: () => Promise<unknown> };
 };
 
@@ -67,5 +68,6 @@ export async function cleanTestDatabase(
   await prisma.userCredential.deleteMany();
   await prisma.user.deleteMany();
   await prisma.tenantBranding.deleteMany();
+  await prisma.storedFile.deleteMany();
   await prisma.tenant.deleteMany();
 }

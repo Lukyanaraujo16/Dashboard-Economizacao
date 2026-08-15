@@ -43,6 +43,7 @@ model Tenant {
   deactivatedAt DateTime?       @map("deactivated_at") @db.Timestamptz(3)
   users         User[]
   branding      TenantBranding?
+  files         StoredFile[]
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
@@ -50,15 +51,40 @@ model Tenant {
 
 /// Overrides visuais por empresa (1:1). Ausência = fallback da plataforma (ADR-046).
 model TenantBranding {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @unique @map("tenant_id") @db.Uuid
-  lightColors Json?    @map("light_colors")
-  darkColors  Json?    @map("dark_colors")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id          String      @id @default(uuid()) @db.Uuid
+  tenantId    String      @unique @map("tenant_id") @db.Uuid
+  logoFileId  String?     @unique @map("logo_file_id") @db.Uuid
+  lightColors Json?       @map("light_colors")
+  darkColors  Json?       @map("dark_colors")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  logoFile    StoredFile? @relation("TenantBrandingLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
 
   @@map("tenant_branding")
+}
+
+enum StoredFileType {
+  TENANT_LOGO
+
+  @@map("stored_file_type")
+}
+
+/// Arquivos gerenciados pela plataforma (docs/03 §4.3). Metadados + storage_key; bytes ficam no FileStorage.
+model StoredFile {
+  id           String           @id @default(uuid()) @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  fileType     StoredFileType   @map("file_type")
+  storageKey   String           @unique(map: "uq_files_storage_key") @map("storage_key")
+  mimeType     String           @map("mime_type")
+  size         Int
+  checksum     String
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brandingLogo TenantBranding?  @relation("TenantBrandingLogo")
+
+  @@index([tenantId], map: "idx_files_tenant_id")
+  @@map("files")
 }
 
 model User {

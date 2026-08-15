@@ -1,7 +1,14 @@
+import type {
+  StoredFile as StoredFileRow,
+  TenantBranding as TenantBrandingRow,
+} from '../../../generated/prisma/client.js';
 import { Prisma } from '../../../generated/prisma/client.js';
-import type { TenantBranding as TenantBrandingRow } from '../../../generated/prisma/client.js';
 import { parseBrandColorOverrides } from '../domain/color-validation.js';
-import type { TenantBrandingRecord } from '../domain/types.js';
+import type { StoredFileRecord, TenantBrandingRecord } from '../domain/types.js';
+
+type TenantBrandingWithLogo = TenantBrandingRow & {
+  readonly logoFile?: StoredFileRow | null;
+};
 
 function mapStoredColorOverrides(
   value: unknown,
@@ -13,10 +20,26 @@ function mapStoredColorOverrides(
   return parseBrandColorOverrides(value, fieldLabel);
 }
 
-export function mapTenantBrandingRecord(row: TenantBrandingRow): TenantBrandingRecord {
+export function mapStoredFileRecord(row: StoredFileRow): StoredFileRecord {
   return {
     id: row.id,
     tenantId: row.tenantId,
+    fileType: row.fileType,
+    storageKey: row.storageKey,
+    mimeType: row.mimeType,
+    size: row.size,
+    checksum: row.checksum,
+    createdAt: row.createdAt,
+  };
+}
+
+export function mapTenantBrandingRecord(row: TenantBrandingWithLogo): TenantBrandingRecord {
+  const logoFile = row.logoFile ? mapStoredFileRecord(row.logoFile) : null;
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    logoFileId: row.logoFileId,
+    logoFile,
     lightColors: mapStoredColorOverrides(row.lightColors, 'lightColors'),
     darkColors: mapStoredColorOverrides(row.darkColors, 'darkColors'),
     createdAt: row.createdAt,

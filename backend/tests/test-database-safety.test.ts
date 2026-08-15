@@ -13,6 +13,8 @@ function createCleanerMock() {
   return {
     userCredential: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     user: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    tenantBranding: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    storedFile: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     tenant: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
   };
 }

@@ -8,6 +8,7 @@ import { loadEnvironment } from '../config/env.js';
 import { registerAuthHttpRoutes } from '../modules/auth/index.js';
 import { registerProtectedTestRoutes } from '../modules/auth/http/protected-test.routes.js';
 import { registerAdminBrandingRoutes } from '../modules/branding/index.js';
+import { registerPublicFileRoutes } from '../modules/branding/http/public-file.routes.js';
 import { registerAdminTenantRoutes } from '../modules/tenant/index.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
@@ -17,6 +18,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await registerAuthHttpRoutes(app);
   await app.register(registerAdminTenantRoutes);
   await app.register(registerAdminBrandingRoutes);
+  await app.register(registerPublicFileRoutes);
 
   const environment = loadEnvironment();
   if (environment.nodeEnv === 'test') {

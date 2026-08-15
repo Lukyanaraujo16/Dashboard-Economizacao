@@ -9,6 +9,8 @@ export function mapBrandingDomainError(error: BrandingDomainError): never {
     case 'BRANDING_INVALID_COLOR_FORMAT':
     case 'BRANDING_INVALID_COLOR_OVERRIDES':
       throw new ValidationError(error.message);
+    case 'BRANDING_FILE_NOT_FOUND':
+      throw new NotFoundError(error.message);
     default:
       throw error;
   }

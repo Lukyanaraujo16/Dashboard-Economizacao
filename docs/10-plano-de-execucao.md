@@ -366,6 +366,14 @@ sem materializar defaults. DELETE reset idempotente (204); Tenant permanece. Sem
 sem frontend.
 
 1.3D — Storage e Upload de Logo
+Status: Concluída
+
+Abstração FileStorage + LocalFileStorage MVP. Tabela StoredFile (files) com ownership por tenant.
+logoFileId em TenantBranding. Upload multipart PNG/JPEG/WebP (2 MB); SVG fora do MVP; MIME real.
+Serving público opaco em GET /files/:fileId. Substitution e cleanup best-effort (DB/storage).
+Storage TEST isolado (_test). Validação de dimensões adiada.
+
+1.3E — UI Administrativa de Aparência
 Status: Próxima
 
 ----------------------------------------

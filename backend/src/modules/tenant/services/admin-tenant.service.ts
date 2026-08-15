@@ -21,6 +21,10 @@ export type AdminTenantService = {
 
 export function createAdminTenantService(deps: {
   readonly tenants: TenantRepository;
+  readonly brandingAssets?: {
+    collectStorageKeys(tenantId: string): Promise<readonly string[]>;
+    deleteStoredObjects(keys: readonly string[]): Promise<void>;
+  };
 }): AdminTenantService {
   return {
     async create(input) {
@@ -60,7 +64,11 @@ export function createAdminTenantService(deps: {
     },
 
     async delete(id) {
-      return withTenantDomainError(() => deps.tenants.delete(id));
+      const keys = deps.brandingAssets ? await deps.brandingAssets.collectStorageKeys(id) : [];
+      await withTenantDomainError(() => deps.tenants.delete(id));
+      if (deps.brandingAssets && keys.length > 0) {
+        await deps.brandingAssets.deleteStoredObjects(keys);
+      }
     },
   };
 }

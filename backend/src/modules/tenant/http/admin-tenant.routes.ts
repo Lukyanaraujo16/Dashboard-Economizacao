@@ -1,9 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 
+import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { createFileStorage } from '../../../infrastructure/storage/index.js';
 import { createRequirePlatformRole } from '../../auth/http/require-platform-role.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
+import { createAdminBrandingService } from '../../branding/services/admin-branding.service.js';
+import { createStoredFileRepository } from '../../branding/repositories/stored-file.repository.js';
+import { createTenantBrandingRepository } from '../../branding/repositories/tenant-branding.repository.js';
 import {
   parseCreateTenantRequestBody,
   parseListTenantsQuery,
@@ -23,7 +28,14 @@ export async function registerAdminTenantRoutes(app: FastifyInstance): Promise<v
   const users = createUserRepository(prisma);
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
-  const adminTenants = createAdminTenantService({ tenants });
+  const environment = loadEnvironment();
+  const brandingAssets = createAdminBrandingService({
+    tenants,
+    branding: createTenantBrandingRepository(prisma),
+    files: createStoredFileRepository(prisma),
+    storage: createFileStorage(environment),
+  });
+  const adminTenants = createAdminTenantService({ tenants, brandingAssets });
 
   const adminGuard = [requireAuthentication, requirePlatformRole];
 
