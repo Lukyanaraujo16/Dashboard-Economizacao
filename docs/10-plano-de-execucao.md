@@ -374,7 +374,13 @@ Serving público opaco em GET /files/:fileId. Substitution e cleanup best-effort
 Storage TEST isolado (_test). Validação de dimensões adiada.
 
 1.3E — UI Administrativa de Aparência
-Status: Próxima
+Status: Concluída
+
+Tela `/empresas/[companyId]/aparencia` com hub Geral/Aparência. Upload/substituição/remoção de
+logo (PNG/JPEG/WebP, 2 MB). Personalização de cores Light/Dark (primary/onPrimary/secondary/accent)
+com preview escopado independente do tema global. Validação de contraste WCAG AA (primary↔onPrimary).
+Polish visual do canvas autenticado (gutters/max-width) e acabamento da composição Aparência/Empresas.
+`allowedDevOrigins` em `next.config.ts` para desenvolvimento via LAN. Sem runtime pós-login (1.3F).
 
 ----------------------------------------
 

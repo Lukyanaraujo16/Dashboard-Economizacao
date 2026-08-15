@@ -177,11 +177,6 @@ export function CompaniesPage() {
             Cadastre e gerencie as empresas da plataforma.
           </Typography>
         </div>
-        <div className={styles.pageHeaderActions}>
-          <Button type="button" variant="primary" onClick={() => router.push('/empresas/nova')}>
-            Nova empresa
-          </Button>
-        </div>
       </div>
 
       <div className={styles.toolbar}>
@@ -199,6 +194,11 @@ export function CompaniesPage() {
               {option.label}
             </button>
           ))}
+        </div>
+        <div className={styles.pageHeaderActions}>
+          <Button type="button" variant="primary" onClick={() => router.push('/empresas/nova')}>
+            Nova empresa
+          </Button>
         </div>
       </div>
 

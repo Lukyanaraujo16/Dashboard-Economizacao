@@ -38,3 +38,11 @@ export function adminTenantDisablePath(tenantId: string): string {
 export function adminTenantReactivatePath(tenantId: string): string {
   return `${adminTenantPath(tenantId)}/reactivate`;
 }
+
+export function adminTenantBrandingPath(tenantId: string): string {
+  return `${adminTenantPath(tenantId)}/branding`;
+}
+
+export function adminTenantBrandingLogoPath(tenantId: string): string {
+  return `${adminTenantBrandingPath(tenantId)}/logo`;
+}

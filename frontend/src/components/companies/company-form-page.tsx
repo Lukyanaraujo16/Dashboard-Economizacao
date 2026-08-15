@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { useAuth } from '../../auth';
 import { createCompany, getCompany, updateCompany } from '../../services/admin/companies';
@@ -14,6 +14,7 @@ import {
   validateCompanyFields,
   type CompanyFieldErrors,
 } from './company-utils';
+import { CompanySectionNav } from './company-section-nav';
 import styles from './companies.module.css';
 
 type CompanyFormPageProps = {
@@ -24,6 +25,12 @@ type CompanyFormPageProps = {
 export function CompanyFormPage({ mode, companyId }: CompanyFormPageProps) {
   const router = useRouter();
   const { refreshSession } = useAuth();
+  const refreshSessionRef = useRef(refreshSession);
+  const routerRef = useRef(router);
+  refreshSessionRef.current = refreshSession;
+  routerRef.current = router;
+
+  const [companyDisplayName, setCompanyDisplayName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [name, setName] = useState('');
   const [identifierTouched, setIdentifierTouched] = useState(false);
@@ -47,6 +54,7 @@ export function CompanyFormPage({ mode, companyId }: CompanyFormPageProps) {
         const company = await getCompany(companyId!);
         if (cancelled) return;
         setDisplayName(company.displayName);
+        setCompanyDisplayName(company.displayName);
         setName(company.name);
         setIdentifierTouched(true);
         setLoadState('ready');
@@ -54,8 +62,8 @@ export function CompanyFormPage({ mode, companyId }: CompanyFormPageProps) {
         if (cancelled) return;
         if (error instanceof CompaniesRequestError) {
           if (error.kind === 'unauthenticated') {
-            await refreshSession().catch(() => undefined);
-            router.replace('/login');
+            await refreshSessionRef.current().catch(() => undefined);
+            routerRef.current.replace('/login');
             return;
           }
           if (error.kind === 'not_found') {
@@ -72,7 +80,7 @@ export function CompanyFormPage({ mode, companyId }: CompanyFormPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [companyId, mode, refreshSession, router]);
+  }, [companyId, mode]);
 
   function handleDisplayNameChange(value: string) {
     setDisplayName(value);
@@ -180,7 +188,7 @@ export function CompanyFormPage({ mode, companyId }: CompanyFormPageProps) {
     );
   }
 
-  return (
+  const formContent = (
     <div className={styles.formPage}>
       <div className={styles.formIntro}>
         <Typography as="h2" variant="heading">
@@ -248,4 +256,14 @@ export function CompanyFormPage({ mode, companyId }: CompanyFormPageProps) {
       </form>
     </div>
   );
+
+  if (mode === 'edit' && companyId) {
+    return (
+      <CompanySectionNav companyId={companyId} companyName={companyDisplayName || displayName}>
+        {formContent}
+      </CompanySectionNav>
+    );
+  }
+
+  return formContent;
 }

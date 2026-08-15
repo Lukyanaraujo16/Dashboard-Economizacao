@@ -8,6 +8,8 @@ import type { NextConfig } from 'next';
 const backendOrigin = (process.env.API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '');
 
 const nextConfig: NextConfig = {
+  // Permite HMR/WebSocket do Next DEV quando o browser acessa via IP da LAN.
+  allowedDevOrigins: ['192.168.1.91'],
   async rewrites() {
     return [
       {
@@ -17,6 +19,10 @@ const nextConfig: NextConfig = {
       {
         source: '/admin/:path*',
         destination: `${backendOrigin}/admin/:path*`,
+      },
+      {
+        source: '/files/:path*',
+        destination: `${backendOrigin}/files/:path*`,
       },
     ];
   },
