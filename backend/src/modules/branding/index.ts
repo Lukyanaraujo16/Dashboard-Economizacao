@@ -10,17 +10,28 @@ export {
   parseBrandColorOverrides,
 } from './domain/color-validation.js';
 export {
+  normalizeUpsertPlatformBrandingInput,
   normalizeUpsertTenantBrandingInput,
   resolveUpsertBrandColorSchemes,
   shouldPersistTenantBranding,
 } from './domain/branding-normalization.js';
+export {
+  PLATFORM_BRANDING_SINGLETON_KEY,
+  normalizePlatformBrandName,
+} from './domain/platform-brand-name.js';
 export type {
   BrandColorOverrides,
+  PlatformBrandingRecord,
+  StoredFileRecord,
+  StoredFileType,
   TenantBrandingRecord,
+  UpsertPlatformBrandingInput,
   UpsertTenantBrandingInput,
 } from './domain/types.js';
 export { createTenantBrandingRepository } from './repositories/tenant-branding.repository.js';
 export type { TenantBrandingRepository } from './repositories/tenant-branding.repository.js';
+export { createPlatformBrandingRepository } from './repositories/platform-branding.repository.js';
+export type { PlatformBrandingRepository } from './repositories/platform-branding.repository.js';
 export { createStoredFileRepository } from './repositories/stored-file.repository.js';
 export type { StoredFileRepository } from './repositories/stored-file.repository.js';
 export { registerAdminBrandingRoutes } from './http/admin-branding.routes.js';

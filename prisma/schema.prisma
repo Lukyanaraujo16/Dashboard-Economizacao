@@ -64,24 +64,48 @@ model TenantBranding {
   @@map("tenant_branding")
 }
 
+/// Identidade visual global Economização (singleton lógico). Ausência = Theme Default (ADR-049).
+model PlatformBranding {
+  id            String      @id @default(uuid()) @db.Uuid
+  /// Discriminador único: sempre "default". Impede múltiplos registros ativos.
+  singletonKey  String      @default("default") @map("singleton_key")
+  name          String
+  lightColors   Json?       @map("light_colors")
+  darkColors    Json?       @map("dark_colors")
+  logoFileId    String?     @unique @map("logo_file_id") @db.Uuid
+  faviconFileId String?     @unique @map("favicon_file_id") @db.Uuid
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  logoFile      StoredFile? @relation("PlatformBrandingLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  faviconFile   StoredFile? @relation("PlatformBrandingFavicon", fields: [faviconFileId], references: [id], onDelete: SetNull)
+
+  @@unique([singletonKey], map: "uq_platform_branding_singleton")
+  @@map("platform_branding")
+}
+
 enum StoredFileType {
   TENANT_LOGO
+  PLATFORM_LOGO
+  PLATFORM_FAVICON
 
   @@map("stored_file_type")
 }
 
 /// Arquivos gerenciados pela plataforma (docs/03 §4.3). Metadados + storage_key; bytes ficam no FileStorage.
+/// tenantId null = asset global (PLATFORM_*); tenantId setado = asset do tenant (TENANT_LOGO).
 model StoredFile {
-  id           String           @id @default(uuid()) @db.Uuid
-  tenantId     String           @map("tenant_id") @db.Uuid
-  fileType     StoredFileType   @map("file_type")
-  storageKey   String           @unique(map: "uq_files_storage_key") @map("storage_key")
-  mimeType     String           @map("mime_type")
-  size         Int
-  checksum     String
-  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  brandingLogo TenantBranding?  @relation("TenantBrandingLogo")
+  id                      String            @id @default(uuid()) @db.Uuid
+  tenantId                String?           @map("tenant_id") @db.Uuid
+  fileType                StoredFileType    @map("file_type")
+  storageKey              String            @unique(map: "uq_files_storage_key") @map("storage_key")
+  mimeType                String            @map("mime_type")
+  size                    Int
+  checksum                String
+  createdAt               DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant                  Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brandingLogo            TenantBranding?   @relation("TenantBrandingLogo")
+  platformBrandingLogo    PlatformBranding? @relation("PlatformBrandingLogo")
+  platformBrandingFavicon PlatformBranding? @relation("PlatformBrandingFavicon")
 
   @@index([tenantId], map: "idx_files_tenant_id")
   @@map("files")

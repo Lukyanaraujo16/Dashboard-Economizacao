@@ -88,10 +88,10 @@ export function createTenantBrandingRepository(prisma: PrismaClient): TenantBran
 
       const file = await prisma.storedFile.findUnique({
         where: { id: logoFileId },
-        select: { id: true, tenantId: true },
+        select: { id: true, tenantId: true, fileType: true },
       });
 
-      if (!file || file.tenantId !== tenantId) {
+      if (!file || file.tenantId !== tenantId || file.fileType !== 'TENANT_LOGO') {
         throw new BrandingDomainError('BRANDING_FILE_NOT_FOUND', 'Arquivo de logo não encontrado.');
       }
 

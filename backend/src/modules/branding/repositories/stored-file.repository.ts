@@ -1,8 +1,9 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
-import type { StoredFileRecord } from '../domain/types.js';
+import { BrandingDomainError } from '../domain/branding-domain-error.js';
+import type { StoredFileRecord, StoredFileType } from '../domain/types.js';
 import { mapStoredFileRecord } from './mappers.js';
 
-export type CreateStoredFileInput = {
+export type CreateTenantStoredFileInput = {
   readonly tenantId: string;
   readonly fileType: 'TENANT_LOGO';
   readonly storageKey: string;
@@ -11,6 +12,17 @@ export type CreateStoredFileInput = {
   readonly checksum: string;
 };
 
+export type CreatePlatformStoredFileInput = {
+  readonly tenantId?: null;
+  readonly fileType: 'PLATFORM_LOGO' | 'PLATFORM_FAVICON';
+  readonly storageKey: string;
+  readonly mimeType: string;
+  readonly size: number;
+  readonly checksum: string;
+};
+
+export type CreateStoredFileInput = CreateTenantStoredFileInput | CreatePlatformStoredFileInput;
+
 export type StoredFileRepository = {
   create(input: CreateStoredFileInput): Promise<StoredFileRecord>;
   findById(id: string): Promise<StoredFileRecord | null>;
@@ -18,12 +30,37 @@ export type StoredFileRepository = {
   listStorageKeysByTenantId(tenantId: string): Promise<readonly string[]>;
 };
 
+function assertOwnershipConsistency(
+  fileType: StoredFileType,
+  tenantId: string | null | undefined,
+): void {
+  if (fileType === 'TENANT_LOGO') {
+    if (tenantId == null || tenantId.length === 0) {
+      throw new BrandingDomainError(
+        'BRANDING_FILE_OWNERSHIP_INVALID',
+        'Arquivo TENANT_LOGO exige tenantId.',
+      );
+    }
+    return;
+  }
+
+  if (tenantId != null) {
+    throw new BrandingDomainError(
+      'BRANDING_FILE_OWNERSHIP_INVALID',
+      `Arquivo ${fileType} deve ser global (tenantId null).`,
+    );
+  }
+}
+
 export function createStoredFileRepository(prisma: PrismaClient): StoredFileRepository {
   return {
     async create(input) {
+      const tenantId = input.fileType === 'TENANT_LOGO' ? input.tenantId : null;
+      assertOwnershipConsistency(input.fileType, tenantId);
+
       const row = await prisma.storedFile.create({
         data: {
-          tenantId: input.tenantId,
+          tenantId,
           fileType: input.fileType,
           storageKey: input.storageKey,
           mimeType: input.mimeType,

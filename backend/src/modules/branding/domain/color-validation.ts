@@ -50,7 +50,7 @@ export function parseBrandColorOverrides(
     if (!isAllowedBrandColorToken(key)) {
       throw new BrandingDomainError(
         'BRANDING_INVALID_COLOR_TOKEN',
-        `Token de cor "${key}" não é permitido para branding de tenant.`,
+        `Token de cor "${key}" não é permitido para branding.`,
       );
     }
 

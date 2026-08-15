@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.5A
+1.5B
 
 Último checkpoint:
 
-1.5A — Arquitetura de Branding da Plataforma
+1.5B — Persistência de Branding da Plataforma
 
 Último commit:
 
-docs(branding): define arquitetura de branding da plataforma
+feat(branding): adiciona persistencia global da plataforma
 
 Próxima fase executável:
 
-1.5B — Persistência de Branding da Plataforma
+1.5C — API de Branding da Plataforma
 
 Estado atual
 
@@ -91,6 +91,8 @@ Estado atual
 ✔ 1.4E — Fluxo Completo de Usuários concluída (épico 1.4 Usuários encerrado)
 
 ✔ 1.5A — Arquitetura de Branding da Plataforma concluída (docs/17, ADR-049)
+
+✔ 1.5B — Persistência e Domínio de Branding da Plataforma concluída
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -490,10 +492,16 @@ FileStorage; API `/admin/platform/branding`; UI Configurações → Branding da 
 Sem código, schema ou migration nesta subfase.
 
 1.5B — Persistência
-Status: Pendente (próxima)
+Status: Concluída
+
+Tabela `platform_branding` (singleton via `singleton_key`), extensão de `files`
+(`tenant_id` nullable + `PLATFORM_LOGO` / `PLATFORM_FAVICON` + CHECK de ownership),
+domínio/repository (`get` / `upsert` / `reset` / attach de referências). Sem API, UI,
+runtime, upload ou alteração do Theme Engine / Login. Migrations aplicadas em DEV/TEST.
+Sem seed de defaults.
 
 1.5C — API
-Status: Pendente
+Status: Pendente (próxima)
 
 1.5D — UI Administrativa
 Status: Pendente
