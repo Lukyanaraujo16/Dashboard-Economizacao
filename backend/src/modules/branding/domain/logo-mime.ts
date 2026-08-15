@@ -1,5 +1,8 @@
 export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 
+/** Favicon MVP: mesmos MIME do logo; limite menor (sem parser ICO). */
+export const MAX_FAVICON_BYTES = 512 * 1024;
+
 export const ALLOWED_LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 
 export type AllowedLogoMimeType = (typeof ALLOWED_LOGO_MIME_TYPES)[number];

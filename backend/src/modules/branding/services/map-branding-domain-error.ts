@@ -4,10 +4,13 @@ import { BrandingDomainError } from '../domain/branding-domain-error.js';
 export function mapBrandingDomainError(error: BrandingDomainError): never {
   switch (error.code) {
     case 'TENANT_NOT_FOUND':
+    case 'PLATFORM_BRANDING_NOT_FOUND':
       throw new NotFoundError(error.message);
     case 'BRANDING_INVALID_COLOR_TOKEN':
     case 'BRANDING_INVALID_COLOR_FORMAT':
     case 'BRANDING_INVALID_COLOR_OVERRIDES':
+    case 'PLATFORM_BRANDING_INVALID_NAME':
+    case 'BRANDING_FILE_OWNERSHIP_INVALID':
       throw new ValidationError(error.message);
     case 'BRANDING_FILE_NOT_FOUND':
       throw new NotFoundError(error.message);

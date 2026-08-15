@@ -51,6 +51,9 @@ describe('LocalFileStorage', () => {
   it('storageKey é opaca e segura', () => {
     expect(isSafeStorageKey(validKey)).toBe(true);
     expect(isSafeStorageKey(`tenants/${tenantId}/branding/${randomUUID()}.webp`)).toBe(true);
+    expect(isSafeStorageKey(`platform/branding/logo/${randomUUID()}.png`)).toBe(true);
+    expect(isSafeStorageKey(`platform/branding/favicon/${randomUUID()}.webp`)).toBe(true);
+    expect(isSafeStorageKey(`platform/branding/logo/not-a-uuid.png`)).toBe(false);
   });
 
   it('rejeita path traversal', async () => {

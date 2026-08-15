@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.5B
+1.5C
 
 Último checkpoint:
 
-1.5B — Persistência de Branding da Plataforma
+1.5C — API Administrativa de Branding da Plataforma
 
 Último commit:
 
-feat(branding): adiciona persistencia global da plataforma
+feat(branding): adiciona api global da plataforma
 
 Próxima fase executável:
 
-1.5C — API de Branding da Plataforma
+1.5D — UI Administrativa de Branding da Plataforma
 
 Estado atual
 
@@ -93,6 +93,8 @@ Estado atual
 ✔ 1.5A — Arquitetura de Branding da Plataforma concluída (docs/17, ADR-049)
 
 ✔ 1.5B — Persistência e Domínio de Branding da Plataforma concluída
+
+✔ 1.5C — API Administrativa de Branding da Plataforma concluída
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -501,10 +503,15 @@ runtime, upload ou alteração do Theme Engine / Login. Migrations aplicadas em 
 Sem seed de defaults.
 
 1.5C — API
-Status: Pendente (próxima)
+Status: Concluída
+
+API administrativa global `/admin/platform/branding` (GET/PATCH/DELETE) e
+logo/favicon (POST/DELETE). ADMIN/SUPER_ADMIN; USER 403. DTO público sem internals.
+Upload reutiliza FileStorage + MIME PNG/JPEG/WebP (favicon sem ICO; máx. 512 KB).
+Storage keys `platform/branding/{logo|favicon}/…`. Reset lifecycle-safe. Sem UI/runtime.
 
 1.5D — UI Administrativa
-Status: Pendente
+Status: Pendente (próxima)
 
 1.5E — Runtime
 Status: Pendente

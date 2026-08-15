@@ -11,6 +11,7 @@ import { registerAdminTenantUsersRoutes } from '../modules/auth/http/admin-tenan
 import { registerProtectedTestRoutes } from '../modules/auth/http/protected-test.routes.js';
 import {
   registerAdminBrandingRoutes,
+  registerAdminPlatformBrandingRoutes,
   registerCurrentBrandingRoutes,
 } from '../modules/branding/index.js';
 import { registerPublicFileRoutes } from '../modules/branding/http/public-file.routes.js';
@@ -25,6 +26,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerAdminAdministratorsRoutes);
   await app.register(registerAdminTenantUsersRoutes);
   await app.register(registerAdminBrandingRoutes);
+  await app.register(registerAdminPlatformBrandingRoutes);
   await app.register(registerCurrentBrandingRoutes);
   await app.register(registerPublicFileRoutes);
 

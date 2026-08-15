@@ -15,3 +15,11 @@ export function createTenantLogoStorageKey(
 
   return `tenants/${tenantId.toLowerCase()}/branding/${randomUUID()}.${extensionForLogoMimeType(mimeType)}`;
 }
+
+export function createPlatformLogoStorageKey(mimeType: AllowedLogoMimeType): string {
+  return `platform/branding/logo/${randomUUID()}.${extensionForLogoMimeType(mimeType)}`;
+}
+
+export function createPlatformFaviconStorageKey(mimeType: AllowedLogoMimeType): string {
+  return `platform/branding/favicon/${randomUUID()}.${extensionForLogoMimeType(mimeType)}`;
+}
