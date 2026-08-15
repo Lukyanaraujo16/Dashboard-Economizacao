@@ -6,6 +6,8 @@ import { redisHealthRoutes } from '../http/routes/redis-health.js';
 import { registerTestSessionRoutes } from '../http/routes/test-session.js';
 import { loadEnvironment } from '../config/env.js';
 import { registerAuthHttpRoutes } from '../modules/auth/index.js';
+import { registerAdminAdministratorsRoutes } from '../modules/auth/http/admin-administrators.routes.js';
+import { registerAdminTenantUsersRoutes } from '../modules/auth/http/admin-tenant-users.routes.js';
 import { registerProtectedTestRoutes } from '../modules/auth/http/protected-test.routes.js';
 import {
   registerAdminBrandingRoutes,
@@ -20,6 +22,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(redisHealthRoutes);
   await registerAuthHttpRoutes(app);
   await app.register(registerAdminTenantRoutes);
+  await app.register(registerAdminAdministratorsRoutes);
+  await app.register(registerAdminTenantUsersRoutes);
   await app.register(registerAdminBrandingRoutes);
   await app.register(registerCurrentBrandingRoutes);
   await app.register(registerPublicFileRoutes);

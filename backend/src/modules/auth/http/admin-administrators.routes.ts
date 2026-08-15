@@ -1,0 +1,109 @@
+import type { FastifyInstance } from 'fastify';
+
+import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { createArgon2idPasswordHasher } from '../crypto/password-hasher.js';
+import { createRequireAuthentication } from './require-authentication.js';
+import { createRequirePlatformRole } from './require-platform-role.js';
+import { toPublicUserResponse } from './to-public-user-response.js';
+import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
+import { createUserCredentialRepository } from '../repositories/user-credential.repository.js';
+import { createUserRepository } from '../repositories/user.repository.js';
+import {
+  parseCreateAdminUserRequestBody,
+  parseListUsersQuery,
+  parseUpdateAdminUserRequestBody,
+  parseUserIdParam,
+} from '../schemas/admin-user.schemas.js';
+import { createAdminAdministratorsService } from '../services/admin-administrators.service.js';
+
+/**
+ * API administrativa — Administradores da Plataforma (1.4C).
+ * Prefixo: /admin/administrators — somente role ADMIN.
+ */
+export async function registerAdminAdministratorsRoutes(app: FastifyInstance): Promise<void> {
+  const prisma = getPrismaClient();
+  const users = createUserRepository(prisma);
+  const credentials = createUserCredentialRepository(prisma);
+  const tenants = createTenantRepository(prisma);
+  const requireAuthentication = createRequireAuthentication({ users, tenants });
+  const requirePlatformRole = createRequirePlatformRole();
+  const adminGuard = [requireAuthentication, requirePlatformRole];
+  const administrators = createAdminAdministratorsService({
+    users,
+    credentials,
+    passwordHasher: createArgon2idPasswordHasher(),
+  });
+
+  app.get('/admin/administrators', { preHandler: adminGuard }, async (request, reply) => {
+    const query = parseListUsersQuery(request.query);
+    const result = await administrators.list(query);
+    return reply.status(200).send({
+      data: result.items.map(toPublicUserResponse),
+      pagination: {
+        limit: result.limit,
+        offset: result.offset,
+        total: result.total,
+        hasMore: result.offset + result.items.length < result.total,
+      },
+    });
+  });
+
+  app.post('/admin/administrators', { preHandler: adminGuard }, async (request, reply) => {
+    const body = parseCreateAdminUserRequestBody(request.body);
+    const user = await administrators.create(body);
+    return reply.status(201).send(toPublicUserResponse(user));
+  });
+
+  app.get('/admin/administrators/:userId', { preHandler: adminGuard }, async (request, reply) => {
+    const userId = parseUserIdParam(request.params);
+    const user = await administrators.getById(userId);
+    return reply.status(200).send(toPublicUserResponse(user));
+  });
+
+  app.patch('/admin/administrators/:userId', { preHandler: adminGuard }, async (request, reply) => {
+    const userId = parseUserIdParam(request.params);
+    const body = parseUpdateAdminUserRequestBody(request.body);
+    const user = await administrators.update(userId, body);
+    return reply.status(200).send(toPublicUserResponse(user));
+  });
+
+  app.post(
+    '/admin/administrators/:userId/block',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const userId = parseUserIdParam(request.params);
+      const user = await administrators.block(userId);
+      return reply.status(200).send(toPublicUserResponse(user));
+    },
+  );
+
+  app.post(
+    '/admin/administrators/:userId/unblock',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const userId = parseUserIdParam(request.params);
+      const user = await administrators.unblock(userId);
+      return reply.status(200).send(toPublicUserResponse(user));
+    },
+  );
+
+  app.post(
+    '/admin/administrators/:userId/disable',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const userId = parseUserIdParam(request.params);
+      const user = await administrators.disable(userId);
+      return reply.status(200).send(toPublicUserResponse(user));
+    },
+  );
+
+  app.post(
+    '/admin/administrators/:userId/enable',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const userId = parseUserIdParam(request.params);
+      const user = await administrators.enable(userId);
+      return reply.status(200).send(toPublicUserResponse(user));
+    },
+  );
+}

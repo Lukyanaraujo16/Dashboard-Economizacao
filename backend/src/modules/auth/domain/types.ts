@@ -44,3 +44,28 @@ export type CreateUserInput = {
   readonly role: UserRole;
   readonly tenantId?: string | null;
 };
+
+/** Atualização cadastral (1.4B). Role/tenant não mudam por este DTO. */
+export type UpdateUserInput = {
+  readonly name?: string;
+  readonly email?: string;
+};
+
+export type ListUsersFilter = {
+  readonly role?: UserRole;
+  readonly roles?: readonly UserRole[];
+  readonly status?: UserStatus;
+  readonly statuses?: readonly UserStatus[];
+  /** Filtra por tenant; `null` = apenas usuários sem tenant (ADMIN/SUPER_ADMIN). */
+  readonly tenantId?: string | null;
+  readonly email?: string;
+  readonly limit?: number;
+  readonly offset?: number;
+};
+
+export type ListUsersResult = {
+  readonly items: readonly UserRecord[];
+  readonly total: number;
+  readonly limit: number;
+  readonly offset: number;
+};

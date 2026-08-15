@@ -11,7 +11,28 @@ export {
   PASSWORD_MIN_LENGTH,
   isPasswordLengthValid,
 } from './password-policy.js';
-export { AuthDomainError, assertUserTenantRoleConsistency } from './user-invariants.js';
+export {
+  AuthDomainError,
+  USER_STATUS_DOMAIN_NOTES,
+  assertCanBlockUser,
+  assertCanDisableUser,
+  assertCanEnableUser,
+  assertCanUnblockUser,
+  assertUserRecordConsistency,
+  assertUserStatusDeactivatedAtConsistency,
+  assertUserTenantRoleConsistency,
+  buildBlockedUserFields,
+  buildDisabledUserFields,
+  buildEnabledUserFields,
+  buildUnblockedUserFields,
+  isOperationalActiveAdmin,
+  assertNotRemovingLastActiveAdmin,
+} from './user-invariants.js';
+export {
+  normalizeCreateUserInput,
+  normalizePersonName,
+  normalizeUpdateUserInput,
+} from './user-normalization.js';
 export type {
   AuthenticatedPrincipal,
   AuthenticatedRequestContext,
@@ -21,6 +42,9 @@ export type { CreateTenantInput, TenantRecord, TenantStatus } from '../../tenant
 export { TENANT_STATUSES } from '../../tenant/domain/types.js';
 export type {
   CreateUserInput,
+  ListUsersFilter,
+  ListUsersResult,
+  UpdateUserInput,
   UserCredentialRecord,
   UserRecord,
   UserRole,

@@ -8,11 +8,11 @@ Fundação:
 Concluída
 
 Versão atual:
-1.3F
+1.4C
 
 Último checkpoint:
 
-1.3 — Checkpoint Final (Branding + Arquitetura de Papéis)
+1.4C — API Administrativa de Usuários
 
 Último commit:
 
@@ -20,7 +20,7 @@ feat(branding): conclui runtime e arquitetura de personalização
 
 Próxima fase executável:
 
-1.4 — Usuários
+1.4D — UI de Usuários
 
 Estado atual
 
@@ -77,6 +77,12 @@ Estado atual
 ✔ 1.2D.1 — Polish Funcional de Empresas concluída
 
 ✔ 1.3 — Branding por empresa concluída (1.3A–1.3F)
+
+✔ 1.4A — Arquitetura de Usuários concluída (docs/16, ADR-048)
+
+✔ 1.4B — Persistência e Domínio de Usuários concluída
+
+✔ 1.4C — API Administrativa de Usuários concluída
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -399,20 +405,86 @@ Sem schema/migration; sem persistência client-side.
 1.4 Usuários
 
 Status:
-Pendente
+Em andamento
 
-Arquitetura de papéis formalizada antes da implementação:
-`docs/15-arquitetura-papeis-e-usuarios.md` e ADR-047
-(`SUPER_ADMIN` técnico global; `ADMIN` operacional global; `USER` tenant-scoped;
-ADMIN não gerencia SUPER_ADMIN; preservar ao menos um ADMIN operacional ativo —
-SUPER_ADMIN não conta nessa invariante). Sem CRUD nesta etapa.
+Arquitetura de papéis (pré-requisito): `docs/15-arquitetura-papeis-e-usuarios.md` e ADR-047.
+
+Subfases:
+
+1.4A — Arquitetura de Usuários
+Status: Concluída
+
+Documentação em `docs/16-arquitetura-usuarios.md` e ADR-048. Dois contextos: Administradores
+da Plataforma (`ADMIN`) e Usuários da Empresa (`USER` por tenant). Visibilidade de SUPER_ADMIN,
+ciclo de vida (`UserStatus` existente), último ADMIN ACTIVE, senhas Argon2id, reset por token,
+auditoria e subfases 1.4B–1.4E. Sem código nesta subfase.
+
+1.4B — Persistência de Usuários
+Status: Concluída
+
+Evolução do `UserRepository` e domínio auth: list/update/block/unblock/disable/enable,
+`existsByEmail`/`existsByTenantId`/`countActiveAdmins`, normalização de nome/e-mail, invariantes
+de status↔`deactivatedAt` e preparação da contagem de ADMIN ACTIVE (último ADMIN na 1.4C).
+Sem migration (schema já suficiente). Sem API/UI/reset. Login/sessão intactos.
+
+1.4C — API de Usuários
+Status: Concluída
+
+Duas famílias: `/admin/administrators` (somente `ADMIN`) e `/admin/tenants/:tenantId/users`
+(somente `USER` do tenant). SUPER_ADMIN oculto na superfície de administrators (404 fora do
+escopo). Último ADMIN ACTIVE protegido com `SELECT … FOR UPDATE`. Create com senha inicial
+Argon2id + status ACTIVE. Sem DELETE, sem reset por token, sem UI. Tenant DISABLED permanece
+administrável cadastralmente (login segue TENANT-003).
+
+1.4D — UI de Usuários
+Status: Pendente (próxima)
+
+1.4E — Fluxo Completo de Usuários
+Status: Pendente
 
 ----------------------------------------
 
-1.5 Modo Suporte
+1.5 Branding da Plataforma
 
 Status:
 Pendente
+
+Escopo futuro (após encerrar a Fase 1.4 — Usuários). Complementa o branding por empresa (1.3):
+persistência e gestão da identidade visual global Economização (login / fallback / Theme Default),
+sem alterar a ordem de execução atual. **Não iniciada.** Próxima fase executável permanece **1.4D**
+após a conclusão da 1.4C (API). Enquanto a 1.4 estiver em andamento, executar 1.4D–1.4E
+antes de iniciar 1.5A.
+
+Subfases planejadas:
+
+1.5A — Arquitetura
+Status: Pendente
+
+1.5B — Persistência
+Status: Pendente
+
+1.5C — API
+Status: Pendente
+
+1.5D — UI Administrativa
+Status: Pendente
+
+1.5E — Runtime
+Status: Pendente
+
+Histórico: na 1.3, `platform_branding` e branding persistido da plataforma ficaram fora do escopo
+(login ADR-044 + Theme Default). Esta fase formaliza essa entrega.
+
+----------------------------------------
+
+1.6 Modo Suporte
+
+Status:
+Pendente
+
+Anteriormente numerado como 1.5 no plano. Renumerado para 1.6 após a inclusão de
+1.5 — Branding da Plataforma. Conteúdo de produto inalterado: modo suporte auditado
+(PRD SUPPORT / `docs/09.9`). **Não iniciada.**
 
 ===========================================================
 
