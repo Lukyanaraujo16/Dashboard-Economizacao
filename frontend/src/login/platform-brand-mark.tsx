@@ -1,12 +1,13 @@
 /**
- * Marca visual da plataforma na Login Experience.
+ * Marca visual da plataforma / tenant.
  *
- * Placeholder institucional temporário (cifrão Accent).
- * Será substituído pelo branding oficial.
- *
- * Preparado para receber `logoUrl` de asset futuro (admin / Theme Default)
- * sem alterar a composição da página.
+ * Placeholder institucional temporário (cifrão Accent) quando não há logoUrl
+ * ou quando o asset falha ao carregar (ex.: 404).
  */
+
+'use client';
+
+import { useEffect, useState } from 'react';
 
 import { cx } from '../components/ui/utils/cx';
 import styles from './platform-brand-mark.module.css';
@@ -14,7 +15,7 @@ import styles from './platform-brand-mark.module.css';
 export type PlatformBrandMarkProps = {
   readonly size?: number;
   readonly alt?: string;
-  /** Asset oficial futuro; quando ausente, usa o placeholder Accent. */
+  /** Asset oficial; quando ausente ou falha, usa o placeholder Accent. */
   readonly logoUrl?: string | null;
   readonly className?: string;
   /** Decorative (ex.: no card de auth) — alt vazio. */
@@ -28,7 +29,19 @@ export function PlatformBrandMark({
   className,
   decorative = false,
 }: PlatformBrandMarkProps) {
-  if (logoUrl) {
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [logoUrl]);
+
+  const showAsset = Boolean(logoUrl) && !logoFailed;
+
+  function handleLogoError() {
+    setLogoFailed(true);
+  }
+
+  if (showAsset && logoUrl) {
     return (
       <img
         src={logoUrl}
@@ -36,6 +49,7 @@ export function PlatformBrandMark({
         width={size}
         height={size}
         className={cx(styles.asset, className)}
+        onError={handleLogoError}
       />
     );
   }

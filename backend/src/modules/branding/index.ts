@@ -24,6 +24,13 @@ export type { TenantBrandingRepository } from './repositories/tenant-branding.re
 export { createStoredFileRepository } from './repositories/stored-file.repository.js';
 export type { StoredFileRepository } from './repositories/stored-file.repository.js';
 export { registerAdminBrandingRoutes } from './http/admin-branding.routes.js';
+export { registerCurrentBrandingRoutes } from './http/current-branding.routes.js';
 export type { PublicTenantBrandingResponse } from './http/to-public-branding-response.js';
 export { toPublicBrandingResponse } from './http/to-public-branding-response.js';
+export type { PublicCurrentBrandingResponse } from './http/to-current-branding-response.js';
+export {
+  PLATFORM_BRAND_NAME,
+  toPlatformCurrentBrandingResponse,
+  toTenantCurrentBrandingResponse,
+} from './http/to-current-branding-response.js';
 export { MAX_LOGO_BYTES, detectAllowedLogoMimeType } from './domain/logo-mime.js';

@@ -4,6 +4,7 @@ export { useTheme } from './hooks/use-theme';
 export { lightColorTokens } from './light/colors';
 export { lightTheme } from './light/theme';
 export { ThemeProvider } from './provider/theme-provider';
+export { RuntimeThemeProvider } from './provider/runtime-theme-provider';
 export { resolveTheme } from './resolver/resolve-theme';
 export { runThemeEngine } from './engine/theme-engine';
 export {

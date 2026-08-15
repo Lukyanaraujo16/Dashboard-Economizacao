@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthenticatedLayout from '../app/(authenticated)/layout';
 import AuthenticatedHomePage from '../app/(authenticated)/page';
 import { SessionRequestError } from '../src/services/auth/me';
-import { ThemeProvider } from '../src/theme';
+import type { CurrentBranding } from '../src/services/branding/current.types';
+import { RuntimeThemeProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
   createUnauthenticatedGetCurrentUser,
@@ -13,6 +14,20 @@ import {
 } from './helpers/render-with-auth';
 
 const replaceMock = vi.fn();
+
+const platformBranding: CurrentBranding = {
+  scope: 'platform',
+  tenantId: null,
+  name: 'Economização',
+  logoUrl: null,
+  light: null,
+  dark: null,
+  updatedAt: null,
+};
+
+function createPlatformBrandingAction() {
+  return vi.fn().mockResolvedValue(platformBranding);
+}
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -54,11 +69,11 @@ beforeEach(() => {
 
 function renderShell(options?: Parameters<typeof renderWithAuth>[1]) {
   return renderWithAuth(
-    <ThemeProvider>
+    <RuntimeThemeProvider getCurrentBrandingAction={createPlatformBrandingAction()}>
       <AuthenticatedLayout>
         <AuthenticatedHomePage />
       </AuthenticatedLayout>
-    </ThemeProvider>,
+    </RuntimeThemeProvider>,
     options,
   );
 }

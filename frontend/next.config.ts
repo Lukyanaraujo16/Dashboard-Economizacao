@@ -24,6 +24,10 @@ const nextConfig: NextConfig = {
         source: '/files/:path*',
         destination: `${backendOrigin}/files/:path*`,
       },
+      {
+        source: '/branding/:path*',
+        destination: `${backendOrigin}/branding/:path*`,
+      },
     ];
   },
 };

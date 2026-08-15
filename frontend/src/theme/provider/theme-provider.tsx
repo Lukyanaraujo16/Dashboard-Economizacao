@@ -10,7 +10,7 @@ import { ThemeContext } from './theme-context';
 type ThemeProviderProps = {
   readonly children: ReactNode;
   readonly preference?: ThemeModePreference;
-  /** Preparado para branding por tenant; ainda sem backend. */
+  /** Overrides de branding (runtime /admin preview); null = Theme Default. */
   readonly branding?: TenantBrandingInput | null;
 };
 

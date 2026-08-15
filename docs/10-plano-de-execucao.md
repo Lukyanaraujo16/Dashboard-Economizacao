@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.2D.1
+1.3F
 
 Último checkpoint:
 
-1.2D.1 — Polish Funcional de Empresas
+1.3 — Checkpoint Final (Branding + Arquitetura de Papéis)
 
 Último commit:
 
-feat(tenant): adiciona administracao visual de empresas
+feat(branding): conclui runtime e arquitetura de personalização
 
 Próxima fase executável:
 
-1.3 — Branding
+1.4 — Usuários
 
 Estado atual
 
@@ -75,6 +75,8 @@ Estado atual
 ✔ 1.2D — UI Administrativa de Empresas concluída
 
 ✔ 1.2D.1 — Polish Funcional de Empresas concluída
+
+✔ 1.3 — Branding por empresa concluída (1.3A–1.3F)
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -338,7 +340,7 @@ implementados.
 1.3 Branding
 
 Status:
-Em andamento
+Concluída
 
 Subfases:
 
@@ -380,7 +382,17 @@ Tela `/empresas/[companyId]/aparencia` com hub Geral/Aparência. Upload/substitu
 logo (PNG/JPEG/WebP, 2 MB). Personalização de cores Light/Dark (primary/onPrimary/secondary/accent)
 com preview escopado independente do tema global. Validação de contraste WCAG AA (primary↔onPrimary).
 Polish visual do canvas autenticado (gutters/max-width) e acabamento da composição Aparência/Empresas.
-`allowedDevOrigins` em `next.config.ts` para desenvolvimento via LAN. Sem runtime pós-login (1.3F).
+`allowedDevOrigins` em `next.config.ts` para desenvolvimento via LAN. Runtime pós-login entregue na 1.3F.
+
+1.3F — Runtime de Branding Pós-login
+Status: Concluída
+
+`GET /branding/current` resolve branding server-side (role + `tenantId` da sessão; sem `tenantId` no
+client). USER → tenant ACTIVE (`Tenant.displayName`, logo `/files/:fileId`, overrides light/dark);
+ADMIN/SUPER_ADMIN → plataforma (Economização / Theme Default). Frontend: `getCurrentBranding()`,
+`RuntimeThemeProvider` alimenta `ThemeProvider`/`resolveTheme()`; shell com nome/logo; fallback
+seguro sem logout; estado só em memória (limpa no logout). Login permanece plataforma (ADR-044).
+Sem schema/migration; sem persistência client-side.
 
 ----------------------------------------
 
@@ -388,6 +400,12 @@ Polish visual do canvas autenticado (gutters/max-width) e acabamento da composi�
 
 Status:
 Pendente
+
+Arquitetura de papéis formalizada antes da implementação:
+`docs/15-arquitetura-papeis-e-usuarios.md` e ADR-047
+(`SUPER_ADMIN` técnico global; `ADMIN` operacional global; `USER` tenant-scoped;
+ADMIN não gerencia SUPER_ADMIN; preservar ao menos um ADMIN operacional ativo —
+SUPER_ADMIN não conta nessa invariante). Sem CRUD nesta etapa.
 
 ----------------------------------------
 

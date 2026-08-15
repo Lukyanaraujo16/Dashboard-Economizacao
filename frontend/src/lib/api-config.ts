@@ -46,3 +46,10 @@ export function adminTenantBrandingPath(tenantId: string): string {
 export function adminTenantBrandingLogoPath(tenantId: string): string {
   return `${adminTenantBrandingPath(tenantId)}/logo`;
 }
+
+/** Prefixo same-origin do branding da sessão autenticada. */
+export const BRANDING_API_PREFIX = '/branding';
+
+export function brandingCurrentPath(): string {
+  return `${BRANDING_API_PREFIX}/current`;
+}

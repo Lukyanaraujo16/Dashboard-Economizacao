@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 
 import { isPlatformRole, useAuth } from '../../auth';
 import { PlatformBrandMark } from '../../login/platform-brand-mark';
+import { useTheme } from '../../theme';
 import { Button, Typography } from '../ui';
 import styles from './app-shell.module.css';
 
@@ -14,11 +15,18 @@ const NAV_ITEMS = [
   { href: '/empresas', label: 'Empresas', platformOnly: true },
 ] as const;
 
+const PLATFORM_BRAND_NAME = 'Economização';
+const BRAND_SUBTITLE = 'Dashboard financeiro';
+
 export function AppSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const { theme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  const brandName = theme.brandName?.trim() || PLATFORM_BRAND_NAME;
+  const logoUrl = theme.logoUrl;
 
   const visibleItems = NAV_ITEMS.filter(
     (item) => !item.platformOnly || (user && isPlatformRole(user.role)),
@@ -39,13 +47,18 @@ export function AppSidebar() {
   return (
     <aside className={styles.sidebar} aria-label="Navegação principal">
       <div className={styles.sidebarBrand}>
-        <PlatformBrandMark size={36} className={styles.brandMark} />
+        <PlatformBrandMark
+          size={36}
+          className={styles.brandMark}
+          logoUrl={logoUrl}
+          alt={brandName}
+        />
         <div className={styles.brandText}>
           <Typography as="span" variant="label" className={styles.brandName}>
-            Economização
+            {brandName}
           </Typography>
           <Typography as="span" variant="caption" className={styles.brandTag}>
-            Dashboard financeiro
+            {BRAND_SUBTITLE}
           </Typography>
         </div>
       </div>

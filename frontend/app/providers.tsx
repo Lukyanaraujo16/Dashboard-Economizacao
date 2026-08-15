@@ -3,17 +3,17 @@
 import type { ReactNode } from 'react';
 
 import { AuthProvider } from '../src/auth';
-import { ThemeProvider } from '../src/theme/index';
+import { RuntimeThemeProvider } from '../src/theme/provider/runtime-theme-provider';
 
 type AppProvidersProps = {
   readonly children: ReactNode;
 };
 
-/** Providers de infraestrutura (tema + sessão mínima 1.1F-E.3). */
+/** Providers de infraestrutura (sessão + tema com branding runtime 1.3F). */
 export function AppProviders({ children }: AppProvidersProps) {
   return (
-    <ThemeProvider>
-      <AuthProvider>{children}</AuthProvider>
-    </ThemeProvider>
+    <AuthProvider>
+      <RuntimeThemeProvider>{children}</RuntimeThemeProvider>
+    </AuthProvider>
   );
 }
