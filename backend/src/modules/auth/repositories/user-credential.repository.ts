@@ -14,6 +14,8 @@ export type CreateUserCredentialInput = {
 export type UserCredentialRepository = {
   create(input: CreateUserCredentialInput): Promise<UserCredentialRecord>;
   findByUserId(userId: string): Promise<UserCredentialRecord | null>;
+  /** Atualiza ou cria credencial com hash já computado (redefinição administrativa). */
+  upsertPasswordHash(userId: string, passwordHash: string): Promise<UserCredentialRecord>;
 };
 
 export function createUserCredentialRepository(prisma: PrismaClient): UserCredentialRepository {
@@ -36,6 +38,20 @@ export function createUserCredentialRepository(prisma: PrismaClient): UserCreden
     async findByUserId(userId) {
       const row = await prisma.userCredential.findUnique({ where: { userId } });
       return row ? mapUserCredentialRecord(row) : null;
+    },
+
+    async upsertPasswordHash(userId, passwordHash) {
+      if (passwordHash.length === 0) {
+        throw new Error('passwordHash não pode ser vazio.');
+      }
+
+      const row = await prisma.userCredential.upsert({
+        where: { userId },
+        create: { userId, passwordHash },
+        update: { passwordHash },
+      });
+
+      return mapUserCredentialRecord(row);
     },
   };
 }

@@ -47,6 +47,64 @@ export function adminTenantBrandingLogoPath(tenantId: string): string {
   return `${adminTenantBrandingPath(tenantId)}/logo`;
 }
 
+/** Prefixo same-origin dos administradores da plataforma (1.4C). */
+export function adminAdministratorsPath(): string {
+  return `${ADMIN_API_PREFIX}/administrators`;
+}
+
+export function adminAdministratorPath(userId: string): string {
+  return `${adminAdministratorsPath()}/${userId}`;
+}
+
+export function adminAdministratorBlockPath(userId: string): string {
+  return `${adminAdministratorPath(userId)}/block`;
+}
+
+export function adminAdministratorUnblockPath(userId: string): string {
+  return `${adminAdministratorPath(userId)}/unblock`;
+}
+
+export function adminAdministratorDisablePath(userId: string): string {
+  return `${adminAdministratorPath(userId)}/disable`;
+}
+
+export function adminAdministratorEnablePath(userId: string): string {
+  return `${adminAdministratorPath(userId)}/enable`;
+}
+
+export function adminAdministratorResetPasswordPath(userId: string): string {
+  return `${adminAdministratorPath(userId)}/reset-password`;
+}
+
+/** Prefixo same-origin dos usuários de uma empresa (1.4C). */
+export function adminTenantUsersPath(tenantId: string): string {
+  return `${adminTenantPath(tenantId)}/users`;
+}
+
+export function adminTenantUserPath(tenantId: string, userId: string): string {
+  return `${adminTenantUsersPath(tenantId)}/${userId}`;
+}
+
+export function adminTenantUserBlockPath(tenantId: string, userId: string): string {
+  return `${adminTenantUserPath(tenantId, userId)}/block`;
+}
+
+export function adminTenantUserUnblockPath(tenantId: string, userId: string): string {
+  return `${adminTenantUserPath(tenantId, userId)}/unblock`;
+}
+
+export function adminTenantUserDisablePath(tenantId: string, userId: string): string {
+  return `${adminTenantUserPath(tenantId, userId)}/disable`;
+}
+
+export function adminTenantUserEnablePath(tenantId: string, userId: string): string {
+  return `${adminTenantUserPath(tenantId, userId)}/enable`;
+}
+
+export function adminTenantUserResetPasswordPath(tenantId: string, userId: string): string {
+  return `${adminTenantUserPath(tenantId, userId)}/reset-password`;
+}
+
 /** Prefixo same-origin do branding da sessão autenticada. */
 export const BRANDING_API_PREFIX = '/branding';
 

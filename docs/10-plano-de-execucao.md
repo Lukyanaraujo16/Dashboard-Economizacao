@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.4C
+1.4E
 
 Último checkpoint:
 
-1.4C — API Administrativa de Usuários
+1.4E — Fluxo Completo de Usuários
 
 Último commit:
 
-feat(branding): conclui runtime e arquitetura de personalização
+feat(users): conclui gestao e ciclo de vida de usuarios
 
 Próxima fase executável:
 
-1.4D — UI de Usuários
+1.5A — Arquitetura de Branding da Plataforma
 
 Estado atual
 
@@ -83,6 +83,12 @@ Estado atual
 ✔ 1.4B — Persistência e Domínio de Usuários concluída
 
 ✔ 1.4C — API Administrativa de Usuários concluída
+
+✔ 1.4D — UI Administrativa de Usuários concluída
+
+✔ 1.4D.1 — Polish UX da Administração de Usuários concluída
+
+✔ 1.4E — Fluxo Completo de Usuários concluída (épico 1.4 Usuários encerrado)
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -405,7 +411,7 @@ Sem schema/migration; sem persistência client-side.
 1.4 Usuários
 
 Status:
-Em andamento
+Concluída
 
 Arquitetura de papéis (pré-requisito): `docs/15-arquitetura-papeis-e-usuarios.md` e ADR-047.
 
@@ -437,28 +443,43 @@ Argon2id + status ACTIVE. Sem DELETE, sem reset por token, sem UI. Tenant DISABL
 administrável cadastralmente (login segue TENANT-003).
 
 1.4D — UI de Usuários
-Status: Pendente (próxima)
+Status: Concluída
+
+UI administrativa em dois contextos: `/administradores` (plataforma) e
+`/empresas/[companyId]/usuarios` (aba do hub da empresa). Sidebar com Administradores
+(somente ADMIN/SUPER_ADMIN). Sem DELETE, sem reset de senha. Backend 1.4C como autoridade.
+
+1.4D.1 — Polish UX da Administração de Usuários
+Status: Concluída
+
+Alinhamento visual com Empresas: formCard, toolbar/filtros/empty states, microcopy de
+cadastro, reserva de layout para futuro resumo. Sem novas funcionalidades; backend intacto.
 
 1.4E — Fluxo Completo de Usuários
-Status: Pendente
+Status: Concluída
+
+Ciclo de vida completo: listar/criar/editar/bloquear/desbloquear/desativar/ativar e
+**redefinição administrativa de senha** (ADMIN e USER). Primeiro acesso permanece senha
+definida pelo administrador na criação (sem convite/e-mail/magic link). Reset: confirmação
+no body, Argon2id via hasher oficial, resposta sem senha; sessões Redis do usuário invalidadas
+(docs/16 §10). Independente de ACTIVE/BLOCKED/DISABLED. Sem schema/migration nova.
+Épico 1.4 encerrado; próxima fase executável: **1.5 Branding da Plataforma**.
 
 ----------------------------------------
 
 1.5 Branding da Plataforma
 
 Status:
-Pendente
+Pendente (próxima)
 
 Escopo futuro (após encerrar a Fase 1.4 — Usuários). Complementa o branding por empresa (1.3):
 persistência e gestão da identidade visual global Economização (login / fallback / Theme Default),
-sem alterar a ordem de execução atual. **Não iniciada.** Próxima fase executável permanece **1.4D**
-após a conclusão da 1.4C (API). Enquanto a 1.4 estiver em andamento, executar 1.4D–1.4E
-antes de iniciar 1.5A.
+sem alterar a ordem de execução atual. **Não iniciada.** Próxima fase executável: **1.5A**.
 
 Subfases planejadas:
 
 1.5A — Arquitetura
-Status: Pendente
+Status: Pendente (próxima)
 
 1.5B — Persistência
 Status: Pendente

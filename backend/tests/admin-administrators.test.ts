@@ -512,4 +512,151 @@ describe('API administrativa /admin/administrators (1.4C)', () => {
       expect(await users.countActiveAdmins()).toBe(1);
     });
   });
+
+  describe('POST /admin/administrators/:userId/reset-password (1.4E)', () => {
+    const NEW_PASSWORD = 'NewPassword#98765';
+
+    it('redefine senha com hash Argon2id, não expõe senha e invalida sessões', async () => {
+      await createPlatformUser({ email: 'actor-reset@api.test', role: 'ADMIN' });
+      const target = await createPlatformUser({ email: 'target-reset@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+
+      const targetCookie = await loginAs(app, 'target-reset@api.test');
+      expect(
+        (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: targetCookie } }))
+          .statusCode,
+      ).toBe(200);
+
+      const actorCookie = await loginAs(app, 'actor-reset@api.test');
+      const reset = await app.inject({
+        method: 'POST',
+        url: `/admin/administrators/${target.id}/reset-password`,
+        headers: { cookie: actorCookie },
+        payload: { password: NEW_PASSWORD, passwordConfirmation: NEW_PASSWORD },
+      });
+
+      expect(reset.statusCode).toBe(200);
+      expect(reset.json().status).toBe('ok');
+      expectPublicUserShape(reset.json().user);
+      expect(JSON.stringify(reset.json())).not.toMatch(/NewPassword|Password#12345/);
+
+      const meAfter = await app.inject({
+        method: 'GET',
+        url: '/auth/me',
+        headers: { cookie: targetCookie },
+      });
+      expect(meAfter.statusCode).toBe(401);
+
+      const oldLogin = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: 'target-reset@api.test', password: VALID_PASSWORD },
+      });
+      expect(oldLogin.statusCode).toBe(401);
+
+      const newLogin = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: 'target-reset@api.test', password: NEW_PASSWORD },
+      });
+      expect(newLogin.statusCode).toBe(200);
+
+      const credential = await credentials.findByUserId(target.id);
+      expect(credential).toBeTruthy();
+      expect(await passwordHasher.verify(credential!.passwordHash, NEW_PASSWORD)).toBe(true);
+      expect(await passwordHasher.verify(credential!.passwordHash, VALID_PASSWORD)).toBe(false);
+    });
+
+    it('permite redefinir senha de ADMIN BLOCKED e DISABLED', async () => {
+      await createPlatformUser({ email: 'actor-status-reset@api.test', role: 'ADMIN' });
+      const blocked = await createPlatformUser({
+        email: 'blocked-reset@api.test',
+        role: 'ADMIN',
+        status: 'BLOCKED',
+      });
+      const disabled = await createPlatformUser({
+        email: 'disabled-reset@api.test',
+        role: 'ADMIN',
+        status: 'DISABLED',
+      });
+
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'actor-status-reset@api.test');
+
+      for (const target of [blocked, disabled]) {
+        const response = await app.inject({
+          method: 'POST',
+          url: `/admin/administrators/${target.id}/reset-password`,
+          headers: { cookie },
+          payload: { password: NEW_PASSWORD, passwordConfirmation: NEW_PASSWORD },
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().status).toBe('ok');
+      }
+    });
+
+    it('valida confirmação e comprimento mínimo', async () => {
+      await createPlatformUser({ email: 'actor-validate-reset@api.test', role: 'ADMIN' });
+      const target = await createPlatformUser({
+        email: 'target-validate-reset@api.test',
+        role: 'ADMIN',
+      });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'actor-validate-reset@api.test');
+
+      const mismatch = await app.inject({
+        method: 'POST',
+        url: `/admin/administrators/${target.id}/reset-password`,
+        headers: { cookie },
+        payload: { password: NEW_PASSWORD, passwordConfirmation: 'OtherPassword#1' },
+      });
+      expect(mismatch.statusCode).toBe(422);
+      expect(mismatch.json().error.code).toBe('VALIDATION_ERROR');
+
+      const short = await app.inject({
+        method: 'POST',
+        url: `/admin/administrators/${target.id}/reset-password`,
+        headers: { cookie },
+        payload: { password: 'short', passwordConfirmation: 'short' },
+      });
+      expect(short.statusCode).toBe(422);
+      expect(short.json().error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('SUPER_ADMIN fora do escopo → 404; USER → 403; sem sessão → 401', async () => {
+      await createPlatformUser({ email: 'actor-perm-reset@api.test', role: 'ADMIN' });
+      const superAdmin = await createPlatformUser({
+        email: 'super-reset@api.test',
+        role: 'SUPER_ADMIN',
+      });
+      await createPlatformUser({ email: 'user-perm-reset@api.test', role: 'USER' });
+      const app = await buildTestApp();
+
+      const unauth = await app.inject({
+        method: 'POST',
+        url: `/admin/administrators/${superAdmin.id}/reset-password`,
+        payload: { password: NEW_PASSWORD, passwordConfirmation: NEW_PASSWORD },
+      });
+      expect(unauth.statusCode).toBe(401);
+
+      const userCookie = await loginAs(app, 'user-perm-reset@api.test');
+      const forbidden = await app.inject({
+        method: 'POST',
+        url: `/admin/administrators/${superAdmin.id}/reset-password`,
+        headers: { cookie: userCookie },
+        payload: { password: NEW_PASSWORD, passwordConfirmation: NEW_PASSWORD },
+      });
+      expect(forbidden.statusCode).toBe(403);
+
+      const adminCookie = await loginAs(app, 'actor-perm-reset@api.test');
+      const notFound = await app.inject({
+        method: 'POST',
+        url: `/admin/administrators/${superAdmin.id}/reset-password`,
+        headers: { cookie: adminCookie },
+        payload: { password: NEW_PASSWORD, passwordConfirmation: NEW_PASSWORD },
+      });
+      expect(notFound.statusCode).toBe(404);
+      expect(notFound.json().error.code).toBe('NOT_FOUND');
+    });
+  });
 });

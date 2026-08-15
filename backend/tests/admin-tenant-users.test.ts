@@ -442,4 +442,108 @@ describe('API administrativa /admin/tenants/:tenantId/users (1.4C)', () => {
       expect(login.json().error.code).toBe('UNAUTHENTICATED');
     });
   });
+
+  describe('POST .../reset-password (1.4E)', () => {
+    const NEW_PASSWORD = 'NewPassword#98765';
+
+    it('redefine senha do USER, valida hash e invalida sessões', async () => {
+      const tenant = await tenants.create({ name: 'reset-tu', displayName: 'Reset TU' });
+      await createPlatformUser({ email: 'admin-reset-tu@api.test', role: 'ADMIN' });
+      const target = await createPlatformUser({
+        email: 'user-reset-tu@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      const app = await buildTestApp();
+
+      const userCookie = await loginAs(app, 'user-reset-tu@api.test');
+      expect(
+        (await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie: userCookie } }))
+          .statusCode,
+      ).toBe(200);
+
+      const adminCookie = await loginAs(app, 'admin-reset-tu@api.test');
+      const reset = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}/reset-password`,
+        headers: { cookie: adminCookie },
+        payload: { password: NEW_PASSWORD, passwordConfirmation: NEW_PASSWORD },
+      });
+
+      expect(reset.statusCode).toBe(200);
+      expect(reset.json().status).toBe('ok');
+      expect(reset.json().user.id).toBe(target.id);
+      expect(JSON.stringify(reset.json())).not.toMatch(/NewPassword|Password#12345/);
+
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: '/auth/me',
+            headers: { cookie: userCookie },
+          })
+        ).statusCode,
+      ).toBe(401);
+
+      const oldLogin = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: 'user-reset-tu@api.test', password: VALID_PASSWORD },
+      });
+      expect(oldLogin.statusCode).toBe(401);
+
+      const newLogin = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: 'user-reset-tu@api.test', password: NEW_PASSWORD },
+      });
+      expect(newLogin.statusCode).toBe(200);
+
+      const credential = await credentials.findByUserId(target.id);
+      expect(credential).toBeTruthy();
+      expect(await passwordHasher.verify(credential!.passwordHash, NEW_PASSWORD)).toBe(true);
+    });
+
+    it('USER não pode redefinir; SUPER_ADMIN pode; mismatch → 422', async () => {
+      const tenant = await tenants.create({ name: 'perm-reset-tu', displayName: 'Perm Reset' });
+      await createPlatformUser({ email: 'super-reset-tu@api.test', role: 'SUPER_ADMIN' });
+      await createPlatformUser({
+        email: 'user-actor-reset-tu@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      const target = await createPlatformUser({
+        email: 'user-target-reset-tu@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      const app = await buildTestApp();
+
+      const userCookie = await loginAs(app, 'user-actor-reset-tu@api.test');
+      const forbidden = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}/reset-password`,
+        headers: { cookie: userCookie },
+        payload: { password: NEW_PASSWORD, passwordConfirmation: NEW_PASSWORD },
+      });
+      expect(forbidden.statusCode).toBe(403);
+
+      const superCookie = await loginAs(app, 'super-reset-tu@api.test');
+      const ok = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}/reset-password`,
+        headers: { cookie: superCookie },
+        payload: { password: NEW_PASSWORD, passwordConfirmation: NEW_PASSWORD },
+      });
+      expect(ok.statusCode).toBe(200);
+
+      const mismatch = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}/reset-password`,
+        headers: { cookie: superCookie },
+        payload: { password: NEW_PASSWORD, passwordConfirmation: 'OtherPassword#1' },
+      });
+      expect(mismatch.statusCode).toBe(422);
+    });
+  });
 });

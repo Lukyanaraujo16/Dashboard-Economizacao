@@ -10,6 +10,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 const CREATE_BODY_KEYS = new Set(['name', 'email', 'password']);
 const UPDATE_BODY_KEYS = new Set(['name', 'email']);
+const RESET_PASSWORD_BODY_KEYS = new Set(['password', 'passwordConfirmation']);
 const LIST_QUERY_KEYS = new Set(['status', 'limit', 'offset']);
 
 function assertObjectBody(body: unknown, label: string): Record<string, unknown> {
@@ -181,4 +182,43 @@ export function parseListUsersQuery(query: unknown): ListUsersQuery {
   }
 
   return { status, limit, offset };
+}
+
+export type ResetPasswordRequestBody = {
+  readonly password: string;
+  readonly passwordConfirmation: string;
+};
+
+export function parseResetPasswordRequestBody(body: unknown): ResetPasswordRequestBody {
+  const record = assertObjectBody(body, 'Payload de redefinição de senha');
+  rejectUnknownKeys(record, RESET_PASSWORD_BODY_KEYS, 'Payload de redefinição de senha');
+
+  const details: Array<{ field: string; issue: string }> = [];
+
+  if (typeof record.password !== 'string') {
+    details.push({ field: 'password', issue: 'required_string' });
+  } else if (!isPasswordLengthValid(record.password)) {
+    details.push({
+      field: 'password',
+      issue: `length_between_${PASSWORD_MIN_LENGTH}_${PASSWORD_MAX_LENGTH}`,
+    });
+  }
+
+  if (typeof record.passwordConfirmation !== 'string') {
+    details.push({ field: 'passwordConfirmation', issue: 'required_string' });
+  } else if (
+    typeof record.password === 'string' &&
+    record.passwordConfirmation !== record.password
+  ) {
+    details.push({ field: 'passwordConfirmation', issue: 'mismatch' });
+  }
+
+  if (details.length > 0) {
+    throw new ValidationError('Dados de redefinição de senha inválidos.', { details });
+  }
+
+  return {
+    password: record.password as string,
+    passwordConfirmation: record.passwordConfirmation as string,
+  };
 }

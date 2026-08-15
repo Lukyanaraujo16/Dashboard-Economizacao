@@ -13,6 +13,7 @@ import styles from './app-shell.module.css';
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', platformOnly: false },
   { href: '/empresas', label: 'Empresas', platformOnly: true },
+  { href: '/administradores', label: 'Administradores', platformOnly: true },
 ] as const;
 
 const PLATFORM_BRAND_NAME = 'Economização';

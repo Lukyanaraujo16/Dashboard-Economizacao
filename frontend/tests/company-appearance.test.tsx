@@ -160,7 +160,7 @@ describe('Company appearance UI', () => {
     expect(within(header).queryByText('Dashboard')).toBeNull();
   });
 
-  it('navegação interna mostra somente Geral e Aparência', async () => {
+  it('navegação interna mostra Geral, Aparência e Usuários', async () => {
     stubLoad(company, emptyBranding);
     renderAppearance();
 
@@ -173,7 +173,9 @@ describe('Company appearance UI', () => {
     expect(within(nav).getByRole('link', { name: 'Aparência' }).getAttribute('href')).toBe(
       `/empresas/${companyId}/aparencia`,
     );
-    expect(within(nav).queryByRole('link', { name: 'Usuários' })).toBeNull();
+    expect(within(nav).getByRole('link', { name: 'Usuários' }).getAttribute('href')).toBe(
+      `/empresas/${companyId}/usuarios`,
+    );
     expect(within(nav).queryByRole('link', { name: 'Integrações' })).toBeNull();
   });
 

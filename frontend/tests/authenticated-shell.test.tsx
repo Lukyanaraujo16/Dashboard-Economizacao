@@ -161,7 +161,9 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
       'page',
     );
     expect(navigation.textContent).not.toMatch(/Relatórios|Consultor|Notificações|Minha Conta/);
-    expect(navigation.textContent).not.toMatch(/Empresas|Usuários|Integrações|Configurações/);
+    expect(navigation.textContent).not.toMatch(
+      /Empresas|Administradores|Usuários|Integrações|Configurações/,
+    );
   });
 
   it('unauthenticated redireciona /login', async () => {

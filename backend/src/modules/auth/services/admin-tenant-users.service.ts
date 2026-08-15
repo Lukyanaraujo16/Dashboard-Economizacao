@@ -12,21 +12,31 @@ export type CreateTenantUserInput = {
   readonly password: string;
 };
 
+export type ResetTenantUserPasswordInput = {
+  readonly password: string;
+};
+
 export type ListTenantUsersFilter = {
   readonly status?: UserRecord['status'];
   readonly limit?: number;
   readonly offset?: number;
 };
 
+type SessionInvalidator = {
+  destroyForUser(userId: string): Promise<number>;
+};
+
 /**
  * Gestão de Usuários da Empresa (somente role USER no tenant da rota).
  * Tenant DISABLED permanece administrável (cadastral); login segue TENANT-003.
+ * Redefinição de senha (1.4E): Argon2id + invalidação de sessões Redis (docs/16 §10).
  */
 export function createAdminTenantUsersService(deps: {
   readonly users: UserRepository;
   readonly credentials: UserCredentialRepository;
   readonly tenants: TenantRepository;
   readonly passwordHasher: PasswordHasher;
+  readonly sessions: SessionInvalidator;
 }) {
   async function requireTenant(tenantId: string) {
     const tenant = await deps.tenants.findById(tenantId);
@@ -116,6 +126,22 @@ export function createAdminTenantUsersService(deps: {
         await requireTenant(tenantId);
         await requireTenantUser(tenantId, userId);
         return deps.users.enable(userId);
+      });
+    },
+
+    async resetPassword(
+      tenantId: string,
+      userId: string,
+      input: ResetTenantUserPasswordInput,
+    ): Promise<UserRecord> {
+      return withAuthDomainError(async () => {
+        await requireTenant(tenantId);
+        const user = await requireTenantUser(tenantId, userId);
+        const passwordHash = await deps.passwordHasher.hash(input.password);
+        await deps.credentials.upsertPasswordHash(user.id, passwordHash);
+        await deps.users.setPasswordConfiguredAt(user.id);
+        await deps.sessions.destroyForUser(user.id);
+        return user;
       });
     },
   };

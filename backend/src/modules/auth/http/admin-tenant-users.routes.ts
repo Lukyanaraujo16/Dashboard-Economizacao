@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createArgon2idPasswordHasher } from '../crypto/password-hasher.js';
 import { createRequireAuthentication } from './require-authentication.js';
@@ -12,28 +13,36 @@ import { createUserRepository } from '../repositories/user.repository.js';
 import {
   parseCreateAdminUserRequestBody,
   parseListUsersQuery,
+  parseResetPasswordRequestBody,
   parseUpdateAdminUserRequestBody,
   parseUserIdParam,
 } from '../schemas/admin-user.schemas.js';
 import { createAdminTenantUsersService } from '../services/admin-tenant-users.service.js';
+import { buildSessionKeyPrefix } from '../session/redis-session-store.js';
+import { destroySessionsForUser } from '../session/destroy-sessions-for-user.js';
 
 /**
- * API administrativa — Usuários da Empresa (1.4C).
+ * API administrativa — Usuários da Empresa (1.4C / 1.4E).
  * Prefixo: /admin/tenants/:tenantId/users — somente role USER do tenant.
  */
 export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Promise<void> {
   const prisma = getPrismaClient();
+  const environment = loadEnvironment();
   const users = createUserRepository(prisma);
   const credentials = createUserCredentialRepository(prisma);
   const tenants = createTenantRepository(prisma);
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
+  const sessionPrefix = buildSessionKeyPrefix(environment.nodeEnv);
   const tenantUsers = createAdminTenantUsersService({
     users,
     credentials,
     tenants,
     passwordHasher: createArgon2idPasswordHasher(),
+    sessions: {
+      destroyForUser: (userId) => destroySessionsForUser(app.redis, sessionPrefix, userId),
+    },
   });
 
   app.get('/admin/tenants/:tenantId/users', { preHandler: adminGuard }, async (request, reply) => {
@@ -122,6 +131,23 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
       const userId = parseUserIdParam(request.params);
       const user = await tenantUsers.enable(tenantId, userId);
       return reply.status(200).send(toPublicUserResponse(user));
+    },
+  );
+
+  app.post(
+    '/admin/tenants/:tenantId/users/:userId/reset-password',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const tenantId = parseTenantIdParam(request.params);
+      const userId = parseUserIdParam(request.params);
+      const body = parseResetPasswordRequestBody(request.body);
+      const user = await tenantUsers.resetPassword(tenantId, userId, {
+        password: body.password,
+      });
+      return reply.status(200).send({
+        status: 'ok' as const,
+        user: toPublicUserResponse(user),
+      });
     },
   );
 }

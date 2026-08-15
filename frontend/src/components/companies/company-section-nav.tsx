@@ -16,6 +16,7 @@ type CompanySectionNavProps = {
 const SECTIONS = [
   { key: 'geral', label: 'Geral', href: (id: string) => `/empresas/${id}/editar` },
   { key: 'aparencia', label: 'Aparência', href: (id: string) => `/empresas/${id}/aparencia` },
+  { key: 'usuarios', label: 'Usuários', href: (id: string) => `/empresas/${id}/usuarios` },
 ] as const;
 
 export function CompanySectionNav({ companyId, companyName, children }: CompanySectionNavProps) {

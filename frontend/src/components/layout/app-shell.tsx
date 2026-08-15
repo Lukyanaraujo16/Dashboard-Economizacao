@@ -23,11 +23,32 @@ export type ShellPageMeta = {
  * Rotas de Empresa usam contexto "Empresas" — nunca "Visão geral / Dashboard".
  */
 export function resolveShellPageMeta(pathname: string): ShellPageMeta {
+  if (pathname === '/administradores') {
+    return { context: 'Administradores', title: 'Administradores' };
+  }
+  if (pathname === '/administradores/novo') {
+    return { context: 'Administradores', title: 'Novo administrador' };
+  }
+  if (pathname.startsWith('/administradores/') && pathname.endsWith('/editar')) {
+    return { context: 'Administradores', title: 'Editar administrador' };
+  }
+  if (pathname.startsWith('/administradores')) {
+    return { context: 'Administradores', title: 'Administradores' };
+  }
   if (pathname === '/empresas') {
     return { context: 'Empresas', title: 'Empresas' };
   }
   if (pathname === '/empresas/nova') {
     return { context: 'Empresas', title: 'Nova empresa' };
+  }
+  if (pathname.startsWith('/empresas/') && pathname.includes('/usuarios')) {
+    if (pathname.endsWith('/novo')) {
+      return { context: 'Empresas', title: 'Novo usuário' };
+    }
+    if (pathname.endsWith('/editar')) {
+      return { context: 'Empresas', title: 'Editar usuário' };
+    }
+    return { context: 'Empresas', title: 'Usuários' };
   }
   if (pathname.startsWith('/empresas/') && pathname.endsWith('/editar')) {
     return { context: 'Empresas', title: 'Geral' };

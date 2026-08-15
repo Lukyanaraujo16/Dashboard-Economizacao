@@ -202,6 +202,8 @@ export function CompaniesPage() {
         </div>
       </div>
 
+      <div className={styles.listLead} aria-hidden="true" />
+
       {actionError ? (
         <Typography as="p" variant="body" className={styles.formError} role="alert">
           {actionError}

@@ -11,10 +11,18 @@ export type CreateAdministratorInput = {
   readonly password: string;
 };
 
+export type ResetAdministratorPasswordInput = {
+  readonly password: string;
+};
+
 export type ListAdministratorsFilter = {
   readonly status?: UserRecord['status'];
   readonly limit?: number;
   readonly offset?: number;
+};
+
+type SessionInvalidator = {
+  destroyForUser(userId: string): Promise<number>;
 };
 
 /**
@@ -23,11 +31,14 @@ export type ListAdministratorsFilter = {
  *
  * Atomicidade do último ADMIN: `UserRepository.block/disable` travam linhas
  * `ADMIN`+`ACTIVE` com `SELECT … FOR UPDATE` ordenado antes de mutar.
+ *
+ * Redefinição de senha (1.4E): Argon2id + invalidação de sessões Redis (docs/16 §10).
  */
 export function createAdminAdministratorsService(deps: {
   readonly users: UserRepository;
   readonly credentials: UserCredentialRepository;
   readonly passwordHasher: PasswordHasher;
+  readonly sessions: SessionInvalidator;
 }) {
   async function requireAdministrator(userId: string): Promise<UserRecord> {
     const user = await deps.users.findById(userId);
@@ -98,6 +109,20 @@ export function createAdminAdministratorsService(deps: {
       return withAuthDomainError(async () => {
         await requireAdministrator(userId);
         return deps.users.enable(userId);
+      });
+    },
+
+    async resetPassword(
+      userId: string,
+      input: ResetAdministratorPasswordInput,
+    ): Promise<UserRecord> {
+      return withAuthDomainError(async () => {
+        const user = await requireAdministrator(userId);
+        const passwordHash = await deps.passwordHasher.hash(input.password);
+        await deps.credentials.upsertPasswordHash(user.id, passwordHash);
+        await deps.users.setPasswordConfiguredAt(user.id);
+        await deps.sessions.destroyForUser(user.id);
+        return user;
       });
     },
   };

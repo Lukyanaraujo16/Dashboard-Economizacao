@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 
+import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createArgon2idPasswordHasher } from '../crypto/password-hasher.js';
 import { createRequireAuthentication } from './require-authentication.js';
@@ -11,27 +12,35 @@ import { createUserRepository } from '../repositories/user.repository.js';
 import {
   parseCreateAdminUserRequestBody,
   parseListUsersQuery,
+  parseResetPasswordRequestBody,
   parseUpdateAdminUserRequestBody,
   parseUserIdParam,
 } from '../schemas/admin-user.schemas.js';
 import { createAdminAdministratorsService } from '../services/admin-administrators.service.js';
+import { buildSessionKeyPrefix } from '../session/redis-session-store.js';
+import { destroySessionsForUser } from '../session/destroy-sessions-for-user.js';
 
 /**
- * API administrativa — Administradores da Plataforma (1.4C).
+ * API administrativa — Administradores da Plataforma (1.4C / 1.4E).
  * Prefixo: /admin/administrators — somente role ADMIN.
  */
 export async function registerAdminAdministratorsRoutes(app: FastifyInstance): Promise<void> {
   const prisma = getPrismaClient();
+  const environment = loadEnvironment();
   const users = createUserRepository(prisma);
   const credentials = createUserCredentialRepository(prisma);
   const tenants = createTenantRepository(prisma);
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
+  const sessionPrefix = buildSessionKeyPrefix(environment.nodeEnv);
   const administrators = createAdminAdministratorsService({
     users,
     credentials,
     passwordHasher: createArgon2idPasswordHasher(),
+    sessions: {
+      destroyForUser: (userId) => destroySessionsForUser(app.redis, sessionPrefix, userId),
+    },
   });
 
   app.get('/admin/administrators', { preHandler: adminGuard }, async (request, reply) => {
@@ -104,6 +113,20 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
       const userId = parseUserIdParam(request.params);
       const user = await administrators.enable(userId);
       return reply.status(200).send(toPublicUserResponse(user));
+    },
+  );
+
+  app.post(
+    '/admin/administrators/:userId/reset-password',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const userId = parseUserIdParam(request.params);
+      const body = parseResetPasswordRequestBody(request.body);
+      const user = await administrators.resetPassword(userId, { password: body.password });
+      return reply.status(200).send({
+        status: 'ok' as const,
+        user: toPublicUserResponse(user),
+      });
     },
   );
 }
