@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.4E
+1.5A
 
 Último checkpoint:
 
-1.4E — Fluxo Completo de Usuários
+1.5A — Arquitetura de Branding da Plataforma
 
 Último commit:
 
-feat(users): conclui gestao e ciclo de vida de usuarios
+feat(users): adiciona dominio e api administrativa
 
 Próxima fase executável:
 
-1.5A — Arquitetura de Branding da Plataforma
+1.5B — Persistência de Branding da Plataforma
 
 Estado atual
 
@@ -89,6 +89,8 @@ Estado atual
 ✔ 1.4D.1 — Polish UX da Administração de Usuários concluída
 
 ✔ 1.4E — Fluxo Completo de Usuários concluída (épico 1.4 Usuários encerrado)
+
+✔ 1.5A — Arquitetura de Branding da Plataforma concluída (docs/17, ADR-049)
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -470,19 +472,25 @@ no body, Argon2id via hasher oficial, resposta sem senha; sessões Redis do usu�
 1.5 Branding da Plataforma
 
 Status:
-Pendente (próxima)
+Em andamento
 
-Escopo futuro (após encerrar a Fase 1.4 — Usuários). Complementa o branding por empresa (1.3):
-persistência e gestão da identidade visual global Economização (login / fallback / Theme Default),
-sem alterar a ordem de execução atual. **Não iniciada.** Próxima fase executável: **1.5A**.
+Complementa o branding por empresa (1.3): persistência e gestão da identidade visual global
+Economização (login / fallback / Theme Default). Platform Branding ≠ Tenant Branding.
+Histórico: na 1.3, `platform_branding` ficou fora do escopo (login ADR-044 + Theme Default).
 
-Subfases planejadas:
+Subfases:
 
 1.5A — Arquitetura
-Status: Pendente (próxima)
+Status: Concluída
+
+Documentação em `docs/17-arquitetura-branding-plataforma.md` e ADR-049. Hierarquia
+Platform → Tenant → Theme Default; login só plataforma; ADMIN/SUPER_ADMIN → plataforma;
+USER → tenant com fallback plataforma; persistência futura em tabela própria; reuso de
+FileStorage; API `/admin/platform/branding`; UI Configurações → Branding da Plataforma.
+Sem código, schema ou migration nesta subfase.
 
 1.5B — Persistência
-Status: Pendente
+Status: Pendente (próxima)
 
 1.5C — API
 Status: Pendente
@@ -492,9 +500,6 @@ Status: Pendente
 
 1.5E — Runtime
 Status: Pendente
-
-Histórico: na 1.3, `platform_branding` e branding persistido da plataforma ficaram fora do escopo
-(login ADR-044 + Theme Default). Esta fase formaliza essa entrega.
 
 ----------------------------------------
 
