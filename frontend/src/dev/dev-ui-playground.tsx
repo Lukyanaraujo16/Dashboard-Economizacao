@@ -16,6 +16,7 @@ import {
   Stack,
   Typography,
 } from '../components/ui';
+import { IconCircleCheckBig } from '../components/ui/icons';
 import { ThemeProvider } from '../theme';
 import type { ResolvedColorScheme } from '../theme/types/theme';
 import { DevBrandingPreview } from './dev-branding-preview';
@@ -34,11 +35,7 @@ function Section({ title, children }: { readonly title: string; readonly childre
 }
 
 function DemoGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
+  return <IconCircleCheckBig size={14} />;
 }
 
 export function DevUiPlayground() {
@@ -204,7 +201,7 @@ export function DevUiPlayground() {
                 <IconButton aria-label="Ação primary" variant="primary">
                   <DemoGlyph />
                 </IconButton>
-                <IconButton aria-label="Ação danger" variant="danger">
+                <IconButton aria-label="Ação danger" variant="ghost" tone="danger">
                   <DemoGlyph />
                 </IconButton>
                 <IconButton aria-label="Desabilitado" disabled>

@@ -4,11 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AuthenticatedLayout from '../app/(authenticated)/layout';
 import AuthenticatedHomePage from '../app/(authenticated)/page';
 import type { AuthenticatedUser } from '../src/auth/types';
+import type { getPlatformBranding } from '../src/services/admin/platform-branding';
+import type { PlatformBranding } from '../src/services/admin/platform-branding.types';
 import type { getCurrentBranding } from '../src/services/branding/current';
 import { BrandingCurrentRequestError } from '../src/services/branding/current.types';
 import type { CurrentBranding } from '../src/services/branding/current.types';
 import type { logout } from '../src/services/auth/logout';
-import { lightColorTokens, RuntimeThemeProvider, useTheme } from '../src/theme';
+import { lightColorTokens, RuntimeThemeProvider, useRuntimeTheme, useTheme } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
   mockAuthenticatedUser,
@@ -49,6 +51,8 @@ afterEach(() => {
   sessionStorage.clear();
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('style');
+  document.title = '';
+  document.head.querySelectorAll('link[data-runtime-favicon="true"]').forEach((el) => el.remove());
 });
 
 beforeEach(() => {
@@ -83,19 +87,31 @@ const tenantBranding: CurrentBranding = {
   tenantId: 'tenant-a',
   name: 'Acme Runtime',
   logoUrl: '/files/logo-acme',
+  faviconUrl: '/files/fav-acme',
   light: { primary: '#112233' },
   dark: { primary: '#AABBCC' },
   updatedAt: '2026-08-15T12:00:00.000Z',
 };
 
-const platformBranding: CurrentBranding = {
+const platformCurrentBranding: CurrentBranding = {
   scope: 'platform',
   tenantId: null,
   name: 'Economização',
   logoUrl: null,
+  faviconUrl: null,
   light: null,
   dark: null,
   updatedAt: null,
+};
+
+const adminPlatformBranding: PlatformBranding = {
+  name: 'Plataforma Admin',
+  logoUrl: '/files/logo-platform',
+  faviconUrl: '/files/fav-platform',
+  light: { primary: '#334455' },
+  dark: { primary: '#CCDDEE' },
+  createdAt: '2026-08-15T10:00:00.000Z',
+  updatedAt: '2026-08-15T12:00:00.000Z',
 };
 
 function ThemeProbe() {
@@ -111,18 +127,36 @@ function ThemeProbe() {
   );
 }
 
+function RefreshProbe() {
+  const { refreshBranding } = useRuntimeTheme();
+  return (
+    <button type="button" onClick={() => void refreshBranding()}>
+      Refresh branding
+    </button>
+  );
+}
+
 function renderRuntime(options: {
   readonly user: AuthenticatedUser;
-  readonly brandingAction: () => Promise<CurrentBranding>;
+  readonly brandingAction?: () => Promise<CurrentBranding>;
+  readonly platformBrandingAction?: () => Promise<PlatformBranding>;
   readonly logoutAction?: typeof logout;
 }) {
   return renderWithAuth(
     <RuntimeThemeProvider
-      getCurrentBrandingAction={options.brandingAction as typeof getCurrentBranding}
+      getCurrentBrandingAction={
+        (options.brandingAction ??
+          vi.fn().mockResolvedValue(platformCurrentBranding)) as typeof getCurrentBranding
+      }
+      getPlatformBrandingAction={
+        (options.platformBrandingAction ??
+          vi.fn().mockResolvedValue(adminPlatformBranding)) as typeof getPlatformBranding
+      }
     >
       <AuthenticatedLayout>
         <AuthenticatedHomePage />
         <ThemeProbe />
+        <RefreshProbe />
       </AuthenticatedLayout>
     </RuntimeThemeProvider>,
     {
@@ -133,7 +167,7 @@ function renderRuntime(options: {
   );
 }
 
-describe('Runtime branding pós-login (1.3F)', () => {
+describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
   it('USER recebe branding tenant e ThemeProvider aplica overrides light', async () => {
     const brandingAction = vi.fn().mockResolvedValue(tenantBranding);
     renderRuntime({ user: tenantUser, brandingAction });
@@ -146,6 +180,10 @@ describe('Runtime branding pós-login (1.3F)', () => {
     expect(screen.getByRole('img', { name: 'Acme Runtime' }).getAttribute('src')).toBe(
       '/files/logo-acme',
     );
+    expect(document.title).toBe('Acme Runtime');
+    expect(
+      document.head.querySelector('link[data-runtime-favicon="true"]')?.getAttribute('href'),
+    ).toContain('/files/fav-acme');
     expect(brandingAction).toHaveBeenCalled();
   });
 
@@ -177,6 +215,7 @@ describe('Runtime branding pós-login (1.3F)', () => {
       tenantId: 'tenant-a',
       name: 'Empresa Sem Branding',
       logoUrl: null,
+      faviconUrl: null,
       light: null,
       dark: null,
       updatedAt: null,
@@ -192,23 +231,68 @@ describe('Runtime branding pós-login (1.3F)', () => {
     expect(screen.getByLabelText('Empresa Sem Branding')).toBeTruthy();
   });
 
-  it('ADMIN e SUPER_ADMIN usam branding de plataforma', async () => {
-    const brandingAction = vi.fn().mockResolvedValue(platformBranding);
-    renderRuntime({ user: adminUser, brandingAction });
+  it('ADMIN e SUPER_ADMIN usam getPlatformBranding com logo/cores', async () => {
+    const platformAction = vi.fn().mockResolvedValue(adminPlatformBranding);
+    const currentAction = vi.fn().mockResolvedValue(platformCurrentBranding);
+    renderRuntime({
+      user: adminUser,
+      brandingAction: currentAction,
+      platformBrandingAction: platformAction,
+    });
 
     await waitFor(() => {
-      expect(screen.getByTestId('brand-name').textContent).toBe('Economização');
-      expect(screen.getByTestId('primary').textContent).toBe(lightColorTokens.primary);
+      expect(screen.getByTestId('brand-name').textContent).toBe('Plataforma Admin');
+      expect(screen.getByTestId('logo-url').textContent).toBe('/files/logo-platform');
+      expect(screen.getByTestId('primary').textContent).toBe('#334455');
     });
+    expect(platformAction).toHaveBeenCalled();
+    expect(currentAction).not.toHaveBeenCalled();
+    expect(document.title).toBe('Plataforma Admin');
 
     cleanup();
     replaceMock.mockReset();
 
-    const superAction = vi.fn().mockResolvedValue(platformBranding);
-    renderRuntime({ user: superAdminUser, brandingAction: superAction });
-    await waitFor(() => {
-      expect(screen.getByTestId('brand-name').textContent).toBe('Economização');
+    const superAction = vi.fn().mockResolvedValue(adminPlatformBranding);
+    renderRuntime({
+      user: superAdminUser,
+      brandingAction: currentAction,
+      platformBrandingAction: superAction,
     });
+    await waitFor(() => {
+      expect(screen.getByTestId('brand-name').textContent).toBe('Plataforma Admin');
+    });
+    expect(superAction).toHaveBeenCalled();
+  });
+
+  it('refreshBranding recarrega branding ADMIN', async () => {
+    const platformAction = vi
+      .fn()
+      .mockResolvedValueOnce(adminPlatformBranding)
+      .mockResolvedValueOnce({
+        ...adminPlatformBranding,
+        name: 'Plataforma Atualizada',
+        logoUrl: '/files/logo-2',
+        light: { primary: '#999999' },
+        updatedAt: '2026-08-15T13:00:00.000Z',
+      });
+
+    renderRuntime({
+      user: adminUser,
+      platformBrandingAction: platformAction,
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('brand-name').textContent).toBe('Plataforma Admin');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh branding' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('brand-name').textContent).toBe('Plataforma Atualizada');
+      expect(screen.getByTestId('primary').textContent).toBe('#999999');
+    });
+    expect(platformAction).toHaveBeenCalledTimes(2);
+    expect(document.title).toBe('Plataforma Atualizada');
   });
 
   it('erro de branding usa fallback sem logout', async () => {
@@ -265,6 +349,7 @@ describe('Runtime branding pós-login (1.3F)', () => {
       tenantId: 'tenant-b',
       name: 'Beta Co',
       logoUrl: '/files/logo-beta',
+      faviconUrl: null,
       light: { primary: '#00FF00' },
       dark: null,
       updatedAt: null,

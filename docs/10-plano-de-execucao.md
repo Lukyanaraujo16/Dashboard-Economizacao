@@ -8,19 +8,21 @@ Fundação:
 Concluída
 
 Versão atual:
-1.5C
+1.5E + Design System Freeze
 
 Último checkpoint:
 
-1.5C — API Administrativa de Branding da Plataforma
+UI.FREEZE — Auditoria Final de Interface (Design System / UI base congelado)
 
 Último commit:
 
-feat(branding): adiciona api global da plataforma
+feat(ui): consolida design system e congela interface base
 
 Próxima fase executável:
 
-1.5D — UI Administrativa de Branding da Plataforma
+1.6 — Modo Suporte
+
+**Não iniciada.**
 
 Estado atual
 
@@ -95,6 +97,22 @@ Estado atual
 ✔ 1.5B — Persistência e Domínio de Branding da Plataforma concluída
 
 ✔ 1.5C — API Administrativa de Branding da Plataforma concluída
+
+✔ 1.5D — UI Administrativa de Branding da Plataforma concluída
+
+✔ 1.5E — Runtime de Branding da Plataforma concluída
+
+✔ UX.P1 — Modernização da Iconografia concluída
+
+✔ UX.P2 — Refinamento Visual do Shell concluída
+
+✔ UX.P3 — System Bar concluída
+
+✔ UX.P4 — Design Polish concluída
+
+✔ UI.FREEZE — Auditoria Final de Interface concluída
+
+✔ Design System / UI base: **congelado** (próxima fase oficial: 1.6 — Modo Suporte)
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -511,10 +529,38 @@ Upload reutiliza FileStorage + MIME PNG/JPEG/WebP (favicon sem ICO; máx. 512 KB
 Storage keys `platform/branding/{logo|favicon}/…`. Reset lifecycle-safe. Sem UI/runtime.
 
 1.5D — UI Administrativa
-Status: Pendente (próxima)
+Status: Concluída
+
+Tela `/configuracoes/aparencia` (Aparência da Plataforma) para ADMIN/SUPER_ADMIN:
+nome, logo, favicon, cores claro/escuro, preview (incl. login ilustrativo), contraste WCAG,
+reset global com confirmação. Sem runtime/login real. Sem alteração de Tenant Branding.
 
 1.5E — Runtime
-Status: Pendente
+Status: Concluída
+
+Runtime de Platform Branding: `GET /branding/platform` no login (público),
+`RuntimePlatformBrandingProvider` + evolução do `RuntimeThemeProvider`
+(ADMIN → admin API; USER → `/branding/current`), título/favicon dinâmicos,
+refresh após save na UI de aparência. Sem schema/migration.
+
+----------------------------------------
+
+Checkpoint visual (pós-1.5E)
+
+Status: Concluído — Design System / UI base congelado
+
+Fases:
+
+- UX.P1 — Modernização da Iconografia (Lucide) — concluída
+- UX.P2 — Refinamento Visual do Shell — concluída
+- UX.P3 — System Bar — concluída
+- UX.P4 — Design Polish — concluída
+- UI.FREEZE — Auditoria Final de Interface — concluída
+
+Escopo: refinamentos de consistência (tokens, tipografia, botões, tabelas, cards,
+empty states, sidebar, system bar, login, light/dark, focus/hover, responsividade).
+Sem novas telas de produto, sem mudança de layout estrutural, sem alteração de
+regras de negócio / schema / permissões nas fases UX.
 
 ----------------------------------------
 

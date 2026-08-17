@@ -1,22 +1,50 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 
 import { isPlatformRole, useAuth } from '../../auth';
 import { PlatformBrandMark } from '../../login/platform-brand-mark';
+import { DEFAULT_PLATFORM_BRAND_NAME } from '../../services/admin/platform-branding.types';
 import { useTheme } from '../../theme';
 import { Button, Typography } from '../ui';
+import {
+  IconBuilding2,
+  IconLayoutDashboard,
+  IconLogOut,
+  IconSettings2,
+  IconShieldUser,
+} from '../ui/icons';
 import styles from './app-shell.module.css';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Dashboard', platformOnly: false },
-  { href: '/empresas', label: 'Empresas', platformOnly: true },
-  { href: '/administradores', label: 'Administradores', platformOnly: true },
+  {
+    href: '/',
+    label: 'Dashboard',
+    platformOnly: false,
+    icon: IconLayoutDashboard,
+  },
+  {
+    href: '/empresas',
+    label: 'Empresas',
+    platformOnly: true,
+    icon: IconBuilding2,
+  },
+  {
+    href: '/administradores',
+    label: 'Administradores',
+    platformOnly: true,
+    icon: IconShieldUser,
+  },
+  {
+    href: '/configuracoes/aparencia',
+    label: 'Configurações',
+    platformOnly: true,
+    icon: IconSettings2,
+  },
 ] as const;
 
-const PLATFORM_BRAND_NAME = 'Economização';
 const BRAND_SUBTITLE = 'Dashboard financeiro';
 
 export function AppSidebar() {
@@ -26,7 +54,7 @@ export function AppSidebar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
-  const brandName = theme.brandName?.trim() || PLATFORM_BRAND_NAME;
+  const brandName = theme.brandName?.trim() || DEFAULT_PLATFORM_BRAND_NAME;
   const logoUrl = theme.logoUrl;
 
   const visibleItems = NAV_ITEMS.filter(
@@ -70,6 +98,7 @@ export function AppSidebar() {
             item.href === '/'
               ? pathname === '/'
               : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const Icon = item.icon;
 
           return (
             <Link
@@ -78,7 +107,10 @@ export function AppSidebar() {
               className={styles.navItem}
               aria-current={isActive ? 'page' : undefined}
             >
-              {item.label}
+              <span className={styles.navItemIcon} aria-hidden="true">
+                <Icon size={18} />
+              </span>
+              <span className={styles.navItemLabel}>{item.label}</span>
             </Link>
           );
         })}
@@ -101,7 +133,8 @@ export function AppSidebar() {
           className={styles.logoutButton}
           onClick={() => void handleLogout()}
         >
-          Sair
+          <IconLogOut size={18} />
+          <span>Sair</span>
         </Button>
         {logoutError ? (
           <Typography as="p" variant="caption" className={styles.logoutError} role="alert">

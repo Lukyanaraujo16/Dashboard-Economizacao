@@ -4,14 +4,13 @@
   justify-content: center;
   gap: var(--space-2);
   border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   font-family: inherit;
   font-weight: 550;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
   cursor: pointer;
   transition:
     background-color var(--duration-fast) ease,
-    background-image var(--duration-fast) ease,
     border-color var(--duration-fast) ease,
     color var(--duration-fast) ease,
     box-shadow var(--duration-fast) ease,
@@ -37,63 +36,48 @@
 }
 
 .sm {
-  min-height: 2rem;
+  min-height: 1.875rem;
   padding: 0 var(--space-3);
   font-size: 0.8125rem;
 }
 
 .md {
-  min-height: 2.5rem;
+  min-height: 2.25rem;
   padding: 0 var(--space-4);
   font-size: 0.875rem;
 }
 
 .lg {
-  min-height: 2.75rem;
+  min-height: 2.5rem;
   padding: 0 var(--space-5);
   font-size: 0.9375rem;
 }
 
 .primary {
   background-color: var(--color-primary);
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-primary) 78%, var(--color-on-primary)) 0%,
-    var(--color-primary) 100%
-  );
+  background-image: none;
   color: var(--color-on-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 65%, transparent);
-  box-shadow:
-    0 1px 2px color-mix(in srgb, var(--color-primary) 22%, transparent),
-    0 4px 10px color-mix(in srgb, var(--color-primary) 12%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--color-on-primary) 12%, transparent);
+  border-color: transparent;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 
 .primary:hover:not(:disabled) {
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-secondary) 88%, var(--color-on-primary)) 0%,
-    var(--color-secondary) 100%
-  );
-  background-color: var(--color-secondary);
-  border-color: color-mix(in srgb, var(--color-secondary) 70%, transparent);
-  box-shadow:
-    0 2px 4px color-mix(in srgb, var(--color-primary) 20%, transparent),
-    0 6px 14px color-mix(in srgb, var(--color-primary) 14%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--color-on-primary) 14%, transparent);
+  background-color: color-mix(in srgb, var(--color-primary) 88%, black);
+  background-image: none;
+  border-color: transparent;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
 .primary:active:not(:disabled) {
-  background-image: none;
-  background-color: color-mix(in srgb, var(--color-primary) 88%, black);
-  box-shadow: inset 0 1px 2px color-mix(in srgb, black 20%, transparent);
+  background-color: color-mix(in srgb, var(--color-primary) 78%, black);
+  box-shadow: none;
   transform: translateY(0.5px);
 }
 
 .secondary {
-  background: color-mix(in srgb, var(--color-surface) 80%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
   color: var(--color-text-secondary);
-  border-color: var(--color-border);
+  border-color: color-mix(in srgb, var(--color-border) 92%, transparent);
   font-weight: 500;
   box-shadow: none;
 }
@@ -101,12 +85,11 @@
 .secondary:hover:not(:disabled) {
   background: var(--color-surface);
   color: var(--color-text-primary);
-  border-color: color-mix(in srgb, var(--color-border) 50%, var(--color-text-muted));
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-shadow) 60%, transparent);
+  border-color: color-mix(in srgb, var(--color-border) 55%, var(--color-text-muted));
 }
 
 .secondary:active:not(:disabled) {
-  background: color-mix(in srgb, var(--color-background) 65%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
   box-shadow: none;
 }
 
@@ -117,44 +100,32 @@
 }
 
 .ghost:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-text-muted) 11%, transparent);
+  background: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
   color: var(--color-text-primary);
 }
 
 .ghost:active:not(:disabled) {
-  background: color-mix(in srgb, var(--color-text-muted) 16%, transparent);
+  background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
 }
 
 .danger {
   background-color: var(--color-danger);
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-danger) 80%, var(--color-on-danger)) 0%,
-    var(--color-danger) 100%
-  );
+  background-image: none;
   color: var(--color-on-danger);
-  border-color: color-mix(in srgb, var(--color-danger) 65%, transparent);
-  box-shadow:
-    0 1px 2px color-mix(in srgb, var(--color-danger) 20%, transparent),
-    0 4px 10px color-mix(in srgb, var(--color-danger) 10%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--color-on-danger) 12%, transparent);
+  border-color: transparent;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-danger) 16%, transparent);
 }
 
 .danger:hover:not(:disabled) {
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-danger) 72%, var(--color-on-danger)) 0%,
-    color-mix(in srgb, var(--color-danger) 90%, black) 100%
-  );
-  box-shadow:
-    0 2px 4px color-mix(in srgb, var(--color-danger) 18%, transparent),
-    0 6px 14px color-mix(in srgb, var(--color-danger) 12%, transparent);
+  background-image: none;
+  background-color: color-mix(in srgb, var(--color-danger) 88%, black);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-danger) 18%, transparent);
 }
 
 .danger:active:not(:disabled) {
   background-image: none;
-  background-color: color-mix(in srgb, var(--color-danger) 88%, black);
-  box-shadow: inset 0 1px 2px color-mix(in srgb, black 20%, transparent);
+  background-color: color-mix(in srgb, var(--color-danger) 78%, black);
+  box-shadow: none;
   transform: translateY(0.5px);
 }
 
@@ -174,9 +145,9 @@
 .spinner {
   width: 0.95rem;
   height: 0.95rem;
-  border: 1.5px solid color-mix(in srgb, currentColor 22%, transparent);
+  border: 1.5px solid color-mix(in srgb, currentColor 16%, transparent);
   border-top-color: currentColor;
-  border-right-color: color-mix(in srgb, currentColor 55%, transparent);
+  border-right-color: color-mix(in srgb, currentColor 45%, transparent);
   border-radius: var(--radius-full);
   animation: spin var(--duration-slow) linear infinite;
 }

@@ -71,6 +71,7 @@ export function CompanyUsersPage({ companyId }: CompanyUsersPageProps) {
         tableAriaLabel="Usuários da empresa"
         filterAriaLabel="Filtrar usuários por status"
         loadingLabel="Carregando usuários"
+        titleHeadingLevel={2}
         api={api}
       />
     </CompanySectionNav>

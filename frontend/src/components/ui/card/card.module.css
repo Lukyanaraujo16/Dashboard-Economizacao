@@ -1,5 +1,5 @@
 .root {
-  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   color: var(--color-text-primary);
@@ -12,8 +12,6 @@
 
 .elevated {
   background: var(--color-surface-elevated);
-  border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
-  box-shadow:
-    var(--elevation-sm),
-    0 8px 24px color-mix(in srgb, var(--color-shadow) 55%, transparent);
+  border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  box-shadow: var(--elevation-sm);
 }

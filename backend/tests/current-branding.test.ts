@@ -175,6 +175,7 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: tenant.id,
       name: 'Acme Runtime',
       logoUrl: `/files/${stored.id}`,
+      faviconUrl: null,
       light: { primary: '#141452', accent: '#F2C200' },
       dark: { primary: '#9A9AD4', onPrimary: '#0A0A12' },
       updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
@@ -210,6 +211,7 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: tenant.id,
       name: 'Empresa Sem Branding',
       logoUrl: null,
+      faviconUrl: null,
       light: null,
       dark: null,
       updatedAt: null,
@@ -315,6 +317,7 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: null,
       name: 'Economização',
       logoUrl: null,
+      faviconUrl: null,
       light: null,
       dark: null,
       updatedAt: null,
@@ -338,6 +341,23 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: null,
       name: 'Economização',
       logoUrl: null,
+      faviconUrl: null,
+      light: null,
+      dark: null,
+      updatedAt: null,
+    });
+  });
+
+  it('GET /branding/platform é público e retorna identidade da plataforma', async () => {
+    const app = await buildTestApp();
+    const response = await app.inject({ method: 'GET', url: '/branding/platform' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      scope: 'platform',
+      tenantId: null,
+      name: 'Economização',
+      logoUrl: null,
+      faviconUrl: null,
       light: null,
       dark: null,
       updatedAt: null,

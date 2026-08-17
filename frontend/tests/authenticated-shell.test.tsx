@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AuthenticatedLayout from '../app/(authenticated)/layout';
@@ -20,6 +20,7 @@ const platformBranding: CurrentBranding = {
   tenantId: null,
   name: 'Economização',
   logoUrl: null,
+  faviconUrl: null,
   light: null,
   dark: null,
   updatedAt: null,
@@ -117,6 +118,12 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     expect(screen.queryByText(/sessionId/i)).toBeNull();
     expect(screen.queryByText(/R\$\s*\d/)).toBeNull();
     expect(screen.getByRole('heading', { name: 'Resumo Financeiro' })).toBeTruthy();
+
+    const banner = screen.getByRole('banner', { name: 'Barra do sistema' });
+    expect(banner.querySelector('h1')).toBeNull();
+    expect(banner.textContent).not.toMatch(/Visão geral/);
+    expect(within(banner).queryByText('Dashboard')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Tema da interface' })).toBeTruthy();
   });
 
   it('oferece Light, Dark e System com estado ativo evidente', async () => {

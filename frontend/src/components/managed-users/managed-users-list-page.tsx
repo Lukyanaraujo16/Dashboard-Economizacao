@@ -66,6 +66,8 @@ export type ManagedUsersListPageProps = {
   readonly filterAriaLabel: string;
   readonly loadingLabel: string;
   readonly api: ManagedUsersListApi;
+  /** Quando a lista vive sob um hub com h1 próprio (ex.: empresa). */
+  readonly titleHeadingLevel?: 1 | 2;
 };
 
 type PendingAction = {
@@ -85,6 +87,7 @@ export function ManagedUsersListPage({
   filterAriaLabel,
   loadingLabel,
   api,
+  titleHeadingLevel = 1,
 }: ManagedUsersListPageProps) {
   const router = useRouter();
   const { refreshSession } = useAuth();
@@ -240,7 +243,7 @@ export function ManagedUsersListPage({
     <div className={styles.companiesPage}>
       <div className={styles.pageHeader}>
         <div className={styles.pageIntro}>
-          <Typography as="h2" variant="heading">
+          <Typography as={titleHeadingLevel === 1 ? 'h1' : 'h2'} variant="heading">
             {title}
           </Typography>
           <Typography as="p" variant="body" className={styles.pageDescription}>
@@ -572,16 +575,35 @@ function ManagedUserRowActions({
   if (layout === 'mobile') {
     return (
       <div className={styles.actionsMobile}>
-        <Button type="button" variant="ghost" size="sm" onClick={() => router.push(editHref)}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={styles.actionToneNeutral}
+          onClick={() => router.push(editHref)}
+        >
           <EditManagedUserIcon />
           <span>Editar</span>
         </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={onResetPassword}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={styles.actionToneInfo}
+          onClick={onResetPassword}
+        >
           <ResetPasswordManagedUserIcon />
           <span>Redefinir senha</span>
         </Button>
         {canBlock ? (
-          <Button type="button" variant="danger" size="sm" loading={isLoading} onClick={onBlock}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            loading={isLoading}
+            className={styles.actionToneWarning}
+            onClick={onBlock}
+          >
             <BlockManagedUserIcon />
             <span>Bloquear</span>
           </Button>
@@ -589,9 +611,10 @@ function ManagedUserRowActions({
         {canUnblock ? (
           <Button
             type="button"
-            variant="secondary"
+            variant="ghost"
             size="sm"
             loading={isLoading}
+            className={styles.actionToneSuccess}
             onClick={onUnblock}
           >
             <UnblockManagedUserIcon />
@@ -599,7 +622,14 @@ function ManagedUserRowActions({
           </Button>
         ) : null}
         {canDisable ? (
-          <Button type="button" variant="danger" size="sm" loading={isLoading} onClick={onDisable}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            loading={isLoading}
+            className={styles.actionToneDanger}
+            onClick={onDisable}
+          >
             <DisableManagedUserIcon />
             <span>Desativar</span>
           </Button>
@@ -607,9 +637,10 @@ function ManagedUserRowActions({
         {canEnable ? (
           <Button
             type="button"
-            variant="secondary"
+            variant="ghost"
             size="sm"
             loading={isLoading}
+            className={styles.actionToneSuccess}
             onClick={onEnable}
           >
             <EnableManagedUserIcon />
@@ -625,6 +656,7 @@ function ManagedUserRowActions({
       <IconButton
         type="button"
         variant="ghost"
+        tone="neutral"
         size="sm"
         aria-label={`Editar ${user.name}`}
         title="Editar"
@@ -635,6 +667,7 @@ function ManagedUserRowActions({
       <IconButton
         type="button"
         variant="ghost"
+        tone="info"
         size="sm"
         aria-label={`Redefinir senha de ${user.name}`}
         title="Redefinir senha"
@@ -645,7 +678,8 @@ function ManagedUserRowActions({
       {canBlock ? (
         <IconButton
           type="button"
-          variant="danger"
+          variant="ghost"
+          tone="warning"
           size="sm"
           aria-label={`Bloquear ${user.name}`}
           title="Bloquear"
@@ -658,7 +692,8 @@ function ManagedUserRowActions({
       {canUnblock ? (
         <IconButton
           type="button"
-          variant="secondary"
+          variant="ghost"
+          tone="success"
           size="sm"
           aria-label={`Desbloquear ${user.name}`}
           title="Desbloquear"
@@ -671,7 +706,8 @@ function ManagedUserRowActions({
       {canDisable ? (
         <IconButton
           type="button"
-          variant="danger"
+          variant="ghost"
+          tone="danger"
           size="sm"
           aria-label={`Desativar ${user.name}`}
           title="Desativar"
@@ -684,7 +720,8 @@ function ManagedUserRowActions({
       {canEnable ? (
         <IconButton
           type="button"
-          variant="secondary"
+          variant="ghost"
+          tone="success"
           size="sm"
           aria-label={`Ativar ${user.name}`}
           title="Ativar"

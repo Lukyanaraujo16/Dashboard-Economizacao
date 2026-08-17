@@ -47,6 +47,19 @@ export function adminTenantBrandingLogoPath(tenantId: string): string {
   return `${adminTenantBrandingPath(tenantId)}/logo`;
 }
 
+/** Branding global da plataforma (1.5C/1.5D). */
+export function adminPlatformBrandingPath(): string {
+  return `${ADMIN_API_PREFIX}/platform/branding`;
+}
+
+export function adminPlatformBrandingLogoPath(): string {
+  return `${adminPlatformBrandingPath()}/logo`;
+}
+
+export function adminPlatformBrandingFaviconPath(): string {
+  return `${adminPlatformBrandingPath()}/favicon`;
+}
+
 /** Prefixo same-origin dos administradores da plataforma (1.4C). */
 export function adminAdministratorsPath(): string {
   return `${ADMIN_API_PREFIX}/administrators`;
@@ -110,4 +123,9 @@ export const BRANDING_API_PREFIX = '/branding';
 
 export function brandingCurrentPath(): string {
   return `${BRANDING_API_PREFIX}/current`;
+}
+
+/** Branding público da plataforma (login / bootstrap sem sessão). */
+export function brandingPlatformPath(): string {
+  return `${BRANDING_API_PREFIX}/platform`;
 }

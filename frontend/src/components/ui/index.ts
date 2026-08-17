@@ -17,7 +17,12 @@ export { FormField } from './form-field';
 export type { FormFieldProps } from './form-field';
 
 export { IconButton } from './icon-button';
-export type { IconButtonProps, IconButtonSize, IconButtonVariant } from './icon-button';
+export type {
+  IconButtonProps,
+  IconButtonSize,
+  IconButtonTone,
+  IconButtonVariant,
+} from './icon-button';
 
 export { Input } from './input';
 export type { InputProps } from './input';

@@ -1,25 +1,67 @@
-import { Typography } from '../ui';
+'use client';
+
+import Link from 'next/link';
+
 import styles from './app-shell.module.css';
+import { useOptionalShellBreadcrumbs } from './shell-breadcrumb-context';
+import { resolveShellSystemBar, type ShellBreadcrumb } from './shell-page-meta';
 import { ThemeControl } from './theme-control';
 
 type AppHeaderProps = {
-  readonly context: string;
-  readonly title: string;
+  readonly pathname: string;
 };
 
-export function AppHeader({ context, title }: AppHeaderProps) {
+function BreadcrumbTrail({ items }: { readonly items: readonly ShellBreadcrumb[] }) {
   return (
-    <header className={styles.header}>
-      <div className={styles.headerInner}>
-        <div className={styles.headerLead}>
-          <Typography as="p" variant="caption" className={styles.eyebrow}>
-            {context}
-          </Typography>
-          <Typography as="h1" variant="heading" className={styles.pageTitle}>
-            {title}
-          </Typography>
+    <nav className={styles.breadcrumb} aria-label="Trilha de navegação">
+      <ol className={styles.breadcrumbList}>
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
+          return (
+            <li key={`${item.label}-${index}`} className={styles.breadcrumbItem}>
+              {index > 0 ? (
+                <span className={styles.breadcrumbSep} aria-hidden="true">
+                  /
+                </span>
+              ) : null}
+              {item.href && !isLast ? (
+                <Link href={item.href} className={styles.breadcrumbLink}>
+                  {item.label}
+                </Link>
+              ) : (
+                <span
+                  className={styles.breadcrumbCurrent}
+                  aria-current={isLast ? 'page' : undefined}
+                >
+                  {item.label}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+/**
+ * System Bar — barra global de contexto/ações.
+ * Não exibe título grande da página (hierarquia fica no conteúdo).
+ */
+export function AppHeader({ pathname }: AppHeaderProps) {
+  const override = useOptionalShellBreadcrumbs();
+  const routeMeta = resolveShellSystemBar(pathname);
+  const breadcrumbs = override?.breadcrumbs ?? routeMeta.breadcrumbs;
+
+  return (
+    <header className={styles.systemBar} role="banner" aria-label="Barra do sistema">
+      <div className={styles.systemBarInner}>
+        <div className={styles.systemBarStart}>
+          {breadcrumbs && breadcrumbs.length > 0 ? <BreadcrumbTrail items={breadcrumbs} /> : null}
         </div>
-        <ThemeControl />
+        <div className={styles.systemBarEnd}>
+          <ThemeControl />
+        </div>
       </div>
     </header>
   );

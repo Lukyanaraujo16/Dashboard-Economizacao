@@ -1,0 +1,187 @@
+.loginPreview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+.loginPreviewCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  min-width: 0;
+}
+
+.loginPreviewBrand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.loginPreviewField {
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-text-muted) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+}
+
+.loginPreviewSubmit {
+  align-self: stretch;
+}
+
+/**
+ * Frame fixo da logo na tela administrativa.
+ * Proporção horizontal (~4:1) acomoda logos largas; 1:1 e verticais cabem via contain.
+ */
+.platformLogoFrame {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: min(100%, 16rem);
+  height: 4rem;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  background: var(--color-surface);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.platformLogoFrame > img,
+.platformLogoFrame .platformLogoAsset {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.platformLogoFrame > [data-brand-placeholder] {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/** Frame 1:1 do favicon — a imagem nunca define o tamanho do card. */
+.faviconPreview {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-text-muted) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.faviconPreviewImg {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.faviconPlaceholder {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-text-muted) 35%, transparent);
+}
+
+/** Frames do preview (shell / login) — mesma regra contain. */
+.previewMarkFrame {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.previewMarkFrame > img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.previewMarkFrameSm {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.assetGuidance {
+  margin: 0;
+  color: var(--color-text-secondary);
+  max-width: 40rem;
+}
+
+.assetGuidanceExamples {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+
+.impactNote {
+  color: var(--color-text-muted);
+}
+
+.nameActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/** Layout compacto da Aparência da Plataforma (1.5D.2). */
+.appearanceCompact {
+  gap: var(--space-3);
+}
+
+.appearanceIntroCompact {
+  gap: var(--space-1);
+}
+
+.groupBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.groupTitle {
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.compactSection {
+  padding: var(--space-3);
+}
+
+.saveBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 640px) {
+  .platformLogoFrame {
+    width: 100%;
+    height: 3.5rem;
+  }
+}

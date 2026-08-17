@@ -170,7 +170,7 @@ export function CompaniesPage() {
     <div className={styles.companiesPage}>
       <div className={styles.pageHeader}>
         <div className={styles.pageIntro}>
-          <Typography as="h2" variant="heading">
+          <Typography as="h1" variant="heading">
             Empresas
           </Typography>
           <Typography as="p" variant="body" className={styles.pageDescription}>
@@ -475,29 +475,44 @@ function CompanyRowActions({
           type="button"
           variant="ghost"
           size="sm"
+          className={styles.actionToneNeutral}
           onClick={() => router.push(`/empresas/${company.id}/editar`)}
         >
           <EditCompanyIcon />
           <span>Editar</span>
         </Button>
         {company.status === 'ACTIVE' ? (
-          <Button type="button" variant="danger" size="sm" loading={isLoading} onClick={onDisable}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            loading={isLoading}
+            className={styles.actionToneDanger}
+            onClick={onDisable}
+          >
             <DisableCompanyIcon />
             <span>Desativar</span>
           </Button>
         ) : (
           <Button
             type="button"
-            variant="secondary"
+            variant="ghost"
             size="sm"
             loading={isLoading}
+            className={styles.actionToneSuccess}
             onClick={onReactivate}
           >
             <ReactivateCompanyIcon />
             <span>Reativar</span>
           </Button>
         )}
-        <Button type="button" variant="ghost" size="sm" onClick={onDelete}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={styles.actionToneDanger}
+          onClick={onDelete}
+        >
           <DeleteCompanyIcon />
           <span>Excluir</span>
         </Button>
@@ -510,6 +525,7 @@ function CompanyRowActions({
       <IconButton
         type="button"
         variant="ghost"
+        tone="neutral"
         size="sm"
         aria-label={`Editar ${company.displayName}`}
         title="Editar"
@@ -520,7 +536,8 @@ function CompanyRowActions({
       {company.status === 'ACTIVE' ? (
         <IconButton
           type="button"
-          variant="danger"
+          variant="ghost"
+          tone="danger"
           size="sm"
           aria-label={`Desativar ${company.displayName}`}
           title="Desativar"
@@ -532,7 +549,8 @@ function CompanyRowActions({
       ) : (
         <IconButton
           type="button"
-          variant="secondary"
+          variant="ghost"
+          tone="success"
           size="sm"
           aria-label={`Reativar ${company.displayName}`}
           title="Reativar"
@@ -545,6 +563,7 @@ function CompanyRowActions({
       <IconButton
         type="button"
         variant="ghost"
+        tone="danger"
         size="sm"
         aria-label={`Excluir permanentemente ${company.displayName}`}
         title="Excluir permanentemente"

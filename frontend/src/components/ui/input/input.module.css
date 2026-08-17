@@ -1,10 +1,10 @@
 .root {
   display: block;
   width: 100%;
-  min-height: 2.5rem;
+  min-height: 2.375rem;
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text-primary);
   font: inherit;
@@ -18,12 +18,13 @@
 
 .root::placeholder {
   color: var(--color-text-muted);
-  opacity: 0.9;
+  opacity: 0.85;
+  letter-spacing: 0;
 }
 
 .root:hover:not(:disabled):not(:focus-visible):not(:focus) {
-  border-color: color-mix(in srgb, var(--color-border) 40%, var(--color-text-muted));
-  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-background));
+  border-color: color-mix(in srgb, var(--color-border) 45%, var(--color-text-muted));
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-background));
 }
 
 .root:focus,
@@ -31,9 +32,7 @@
   outline: none;
   border-color: var(--color-focus);
   background: var(--color-surface);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--color-focus) 16%, transparent),
-    0 1px 2px color-mix(in srgb, var(--color-primary) 6%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 14%, transparent);
 }
 
 .root:disabled {
@@ -46,7 +45,7 @@
 
 .invalid {
   border-color: color-mix(in srgb, var(--color-danger) 70%, var(--color-border));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-danger) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-danger) 12%, transparent);
 }
 
 .invalid:hover:not(:disabled):not(:focus-visible):not(:focus) {
@@ -56,9 +55,7 @@
 .invalid:focus,
 .invalid:focus-visible {
   border-color: var(--color-danger);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--color-danger) 16%, transparent),
-    0 1px 2px color-mix(in srgb, var(--color-danger) 6%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-danger) 14%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

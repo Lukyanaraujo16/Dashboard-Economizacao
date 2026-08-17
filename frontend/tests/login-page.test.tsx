@@ -2,6 +2,7 @@ import { cleanup, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import LoginPage from '../app/login/page';
+import { RuntimePlatformBrandingProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
   createUnauthenticatedGetCurrentUser,
@@ -22,9 +23,31 @@ afterEach(() => {
   replaceMock.mockReset();
 });
 
+const emptyPlatformBranding = {
+  scope: 'platform' as const,
+  tenantId: null,
+  name: 'Economização',
+  logoUrl: null,
+  faviconUrl: null,
+  light: null,
+  dark: null,
+  updatedAt: null,
+};
+
+function renderLoginPage(options?: Parameters<typeof renderWithAuth>[1]) {
+  return renderWithAuth(
+    <RuntimePlatformBrandingProvider
+      getPublicPlatformBrandingAction={vi.fn().mockResolvedValue(emptyPlatformBranding)}
+    >
+      <LoginPage />
+    </RuntimePlatformBrandingProvider>,
+    options,
+  );
+}
+
 describe('rota /login', () => {
   it('não autenticado → Login Experience', async () => {
-    renderWithAuth(<LoginPage />, {
+    renderLoginPage({
       getCurrentUserAction: createUnauthenticatedGetCurrentUser(),
       hydrateOnMount: true,
     });
@@ -37,7 +60,7 @@ describe('rota /login', () => {
   });
 
   it('autenticado → redirect /', async () => {
-    renderWithAuth(<LoginPage />, {
+    renderLoginPage({
       getCurrentUserAction: createAuthenticatedGetCurrentUser(),
       hydrateOnMount: true,
     });
@@ -56,7 +79,7 @@ describe('rota /login', () => {
         }),
     );
 
-    renderWithAuth(<LoginPage />, {
+    renderLoginPage({
       getCurrentUserAction: pending as never,
       hydrateOnMount: true,
     });

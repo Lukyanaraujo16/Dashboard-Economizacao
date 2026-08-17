@@ -1,7 +1,7 @@
 .companiesPage {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .pageHeader {
@@ -9,7 +9,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3) var(--space-4);
+  gap: var(--space-2) var(--space-4);
 }
 
 .pageHeaderActions {
@@ -21,7 +21,7 @@
 .pageIntro {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   max-width: 42rem;
 }
 
@@ -35,8 +35,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-3);
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
 }
 
 /* Reserva visual para futuros cards de resumo (sem métricas nesta fase). */
@@ -51,22 +51,32 @@
 }
 
 .filterButton {
-  min-height: 2rem;
+  min-height: 1.875rem;
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 500;
   cursor: pointer;
+  transition:
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+
+.filterButton:hover {
+  background: color-mix(in srgb, var(--color-text-muted) 7%, transparent);
+  color: var(--color-text-primary);
 }
 
 .filterButton[data-active='true'] {
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
-  border-color: color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  border-color: transparent;
   color: var(--color-primary);
+  font-weight: 550;
 }
 
 .filterButton:focus-visible {
@@ -76,7 +86,7 @@
 
 .tableWrap {
   overflow-x: auto;
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
@@ -92,16 +102,24 @@
   padding: var(--space-3) var(--space-4);
   text-align: left;
   vertical-align: middle;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 72%, transparent);
 }
 
 .table th {
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: 0.6875rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--color-text-muted);
-  background: color-mix(in srgb, var(--color-surface-elevated) 80%, transparent);
+  background: transparent;
+}
+
+.table tbody tr {
+  transition: background-color var(--duration-fast) ease;
+}
+
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-text-muted) 5%, transparent);
 }
 
 .table tbody tr:last-child td {
@@ -109,13 +127,14 @@
 }
 
 .companyName {
-  font-weight: 600;
+  font-weight: 550;
+  letter-spacing: -0.01em;
 }
 
 .identifier {
   color: var(--color-text-secondary);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .emailCell {
@@ -147,6 +166,36 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease,
+    transform var(--duration-fast) ease;
+}
+
+.actionToneNeutral:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  color: var(--color-text-primary);
+}
+
+.actionToneInfo:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: var(--color-info);
+}
+
+.actionToneWarning:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  color: var(--color-warning);
+}
+
+.actionToneDanger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
+}
+
+.actionToneSuccess:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
 }
 
 .cardList {
@@ -160,7 +209,7 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
@@ -276,7 +325,7 @@
 .formIntro {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .formDescription {
@@ -289,7 +338,7 @@
   flex-direction: column;
   gap: var(--space-5);
   padding: var(--space-6);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
@@ -333,7 +382,7 @@
 .companyHub {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-5);
 }
 
 .companyHubHeader {
@@ -346,44 +395,57 @@
   margin: 0;
   color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  font-size: 0.6875rem;
+  font-weight: 550;
 }
 
 .companyHubTitle {
   margin: 0;
+  letter-spacing: -0.025em;
 }
 
 .companyHubNav {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-1);
   padding: var(--space-1);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-background) 65%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
   width: fit-content;
 }
 
 .companyHubTab {
-  min-height: 2rem;
+  min-height: 1.875rem;
   padding: 0 var(--space-3);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 500;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  transition:
+    background-color var(--duration-fast) ease,
+    color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
+}
+
+.companyHubTab:hover {
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-text-muted) 6%, transparent);
 }
 
 .companyHubTab[data-active='true'] {
   background: var(--color-surface);
-  border-color: color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
-  color: var(--color-primary);
-  box-shadow: var(--elevation-sm);
+  border-color: transparent;
+  color: var(--color-text-primary);
+  font-weight: 550;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-shadow) 55%, transparent);
 }
 
 .companyHubTab:focus-visible {
@@ -404,7 +466,7 @@
 .appearanceIntro {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   max-width: 40rem;
 }
 
@@ -426,7 +488,7 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
@@ -459,7 +521,7 @@
   width: 4.5rem;
   height: 4.5rem;
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   background: var(--color-surface);
   flex-shrink: 0;
 }
@@ -492,13 +554,13 @@
   min-height: 2rem;
   width: fit-content;
   padding: 0 var(--space-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-md);
-  background: var(--color-surface-elevated);
+  background: var(--color-surface);
   color: var(--color-text-primary);
   font: inherit;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -572,7 +634,7 @@
   width: 2.75rem;
   height: 2.75rem;
   padding: 0;
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
@@ -595,7 +657,7 @@
   gap: var(--space-3);
   padding: var(--space-4);
   border: 1px solid color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface));
 }
 
@@ -615,7 +677,7 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--elevation-sm);
@@ -635,7 +697,7 @@
   flex-direction: column;
   gap: var(--space-4);
   min-height: 18rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-md);
   background: var(--color-background);
   color: var(--color-text-primary);
@@ -726,7 +788,7 @@
 
   .appearancePreviewColumn {
     position: sticky;
-    top: calc(4.25rem + var(--space-4));
+    top: calc(2.75rem + var(--space-3));
   }
 
   .appearancePreviewPanel {

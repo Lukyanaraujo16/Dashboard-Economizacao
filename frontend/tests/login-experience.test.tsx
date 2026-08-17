@@ -74,6 +74,11 @@ describe('LoginExperience (visual freeze)', () => {
     expect(shell()?.getAttribute('data-scheme')).toBe('light');
   });
 
+  it('usa brandName customizado quando informado', () => {
+    renderWithAuth(<LoginExperience brandName="Marca Custom" />);
+    expect(screen.getByText('Marca Custom')).toBeTruthy();
+  });
+
   it('usa placeholder de marca preparado para asset futuro', () => {
     const { container, rerender, getCurrentUserAction, logoutAction } = renderWithAuth(
       <LoginExperience />,

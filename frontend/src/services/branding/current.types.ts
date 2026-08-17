@@ -14,6 +14,7 @@ export type CurrentBranding = {
   readonly tenantId: string | null;
   readonly name: string;
   readonly logoUrl: string | null;
+  readonly faviconUrl: string | null;
   readonly light: CurrentBrandColorOverrides | null;
   readonly dark: CurrentBrandColorOverrides | null;
   readonly updatedAt: string | null;

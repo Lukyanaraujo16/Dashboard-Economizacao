@@ -133,7 +133,7 @@ afterEach(() => {
 });
 
 describe('Company appearance UI', () => {
-  it('header do shell usa Empresas / Aparência', async () => {
+  it('system bar usa breadcrumb discreto Empresas / Empresa / Aparência', async () => {
     stubLoad(company, emptyBranding);
     renderWithAuth(
       <ThemeProvider>
@@ -153,11 +153,14 @@ describe('Company appearance UI', () => {
       },
     );
 
-    const header = await screen.findByRole('banner');
-    expect(within(header).getByRole('heading', { level: 1, name: 'Aparência' })).toBeTruthy();
+    const header = await screen.findByRole('banner', { name: 'Barra do sistema' });
+    expect(within(header).queryByRole('heading')).toBeNull();
+    expect(within(header).getByRole('navigation', { name: 'Trilha de navegação' })).toBeTruthy();
     expect(within(header).getByText('Empresas')).toBeTruthy();
+    expect(within(header).getByText('Aparência')).toBeTruthy();
     expect(within(header).queryByText('Visão geral')).toBeNull();
     expect(within(header).queryByText('Dashboard')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Tema da interface' })).toBeTruthy();
   });
 
   it('navegação interna mostra Geral, Aparência e Usuários', async () => {

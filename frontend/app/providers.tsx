@@ -3,17 +3,20 @@
 import type { ReactNode } from 'react';
 
 import { AuthProvider } from '../src/auth';
+import { RuntimePlatformBrandingProvider } from '../src/theme/provider/runtime-platform-branding-provider';
 import { RuntimeThemeProvider } from '../src/theme/provider/runtime-theme-provider';
 
 type AppProvidersProps = {
   readonly children: ReactNode;
 };
 
-/** Providers de infraestrutura (sessão + tema com branding runtime 1.3F). */
+/** Providers de infraestrutura (sessão + branding plataforma + tema runtime). */
 export function AppProviders({ children }: AppProvidersProps) {
   return (
     <AuthProvider>
-      <RuntimeThemeProvider>{children}</RuntimeThemeProvider>
+      <RuntimePlatformBrandingProvider>
+        <RuntimeThemeProvider>{children}</RuntimeThemeProvider>
+      </RuntimePlatformBrandingProvider>
     </AuthProvider>
   );
 }

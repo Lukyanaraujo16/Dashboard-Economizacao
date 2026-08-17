@@ -2,43 +2,43 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  min-height: 1.5rem;
+  min-height: 1.375rem;
   padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 550;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   line-height: 1;
   white-space: nowrap;
 }
 
 .neutral {
-  background: color-mix(in srgb, var(--color-text-muted) 14%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-text-muted) 12%, var(--color-surface));
   color: var(--color-text-secondary);
-  border-color: var(--color-border);
+  border-color: transparent;
 }
 
 .success {
-  background: color-mix(in srgb, var(--color-success) 14%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-surface));
   color: var(--color-success);
-  border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+  border-color: transparent;
 }
 
 .warning {
-  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
   color: var(--color-warning);
-  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+  border-color: transparent;
 }
 
 .danger {
-  background: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface));
   color: var(--color-danger);
-  border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-border));
+  border-color: transparent;
 }
 
 .info {
-  background: color-mix(in srgb, var(--color-info) 14%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-info) 12%, var(--color-surface));
   color: var(--color-info);
-  border-color: color-mix(in srgb, var(--color-info) 35%, var(--color-border));
+  border-color: transparent;
 }

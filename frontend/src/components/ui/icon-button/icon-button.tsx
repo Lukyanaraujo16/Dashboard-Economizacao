@@ -3,11 +3,14 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cx } from '../utils/cx';
 import styles from './icon-button.module.css';
 
-export type IconButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+export type IconButtonVariant = 'primary' | 'secondary' | 'ghost';
+/** Tom de hover suave para ações icon-only (Linear / Vercel style). */
+export type IconButtonTone = 'neutral' | 'info' | 'warning' | 'danger' | 'success';
 export type IconButtonSize = 'sm' | 'md' | 'lg';
 
 export type IconButtonProps = {
   readonly variant?: IconButtonVariant;
+  readonly tone?: IconButtonTone;
   readonly size?: IconButtonSize;
   readonly loading?: boolean;
   readonly 'aria-label': string;
@@ -16,6 +19,7 @@ export type IconButtonProps = {
 
 export function IconButton({
   variant = 'ghost',
+  tone = 'neutral',
   size = 'md',
   loading = false,
   disabled = false,
@@ -30,7 +34,13 @@ export function IconButton({
     <button
       {...rest}
       type={type}
-      className={cx(styles.root, styles[variant], styles[size], className)}
+      className={cx(
+        styles.root,
+        styles[variant],
+        styles[size],
+        variant === 'ghost' ? styles[`tone_${tone}`] : null,
+        className,
+      )}
       disabled={isDisabled}
       aria-busy={loading || undefined}
       aria-disabled={isDisabled || undefined}

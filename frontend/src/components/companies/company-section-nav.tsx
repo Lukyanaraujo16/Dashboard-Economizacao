@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 
 import { Typography } from '../ui';
+import { useOptionalShellBreadcrumbs } from '../layout/shell-breadcrumb-context';
 import styles from './companies.module.css';
 
 type CompanySectionNavProps = {
@@ -19,8 +20,36 @@ const SECTIONS = [
   { key: 'usuarios', label: 'Usuários', href: (id: string) => `/empresas/${id}/usuarios` },
 ] as const;
 
+function resolveSectionLabel(pathname: string): string {
+  if (pathname.includes('/usuarios/novo')) return 'Novo usuário';
+  if (pathname.includes('/usuarios/') && pathname.endsWith('/editar')) return 'Editar usuário';
+  if (pathname.includes('/usuarios')) return 'Usuários';
+  if (pathname.includes('/aparencia')) return 'Aparência';
+  if (pathname.includes('/editar')) return 'Geral';
+  return 'Empresa';
+}
+
 export function CompanySectionNav({ companyId, companyName, children }: CompanySectionNavProps) {
   const pathname = usePathname();
+  const shellCrumbs = useOptionalShellBreadcrumbs();
+  const setBreadcrumbs = shellCrumbs?.setBreadcrumbs;
+
+  useEffect(() => {
+    if (!setBreadcrumbs) return;
+    const name = companyName?.trim();
+    if (!name) {
+      setBreadcrumbs(null);
+      return;
+    }
+    setBreadcrumbs([
+      { label: 'Empresas', href: '/empresas' },
+      { label: name },
+      { label: resolveSectionLabel(pathname) },
+    ]);
+    return () => {
+      setBreadcrumbs(null);
+    };
+  }, [companyName, pathname, setBreadcrumbs]);
 
   return (
     <div className={styles.companyHub}>
@@ -31,7 +60,7 @@ export function CompanySectionNav({ companyId, companyName, children }: CompanyS
           </Typography>
         ) : null}
         {companyName ? (
-          <Typography as="h2" variant="heading" className={styles.companyHubTitle}>
+          <Typography as="h1" variant="heading" className={styles.companyHubTitle}>
             {companyName}
           </Typography>
         ) : null}

@@ -1,4 +1,4 @@
-import { brandingCurrentPath } from '../../lib/api-config';
+import { brandingCurrentPath, brandingPlatformPath } from '../../lib/api-config';
 import type { CurrentBrandColorOverrides, CurrentBranding } from './current.types';
 import { BrandingCurrentRequestError } from './current.types';
 
@@ -49,6 +49,7 @@ function isCurrentBranding(value: unknown): value is CurrentBranding {
     (value.tenantId === null || typeof value.tenantId === 'string') &&
     typeof value.name === 'string' &&
     (value.logoUrl === null || typeof value.logoUrl === 'string') &&
+    (value.faviconUrl === null || typeof value.faviconUrl === 'string') &&
     isColorOverrides(value.light) &&
     isColorOverrides(value.dark) &&
     (value.updatedAt === null || typeof value.updatedAt === 'string')
@@ -85,14 +86,11 @@ function toFailure(response: Response, body: unknown): BrandingCurrentRequestErr
   });
 }
 
-/**
- * Branding visual da sessão atual (cookie HttpOnly; sem tenantId no client).
- */
-export async function getCurrentBranding(): Promise<CurrentBranding> {
+async function fetchBranding(path: string): Promise<CurrentBranding> {
   let response: Response;
 
   try {
-    response = await fetch(brandingCurrentPath(), {
+    response = await fetch(path, {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
@@ -120,4 +118,19 @@ export async function getCurrentBranding(): Promise<CurrentBranding> {
   }
 
   return body;
+}
+
+/**
+ * Branding visual da sessão atual (cookie HttpOnly; sem tenantId no client).
+ */
+export async function getCurrentBranding(): Promise<CurrentBranding> {
+  return fetchBranding(brandingCurrentPath());
+}
+
+/**
+ * Branding público da plataforma (GET /branding/platform).
+ * Usado no login e bootstrap sem sessão autenticada.
+ */
+export async function getPublicPlatformBranding(): Promise<CurrentBranding> {
+  return fetchBranding(brandingPlatformPath());
 }

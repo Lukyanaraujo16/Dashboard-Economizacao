@@ -15,9 +15,10 @@ import {
   Stack,
   Typography,
 } from '../components/ui';
+import { IconGauge, IconShield, IconZap } from '../components/ui/icons';
 import { login, LoginRequestError } from '../services/auth/login';
 import { ThemeProvider } from '../theme';
-import type { ResolvedColorScheme } from '../theme/types/theme';
+import type { ResolvedColorScheme, TenantBrandingInput } from '../theme/types/theme';
 import {
   mapLoginValidationDetails,
   validateLoginFields,
@@ -25,6 +26,8 @@ import {
 } from './login-form-validation';
 import styles from './login-experience.module.css';
 import { PlatformBrandMark } from './platform-brand-mark';
+
+const DEFAULT_LOGIN_BRAND_NAME = 'Economização';
 
 type HighlightIconKind = 'control' | 'security' | 'performance';
 
@@ -51,86 +54,13 @@ const HIGHLIGHTS: ReadonlyArray<{
 ];
 
 function HighlightIcon({ kind }: { readonly kind: HighlightIconKind }) {
-  const common = {
-    width: 18,
-    height: 18,
-    viewBox: '0 0 18 18',
-    fill: 'none',
-    'aria-hidden': true as const,
-  };
-
   if (kind === 'control') {
-    return (
-      <svg {...common}>
-        <rect
-          x="2.5"
-          y="2.5"
-          width="5.5"
-          height="5.5"
-          rx="1.2"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
-        <rect
-          x="10"
-          y="2.5"
-          width="5.5"
-          height="5.5"
-          rx="1.2"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
-        <rect
-          x="2.5"
-          y="10"
-          width="5.5"
-          height="5.5"
-          rx="1.2"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
-        <rect
-          x="10"
-          y="10"
-          width="5.5"
-          height="5.5"
-          rx="1.2"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
-        <circle cx="13" cy="13" r="1.15" className={styles.accentDot} />
-      </svg>
-    );
+    return <IconGauge size={18} />;
   }
-
   if (kind === 'security') {
-    return (
-      <svg {...common}>
-        <path
-          d="M9 2.4 14.5 4.6v4.2c0 3.2-2.2 5.5-5.5 6.8C5.7 14.3 3.5 12 3.5 8.8V4.6L9 2.4Z"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinejoin="round"
-        />
-        <path d="M9 7.2v3.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        <circle cx="9" cy="12.2" r="0.9" className={styles.accentDot} />
-      </svg>
-    );
+    return <IconShield size={18} />;
   }
-
-  return (
-    <svg {...common}>
-      <path
-        d="M3 12.5 6.8 8.2 9.6 10.6 15 4.5"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M11.2 4.5H15v3.7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <circle cx="15" cy="4.5" r="1" className={styles.accentDot} />
-    </svg>
-  );
+  return <IconZap size={18} />;
 }
 
 type LoginStatus = 'idle' | 'submitting' | 'success';
@@ -138,11 +68,14 @@ type LoginStatus = 'idle' | 'submitting' | 'success';
 type LoginExperienceProps = {
   /** Controles DEV de tema; omitidos na rota de produto. */
   readonly showThemeControls?: boolean;
+  /** Nome da plataforma (GET /branding/platform); fallback Economização. */
+  readonly brandName?: string;
   /**
-   * Asset oficial futuro (Theme Default / admin).
-   * Quando omitido, usa placeholder Accent temporário.
+   * Logo da plataforma. Quando omitido/null, usa placeholder Accent.
    */
   readonly brandLogoUrl?: string | null;
+  /** Cores/nome/logo para o ThemeProvider aninhado do login. */
+  readonly branding?: TenantBrandingInput | null;
   /** Injeção para testes; default: serviço HTTP real. */
   readonly loginAction?: typeof login;
 };
@@ -154,7 +87,9 @@ type LoginExperienceProps = {
  */
 export function LoginExperience({
   showThemeControls = false,
+  brandName,
   brandLogoUrl = null,
+  branding = null,
   loginAction = login,
 }: LoginExperienceProps) {
   const router = useRouter();
@@ -223,9 +158,19 @@ export function LoginExperience({
   }
 
   const isSubmitting = status === 'submitting' || status === 'success';
+  const resolvedBrandName = brandName?.trim() || DEFAULT_LOGIN_BRAND_NAME;
+  const themeBranding: TenantBrandingInput | null = branding
+    ? {
+        ...branding,
+        name: branding.name ?? resolvedBrandName,
+        logoUrl: branding.logoUrl ?? brandLogoUrl,
+      }
+    : brandLogoUrl || brandName
+      ? { name: resolvedBrandName, logoUrl: brandLogoUrl }
+      : null;
 
   return (
-    <ThemeProvider preference={scheme}>
+    <ThemeProvider preference={scheme} branding={themeBranding}>
       <div className={styles.shell} data-scheme={scheme}>
         <div className={styles.atmosphere} aria-hidden="true" />
         <div className={styles.gridOverlay} aria-hidden="true" />
@@ -270,7 +215,7 @@ export function LoginExperience({
                     />
                     <div className={styles.brandText}>
                       <Typography as="span" variant="heading" className={styles.brandName}>
-                        Economização
+                        {resolvedBrandName}
                       </Typography>
                       <Typography as="span" variant="caption" className={styles.brandTag}>
                         Dashboard financeiro
