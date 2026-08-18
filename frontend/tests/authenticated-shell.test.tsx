@@ -57,6 +57,7 @@ vi.mock('next/link', () => ({
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   replaceMock.mockReset();
   localStorage.clear();
   sessionStorage.clear();
@@ -173,6 +174,62 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     );
   });
 
+  it('exibe banner, oculta módulos de plataforma e sai do modo suporte', async () => {
+    const superAdmin = {
+      ...mockAuthenticatedUser,
+      role: 'SUPER_ADMIN' as const,
+      tenantId: null,
+    };
+    const activeSupport = {
+      active: true as const,
+      tenantId: 'tenant-support',
+      tenantDisplayName: 'Empresa Assistida',
+      startedAt: '2026-08-17T12:00:00.000Z',
+      supportSessionId: 'support-1',
+    };
+    const getCurrentUserAction = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: 'authenticated',
+        user: superAdmin,
+        support: activeSupport,
+      })
+      .mockResolvedValue({
+        kind: 'authenticated',
+        user: superAdmin,
+        support: { active: false },
+      });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          user: superAdmin,
+          support: { active: false },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderShell({ getCurrentUserAction, hydrateOnMount: true });
+
+    const banner = await screen.findByLabelText('Modo suporte');
+    expect(banner.textContent).toContain('Empresa Assistida');
+    const navigation = screen.getByRole('navigation', { name: 'Seções' });
+    expect(navigation.textContent).not.toMatch(/Empresas|Administradores|Configurações/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sair do modo suporte' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/auth/support/exit',
+        expect.objectContaining({ method: 'POST', credentials: 'include' }),
+      );
+      expect(getCurrentUserAction).toHaveBeenCalledTimes(1);
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    expect(screen.queryByLabelText('Modo suporte')).toBeNull();
+  });
+
   it('unauthenticated redireciona /login', async () => {
     renderShell({
       getCurrentUserAction: createUnauthenticatedGetCurrentUser(),
@@ -192,7 +249,11 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
       .mockRejectedValueOnce(
         new SessionRequestError('Não foi possível verificar a sessão.', { httpStatus: 500 }),
       )
-      .mockResolvedValueOnce({ kind: 'authenticated', user: mockAuthenticatedUser });
+      .mockResolvedValueOnce({
+        kind: 'authenticated',
+        user: mockAuthenticatedUser,
+        support: { active: false },
+      });
 
     renderShell({
       getCurrentUserAction,

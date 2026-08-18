@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 
+import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { SESSION_COOKIE_NAME } from '../config/session-config.js';
+import { createSupportSessionRepository } from '../repositories/support-session.repository.js';
 
 function clearSessionCookie(reply: {
   clearCookie: (name: string, options: Record<string, unknown>) => unknown;
@@ -21,7 +23,16 @@ function clearSessionCookie(reply: {
  * Não usa requireAuthentication — logout não deve falhar com 401.
  */
 export async function registerLogoutRoutes(app: FastifyInstance): Promise<void> {
+  const supportSessions = createSupportSessionRepository(getPrismaClient());
+
   app.post('/auth/logout', async (request, reply) => {
+    if (
+      request.session?.supportMode === true &&
+      typeof request.session.supportSessionId === 'string'
+    ) {
+      await supportSessions.end(request.session.supportSessionId, new Date());
+    }
+
     try {
       if (request.session) {
         await request.session.destroy();

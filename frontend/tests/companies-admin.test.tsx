@@ -509,6 +509,78 @@ describe('UI administrativa de Empresas (1.2D)', () => {
       expect(screen.getByRole('button', { name: 'Desativar Alpha Co' })).toBeTruthy();
       expect(screen.getByRole('button', { name: 'Excluir permanentemente Alpha Co' })).toBeTruthy();
     });
+
+    it('mostra modo suporte apenas para SUPER_ADMIN e empresa ativa', async () => {
+      stubListFetch([companyA, companyB]);
+      renderCompaniesPage('SUPER_ADMIN');
+      await findCompanyInTable('Alpha Co');
+
+      expect(
+        screen.getAllByRole('button', { name: 'Acessar Alpha Co em modo suporte' }).length,
+      ).toBeGreaterThan(0);
+      expect(screen.queryByRole('button', { name: 'Acessar Beta Co em modo suporte' })).toBeNull();
+
+      cleanup();
+      stubListFetch([companyA]);
+      renderCompaniesPage('ADMIN');
+      await findCompanyInTable('Alpha Co');
+      expect(screen.queryByRole('button', { name: 'Acessar Alpha Co em modo suporte' })).toBeNull();
+    });
+
+    it('entra em suporte, atualiza a sessão e navega via SPA', async () => {
+      const superAdmin = {
+        ...mockAuthenticatedUser,
+        role: 'SUPER_ADMIN' as const,
+        tenantId: null,
+      };
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (String(url) === '/auth/support/enter') {
+          return Promise.resolve(
+            jsonResponse({
+              user: superAdmin,
+              support: {
+                active: true,
+                tenantId: companyA.id,
+                tenantDisplayName: companyA.displayName,
+                startedAt: '2026-08-17T12:00:00.000Z',
+                supportSessionId: 'support-1',
+              },
+            }),
+          );
+        }
+        return Promise.resolve(listResponse([companyA]));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const getCurrentUserAction = createAuthenticatedGetCurrentUser(superAdmin);
+      renderWithAuth(
+        <ThemeProvider>
+          <AuthenticatedLayout>
+            <EmpresasLayout>
+              <CompaniesPage />
+            </EmpresasLayout>
+          </AuthenticatedLayout>
+        </ThemeProvider>,
+        { getCurrentUserAction, hydrateOnMount: true },
+      );
+
+      const table = await getCompanyTable();
+      fireEvent.click(
+        within(table).getByRole('button', { name: 'Acessar Alpha Co em modo suporte' }),
+      );
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/auth/support/enter',
+          expect.objectContaining({
+            method: 'POST',
+            credentials: 'include',
+            body: JSON.stringify({ tenantId: companyA.id }),
+          }),
+        );
+        expect(getCurrentUserAction).toHaveBeenCalledTimes(1);
+        expect(replaceMock).toHaveBeenCalledWith('/');
+      });
+    });
   });
 
   describe('exclusão permanente', () => {

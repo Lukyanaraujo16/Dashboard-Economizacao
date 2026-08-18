@@ -3,4 +3,10 @@ export type { AuthContextValue } from './auth-provider';
 export { RequireSession } from './require-session';
 export { RequirePlatformRole } from './require-platform-role';
 export { isPlatformRole } from './platform-roles';
-export type { AuthenticatedUser, AuthenticatedUserRole, AuthStatus } from './types';
+export type {
+  AuthMeResponse,
+  AuthenticatedUser,
+  AuthenticatedUserRole,
+  AuthStatus,
+  SupportState,
+} from './types';

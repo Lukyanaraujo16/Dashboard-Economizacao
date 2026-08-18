@@ -1,4 +1,5 @@
 import type { UserRole } from './types.js';
+import type { SessionSupportContext } from './support-mode.js';
 
 /** Contexto autenticado persistido na sessão Redis após login (1.1D). */
 export type AuthenticationContext = {
@@ -9,6 +10,7 @@ export type AuthenticationContext = {
   readonly lastAccess: string;
   readonly ip: string | null;
   readonly userAgent: string | null;
+  readonly support: SessionSupportContext;
 };
 
 /**
@@ -24,6 +26,7 @@ export type AuthenticatedRequestContext = {
   readonly lastAccess: string;
   readonly ip: string | null;
   readonly userAgent: string | null;
+  readonly support: SessionSupportContext;
 };
 
 export type AuthenticatedPrincipal = {

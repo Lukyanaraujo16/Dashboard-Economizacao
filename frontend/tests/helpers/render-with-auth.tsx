@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { AuthProvider } from '../../src/auth';
-import type { AuthenticatedUser } from '../../src/auth/types';
+import type { AuthenticatedUser, SupportState } from '../../src/auth/types';
 import type { getCurrentUser } from '../../src/services/auth/me';
 import type { logout } from '../../src/services/auth/logout';
 
@@ -21,8 +21,9 @@ export function createUnauthenticatedGetCurrentUser(): typeof getCurrentUser {
 
 export function createAuthenticatedGetCurrentUser(
   user: AuthenticatedUser = mockAuthenticatedUser,
+  support: SupportState = { active: false },
 ): typeof getCurrentUser {
-  return vi.fn().mockResolvedValue({ kind: 'authenticated', user });
+  return vi.fn().mockResolvedValue({ kind: 'authenticated', user, support });
 }
 
 export function renderWithAuth(

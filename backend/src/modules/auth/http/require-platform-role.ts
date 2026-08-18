@@ -23,5 +23,11 @@ export function createRequirePlatformRole(): preHandlerAsyncHookHandler {
     if (!isPlatformRole(auth.role)) {
       throw new ForbiddenError();
     }
+
+    // Durante modo suporte o operador atua no contexto do cliente — mutações/admin
+    // de plataforma ficam bloqueadas até sair do suporte (fase 1.6).
+    if (auth.support.active) {
+      throw new ForbiddenError('Saia do modo suporte para acessar operações administrativas.');
+    }
   };
 }

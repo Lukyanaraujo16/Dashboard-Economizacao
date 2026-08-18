@@ -49,7 +49,7 @@ const BRAND_SUBTITLE = 'Dashboard financeiro';
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, support, logout } = useAuth();
   const { theme } = useTheme();
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export function AppSidebar() {
   const logoUrl = theme.logoUrl;
 
   const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.platformOnly || (user && isPlatformRole(user.role)),
+    (item) => !item.platformOnly || (user && isPlatformRole(user.role) && !support.active),
   );
 
   async function handleLogout() {

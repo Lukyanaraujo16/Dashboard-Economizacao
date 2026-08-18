@@ -23,6 +23,7 @@ describe('getCurrentUser', () => {
               role: 'USER',
               tenantId: 't1',
             },
+            support: { active: false },
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
@@ -38,6 +39,7 @@ describe('getCurrentUser', () => {
         role: 'USER',
         tenantId: 't1',
       },
+      support: { active: false },
     });
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;

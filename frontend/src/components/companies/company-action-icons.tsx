@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import {
   IconCircleCheckBig,
   IconCircleOff,
+  IconHeadphones,
   IconPencilLine,
   IconTrash2,
   type UiIconProps,
@@ -30,4 +31,8 @@ export function ReactivateCompanyIcon({ className }: IconProps): ReactNode {
 
 export function DeleteCompanyIcon({ className }: IconProps): ReactNode {
   return <IconTrash2 {...toProps({ className })} />;
+}
+
+export function SupportCompanyIcon({ className }: IconProps): ReactNode {
+  return <IconHeadphones {...toProps({ className })} />;
 }

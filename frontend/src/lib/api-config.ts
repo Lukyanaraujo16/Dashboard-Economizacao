@@ -20,6 +20,14 @@ export function authLogoutPath(): string {
   return `${AUTH_API_PREFIX}/logout`;
 }
 
+export function authSupportEnterPath(): string {
+  return `${AUTH_API_PREFIX}/support/enter`;
+}
+
+export function authSupportExitPath(): string {
+  return `${AUTH_API_PREFIX}/support/exit`;
+}
+
 /** Prefixo same-origin das rotas administrativas de plataforma. */
 export const ADMIN_API_PREFIX = '/admin';
 

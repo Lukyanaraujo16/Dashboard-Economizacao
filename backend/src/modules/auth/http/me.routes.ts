@@ -5,7 +5,7 @@ import { UnauthenticatedError } from '../../../shared/errors/application-error.j
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createUserRepository } from '../repositories/user.repository.js';
 import { createRequireAuthentication } from './require-authentication.js';
-import { toPublicAuthenticatedUser } from './public-authenticated-user.js';
+import { toAuthMeResponse } from './public-authenticated-user.js';
 
 /**
  * GET /auth/me — identidade pública da sessão atual (1.1F-E.3).
@@ -31,8 +31,22 @@ export async function registerMeRoutes(app: FastifyInstance): Promise<void> {
       throw new UnauthenticatedError();
     }
 
-    return reply.status(200).send({
-      user: toPublicAuthenticatedUser(user),
-    });
+    if (auth.support.active) {
+      const tenant = await tenants.findById(auth.support.tenantId);
+      if (!tenant || tenant.status !== 'ACTIVE') {
+        throw new UnauthenticatedError();
+      }
+      return reply.status(200).send(
+        toAuthMeResponse(user, {
+          active: true,
+          tenantId: tenant.id,
+          tenantDisplayName: tenant.displayName,
+          startedAt: auth.support.startedAt,
+          supportSessionId: auth.support.supportSessionId,
+        }),
+      );
+    }
+
+    return reply.status(200).send(toAuthMeResponse(user, { active: false }));
   });
 }

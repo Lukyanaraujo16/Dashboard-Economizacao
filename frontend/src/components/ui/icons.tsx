@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   Gauge,
+  Headphones,
   KeyRound,
   LayoutDashboard,
   List,
@@ -58,6 +59,9 @@ export function IconSettings2(props: UiIconProps = {}) {
 }
 export function IconLogOut(props: UiIconProps = {}) {
   return withDefaults(LogOut, props);
+}
+export function IconHeadphones(props: UiIconProps = {}) {
+  return withDefaults(Headphones, props);
 }
 
 /* ——— Ações ——— */

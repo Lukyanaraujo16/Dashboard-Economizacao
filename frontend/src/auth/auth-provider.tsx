@@ -14,16 +14,20 @@ import { useRouter } from 'next/navigation';
 
 import { logout as logoutRequest } from '../services/auth/logout';
 import { getCurrentUser, SessionRequestError } from '../services/auth/me';
-import type { AuthenticatedUser, AuthStatus } from './types';
+import type { AuthMeResponse, AuthenticatedUser, AuthStatus, SupportState } from './types';
 
 export type AuthContextValue = {
   readonly status: AuthStatus;
   readonly user: AuthenticatedUser | null;
+  readonly support: SupportState;
   readonly refreshSession: () => Promise<'authenticated' | 'unauthenticated'>;
+  /** Aplica resposta de enter/exit sem segundo round-trip. */
+  readonly applySession: (session: AuthMeResponse) => void;
   readonly logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const INACTIVE_SUPPORT: SupportState = { active: false };
 
 type AuthProviderProps = {
   readonly children: ReactNode;
@@ -47,6 +51,7 @@ export function AuthProvider({
   const router = useRouter();
   const [status, setStatus] = useState<AuthStatus>(hydrateOnMount ? 'loading' : 'unauthenticated');
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [support, setSupport] = useState<SupportState>(INACTIVE_SUPPORT);
   const requestIdRef = useRef(0);
 
   const refreshSession = useCallback(async (): Promise<'authenticated' | 'unauthenticated'> => {
@@ -58,15 +63,18 @@ export function AuthProvider({
       }
       if (result.kind === 'authenticated') {
         setUser(result.user);
+        setSupport(result.support);
         setStatus('authenticated');
         return 'authenticated';
       }
       setUser(null);
+      setSupport(INACTIVE_SUPPORT);
       setStatus('unauthenticated');
       return 'unauthenticated';
     } catch (error) {
       if (requestId === requestIdRef.current) {
         setUser(null);
+        setSupport(INACTIVE_SUPPORT);
         setStatus('error');
       }
       if (error instanceof SessionRequestError) {
@@ -78,9 +86,16 @@ export function AuthProvider({
     }
   }, [getCurrentUserAction]);
 
+  const applySession = useCallback((session: AuthMeResponse) => {
+    setUser(session.user);
+    setSupport(session.support);
+    setStatus('authenticated');
+  }, []);
+
   const logout = useCallback(async () => {
     await logoutAction();
     setUser(null);
+    setSupport(INACTIVE_SUPPORT);
     setStatus('unauthenticated');
     router.replace('/login');
   }, [logoutAction, router]);
@@ -98,10 +113,12 @@ export function AuthProvider({
     () => ({
       status,
       user,
+      support,
       refreshSession,
+      applySession,
       logout,
     }),
-    [status, user, refreshSession, logout],
+    [status, user, support, refreshSession, applySession, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

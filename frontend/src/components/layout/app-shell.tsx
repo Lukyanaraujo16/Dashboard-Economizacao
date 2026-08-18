@@ -7,6 +7,7 @@ import { AppHeader } from './app-header';
 import { AppSidebar } from './app-sidebar';
 import styles from './app-shell.module.css';
 import { ShellBreadcrumbProvider } from './shell-breadcrumb-context';
+import { SupportModeBanner } from './support-mode-banner';
 
 export type { ShellPageMeta, ShellSystemBarMeta, ShellBreadcrumb } from './shell-page-meta';
 export { resolveShellPageMeta, resolveShellSystemBar } from './shell-page-meta';
@@ -32,6 +33,7 @@ export function AppShell({ children }: AppShellProps) {
         <AppSidebar />
         <div className={styles.workspace}>
           <AppHeader pathname={pathname} />
+          <SupportModeBanner />
           <main className={styles.main} id="conteudo-principal">
             <div className={styles.content}>{children}</div>
           </main>

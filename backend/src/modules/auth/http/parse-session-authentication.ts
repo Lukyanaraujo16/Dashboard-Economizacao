@@ -1,6 +1,7 @@
 import type { Session } from 'fastify';
 
 import type { AuthenticationContext } from '../domain/authentication-context.js';
+import type { SessionSupportContext } from '../domain/support-mode.js';
 import { USER_ROLES, type UserRole } from '../domain/types.js';
 import { assertUserTenantRoleConsistency } from '../domain/user-invariants.js';
 
@@ -41,6 +42,24 @@ export function parseSessionAuthenticationContext(session: Session): Authenticat
     return null;
   }
 
+  let support: SessionSupportContext = { active: false };
+  if (session.supportMode === true) {
+    if (
+      session.role !== 'SUPER_ADMIN' ||
+      !isNonEmptyString(session.supportTenantId) ||
+      !isNonEmptyString(session.supportStartedAt) ||
+      !isNonEmptyString(session.supportSessionId)
+    ) {
+      return null;
+    }
+    support = {
+      active: true,
+      tenantId: session.supportTenantId,
+      startedAt: session.supportStartedAt,
+      supportSessionId: session.supportSessionId,
+    };
+  }
+
   return {
     userId: session.userId,
     tenantId,
@@ -49,5 +68,6 @@ export function parseSessionAuthenticationContext(session: Session): Authenticat
     lastAccess: session.lastAccess,
     ip: session.ip ?? null,
     userAgent: session.userAgent ?? null,
+    support,
   };
 }

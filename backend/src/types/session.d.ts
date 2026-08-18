@@ -14,6 +14,12 @@ declare module 'fastify' {
     lastAccess?: string;
     ip?: string | null;
     userAgent?: string | null;
+
+    /** Contexto adicional de suporte; nunca substitui tenantId da identidade. */
+    supportMode?: boolean;
+    supportTenantId?: string | null;
+    supportStartedAt?: string | null;
+    supportSessionId?: string | null;
   }
 
   interface FastifyRequest {

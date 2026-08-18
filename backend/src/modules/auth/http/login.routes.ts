@@ -4,6 +4,7 @@ import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createArgon2idPasswordHasher } from '../crypto/password-hasher.js';
 import type { AuthenticationContext } from '../domain/authentication-context.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
+import { createSupportSessionRepository } from '../repositories/support-session.repository.js';
 import { createUserCredentialRepository } from '../repositories/user-credential.repository.js';
 import { createUserRepository } from '../repositories/user.repository.js';
 import { parseLoginRequestBody } from '../schemas/login.schema.js';
@@ -44,6 +45,7 @@ export async function registerLoginRoutes(app: FastifyInstance): Promise<void> {
   const prisma = getPrismaClient();
   const users = createUserRepository(prisma);
   const tenants = createTenantRepository(prisma);
+  const supportSessions = createSupportSessionRepository(prisma);
   const credentials = createUserCredentialRepository(prisma);
   const passwordHasher = createArgon2idPasswordHasher();
   const loginService = createLoginService({
@@ -56,6 +58,9 @@ export async function registerLoginRoutes(app: FastifyInstance): Promise<void> {
   app.post('/auth/login', async (request, reply) => {
     const body = parseLoginRequestBody(request.body);
     const principal = await loginService.authenticate(body);
+    const loginTimestamp = new Date();
+
+    await supportSessions.endOpenByOperatorUserId(principal.userId, loginTimestamp);
 
     const previousSessionId = request.session.sessionId;
     await request.session.regenerate();
@@ -69,6 +74,7 @@ export async function registerLoginRoutes(app: FastifyInstance): Promise<void> {
       lastAccess: timestamp,
       ip: request.ip ?? null,
       userAgent: readUserAgent(request.headers['user-agent']),
+      support: { active: false },
     };
 
     request.session.userId = context.userId;
@@ -78,6 +84,10 @@ export async function registerLoginRoutes(app: FastifyInstance): Promise<void> {
     request.session.lastAccess = context.lastAccess;
     request.session.ip = context.ip;
     request.session.userAgent = context.userAgent;
+    request.session.supportMode = false;
+    request.session.supportTenantId = null;
+    request.session.supportStartedAt = null;
+    request.session.supportSessionId = null;
 
     await request.session.save();
 

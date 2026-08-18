@@ -7,3 +7,9 @@ export type {
   CreateUserCredentialInput,
   UserCredentialRepository,
 } from './user-credential.repository.js';
+export { createSupportSessionRepository } from './support-session.repository.js';
+export type {
+  CreateSupportSessionInput,
+  SupportSessionRecord,
+  SupportSessionRepository,
+} from './support-session.repository.js';

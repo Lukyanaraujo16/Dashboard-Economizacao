@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AuthenticatedLayout from '../app/(authenticated)/layout';
 import AuthenticatedHomePage from '../app/(authenticated)/page';
-import type { AuthenticatedUser } from '../src/auth/types';
+import type { AuthenticatedUser, SupportState } from '../src/auth/types';
 import type { getPlatformBranding } from '../src/services/admin/platform-branding';
 import type { PlatformBranding } from '../src/services/admin/platform-branding.types';
 import type { getCurrentBranding } from '../src/services/branding/current';
@@ -11,6 +11,7 @@ import { BrandingCurrentRequestError } from '../src/services/branding/current.ty
 import type { CurrentBranding } from '../src/services/branding/current.types';
 import type { logout } from '../src/services/auth/logout';
 import { lightColorTokens, RuntimeThemeProvider, useRuntimeTheme, useTheme } from '../src/theme';
+import { runtimeBrandingSessionKey } from '../src/theme/provider/runtime-theme-provider';
 import {
   createAuthenticatedGetCurrentUser,
   mockAuthenticatedUser,
@@ -141,6 +142,7 @@ function renderRuntime(options: {
   readonly brandingAction?: () => Promise<CurrentBranding>;
   readonly platformBrandingAction?: () => Promise<PlatformBranding>;
   readonly logoutAction?: typeof logout;
+  readonly support?: SupportState;
 }) {
   return renderWithAuth(
     <RuntimeThemeProvider
@@ -160,7 +162,7 @@ function renderRuntime(options: {
       </AuthenticatedLayout>
     </RuntimeThemeProvider>,
     {
-      getCurrentUserAction: createAuthenticatedGetCurrentUser(options.user),
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(options.user, options.support),
       logoutAction: options.logoutAction,
       hydrateOnMount: true,
     },
@@ -262,6 +264,35 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
       expect(screen.getByTestId('brand-name').textContent).toBe('Plataforma Admin');
     });
     expect(superAction).toHaveBeenCalled();
+  });
+
+  it('SUPER_ADMIN em suporte usa branding corrente e chave isolada por tenant', async () => {
+    const currentAction = vi.fn().mockResolvedValue(tenantBranding);
+    const platformAction = vi.fn().mockResolvedValue(adminPlatformBranding);
+    renderRuntime({
+      user: superAdminUser,
+      brandingAction: currentAction,
+      platformBrandingAction: platformAction,
+      support: {
+        active: true,
+        tenantId: 'tenant-a',
+        tenantDisplayName: 'Acme',
+        startedAt: '2026-08-17T12:00:00.000Z',
+        supportSessionId: 'support-1',
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('brand-name').textContent).toBe('Acme Runtime');
+    });
+    expect(currentAction).toHaveBeenCalled();
+    expect(platformAction).not.toHaveBeenCalled();
+    expect(runtimeBrandingSessionKey('super-1', null, 'tenant-a')).toBe(
+      'super-1:platform:support-tenant-a',
+    );
+    expect(runtimeBrandingSessionKey('super-1', null, null)).not.toBe(
+      runtimeBrandingSessionKey('super-1', null, 'tenant-a'),
+    );
   });
 
   it('refreshBranding recarrega branding ADMIN', async () => {

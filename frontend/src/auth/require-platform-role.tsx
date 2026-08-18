@@ -33,13 +33,13 @@ function PlatformAccessDeniedState() {
  * Não substitui autorização no backend.
  */
 export function RequirePlatformRole({ children }: RequirePlatformRoleProps) {
-  const { status, user } = useAuth();
+  const { status, user, support } = useAuth();
 
   if (status === 'loading') {
     return <SessionLoadingState />;
   }
 
-  if (status !== 'authenticated' || !user || !isPlatformRole(user.role)) {
+  if (status !== 'authenticated' || !user || !isPlatformRole(user.role) || support.active) {
     return <PlatformAccessDeniedState />;
   }
 

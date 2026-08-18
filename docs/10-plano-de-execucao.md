@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.5E + Design System Freeze
+1.6 — Modo Suporte
 
 Último checkpoint:
 
-UI.FREEZE — Auditoria Final de Interface (Design System / UI base congelado)
+1.6 — Modo Suporte (auditado, homologado e commitado)
 
 Último commit:
 
-feat(ui): consolida design system e congela interface base
+feat(support): adiciona modo suporte auditavel por empresa
 
 Próxima fase executável:
 
-1.6 — Modo Suporte
+2.1 — OAuth (Épico 2 — Conta Azul)
 
 **Não iniciada.**
 
@@ -112,7 +112,9 @@ Estado atual
 
 ✔ UI.FREEZE — Auditoria Final de Interface concluída
 
-✔ Design System / UI base: **congelado** (próxima fase oficial: 1.6 — Modo Suporte)
+✔ Design System / UI base: **congelado**
+
+✔ 1.6 — Modo Suporte concluída (SUPER_ADMIN-only, overlay de contexto, `support_sessions`)
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -195,7 +197,7 @@ Administração
 
 Status:
 
-Em andamento
+Concluída
 
 Objetivo:
 
@@ -567,11 +569,56 @@ regras de negócio / schema / permissões nas fases UX.
 1.6 Modo Suporte
 
 Status:
-Pendente
+Concluída
 
 Anteriormente numerado como 1.5 no plano. Renumerado para 1.6 após a inclusão de
 1.5 — Branding da Plataforma. Conteúdo de produto inalterado: modo suporte auditado
-(PRD SUPPORT / `docs/09.9`). **Não iniciada.**
+(PRD SUPPORT / `docs/09.9`).
+
+SUPER_ADMIN assume temporariamente o contexto visual/operacional de um tenant
+ACTIVE, sem impersonar usuário e sem alterar a identidade da sessão
+(`role` permanece SUPER_ADMIN; `tenantId` de identidade permanece `null`).
+O modo suporte é um overlay de contexto, não um login paralelo.
+
+`support_sessions` representa o lifecycle privilegiado auditável
+(operador, tenant, início, fim, IP, User-Agent, `redis_session_id`),
+não um audit log genérico. Índice único parcial garante no máximo uma
+sessão aberta por cookie Redis.
+
+Contrato:
+- `POST /auth/support/enter` e `POST /auth/support/exit` — somente SUPER_ADMIN
+- `GET /auth/me` sempre inclui `support`
+- `GET /branding/current` resolve branding do tenant em suporte
+- `/admin/*` bloqueado enquanto `support.active`
+- ADMIN e USER recebem 403 no enter
+- banner persistente com nome da empresa e saída sem F5
+- sidebar tenant-like; itens `platformOnly` ocultos durante suporte
+- `requireAuthentication` reconcilia Redis ↔ registro aberto no PostgreSQL
+- tenant DISABLED/inexistente invalida o suporte na próxima request
+- login novo sempre começa na plataforma e encerra sessões abertas do operador
+- logout fecha a `support_session` ativa
+
+Multi-aba: session-scoped. Exit em uma aba encerra o suporte server-side
+para todas as abas da mesma sessão. Outra aba pode ficar visualmente stale
+até revalidação; o backend não continua autorizando. Sem BroadcastChannel.
+
+Expiração: o contexto efetivo de suporte morre com a sessão Redis.
+Novo login sempre inicia na plataforma. Um registro `support_sessions`
+pode permanecer aberto até a próxima reconciliação/login — risco residual
+aceito no MVP. Sem job de cleanup nesta fase.
+
+Homologação manual concluída. 1.6A (Validation & Engineering Review)
+aplicou reconciliação, bloqueio de `/admin` no frontend e higiene de build
+(`NODE_ENV=production` no `next build`; falha já existia no HEAD base).
+
+Riscos residuais (hardening futuro, não bloqueiam o fechamento):
+1. audit órfã possível entre expiração Redis e a próxima reconciliação
+2. janela mínima de lost update Redis em concorrência
+3. sem sincronização visual cross-tab instantânea
+
+Migration: `20260817131000_support_sessions` (SHA-256
+`8cc31aa6bfab1343113f478481749ff4165e07b780af4211eae79d83e96ab176`).
+Aplicada em DEV via `prisma migrate deploy`. Sem `migrate reset` / `db push`.
 
 ===========================================================
 

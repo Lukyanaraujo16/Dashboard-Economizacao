@@ -44,6 +44,7 @@ model Tenant {
   users         User[]
   branding      TenantBranding?
   files         StoredFile[]
+  supportSessions SupportSession[]
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
@@ -128,9 +129,31 @@ model User {
   deactivatedAt          DateTime?       @map("deactivated_at") @db.Timestamptz(3)
   tenant                 Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   credential             UserCredential?
+  supportSessions        SupportSession[] @relation("SupportSessionOperator")
 
   @@index([tenantId], map: "idx_users_tenant_id")
   @@map("users")
+}
+
+/// Lifecycle privilegiado auditável de modo suporte (não é audit log genérico).
+/// Índice único parcial `uq_support_sessions_open_redis_session` está na migration.
+model SupportSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  operatorUserId String    @map("operator_user_id") @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  startedAt      DateTime  @map("started_at") @db.Timestamptz(3)
+  endedAt        DateTime? @map("ended_at") @db.Timestamptz(3)
+  redisSessionId String?   @map("redis_session_id")
+  ip             String?
+  userAgent      String?   @map("user_agent")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  operator       User      @relation("SupportSessionOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([operatorUserId], map: "idx_support_sessions_operator_user_id")
+  @@index([tenantId, startedAt], map: "idx_support_sessions_tenant_started_at")
+  @@index([redisSessionId], map: "idx_support_sessions_redis_session_id")
+  @@map("support_sessions")
 }
 
 /// Credencial de senha 1:1. Usuário PENDING pode existir sem registro.

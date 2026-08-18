@@ -7,6 +7,7 @@ import { registerSessionPlugin } from '../../http/plugins/register-session.js';
 import { registerLoginRoutes } from './http/login.routes.js';
 import { registerLogoutRoutes } from './http/logout.routes.js';
 import { registerMeRoutes } from './http/me.routes.js';
+import { registerSupportRoutes } from './http/support.routes.js';
 
 export * from './domain/index.js';
 export * from './repositories/index.js';
@@ -21,6 +22,9 @@ export type { RequireAuthenticationDependencies } from './http/require-authentic
 export { createRequirePlatformRole } from './http/require-platform-role.js';
 export { parseSessionAuthenticationContext } from './http/parse-session-authentication.js';
 export type { PublicAuthenticatedUser } from './http/public-authenticated-user.js';
+export type { AuthMeResponse } from './http/public-authenticated-user.js';
+export type { SupportState } from './domain/support-mode.js';
+export { createSupportModeService } from './services/support-mode.service.js';
 
 /**
  * Porta pública do módulo auth.
@@ -45,5 +49,6 @@ export async function registerAuthFoundation(
 export async function registerAuthHttpRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerLoginRoutes);
   await app.register(registerMeRoutes);
+  await app.register(registerSupportRoutes);
   await app.register(registerLogoutRoutes);
 }

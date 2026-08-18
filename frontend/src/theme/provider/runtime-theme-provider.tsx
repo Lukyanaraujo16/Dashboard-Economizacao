@@ -35,8 +35,12 @@ const EMPTY_BRANDING: SessionBrandingState = {
   updatedAt: null,
 };
 
-function sessionKey(userId: string, tenantId: string | null): string {
-  return `${userId}:${tenantId ?? 'platform'}`;
+export function runtimeBrandingSessionKey(
+  userId: string,
+  tenantId: string | null,
+  supportTenantId: string | null,
+): string {
+  return `${userId}:${tenantId ?? 'platform'}:support-${supportTenantId ?? 'inactive'}`;
 }
 
 function toTenantBrandingInput(current: CurrentBranding): TenantBrandingInput {
@@ -84,7 +88,7 @@ export function RuntimeThemeProvider({
   getCurrentBrandingAction = getCurrentBranding,
   getPlatformBrandingAction = getPlatformBranding,
 }: RuntimeThemeProviderProps) {
-  const { status, user } = useAuth();
+  const { status, user, support } = useAuth();
   const [session, setSession] = useState<SessionBrandingState>(EMPTY_BRANDING);
   const activeKeyRef = useRef<string | null>(null);
   const loadIdRef = useRef(0);
@@ -104,12 +108,13 @@ export function RuntimeThemeProvider({
   }, []);
 
   const loadForUser = useCallback(
-    async (key: string, role: NonNullable<typeof user>['role']) => {
+    async (key: string, role: NonNullable<typeof user>['role'], supportActive: boolean) => {
       const loadId = ++loadIdRef.current;
       try {
-        const next = isPlatformRole(role)
-          ? platformToSessionState(await getPlatformBrandingAction())
-          : currentToSessionState(await getCurrentBrandingAction());
+        const next =
+          isPlatformRole(role) && !supportActive
+            ? platformToSessionState(await getPlatformBrandingAction())
+            : currentToSessionState(await getCurrentBrandingAction());
 
         if (loadId !== loadIdRef.current || activeKeyRef.current !== key) {
           return;
@@ -134,24 +139,38 @@ export function RuntimeThemeProvider({
       return;
     }
 
-    const key = sessionKey(user.id, user.tenantId);
+    const supportTenantId = support.active ? support.tenantId : null;
+    const key = runtimeBrandingSessionKey(user.id, user.tenantId, supportTenantId);
     activeKeyRef.current = key;
     setSession(EMPTY_BRANDING);
 
-    void loadForUser(key, user.role);
-  }, [status, user, clearSession, loadForUser]);
+    void loadForUser(key, user.role, support.active);
+  }, [
+    status,
+    user?.id,
+    user?.tenantId,
+    user?.role,
+    support.active,
+    support.active ? support.tenantId : null,
+    clearSession,
+    loadForUser,
+  ]);
 
   const refreshBranding = useCallback(async () => {
     if (status !== 'authenticated' || !user) {
       return;
     }
-    const key = sessionKey(user.id, user.tenantId);
+    const key = runtimeBrandingSessionKey(
+      user.id,
+      user.tenantId,
+      support.active ? support.tenantId : null,
+    );
     activeKeyRef.current = key;
-    await loadForUser(key, user.role);
-  }, [status, user, loadForUser]);
+    await loadForUser(key, user.role, support.active);
+  }, [status, user, support, loadForUser]);
 
   return (
-    <RuntimeThemeContext.Provider value={{ refreshBranding }}>
+    <RuntimeThemeContext.Provider value={{ refreshBranding, clearBranding: clearSession }}>
       <ThemeProvider branding={session.branding}>{children}</ThemeProvider>
     </RuntimeThemeContext.Provider>
   );

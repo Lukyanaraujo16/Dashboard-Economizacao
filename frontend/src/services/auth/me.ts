@@ -1,8 +1,12 @@
 import { authMePath } from '../../lib/api-config';
-import type { AuthenticatedUser } from '../../auth/types';
+import type { AuthMeResponse, AuthenticatedUser, SupportState } from '../../auth/types';
 
 export type GetCurrentUserResult =
-  | { readonly kind: 'authenticated'; readonly user: AuthenticatedUser }
+  | {
+      readonly kind: 'authenticated';
+      readonly user: AuthenticatedUser;
+      readonly support: SupportState;
+    }
   | { readonly kind: 'unauthenticated' };
 
 export class SessionRequestError extends Error {
@@ -43,7 +47,29 @@ function isAuthenticatedUser(value: unknown): value is AuthenticatedUser {
   );
 }
 
-async function readJsonBody(response: Response): Promise<unknown> {
+function isSupportState(value: unknown): value is SupportState {
+  if (!isRecord(value) || typeof value.active !== 'boolean') {
+    return false;
+  }
+  if (!value.active) {
+    return true;
+  }
+  return (
+    typeof value.tenantId === 'string' &&
+    typeof value.tenantDisplayName === 'string' &&
+    typeof value.startedAt === 'string' &&
+    typeof value.supportSessionId === 'string'
+  );
+}
+
+export function parseAuthMeResponse(value: unknown): AuthMeResponse | null {
+  if (!isRecord(value) || !isAuthenticatedUser(value.user) || !isSupportState(value.support)) {
+    return null;
+  }
+  return { user: value.user, support: value.support };
+}
+
+export async function readJsonBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) {
     return null;
@@ -90,11 +116,12 @@ export async function getCurrentUser(): Promise<GetCurrentUserResult> {
     });
   }
 
-  if (!isRecord(body) || !isAuthenticatedUser(body.user)) {
+  const session = parseAuthMeResponse(body);
+  if (!session) {
     throw new SessionRequestError('Não foi possível verificar a sessão. Tente novamente.', {
       httpStatus: response.status,
     });
   }
 
-  return { kind: 'authenticated', user: body.user };
+  return { kind: 'authenticated', ...session };
 }

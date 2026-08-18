@@ -165,6 +165,7 @@ describe('GET /auth/me (1.1F-E.3)', () => {
         role: 'USER',
         tenantId: user.tenantId,
       },
+      support: { active: false },
     });
 
     const bodyText = response.body;

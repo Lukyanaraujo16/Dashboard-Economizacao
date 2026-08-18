@@ -11,6 +11,8 @@ import {
   reactivateCompany,
 } from '../../services/admin/companies';
 import { CompaniesRequestError, type Company } from '../../services/admin/companies.types';
+import { enterSupportMode } from '../../services/auth/support';
+import { useOptionalRuntimeTheme } from '../../theme';
 import { EmptyState } from '../dashboard/empty-state';
 import { PanelIcon } from '../financial/panel-icon';
 import { StateWrapper } from '../financial/state-wrapper';
@@ -20,6 +22,7 @@ import {
   DisableCompanyIcon,
   EditCompanyIcon,
   ReactivateCompanyIcon,
+  SupportCompanyIcon,
 } from './company-action-icons';
 import { CompanyStatusBadge } from './company-status-badge';
 import {
@@ -43,7 +46,8 @@ type PendingDelete = {
 
 export function CompaniesPage() {
   const router = useRouter();
-  const { refreshSession } = useAuth();
+  const { user, support, refreshSession, applySession } = useAuth();
+  const runtimeTheme = useOptionalRuntimeTheme();
   const [statusFilter, setStatusFilter] = useState<CompanyStatusFilter>('ALL');
   const [offset, setOffset] = useState(0);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -159,6 +163,21 @@ export function CompaniesPage() {
           ? error.message
           : 'Não foi possível excluir a empresa.',
       );
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleEnterSupport(company: Company) {
+    setActionLoadingId(company.id);
+    setActionError(null);
+    try {
+      const session = await enterSupportMode(company.id);
+      applySession(session);
+      await runtimeTheme?.refreshBranding();
+      router.replace('/');
+    } catch {
+      setActionError('Não foi possível acessar a empresa em modo suporte. Tente novamente.');
     } finally {
       setActionLoadingId(null);
     }
@@ -357,6 +376,12 @@ export function CompaniesPage() {
                         company={company}
                         layout="desktop"
                         actionLoadingId={actionLoadingId}
+                        canEnterSupport={
+                          user?.role === 'SUPER_ADMIN' &&
+                          company.status === 'ACTIVE' &&
+                          !support.active
+                        }
+                        onEnterSupport={() => void handleEnterSupport(company)}
                         onDisable={() => {
                           setPendingDelete(null);
                           setPendingDisable({ company });
@@ -403,6 +428,10 @@ export function CompaniesPage() {
                   company={company}
                   layout="mobile"
                   actionLoadingId={actionLoadingId}
+                  canEnterSupport={
+                    user?.role === 'SUPER_ADMIN' && company.status === 'ACTIVE' && !support.active
+                  }
+                  onEnterSupport={() => void handleEnterSupport(company)}
                   onDisable={() => {
                     setPendingDelete(null);
                     setPendingDisable({ company });
@@ -452,6 +481,8 @@ type CompanyRowActionsProps = {
   readonly company: Company;
   readonly layout: 'desktop' | 'mobile';
   readonly actionLoadingId: string | null;
+  readonly canEnterSupport: boolean;
+  readonly onEnterSupport: () => void;
   readonly onDisable: () => void;
   readonly onReactivate: () => void;
   readonly onDelete: () => void;
@@ -461,6 +492,8 @@ function CompanyRowActions({
   company,
   layout,
   actionLoadingId,
+  canEnterSupport,
+  onEnterSupport,
   onDisable,
   onReactivate,
   onDelete,
@@ -471,6 +504,19 @@ function CompanyRowActions({
   if (layout === 'mobile') {
     return (
       <div className={styles.actionsMobile}>
+        {canEnterSupport ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            loading={isLoading}
+            className={styles.actionToneInfo}
+            onClick={onEnterSupport}
+          >
+            <SupportCompanyIcon />
+            <span>Acessar em modo suporte</span>
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
@@ -522,6 +568,20 @@ function CompanyRowActions({
 
   return (
     <div className={styles.actionsDesktop}>
+      {canEnterSupport ? (
+        <IconButton
+          type="button"
+          variant="ghost"
+          tone="neutral"
+          size="sm"
+          aria-label={`Acessar ${company.displayName} em modo suporte`}
+          title="Acessar em modo suporte"
+          loading={isLoading}
+          onClick={onEnterSupport}
+        >
+          <SupportCompanyIcon />
+        </IconButton>
+      ) : null}
       <IconButton
         type="button"
         variant="ghost"

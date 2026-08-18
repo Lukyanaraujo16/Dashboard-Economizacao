@@ -1,13 +1,16 @@
 import type { preHandlerAsyncHookHandler } from 'fastify';
 
-import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
+import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { ConflictError, UnauthenticatedError } from '../../../shared/errors/application-error.js';
 import { canRoleUseTenantOperationalContext } from '../../tenant/domain/tenant-invariants.js';
 import type { TenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { SESSION_MAX_AGE_MILLISECONDS } from '../config/session-config.js';
 import { isTemporaryLockoutExpired } from '../domain/auth-lockout.js';
 import type { AuthenticatedRequestContext } from '../domain/authentication-context.js';
+import { createSupportSessionRepository } from '../repositories/support-session.repository.js';
 import type { UserRepository } from '../repositories/user.repository.js';
 import { parseSessionAuthenticationContext } from './parse-session-authentication.js';
+import { clearSupportSessionFields } from '../services/support-mode.service.js';
 
 export type RequireAuthenticationDependencies = {
   readonly users: UserRepository;
@@ -76,6 +79,40 @@ export function createRequireAuthentication(
       }
     }
 
+    let support = sessionAuth.support;
+    let supportInvalidated = false;
+    const supportSessions = createSupportSessionRepository(getPrismaClient());
+
+    if (support.active) {
+      const openRecord = await supportSessions.findOpenById(support.supportSessionId);
+      const recordValid =
+        openRecord !== null &&
+        openRecord.operatorUserId === sessionAuth.userId &&
+        openRecord.tenantId === support.tenantId;
+
+      if (!recordValid) {
+        clearSupportSessionFields(session);
+        support = { active: false };
+        supportInvalidated = true;
+      } else {
+        const supportTenant = await deps.tenants.findById(support.tenantId);
+        if (!supportTenant || supportTenant.status !== 'ACTIVE') {
+          await supportSessions.end(support.supportSessionId, at);
+          clearSupportSessionFields(session);
+          support = { active: false };
+          supportInvalidated = true;
+        }
+      }
+    }
+
+    const isSupportReconciliationRoute =
+      request.method === 'GET' &&
+      (request.url === '/auth/me' || request.url.startsWith('/branding/'));
+
+    if (supportInvalidated && !isSupportReconciliationRoute) {
+      throw new ConflictError('O modo suporte foi encerrado. Atualize a página e tente novamente.');
+    }
+
     const lastAccess = at.toISOString();
     session.lastAccess = lastAccess;
     // Renova Expires do cookie a partir da config central (ms), sem rolling global.
@@ -91,6 +128,7 @@ export function createRequireAuthentication(
       lastAccess,
       ip: sessionAuth.ip,
       userAgent: sessionAuth.userAgent,
+      support,
     });
 
     request.auth = auth;

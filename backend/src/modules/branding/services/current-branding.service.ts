@@ -36,15 +36,16 @@ export function createCurrentBrandingService(deps: CurrentBrandingServiceDepende
     ): Promise<PublicCurrentBrandingResponse> {
       const platform = await loadPlatform();
 
-      if (auth.role === 'ADMIN' || auth.role === 'SUPER_ADMIN') {
+      if ((auth.role === 'ADMIN' || auth.role === 'SUPER_ADMIN') && !auth.support.active) {
         return platform;
       }
 
-      if (auth.role !== 'USER' || auth.tenantId === null) {
+      const tenantId = auth.support.active ? auth.support.tenantId : auth.tenantId;
+      if ((!auth.support.active && auth.role !== 'USER') || tenantId === null) {
         throw new UnauthenticatedError();
       }
 
-      const tenant = await deps.tenants.findById(auth.tenantId);
+      const tenant = await deps.tenants.findById(tenantId);
       if (!tenant || tenant.status !== 'ACTIVE') {
         throw new UnauthenticatedError();
       }

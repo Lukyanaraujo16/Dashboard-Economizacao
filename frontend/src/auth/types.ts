@@ -9,4 +9,19 @@ export type AuthenticatedUser = {
   readonly tenantId: string | null;
 };
 
+export type SupportState =
+  | { readonly active: false }
+  | {
+      readonly active: true;
+      readonly tenantId: string;
+      readonly tenantDisplayName: string;
+      readonly startedAt: string;
+      readonly supportSessionId: string;
+    };
+
+export type AuthMeResponse = {
+  readonly user: AuthenticatedUser;
+  readonly support: SupportState;
+};
+
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'error';

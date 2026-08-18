@@ -14,3 +14,7 @@ export function useRuntimeTheme(): RuntimeThemeContextValue {
   }
   return context;
 }
+
+export function useOptionalRuntimeTheme(): RuntimeThemeContextValue | null {
+  return useContext(RuntimeThemeContext);
+}
