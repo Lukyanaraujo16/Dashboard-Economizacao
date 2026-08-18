@@ -8,8 +8,10 @@ import type { NextConfig } from 'next';
 const backendOrigin = (process.env.API_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '');
 
 const nextConfig: NextConfig = {
-  // Permite HMR/WebSocket do Next DEV quando o browser acessa via IP da LAN.
-  allowedDevOrigins: ['192.168.1.91'],
+  // Next 16 bloqueia origens DEV diferentes do hostname de bind (`localhost`).
+  // `127.0.0.1` é o host local do callback OAuth. `*.trycloudflare.com` cobre
+  // Quick Tunnels sem hardcodar o hostname temporário. LAN permanece explícita.
+  allowedDevOrigins: ['127.0.0.1', '192.168.1.91', '*.trycloudflare.com'],
   async rewrites() {
     return [
       {
@@ -27,6 +29,10 @@ const nextConfig: NextConfig = {
       {
         source: '/branding/:path*',
         destination: `${backendOrigin}/branding/:path*`,
+      },
+      {
+        source: '/integrations/:path*',
+        destination: `${backendOrigin}/integrations/:path*`,
       },
     ];
   },

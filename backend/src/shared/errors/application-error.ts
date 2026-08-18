@@ -126,3 +126,19 @@ export class ConflictError extends ApplicationError {
     super(message, options);
   }
 }
+
+export class IntegrationUnavailableError extends ApplicationError {
+  readonly category = 'integracao' as const;
+  readonly code = 'INTEGRATION_UNAVAILABLE' as const;
+  readonly httpStatus = 503;
+  readonly recoverable = true;
+
+  constructor(
+    message = 'A integração não está disponível no momento.',
+    options?: {
+      cause?: unknown;
+    },
+  ) {
+    super(message, options);
+  }
+}

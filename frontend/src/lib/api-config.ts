@@ -55,6 +55,18 @@ export function adminTenantBrandingLogoPath(tenantId: string): string {
   return `${adminTenantBrandingPath(tenantId)}/logo`;
 }
 
+export function adminTenantContaAzulPath(tenantId: string): string {
+  return `${adminTenantPath(tenantId)}/integrations/conta-azul`;
+}
+
+export function adminTenantContaAzulConnectPath(tenantId: string): string {
+  return `${adminTenantContaAzulPath(tenantId)}/connect`;
+}
+
+export function adminTenantContaAzulDisconnectPath(tenantId: string): string {
+  return `${adminTenantContaAzulPath(tenantId)}/disconnect`;
+}
+
 /** Branding global da plataforma (1.5C/1.5D). */
 export function adminPlatformBrandingPath(): string {
   return `${ADMIN_API_PREFIX}/platform/branding`;

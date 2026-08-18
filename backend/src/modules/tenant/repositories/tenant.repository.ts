@@ -198,11 +198,14 @@ export function createTenantRepository(prisma: PrismaClient): TenantRepository {
       const dependentUsers = await prisma.user.count({
         where: { tenantId: id },
       });
+      const dependentIntegrations = await prisma.integration.count({
+        where: { tenantId: id },
+      });
 
-      if (dependentUsers > 0) {
+      if (dependentUsers > 0 || dependentIntegrations > 0) {
         throw new TenantDomainError(
           'TENANT_HAS_DEPENDENTS',
-          'Esta empresa possui usuários vinculados e não pode ser excluída permanentemente.',
+          'Esta empresa possui vínculos e não pode ser excluída permanentemente.',
         );
       }
 
@@ -212,7 +215,7 @@ export function createTenantRepository(prisma: PrismaClient): TenantRepository {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
           throw new TenantDomainError(
             'TENANT_HAS_DEPENDENTS',
-            'Esta empresa possui usuários vinculados e não pode ser excluída permanentemente.',
+            'Esta empresa possui vínculos e não pode ser excluída permanentemente.',
           );
         }
         throw error;

@@ -41,10 +41,11 @@ model Tenant {
   createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
   deactivatedAt DateTime?       @map("deactivated_at") @db.Timestamptz(3)
-  users         User[]
-  branding      TenantBranding?
-  files         StoredFile[]
+  users           User[]
+  branding        TenantBranding?
+  files           StoredFile[]
   supportSessions SupportSession[]
+  integrations    Integration[]
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
@@ -154,6 +155,55 @@ model SupportSession {
   @@index([tenantId, startedAt], map: "idx_support_sessions_tenant_started_at")
   @@index([redisSessionId], map: "idx_support_sessions_redis_session_id")
   @@map("support_sessions")
+}
+
+enum IntegrationProvider {
+  CONTA_AZUL
+
+  @@map("integration_provider")
+}
+
+enum IntegrationStatus {
+  DISCONNECTED
+  CONNECTED
+  ERROR
+
+  @@map("integration_status")
+}
+
+/// Conexão de um tenant com um provedor externo. MVP: 1 Conta Azul por empresa.
+model Integration {
+  id             String                @id @default(uuid()) @db.Uuid
+  tenantId       String                @map("tenant_id") @db.Uuid
+  provider       IntegrationProvider
+  status         IntegrationStatus
+  connectedAt    DateTime?             @map("connected_at") @db.Timestamptz(3)
+  disconnectedAt DateTime?             @map("disconnected_at") @db.Timestamptz(3)
+  lastErrorAt    DateTime?             @map("last_error_at") @db.Timestamptz(3)
+  lastErrorCode  String?               @map("last_error_code")
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  credential     IntegrationCredential?
+
+  @@unique([tenantId, provider], map: "uq_integrations_tenant_provider")
+  @@index([tenantId], map: "idx_integrations_tenant_id")
+  @@map("integrations")
+}
+
+/// Tokens OAuth cifrados (AES-256-GCM). Nunca plaintext. 1:1 com Integration.
+model IntegrationCredential {
+  id                    String      @id @default(uuid()) @db.Uuid
+  integrationId         String      @unique(map: "uq_integration_credentials_integration_id") @map("integration_id") @db.Uuid
+  encryptedAccessToken  String      @map("encrypted_access_token")
+  encryptedRefreshToken String      @map("encrypted_refresh_token")
+  accessExpiresAt       DateTime    @map("access_expires_at") @db.Timestamptz(3)
+  tokenType             String      @map("token_type")
+  createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  integration           Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@map("integration_credentials")
 }
 
 /// Credencial de senha 1:1. Usuário PENDING pode existir sem registro.

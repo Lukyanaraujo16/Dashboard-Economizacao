@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-1.6 — Modo Suporte
+2.1 — OAuth Conta Azul
 
 Último checkpoint:
 
-1.6 — Modo Suporte (auditado, homologado e commitado)
+2.1 — OAuth Conta Azul (homologado com OAuth real e commitado)
 
 Último commit:
 
-feat(support): adiciona modo suporte auditavel por empresa
+feat(integrations): conclui oauth da conta azul
 
 Próxima fase executável:
 
-2.1 — OAuth (Épico 2 — Conta Azul)
+2.2 — Gestão das conexões
 
 **Não iniciada.**
 
@@ -115,6 +115,8 @@ Estado atual
 ✔ Design System / UI base: **congelado**
 
 ✔ 1.6 — Modo Suporte concluída (SUPER_ADMIN-only, overlay de contexto, `support_sessions`)
+
+✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -629,11 +631,30 @@ Conta Azul
 
 Status:
 
-Pendente
+Em andamento
 
 Fases
 
 2.1 OAuth
+
+Status:
+Concluída
+
+Authorization Code por tenant, tokens AES-256-GCM, state Redis session-bound,
+refresh com `SELECT FOR UPDATE` e rotação do refresh_token. Contrato oficial
+2026-08-17 (`login.contaazul.com` / `api-v2.contaazul.com/oauth/token`).
+Sem consumo financeiro. Docs: `docs/18`, ADR-050.
+
+Homologação real em 18/08/2026: App de Produção (callback customizado HTTPS);
+App de Desenvolvimento usa redirect fixa da Conta Azul e não serve ao callback
+do Dashboard. Tokens cifrados; refresh real e rotação do refresh confirmados.
+Conexão da conta ERP de homologação removida (disconnect local) após o
+fechamento. Não há endpoint de revogação remota no contrato oficial.
+Próxima fase: 2.2.
+
+Migration: `20260817214500_conta_azul_oauth` (SHA-256
+`9e16a45743a364bbe4a5f33c7a165722a8e1f8a9d9afd5c9c7165ef15e77d715`).
+Aplicada em DEV e TEST via `prisma migrate deploy`. Sem `migrate reset` / `db push`.
 
 2.2 Gestão das conexões
 

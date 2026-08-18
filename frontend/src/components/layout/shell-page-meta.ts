@@ -24,6 +24,7 @@ function companySectionFromPath(pathname: string): string | null {
   if (pathname.includes('/usuarios/') && pathname.endsWith('/editar')) return 'Editar usuário';
   if (pathname.includes('/usuarios')) return 'Usuários';
   if (pathname.endsWith('/aparencia')) return 'Aparência';
+  if (pathname.endsWith('/integracoes')) return 'Integrações';
   if (pathname.endsWith('/editar')) return 'Geral';
   return null;
 }

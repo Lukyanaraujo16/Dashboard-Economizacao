@@ -16,6 +16,10 @@ import {
 } from '../modules/branding/index.js';
 import { registerPublicFileRoutes } from '../modules/branding/http/public-file.routes.js';
 import { registerAdminTenantRoutes } from '../modules/tenant/index.js';
+import {
+  registerAdminContaAzulRoutes,
+  registerContaAzulCallbackRoutes,
+} from '../modules/integrations/conta-azul/index.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(healthRoutes);
@@ -23,6 +27,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(redisHealthRoutes);
   await registerAuthHttpRoutes(app);
   await app.register(registerAdminTenantRoutes);
+  await app.register(registerAdminContaAzulRoutes);
+  await app.register(registerContaAzulCallbackRoutes);
   await app.register(registerAdminAdministratorsRoutes);
   await app.register(registerAdminTenantUsersRoutes);
   await app.register(registerAdminBrandingRoutes);

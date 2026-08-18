@@ -113,9 +113,11 @@ Tokens nunca deverão ser compartilhados entre tenants.
 
 6. URL de autorização
 
-A documentação oficial utiliza:
+A documentação oficial vigente (2026-08-17) utiliza:
 
-https://auth.contaazul.com/login
+https://login.contaazul.com/#/oauth/authorize
+
+(A menção anterior a `https://auth.contaazul.com/login` está superada.)
 
 O fluxo deverá utilizar os parâmetros exigidos pela documentação oficial vigente.
 
@@ -135,7 +137,9 @@ A implementação deverá utilizar state de forma segura para proteção e assoc
 
 O código de autorização deverá ser trocado através de:
 
-POST https://auth.contaazul.com/oauth2/token
+POST https://api-v2.contaazul.com/oauth/token
+
+(A menção anterior a `https://auth.contaazul.com/oauth2/token` está superada.)
 
 A autenticação do cliente utiliza conceitualmente:
 
@@ -182,7 +186,7 @@ Quando o access token expirar, deverá ser utilizado o refresh token.
 
 Endpoint:
 
-POST https://auth.contaazul.com/oauth2/token
+POST https://api-v2.contaazul.com/oauth/token
 
 Fluxo:
 
@@ -367,13 +371,19 @@ Enquanto a sincronização ocorre independentemente.
 
 21. Ambiente de desenvolvimento Conta Azul
 
-A documentação atual informa que não existe sandbox independente tradicional.
+A documentação oficial informa que não existe sandbox independente tradicional.
 
-Para testes deverá ser criado um:
+Há dois tipos de aplicativo no Portal:
 
-App de Desenvolvimento
+* **App de Desenvolvimento** — redirect de testes fixa em `https://www.contaazul.com`.
+  Não aceita a Redirect URI do Dashboard. Serve ao onboarding (ERP fictício /
+  token de tutorial). Esse token de tutorial **não** deve ser persistido no produto.
+* **App de Produção** — o titular cadastra a Redirect URI. Callback customizado
+  do Dashboard (incluindo HTTPS de homologação) exige este tipo. A URI no Portal,
+  em `CONTA_AZUL_REDIRECT_URI` e no authorize/token exchange deve ser idêntica.
 
-Esse app fornece acesso a uma Conta de Desenvolvimento com dados fictícios.
+A Conta de Desenvolvimento (ERP fictício, ~30 dias) continua disponível para
+dados de teste. Homologação OAuth do Dashboard usa App de Produção.
 
 A documentação atual informa duração inicial de:
 
