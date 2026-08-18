@@ -29,6 +29,11 @@ const disconnected: ContaAzulIntegration = {
   status: 'DISCONNECTED',
   connectedAt: null,
   disconnectedAt: null,
+  externalAccountId: null,
+  externalCompanyName: null,
+  lastSuccessfulSyncAt: null,
+  lastErrorAt: null,
+  lastErrorCode: null,
 };
 
 const connected: ContaAzulIntegration = {
@@ -36,6 +41,18 @@ const connected: ContaAzulIntegration = {
   status: 'CONNECTED',
   connectedAt: '2026-08-17T12:00:00.000Z',
   disconnectedAt: null,
+  externalAccountId: '123456',
+  externalCompanyName: 'Conta Azul Software Ltda',
+  lastSuccessfulSyncAt: null,
+  lastErrorAt: null,
+  lastErrorCode: null,
+};
+
+const attention: ContaAzulIntegration = {
+  ...connected,
+  status: 'ERROR',
+  lastErrorAt: '2026-08-18T15:00:00.000Z',
+  lastErrorCode: 'identity_unauthorized',
 };
 
 const replaceMock = vi.fn();
@@ -88,7 +105,7 @@ function renderPage(oauthResult?: string | null) {
   );
 }
 
-describe('UI Integrações Conta Azul (2.1)', () => {
+describe('UI Integrações Conta Azul (2.2)', () => {
   beforeEach(() => {
     replaceMock.mockReset();
     assignMock.mockReset();
@@ -157,7 +174,11 @@ describe('UI Integrações Conta Azul (2.1)', () => {
     );
     renderPage();
     expect(await screen.findByText('Conectada')).toBeTruthy();
+    expect(screen.getByText('Empresa conectada: Conta Azul Software Ltda')).toBeTruthy();
+    expect(screen.getByText('Identificador: 123456')).toBeTruthy();
+    expect(screen.getByText('Última sincronização: Nunca sincronizado')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reconectar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Verificar conexão' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Desconectar' }));
     expect(screen.getByText('A sincronização com a Conta Azul será interrompida.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar desconexão' }));
@@ -191,5 +212,45 @@ describe('UI Integrações Conta Azul (2.1)', () => {
     );
     renderPage('denied');
     expect(await screen.findByText('A autorização na Conta Azul foi recusada.')).toBeTruthy();
+  });
+
+  it('estado de atenção mostra diagnóstico amigável sem código técnico', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.endsWith(`/admin/tenants/${companyId}`)) {
+          return Promise.resolve(jsonResponse(company));
+        }
+        return Promise.resolve(jsonResponse(attention));
+      }),
+    );
+    renderPage();
+    expect(await screen.findByText('Atenção necessária')).toBeTruthy();
+    expect(screen.getByText(/A autorização da Conta Azul precisa ser renovada/)).toBeTruthy();
+    expect(screen.queryByText('identity_unauthorized')).toBeNull();
+  });
+
+  it('verificar conexão atualiza o card', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.endsWith(`/admin/tenants/${companyId}`)) {
+          return Promise.resolve(jsonResponse(company));
+        }
+        if (url.endsWith('/verify') && init?.method === 'POST') {
+          return Promise.resolve(
+            jsonResponse({
+              ...connected,
+              externalCompanyName: 'Empresa Verificada',
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(connected));
+      }),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Verificar conexão' }));
+    expect(await screen.findByText('Empresa conectada: Empresa Verificada')).toBeTruthy();
+    expect(screen.getByText('Conexão com a Conta Azul verificada.')).toBeTruthy();
   });
 });

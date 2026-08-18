@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from '../../../../generated/prisma/client.j
 import { CONTA_AZUL_PROVIDER } from '../domain/conta-azul-oauth.js';
 import type {
   ContaAzulCredentialRecord,
+  ContaAzulExternalAccountInput,
   ContaAzulIntegrationRecord,
   IntegrationStatus,
 } from '../domain/types.js';
@@ -26,6 +27,12 @@ export type ContaAzulIntegrationRepository = {
   persistConnectedTokens(input: PersistConnectedTokensInput): Promise<ContaAzulIntegrationRecord>;
   disconnect(tenantId: string, at: Date): Promise<ContaAzulIntegrationRecord>;
   markError(tenantId: string, code: string, at: Date): Promise<void>;
+  markHealthy(tenantId: string): Promise<void>;
+  upsertExternalAccount(input: ContaAzulExternalAccountInput): Promise<void>;
+  findConnectedConflict(input: {
+    readonly externalAccountId: string;
+    readonly excludeIntegrationId: string;
+  }): Promise<{ readonly integrationId: string; readonly tenantId: string } | null>;
   refreshTokensInLock(
     tenantId: string,
     work: (locked: IntegrationWithCredential) => Promise<{
@@ -44,8 +51,13 @@ function mapIntegration(row: {
   status: IntegrationStatus;
   connectedAt: Date | null;
   disconnectedAt: Date | null;
+  lastSuccessfulSyncAt: Date | null;
   lastErrorAt: Date | null;
   lastErrorCode: string | null;
+  externalAccount?: {
+    externalAccountId: string;
+    externalCompanyName: string | null;
+  } | null;
 }): ContaAzulIntegrationRecord {
   return {
     id: row.id,
@@ -54,8 +66,11 @@ function mapIntegration(row: {
     status: row.status,
     connectedAt: row.connectedAt,
     disconnectedAt: row.disconnectedAt,
+    lastSuccessfulSyncAt: row.lastSuccessfulSyncAt,
     lastErrorAt: row.lastErrorAt,
     lastErrorCode: row.lastErrorCode,
+    externalAccountId: row.externalAccount?.externalAccountId ?? null,
+    externalCompanyName: row.externalAccount?.externalCompanyName ?? null,
   };
 }
 
@@ -84,8 +99,14 @@ const integrationSelect = {
   status: true,
   connectedAt: true,
   disconnectedAt: true,
+  lastSuccessfulSyncAt: true,
   lastErrorAt: true,
   lastErrorCode: true,
+} as const;
+
+const externalAccountSelect = {
+  externalAccountId: true,
+  externalCompanyName: true,
 } as const;
 
 const credentialSelect = {
@@ -107,6 +128,7 @@ export function createContaAzulIntegrationRepository(
         select: {
           ...integrationSelect,
           credential: { select: credentialSelect },
+          externalAccount: { select: externalAccountSelect },
         },
       });
       if (!row) {
@@ -121,7 +143,10 @@ export function createContaAzulIntegrationRepository(
     async findPublicByTenantId(tenantId) {
       const row = await prisma.integration.findUnique({
         where: { tenantId_provider: { tenantId, provider: CONTA_AZUL_PROVIDER } },
-        select: integrationSelect,
+        select: {
+          ...integrationSelect,
+          externalAccount: { select: externalAccountSelect },
+        },
       });
       return row ? mapIntegration(row) : null;
     },
@@ -168,6 +193,10 @@ export function createContaAzulIntegrationRepository(
           },
         });
 
+        await tx.integrationExternalAccount.deleteMany({
+          where: { integrationId: integration.id },
+        });
+
         return mapIntegration(integration);
       });
     },
@@ -176,7 +205,7 @@ export function createContaAzulIntegrationRepository(
       return prisma.$transaction(async (tx) => {
         const existing = await tx.integration.findUnique({
           where: { tenantId_provider: { tenantId, provider: CONTA_AZUL_PROVIDER } },
-          select: integrationSelect,
+          select: { ...integrationSelect, externalAccount: { select: externalAccountSelect } },
         });
 
         if (!existing) {
@@ -187,12 +216,13 @@ export function createContaAzulIntegrationRepository(
               status: 'DISCONNECTED',
               disconnectedAt: at,
             },
-            select: integrationSelect,
+            select: { ...integrationSelect, externalAccount: { select: externalAccountSelect } },
           });
           return mapIntegration(created);
         }
 
         await tx.integrationCredential.deleteMany({ where: { integrationId: existing.id } });
+        await tx.integrationExternalAccount.deleteMany({ where: { integrationId: existing.id } });
         const updated = await tx.integration.update({
           where: { id: existing.id },
           data: {
@@ -201,7 +231,7 @@ export function createContaAzulIntegrationRepository(
             lastErrorAt: null,
             lastErrorCode: null,
           },
-          select: integrationSelect,
+          select: { ...integrationSelect, externalAccount: { select: externalAccountSelect } },
         });
         return mapIntegration(updated);
       });
@@ -218,6 +248,62 @@ export function createContaAzulIntegrationRepository(
       });
     },
 
+    async markHealthy(tenantId) {
+      await prisma.integration.updateMany({
+        where: {
+          tenantId,
+          provider: CONTA_AZUL_PROVIDER,
+          status: { in: ['CONNECTED', 'ERROR'] },
+        },
+        data: {
+          status: 'CONNECTED',
+          lastErrorAt: null,
+          lastErrorCode: null,
+        },
+      });
+    },
+
+    async upsertExternalAccount(input) {
+      const metadata =
+        input.metadata === null ? Prisma.JsonNull : (input.metadata as Prisma.InputJsonValue);
+
+      await prisma.integrationExternalAccount.upsert({
+        where: { integrationId: input.integrationId },
+        create: {
+          integrationId: input.integrationId,
+          externalAccountId: input.externalAccountId,
+          externalCompanyName: input.externalCompanyName,
+          metadata,
+        },
+        update: {
+          externalAccountId: input.externalAccountId,
+          externalCompanyName: input.externalCompanyName,
+          metadata,
+        },
+      });
+    },
+
+    async findConnectedConflict(input) {
+      const row = await prisma.integrationExternalAccount.findFirst({
+        where: {
+          externalAccountId: input.externalAccountId,
+          integrationId: { not: input.excludeIntegrationId },
+          integration: {
+            provider: CONTA_AZUL_PROVIDER,
+            status: 'CONNECTED',
+          },
+        },
+        select: {
+          integrationId: true,
+          integration: { select: { tenantId: true } },
+        },
+      });
+      if (!row) {
+        return null;
+      }
+      return { integrationId: row.integrationId, tenantId: row.integration.tenantId };
+    },
+
     async refreshTokensInLock(tenantId, work) {
       return prisma.$transaction(
         async (tx) => {
@@ -230,6 +316,7 @@ export function createContaAzulIntegrationRepository(
             select: {
               ...integrationSelect,
               credential: { select: credentialSelect },
+              externalAccount: { select: externalAccountSelect },
             },
           });
           if (!row) {

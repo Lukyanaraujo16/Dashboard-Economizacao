@@ -67,6 +67,10 @@ export function adminTenantContaAzulDisconnectPath(tenantId: string): string {
   return `${adminTenantContaAzulPath(tenantId)}/disconnect`;
 }
 
+export function adminTenantContaAzulVerifyPath(tenantId: string): string {
+  return `${adminTenantContaAzulPath(tenantId)}/verify`;
+}
+
 /** Branding global da plataforma (1.5C/1.5D). */
 export function adminPlatformBrandingPath(): string {
   return `${ADMIN_API_PREFIX}/platform/branding`;

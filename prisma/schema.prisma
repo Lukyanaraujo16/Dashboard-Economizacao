@@ -173,18 +173,20 @@ enum IntegrationStatus {
 
 /// Conexão de um tenant com um provedor externo. MVP: 1 Conta Azul por empresa.
 model Integration {
-  id             String                @id @default(uuid()) @db.Uuid
-  tenantId       String                @map("tenant_id") @db.Uuid
-  provider       IntegrationProvider
-  status         IntegrationStatus
-  connectedAt    DateTime?             @map("connected_at") @db.Timestamptz(3)
-  disconnectedAt DateTime?             @map("disconnected_at") @db.Timestamptz(3)
-  lastErrorAt    DateTime?             @map("last_error_at") @db.Timestamptz(3)
-  lastErrorCode  String?               @map("last_error_code")
-  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
-  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  credential     IntegrationCredential?
+  id                    String                      @id @default(uuid()) @db.Uuid
+  tenantId              String                      @map("tenant_id") @db.Uuid
+  provider              IntegrationProvider
+  status                IntegrationStatus
+  connectedAt           DateTime?                   @map("connected_at") @db.Timestamptz(3)
+  disconnectedAt        DateTime?                   @map("disconnected_at") @db.Timestamptz(3)
+  lastSuccessfulSyncAt  DateTime?                   @map("last_successful_sync_at") @db.Timestamptz(3)
+  lastErrorAt           DateTime?                   @map("last_error_at") @db.Timestamptz(3)
+  lastErrorCode         String?                     @map("last_error_code")
+  createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  credential            IntegrationCredential?
+  externalAccount       IntegrationExternalAccount?
 
   @@unique([tenantId, provider], map: "uq_integrations_tenant_provider")
   @@index([tenantId], map: "idx_integrations_tenant_id")
@@ -204,6 +206,23 @@ model IntegrationCredential {
   integration           Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
 
   @@map("integration_credentials")
+}
+
+/// Identidade da conta externa conectada (ex.: id_empresa Conta Azul). Subordinada à Integration.
+/// Isolamento: queries sempre via Integration/Tenant — nunca só por externalAccountId.
+model IntegrationExternalAccount {
+  id                  String      @id @default(uuid()) @db.Uuid
+  integrationId       String      @unique(map: "uq_integration_external_accounts_integration_id") @map("integration_id") @db.Uuid
+  externalAccountId   String      @map("external_account_id")
+  externalCompanyName String?     @map("external_company_name")
+  /// Mínimo: documento, nomeFantasia, email. Nunca tokens nem resposta HTTP crua.
+  metadata            Json?
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  integration         Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([externalAccountId], map: "idx_integration_external_accounts_external_account_id")
+  @@map("integration_external_accounts")
 }
 
 /// Credencial de senha 1:1. Usuário PENDING pode existir sem registro.

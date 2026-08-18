@@ -1,0 +1,78 @@
+import type { FastifyInstance } from 'fastify';
+
+import { loadEnvironment } from '../../../../config/env.js';
+import { getPrismaClient } from '../../../../infrastructure/database/prisma.js';
+import { IntegrationUnavailableError } from '../../../../shared/errors/application-error.js';
+import { createTenantRepository } from '../../../tenant/repositories/tenant.repository.js';
+import { createContaAzulApiClient } from '../connector/conta-azul-api-client.js';
+import { createContaAzulTokenClient } from '../connector/conta-azul-token-client.js';
+import { createContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
+import {
+  createContaAzulIdentityService,
+  type ContaAzulIdentityService,
+} from './conta-azul-identity.service.js';
+import {
+  createContaAzulOAuthService,
+  type ContaAzulOAuthService,
+} from './conta-azul-oauth.service.js';
+import { createContaAzulOAuthStateStore } from './oauth-state.store.js';
+
+export type ContaAzulRuntime = {
+  readonly configured: boolean;
+  readonly oauth: ContaAzulOAuthService;
+  readonly identity: ContaAzulIdentityService;
+};
+
+export function createContaAzulRuntime(app: FastifyInstance): ContaAzulRuntime {
+  const environment = loadEnvironment();
+  const prisma = getPrismaClient();
+  const tenants = createTenantRepository(prisma);
+  const integrations = createContaAzulIntegrationRepository(prisma);
+  const contaAzul = environment.contaAzul;
+  const configured = Boolean(contaAzul);
+  const tokenClient = contaAzul
+    ? createContaAzulTokenClient({
+        clientId: contaAzul.clientId,
+        clientSecret: contaAzul.clientSecret,
+      })
+    : {
+        exchangeAuthorizationCode: async () => {
+          throw new IntegrationUnavailableError('Integração Conta Azul não configurada.');
+        },
+        refresh: async () => {
+          throw new IntegrationUnavailableError('Integração Conta Azul não configurada.');
+        },
+      };
+
+  const apiClient = createContaAzulApiClient();
+  const identityRef: { service: ContaAzulIdentityService | null } = { service: null };
+
+  const oauth = createContaAzulOAuthService({
+    tenants,
+    integrations,
+    stateStore: createContaAzulOAuthStateStore(app.redis, environment.nodeEnv),
+    tokenClient,
+    contaAzul: contaAzul ?? {
+      clientId: 'unconfigured',
+      clientSecret: 'unconfigured',
+      redirectUri: 'http://127.0.0.1:3000/integrations/conta-azul/callback',
+    },
+    encryptionKey: environment.integrationEncryptionKey,
+    identifyConnectedAccount: async (tenantId) => {
+      const service = identityRef.service;
+      if (!service) {
+        return;
+      }
+      await service.identify(tenantId, 'callback');
+    },
+  });
+
+  const identity = createContaAzulIdentityService({
+    integrations,
+    apiClient,
+    getValidAccessToken: (tenantId) => oauth.getValidAccessToken(tenantId),
+  });
+  identityRef.service = identity;
+
+  return { configured, oauth, identity };
+}

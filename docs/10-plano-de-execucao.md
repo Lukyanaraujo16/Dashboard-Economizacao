@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-2.1 — OAuth Conta Azul
+2.2 — Gestão das conexões
 
 Último checkpoint:
 
-2.1 — OAuth Conta Azul (homologado com OAuth real e commitado)
+2.2 — Gestão das conexões (homologada com OAuth real + identidade e commitada)
 
 Último commit:
 
-feat(integrations): conclui oauth da conta azul
+feat(integrations): conclui gestao de conexoes conta azul
 
 Próxima fase executável:
 
-2.2 — Gestão das conexões
+2.3 — Primeira sincronização manual
 
 **Não iniciada.**
 
@@ -117,6 +117,8 @@ Estado atual
 ✔ 1.6 — Modo Suporte concluída (SUPER_ADMIN-only, overlay de contexto, `support_sessions`)
 
 ✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
+
+✔ 2.2 — Gestão das conexões concluída (identidade/health homologados; sem sync financeira)
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -657,6 +659,39 @@ Migration: `20260817214500_conta_azul_oauth` (SHA-256
 Aplicada em DEV e TEST via `prisma migrate deploy`. Sem `migrate reset` / `db push`.
 
 2.2 Gestão das conexões
+
+Status:
+Concluída
+
+Gestão da conexão por tenant — **não** é sincronização financeira.
+
+Escopo:
+
+* `GET https://api-v2.contaazul.com/v1/pessoas/conta-conectada` (Bearer);
+* persistência de `IntegrationExternalAccount` (`id_empresa`);
+* DTO administrativo enriquecido (identidade, lastError sanitizado,
+  `lastSuccessfulSyncAt` sempre null nesta fase);
+* UI Empresas → Integrações;
+* `POST …/verify` reutiliza o mesmo identity service;
+* disconnect remove a conta externa e preserva a Integration;
+* identity probe **não** preenche `lastSuccessfulSyncAt` e **não** é sync.
+
+Fora desta fase (2.3+): parcelas, pessoas em lista, categorias, contas,
+transações, fila, cron, BullMQ, `sync_runs`, status `SYNCING`/`PENDING`.
+
+Nenhuma fila/cron criada. OAuth 2.1 não foi reaberto.
+
+Homologação real em 18/08/2026: OAuth, callback, identity probe
+(`GET /v1/pessoas/conta-conectada` apenas), persistência após reload, verify
+idempotente e disconnect. `lastSuccessfulSyncAt` permaneceu NULL. Conta ERP
+desconectada no fechamento (Integration DISCONNECTED; 0 credentials; 0 contas
+externas). Nenhum endpoint financeiro consumido.
+
+Migration: `20260818120500_conta_azul_connection_management` (SHA-256
+`a07932c5c8b1016206a6d198447619f3fea12925983e75a395889bf7d049a1cc`).
+Aplicada em DEV e TEST via `prisma migrate deploy`. Sem `migrate reset` / `db push`.
+
+Próxima fase: 2.3.
 
 2.3 Primeira sincronização manual
 

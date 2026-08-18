@@ -13,6 +13,7 @@ import {
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
 import {
   CONTA_AZUL_AUTHORIZATION_URL,
+  CONTA_AZUL_CONNECTED_COMPANY_URL,
   CONTA_AZUL_SCOPE,
   CONTA_AZUL_TOKEN_URL,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-oauth.js';
@@ -90,6 +91,50 @@ function tokenResponse(overrides?: Record<string, unknown>): Response {
   );
 }
 
+function connectedCompanyResponse(overrides?: Record<string, unknown>): Response {
+  return new Response(
+    JSON.stringify({
+      id_empresa: '123456',
+      documento: '05206246000138',
+      razao_social: 'Conta Azul Software Ltda',
+      nome_fantasia: 'Conta Azul',
+      email: 'api@contaazul.com',
+      data_fundacao: '2012-01-01',
+      ...overrides,
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+const disconnectedPublic = {
+  provider: 'CONTA_AZUL',
+  status: 'DISCONNECTED',
+  connectedAt: null,
+  disconnectedAt: null,
+  externalAccountId: null,
+  externalCompanyName: null,
+  lastSuccessfulSyncAt: null,
+  lastErrorAt: null,
+  lastErrorCode: null,
+};
+
+function stubContaAzulNetwork(options?: {
+  readonly identityForUrl?: (url: string) => Response;
+}): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn().mockImplementation((url: string) => {
+    const href = String(url);
+    if (href.includes('/oauth/token')) {
+      return Promise.resolve(tokenResponse());
+    }
+    if (href.includes('/v1/pessoas/conta-conectada')) {
+      return Promise.resolve(options?.identityForUrl?.(href) ?? connectedCompanyResponse());
+    }
+    return Promise.resolve(new Response('unexpected', { status: 500 }));
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
 async function createActiveUser(
   email: string,
   role: 'USER' | 'ADMIN' | 'SUPER_ADMIN',
@@ -164,12 +209,7 @@ describe('OAuth Conta Azul (fase 2.1)', () => {
       return;
     }
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
-      provider: 'CONTA_AZUL',
-      status: 'DISCONNECTED',
-      connectedAt: null,
-      disconnectedAt: null,
-    });
+    expect(response.json()).toEqual(disconnectedPublic);
     expect(JSON.stringify(response.json())).not.toMatch(/access|refresh|token/i);
   });
 
@@ -233,14 +273,7 @@ describe('OAuth Conta Azul (fase 2.1)', () => {
   });
 
   it('callback sucesso persiste tokens cifrados e não os expõe', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          tokenResponse({ access_token: 'access-live', refresh_token: 'refresh-live' }),
-        ),
-    );
+    const fetchMock = stubContaAzulNetwork();
     await createActiveUser('oauth.admin-callback@test.local', 'ADMIN');
     const tenant = await tenants.create({ name: 'oauth-callback', displayName: 'Callback' });
     const app = await buildTestApp();
@@ -262,27 +295,38 @@ describe('OAuth Conta Azul (fase 2.1)', () => {
       `http://127.0.0.1:3000/empresas/${tenant.id}/integracoes?contaAzul=connected`,
     );
 
-    const fetchMock = vi.mocked(fetch);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, init] = fetchMock.mock.calls[0]!;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[0]![0])).toBe(CONTA_AZUL_TOKEN_URL);
-    expect((init as RequestInit).headers).toMatchObject({
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).headers).toMatchObject({
       'Content-Type': 'application/x-www-form-urlencoded',
     });
+    expect(String(fetchMock.mock.calls[1]![0])).toBe(CONTA_AZUL_CONNECTED_COMPANY_URL);
+    const identityHeaders = (fetchMock.mock.calls[1]![1] as RequestInit).headers as Record<
+      string,
+      string
+    >;
+    expect(identityHeaders.Authorization).toMatch(/^Bearer /);
 
     const status = await app.inject({
       method: 'GET',
       url: `/admin/tenants/${tenant.id}/integrations/conta-azul`,
       headers: { cookie },
     });
-    expect(status.json().status).toBe('CONNECTED');
-    expect(JSON.stringify(status.json())).not.toContain('access-live');
-    expect(JSON.stringify(status.json())).not.toContain('refresh-live');
+    expect(status.json()).toMatchObject({
+      status: 'CONNECTED',
+      externalAccountId: '123456',
+      externalCompanyName: 'Conta Azul Software Ltda',
+      lastSuccessfulSyncAt: null,
+      lastErrorCode: null,
+    });
+    expect(JSON.stringify(status.json())).not.toContain('access-1');
+    expect(JSON.stringify(status.json())).not.toContain('refresh-1');
 
     const stored = await prisma.integrationCredential.findFirstOrThrow();
-    expect(stored.encryptedAccessToken).not.toContain('access-live');
-    expect(stored.encryptedRefreshToken).not.toContain('refresh-live');
+    expect(stored.encryptedAccessToken).not.toContain('access-1');
+    expect(stored.encryptedRefreshToken).not.toContain('refresh-1');
     expect(stored.encryptedAccessToken.startsWith('v1.')).toBe(true);
+    expect(await prisma.integrationExternalAccount.count()).toBe(1);
   });
 
   it('rejeita state inválido, replay, sessão diferente, code ausente e access_denied', async () => {
@@ -386,10 +430,13 @@ describe('OAuth Conta Azul (fase 2.1)', () => {
   });
 
   it('tenant A não desconecta tenant B; disconnect é idempotente', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation(() => Promise.resolve(tokenResponse())),
-    );
+    let identitySeq = 0;
+    stubContaAzulNetwork({
+      identityForUrl: () => {
+        identitySeq += 1;
+        return connectedCompanyResponse({ id_empresa: `empresa-${identitySeq}` });
+      },
+    });
     await createActiveUser('oauth.admin-iso@test.local', 'ADMIN');
     const tenantA = await tenants.create({ name: 'oauth-iso-a', displayName: 'A' });
     const tenantB = await tenants.create({ name: 'oauth-iso-b', displayName: 'B' });
@@ -436,7 +483,9 @@ describe('OAuth Conta Azul (fase 2.1)', () => {
       headers: { cookie },
     });
     expect(statusA.json().status).toBe('DISCONNECTED');
+    expect(statusA.json().externalAccountId).toBeNull();
     expect(statusB.json().status).toBe('CONNECTED');
+    expect(statusB.json().externalAccountId).toBe('empresa-2');
 
     const again = await app.inject({
       method: 'POST',
@@ -448,14 +497,25 @@ describe('OAuth Conta Azul (fase 2.1)', () => {
   });
 
   it('reconnect substitui credenciais anteriores', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        tokenResponse({ access_token: 'first-access', refresh_token: 'first-refresh' }),
-      )
-      .mockResolvedValueOnce(
-        tokenResponse({ access_token: 'second-access', refresh_token: 'second-refresh' }),
-      );
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const href = String(url);
+      if (href.includes('/oauth/token')) {
+        const count = fetchMock.mock.calls.filter((call) =>
+          String(call[0]).includes('/oauth/token'),
+        ).length;
+        return Promise.resolve(
+          tokenResponse(
+            count <= 1
+              ? { access_token: 'first-access', refresh_token: 'first-refresh' }
+              : { access_token: 'second-access', refresh_token: 'second-refresh' },
+          ),
+        );
+      }
+      if (href.includes('/v1/pessoas/conta-conectada')) {
+        return Promise.resolve(connectedCompanyResponse({ id_empresa: 'reconnect-1' }));
+      }
+      return Promise.resolve(new Response('unexpected', { status: 500 }));
+    });
     vi.stubGlobal('fetch', fetchMock);
     await createActiveUser('oauth.admin-reconnect@test.local', 'ADMIN');
     const tenant = await tenants.create({ name: 'oauth-reconnect', displayName: 'Reconnect' });
@@ -477,6 +537,7 @@ describe('OAuth Conta Azul (fase 2.1)', () => {
     }
 
     expect(await prisma.integration.count()).toBe(1);
+    expect(await prisma.integrationExternalAccount.count()).toBe(1);
     const stored = await prisma.integrationCredential.findFirstOrThrow();
     expect(stored.encryptedAccessToken).not.toContain('first-access');
     expect(stored.encryptedRefreshToken).not.toContain('first-refresh');
@@ -648,5 +709,265 @@ describe('OAuth Conta Azul (fase 2.1)', () => {
     });
     expect(response.statusCode).toBe(409);
     expect(await tenants.findById(tenant.id)).not.toBeNull();
+  });
+});
+
+describe('Gestão das conexões Conta Azul (fase 2.2)', () => {
+  async function seedConnected(tenantId: string, token = 'access-live') {
+    const environment = loadEnvironment();
+    await integrations.persistConnectedTokens({
+      tenantId,
+      encryptedAccessToken: encryptSecret(token, environment.integrationEncryptionKey),
+      encryptedRefreshToken: encryptSecret(
+        `refresh-${token}`,
+        environment.integrationEncryptionKey,
+      ),
+      accessExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      tokenType: 'Bearer',
+      at: new Date(),
+    });
+  }
+
+  it('GET connected inclui identidade e lastSuccessfulSyncAt nulo sem tokens', async () => {
+    stubContaAzulNetwork();
+    await createActiveUser('id.admin-get@test.local', 'ADMIN');
+    const tenant = await tenants.create({ name: 'id-get', displayName: 'Get' });
+    await seedConnected(tenant.id);
+    const app = await buildTestApp();
+    const cookie = await login(app, 'id.admin-get@test.local');
+    const verify = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/verify`,
+      headers: { cookie },
+    });
+    expect(verify.statusCode).toBe(200);
+    expect(verify.json()).toMatchObject({
+      provider: 'CONTA_AZUL',
+      status: 'CONNECTED',
+      externalAccountId: '123456',
+      externalCompanyName: 'Conta Azul Software Ltda',
+      lastSuccessfulSyncAt: null,
+      lastErrorAt: null,
+      lastErrorCode: null,
+    });
+    expect(JSON.stringify(verify.json())).not.toMatch(/access|refresh|token/i);
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul`,
+      headers: { cookie },
+    });
+    expect(status.json().lastSuccessfulSyncAt).toBeNull();
+    expect(await prisma.integrationExternalAccount.count()).toBe(1);
+  });
+
+  it('dois probes não duplicam a conta externa', async () => {
+    stubContaAzulNetwork();
+    await createActiveUser('id.admin-idem@test.local', 'ADMIN');
+    const tenant = await tenants.create({ name: 'id-idem', displayName: 'Idem' });
+    await seedConnected(tenant.id);
+    const app = await buildTestApp();
+    const cookie = await login(app, 'id.admin-idem@test.local');
+    await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/verify`,
+      headers: { cookie },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/verify`,
+      headers: { cookie },
+    });
+    expect(await prisma.integrationExternalAccount.count()).toBe(1);
+  });
+
+  it('401 persistente marca ERROR e preserva tokens', async () => {
+    stubContaAzulNetwork({
+      identityForUrl: () => new Response(JSON.stringify({ error: 'denied' }), { status: 401 }),
+    });
+    await createActiveUser('id.admin-401@test.local', 'ADMIN');
+    const tenant = await tenants.create({ name: 'id-401', displayName: '401' });
+    await seedConnected(tenant.id);
+    const app = await buildTestApp();
+    const cookie = await login(app, 'id.admin-401@test.local');
+    const verify = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/verify`,
+      headers: { cookie },
+    });
+    expect(verify.statusCode).toBe(200);
+    expect(verify.json()).toMatchObject({
+      status: 'ERROR',
+      lastErrorCode: 'identity_unauthorized',
+      lastSuccessfulSyncAt: null,
+    });
+    expect(JSON.stringify(verify.json())).not.toContain('denied');
+    expect(await prisma.integrationCredential.count()).toBe(1);
+  });
+
+  it('429 no verify não desconecta e não persiste lastError', async () => {
+    stubContaAzulNetwork({
+      identityForUrl: () => new Response(JSON.stringify({ error: 'slow' }), { status: 429 }),
+    });
+    await createActiveUser('id.admin-429@test.local', 'ADMIN');
+    const tenant = await tenants.create({ name: 'id-429', displayName: '429' });
+    await seedConnected(tenant.id);
+    const app = await buildTestApp();
+    const cookie = await login(app, 'id.admin-429@test.local');
+    const verify = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/verify`,
+      headers: { cookie },
+    });
+    expect(verify.statusCode).toBe(503);
+    const status = await app.inject({
+      method: 'GET',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul`,
+      headers: { cookie },
+    });
+    expect(status.json().status).toBe('CONNECTED');
+    expect(status.json().lastErrorCode).toBeNull();
+    expect(await prisma.integrationCredential.count()).toBe(1);
+  });
+
+  it('500 no callback não apaga tokens e mantém CONNECTED', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      const href = String(url);
+      if (href.includes('/oauth/token')) {
+        return Promise.resolve(tokenResponse());
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await createActiveUser('id.admin-cb500@test.local', 'ADMIN');
+    const tenant = await tenants.create({ name: 'id-cb500', displayName: 'CB500' });
+    const app = await buildTestApp();
+    const cookie = await login(app, 'id.admin-cb500@test.local');
+    const connect = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/connect`,
+      headers: { cookie },
+    });
+    const state = parseAuthorizationQuery(connect.json().authorizationUrl as string).get('state');
+    const callback = await app.inject({
+      method: 'GET',
+      url: `/integrations/conta-azul/callback?code=ok&state=${state}`,
+      headers: { cookie },
+    });
+    expect(callback.headers.location).toContain('contaAzul=connected');
+    const status = await app.inject({
+      method: 'GET',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul`,
+      headers: { cookie },
+    });
+    expect(status.json().status).toBe('CONNECTED');
+    expect(status.json().externalAccountId).toBeNull();
+    expect(status.json().lastSuccessfulSyncAt).toBeNull();
+    expect(await prisma.integrationCredential.count()).toBe(1);
+    expect(await prisma.integrationExternalAccount.count()).toBe(0);
+  });
+
+  it('colisão de id_empresa não compartilha credencial e sinaliza ERROR', async () => {
+    stubContaAzulNetwork();
+    await createActiveUser('id.admin-conflict@test.local', 'ADMIN');
+    const tenantA = await tenants.create({ name: 'id-conflict-a', displayName: 'A' });
+    const tenantB = await tenants.create({ name: 'id-conflict-b', displayName: 'B' });
+    await seedConnected(tenantA.id, 'token-a');
+    await seedConnected(tenantB.id, 'token-b');
+    const app = await buildTestApp();
+    const cookie = await login(app, 'id.admin-conflict@test.local');
+
+    const first = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenantA.id}/integrations/conta-azul/verify`,
+      headers: { cookie },
+    });
+    expect(first.json().status).toBe('CONNECTED');
+
+    const second = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenantB.id}/integrations/conta-azul/verify`,
+      headers: { cookie },
+    });
+    expect(second.json()).toMatchObject({
+      status: 'ERROR',
+      lastErrorCode: 'external_account_conflict',
+      externalAccountId: '123456',
+    });
+
+    const credA = await prisma.integrationCredential.findFirst({
+      where: { integration: { tenantId: tenantA.id } },
+    });
+    const credB = await prisma.integrationCredential.findFirst({
+      where: { integration: { tenantId: tenantB.id } },
+    });
+    expect(credA?.id).not.toBe(credB?.id);
+    expect(credA?.encryptedAccessToken).not.toBe(credB?.encryptedAccessToken);
+
+    const statusA = await app.inject({
+      method: 'GET',
+      url: `/admin/tenants/${tenantA.id}/integrations/conta-azul`,
+      headers: { cookie },
+    });
+    expect(statusA.json().status).toBe('CONNECTED');
+  });
+
+  it('USER e modo suporte recebem 403 no verify', async () => {
+    await createActiveUser('id.user-verify@test.local', 'USER');
+    await createActiveUser('id.support-verify@test.local', 'SUPER_ADMIN');
+    const tenant = await tenants.create({ name: 'id-verify-403', displayName: '403' });
+    const app = await buildTestApp();
+
+    const userCookie = await login(app, 'id.user-verify@test.local');
+    const userResponse = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/verify`,
+      headers: { cookie: userCookie },
+    });
+    expect(userResponse.statusCode).toBe(403);
+
+    const supportCookie = await login(app, 'id.support-verify@test.local');
+    await app.inject({
+      method: 'POST',
+      url: '/auth/support/enter',
+      headers: { cookie: supportCookie },
+      payload: { tenantId: tenant.id },
+    });
+    const supportResponse = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/verify`,
+      headers: { cookie: supportCookie },
+    });
+    expect(supportResponse.statusCode).toBe(403);
+  });
+
+  it('disconnect remove a conta externa e preserva lastSuccessfulSyncAt nulo', async () => {
+    stubContaAzulNetwork();
+    await createActiveUser('id.admin-disc@test.local', 'ADMIN');
+    const tenant = await tenants.create({ name: 'id-disc', displayName: 'Disc' });
+    await seedConnected(tenant.id);
+    const app = await buildTestApp();
+    const cookie = await login(app, 'id.admin-disc@test.local');
+    await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/verify`,
+      headers: { cookie },
+    });
+    expect(await prisma.integrationExternalAccount.count()).toBe(1);
+
+    const disconnected = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${tenant.id}/integrations/conta-azul/disconnect`,
+      headers: { cookie },
+    });
+    expect(disconnected.json()).toMatchObject({
+      status: 'DISCONNECTED',
+      externalAccountId: null,
+      externalCompanyName: null,
+      lastSuccessfulSyncAt: null,
+      lastErrorCode: null,
+    });
+    expect(await prisma.integrationExternalAccount.count()).toBe(0);
+    expect(await prisma.integration.count()).toBe(1);
   });
 });

@@ -211,15 +211,19 @@ Access token e refresh token deverão:
 
 12. Identificação da empresa conectada
 
-A API atual possui recurso para retornar informações da empresa da conta conectada.
+A documentação oficial vigente (developers.contaazul.com, consultada em
+2026-08-18) define:
 
-A documentação/changelog atual informa que a resposta passou a disponibilizar id_empresa.
+`GET https://api-v2.contaazul.com/v1/pessoas/conta-conectada`
 
-O Dashboard Economização deverá utilizar a identificação oficial da empresa conectada como mecanismo adicional de validação da associação entre:
+Autenticação: `Authorization: Bearer {access_token}`. Sem query e sem body.
 
-* tenant;
-* integração;
-* conta Conta Azul.
+A resposta inclui `id_empresa`, `documento`, `razao_social`, `nome_fantasia`,
+`email` e `data_fundacao`.
+
+O Dashboard Economização utiliza este endpoint na fase 2.2 para identificar a
+conta ERP conectada. Essa chamada é um **probe de identidade/saúde**, não uma
+sincronização financeira. `last_successful_sync_at` permanece nulo até a 2.3.
 
 O identificador externo não substituirá o ID interno do tenant.
 

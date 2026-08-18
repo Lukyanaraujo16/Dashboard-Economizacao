@@ -2,16 +2,17 @@ import type { FastifyInstance } from 'fastify';
 
 import { loadEnvironment } from '../../../../config/env.js';
 import { getPrismaClient } from '../../../../infrastructure/database/prisma.js';
-import { IntegrationUnavailableError } from '../../../../shared/errors/application-error.js';
+import {
+  IntegrationUnavailableError,
+  NotFoundError,
+  ValidationError,
+} from '../../../../shared/errors/application-error.js';
 import { createRequireAuthentication } from '../../../auth/http/require-authentication.js';
 import { createRequirePlatformRole } from '../../../auth/http/require-platform-role.js';
 import { createUserRepository } from '../../../auth/repositories/user.repository.js';
 import { createTenantRepository } from '../../../tenant/repositories/tenant.repository.js';
-import { createContaAzulTokenClient } from '../connector/conta-azul-token-client.js';
 import { parseTenantIdParam } from '../schemas/conta-azul.schemas.js';
-import { createContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
-import { createContaAzulOAuthService } from '../services/conta-azul-oauth.service.js';
-import { createContaAzulOAuthStateStore } from '../services/oauth-state.store.js';
+import { createContaAzulRuntime } from '../services/conta-azul-runtime.js';
 
 export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promise<void> {
   const environment = loadEnvironment();
@@ -21,34 +22,7 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
-
-  const contaAzul = environment.contaAzul;
-  const tokenClient = contaAzul
-    ? createContaAzulTokenClient({
-        clientId: contaAzul.clientId,
-        clientSecret: contaAzul.clientSecret,
-      })
-    : {
-        exchangeAuthorizationCode: async () => {
-          throw new IntegrationUnavailableError('Integração Conta Azul não configurada.');
-        },
-        refresh: async () => {
-          throw new IntegrationUnavailableError('Integração Conta Azul não configurada.');
-        },
-      };
-
-  const oauth = createContaAzulOAuthService({
-    tenants,
-    integrations: createContaAzulIntegrationRepository(prisma),
-    stateStore: createContaAzulOAuthStateStore(app.redis, environment.nodeEnv),
-    tokenClient,
-    contaAzul: contaAzul ?? {
-      clientId: 'unconfigured',
-      clientSecret: 'unconfigured',
-      redirectUri: 'http://127.0.0.1:3000/integrations/conta-azul/callback',
-    },
-    encryptionKey: environment.integrationEncryptionKey,
-  });
+  const { configured, oauth, identity } = createContaAzulRuntime(app);
 
   app.get(
     '/admin/tenants/:tenantId/integrations/conta-azul',
@@ -63,7 +37,7 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
     '/admin/tenants/:tenantId/integrations/conta-azul/connect',
     { preHandler: adminGuard },
     async (request, reply) => {
-      if (!contaAzul) {
+      if (!configured) {
         throw new IntegrationUnavailableError(
           'Integração Conta Azul não configurada neste ambiente.',
         );
@@ -75,6 +49,37 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
         'conta_azul_oauth_connect_started',
       );
       return reply.status(200).send(result);
+    },
+  );
+
+  app.post(
+    '/admin/tenants/:tenantId/integrations/conta-azul/verify',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      if (!configured) {
+        throw new IntegrationUnavailableError(
+          'Integração Conta Azul não configurada neste ambiente.',
+        );
+      }
+      if (!environment.integrationEncryptionKey) {
+        throw new IntegrationUnavailableError(
+          'Cifração de integrações não configurada neste ambiente.',
+        );
+      }
+      const tenantId = parseTenantIdParam(request.params);
+      const tenant = await tenants.findById(tenantId);
+      if (!tenant) {
+        throw new NotFoundError('Empresa não encontrada.');
+      }
+      if (tenant.status !== 'ACTIVE') {
+        throw new ValidationError('Empresa inativa não pode verificar a Conta Azul.');
+      }
+      const status = await identity.identify(tenantId, 'verify');
+      request.log.info(
+        { tenantId, actorUserId: request.auth?.userId, integrationStatus: status.status },
+        'conta_azul_identity_verified',
+      );
+      return reply.status(200).send(status);
     },
   );
 

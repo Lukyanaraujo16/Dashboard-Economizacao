@@ -9,12 +9,17 @@ import {
   connectContaAzul,
   disconnectContaAzul,
   getContaAzulIntegration,
+  verifyContaAzul,
 } from '../../services/admin/conta-azul';
-import { ContaAzulRequestError } from '../../services/admin/conta-azul.types';
+import {
+  ContaAzulRequestError,
+  contaAzulErrorMessage,
+} from '../../services/admin/conta-azul.types';
 import type { ContaAzulIntegration } from '../../services/admin/conta-azul.types';
 import { StateWrapper } from '../financial/state-wrapper';
 import { Badge, Button, Card, Typography } from '../ui';
 import { CompanySectionNav } from './company-section-nav';
+import { formatCompanyDate } from './company-utils';
 import styles from './companies.module.css';
 
 type CompanyIntegrationsPageProps = {
@@ -58,6 +63,13 @@ function statusLabel(status: ContaAzulIntegration['status']): {
   return { label: 'Não conectada', variant: 'neutral' };
 }
 
+function syncLabel(lastSuccessfulSyncAt: string | null): string {
+  if (!lastSuccessfulSyncAt) {
+    return 'Nunca sincronizado';
+  }
+  return formatCompanyDate(lastSuccessfulSyncAt);
+}
+
 export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyIntegrationsPageProps) {
   const router = useRouter();
   const [companyName, setCompanyName] = useState<string | null>(null);
@@ -69,6 +81,7 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
   const [flash, setFlash] = useState(callbackMessage(oauthResult));
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   const load = useCallback(async () => {
@@ -120,6 +133,28 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
     }
   }
 
+  async function handleVerify() {
+    setActionError(null);
+    setVerifying(true);
+    try {
+      const status = await verifyContaAzul(companyId);
+      setIntegration(status);
+      if (status.status === 'ERROR') {
+        setFlash(null);
+      } else {
+        setFlash({ text: 'Conexão com a Conta Azul verificada.', tone: 'success' });
+      }
+    } catch (error) {
+      setActionError(
+        error instanceof ContaAzulRequestError
+          ? error.message
+          : 'Não foi possível verificar a conexão com a Conta Azul.',
+      );
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function handleDisconnect() {
     setActionError(null);
     setDisconnecting(true);
@@ -145,6 +180,7 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
     loadState === 'not_found'
       ? 'Empresa não encontrada.'
       : 'Não foi possível carregar as integrações.';
+  const canManageConnection = integration && integration.status !== 'DISCONNECTED';
 
   return (
     <CompanySectionNav companyId={companyId} companyName={companyName}>
@@ -190,9 +226,35 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
             </Typography>
           ) : null}
 
+          {canManageConnection ? (
+            <div className={styles.integrationMeta}>
+              {integration.externalCompanyName ? (
+                <Typography as="p" variant="body">
+                  Empresa conectada: {integration.externalCompanyName}
+                </Typography>
+              ) : null}
+              {integration.externalAccountId ? (
+                <Typography as="p" variant="body" className={styles.pageDescription}>
+                  Identificador: {integration.externalAccountId}
+                </Typography>
+              ) : null}
+              {integration.connectedAt ? (
+                <Typography as="p" variant="body" className={styles.pageDescription}>
+                  Conectada em: {formatCompanyDate(integration.connectedAt)}
+                </Typography>
+              ) : null}
+              <Typography as="p" variant="body" className={styles.pageDescription}>
+                Última sincronização: {syncLabel(integration.lastSuccessfulSyncAt)}
+              </Typography>
+            </div>
+          ) : null}
+
           {integration.status === 'ERROR' ? (
             <Typography as="p" variant="body" className={styles.pageDescription}>
-              A autorização precisa ser renovada. Reconecte a empresa para continuar.
+              {contaAzulErrorMessage(integration.lastErrorCode)}
+              {integration.lastErrorAt
+                ? ` Último erro em ${formatCompanyDate(integration.lastErrorAt)}.`
+                : ''}
             </Typography>
           ) : null}
 
@@ -234,7 +296,18 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
               >
                 {integration.status === 'DISCONNECTED' ? 'Conectar Conta Azul' : 'Reconectar'}
               </Button>
-              {integration.status !== 'DISCONNECTED' ? (
+              {canManageConnection ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={verifying}
+                  disabled={connecting}
+                  onClick={() => void handleVerify()}
+                >
+                  Verificar conexão
+                </Button>
+              ) : null}
+              {canManageConnection ? (
                 <Button
                   type="button"
                   variant="secondary"

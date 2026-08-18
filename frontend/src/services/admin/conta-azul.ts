@@ -2,6 +2,7 @@ import {
   adminTenantContaAzulConnectPath,
   adminTenantContaAzulDisconnectPath,
   adminTenantContaAzulPath,
+  adminTenantContaAzulVerifyPath,
 } from '../../lib/api-config';
 import {
   ContaAzulRequestError,
@@ -13,6 +14,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
+function isPublicErrorCode(value: unknown): value is ContaAzulIntegration['lastErrorCode'] {
+  return (
+    value === null ||
+    value === 'refresh_failed' ||
+    value === 'identity_unauthorized' ||
+    value === 'identity_incomplete' ||
+    value === 'external_account_conflict'
+  );
+}
+
 function isIntegration(value: unknown): value is ContaAzulIntegration {
   if (!isRecord(value)) {
     return false;
@@ -20,8 +35,13 @@ function isIntegration(value: unknown): value is ContaAzulIntegration {
   return (
     value.provider === 'CONTA_AZUL' &&
     (value.status === 'DISCONNECTED' || value.status === 'CONNECTED' || value.status === 'ERROR') &&
-    (value.connectedAt === null || typeof value.connectedAt === 'string') &&
-    (value.disconnectedAt === null || typeof value.disconnectedAt === 'string')
+    isNullableString(value.connectedAt) &&
+    isNullableString(value.disconnectedAt) &&
+    isNullableString(value.externalAccountId) &&
+    isNullableString(value.externalCompanyName) &&
+    isNullableString(value.lastSuccessfulSyncAt) &&
+    isNullableString(value.lastErrorAt) &&
+    isPublicErrorCode(value.lastErrorCode)
   );
 }
 
@@ -150,6 +170,24 @@ export async function disconnectContaAzul(tenantId: string): Promise<ContaAzulIn
     throw new ContaAzulRequestError('unavailable', 'Não foi possível desconectar a Conta Azul.', {
       httpStatus: response.status,
     });
+  }
+  return body;
+}
+
+export async function verifyContaAzul(tenantId: string): Promise<ContaAzulIntegration> {
+  const response = await contaAzulFetch(adminTenantContaAzulVerifyPath(tenantId), {
+    method: 'POST',
+  });
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toFailure(response, body);
+  }
+  if (!isIntegration(body)) {
+    throw new ContaAzulRequestError(
+      'unavailable',
+      'Não foi possível verificar a conexão com a Conta Azul.',
+      { httpStatus: response.status },
+    );
   }
   return body;
 }

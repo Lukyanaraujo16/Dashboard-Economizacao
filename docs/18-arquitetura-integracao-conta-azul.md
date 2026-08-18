@@ -1,6 +1,7 @@
-# 18 — Arquitetura da Integração Conta Azul (OAuth 2.1)
+# 18 — Arquitetura da Integração Conta Azul
 
-Status: Concluída (fase 2.1 — homologada em 18/08/2026)
+Status: 2.1 concluída (homologada em 18/08/2026). 2.2 concluída (homologada em
+18/08/2026 — identidade/health; sem sync financeira).
 Projeto: Dashboard Economização
 
 ## 1. Decisão de contrato
@@ -38,15 +39,16 @@ Homologação real 2.1 usou App de Produção e HTTPS temporário. Para um novo 
 real: URL HTTPS válida, atualizar Portal e `CONTA_AZUL_REDIRECT_URI` de forma
 idêntica. Não persistir hostname de túnel temporário em código ou docs.
 
-`id_empresa` **não** vem na resposta OAuth. `IntegrationExternalAccount`
-fica para fase posterior, quando houver chamada autenticada à API de negócio.
+`id_empresa` **não** vem na resposta OAuth. A fase 2.2 obtém a identidade via
+`GET /v1/pessoas/conta-conectada` e persiste `IntegrationExternalAccount`.
 
 ## 2. Modelo
 
 ```
 Tenant 1 ──< Integration (provider=CONTA_AZUL, unique tenant+provider)
                  │ 1:1
-                 └── IntegrationCredential  (AES-256-GCM)
+                 ├── IntegrationCredential  (AES-256-GCM)
+                 └── IntegrationExternalAccount  (id_empresa; 2.2)
 ```
 
 Status: `DISCONNECTED` | `CONNECTED` | `ERROR`.
@@ -89,18 +91,35 @@ URLs do provider são constantes (allowlist). Timeout 15s. Sem retry agressivo.
 
 ## 6. API interna
 
-- `GET/POST /admin/tenants/:tenantId/integrations/conta-azul`
+- `GET /admin/tenants/:tenantId/integrations/conta-azul`
 - `POST …/connect` → `{ authorizationUrl }`
+- `POST …/verify` → DTO público (identity probe; não é sync)
 - `POST …/disconnect`
 - `GET /integrations/conta-azul/callback` → redirect sanitizado para
   `/empresas/:id/integracoes?contaAzul=`
 
-DTOs nunca incluem tokens.
+DTO público: `provider`, `status`, `connectedAt`, `disconnectedAt`,
+`externalAccountId`, `externalCompanyName`, `lastSuccessfulSyncAt` (null na 2.2),
+`lastErrorAt`, `lastErrorCode` sanitizado.
 
-Connect bloqueado em tenant DISABLED e em Modo Suporte.
+Nunca inclui tokens, credenciais nem metadata completa.
+
+Connect/verify bloqueados em tenant DISABLED e em Modo Suporte.
 USER: 403. ADMIN/SUPER_ADMIN: gerenciam.
+
+Identity probe (2.2): após callback OAuth e via `POST …/verify`.
+Falha transitória (429/5xx/timeout) não apaga tokens nem marca ERROR.
+401 persistente → `ERROR` / `identity_unauthorized`.
+Colisão de `id_empresa` em outra Integration `CONNECTED` → `ERROR` /
+`external_account_conflict` sem compartilhar credencial.
+
+Disconnect remove `IntegrationCredential` e `IntegrationExternalAccount`.
+A linha `Integration` permanece.
 
 ## 7. UI
 
 Hub da empresa → aba **Integrações**. Redirect completo (sem popup).
 Confirm de desconexão pelo Design System (não `window.confirm`).
+Card exibe empresa conectada, identificador externo, data de conexão,
+“Nunca sincronizado” enquanto `lastSuccessfulSyncAt` é nulo, diagnóstico
+amigável de `lastErrorCode` e ação **Verificar conexão**.

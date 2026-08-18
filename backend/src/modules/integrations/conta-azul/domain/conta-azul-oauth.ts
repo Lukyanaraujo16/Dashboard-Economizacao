@@ -4,6 +4,11 @@ export const CONTA_AZUL_AUTHORIZATION_URL = 'https://login.contaazul.com/#/oauth
 
 export const CONTA_AZUL_TOKEN_URL = 'https://api-v2.contaazul.com/oauth/token';
 
+export const CONTA_AZUL_CONNECTED_COMPANY_URL =
+  'https://api-v2.contaazul.com/v1/pessoas/conta-conectada';
+
+export const CONTA_AZUL_IDENTITY_RETRY_BACKOFF_MS = 250;
+
 export const CONTA_AZUL_SCOPE = 'openid profile aws.cognito.signin.user.admin';
 
 /** Authorization code da Conta Azul: 3 minutos. State cobre o tempo de login no IdP. */

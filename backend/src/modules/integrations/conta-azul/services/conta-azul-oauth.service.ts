@@ -15,7 +15,7 @@ import {
   isAccessTokenFresh,
   type ContaAzulCallbackSignal,
 } from '../domain/conta-azul-oauth.js';
-import type { PublicContaAzulIntegration } from '../domain/types.js';
+import { toPublicContaAzulIntegration, type PublicContaAzulIntegration } from '../domain/types.js';
 import type { ContaAzulTokenClient } from '../connector/conta-azul-token-client.js';
 import type { ContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
 import type { ContaAzulOAuthStateStore } from './oauth-state.store.js';
@@ -35,29 +35,6 @@ export type ContaAzulOAuthService = {
   }): Promise<{ readonly tenantId: string | null; readonly signal: ContaAzulCallbackSignal }>;
   getValidAccessToken(tenantId: string): Promise<string>;
 };
-
-function toPublic(
-  record: {
-    status: PublicContaAzulIntegration['status'];
-    connectedAt: Date | null;
-    disconnectedAt: Date | null;
-  } | null,
-): PublicContaAzulIntegration {
-  if (!record) {
-    return {
-      provider: 'CONTA_AZUL',
-      status: 'DISCONNECTED',
-      connectedAt: null,
-      disconnectedAt: null,
-    };
-  }
-  return {
-    provider: 'CONTA_AZUL',
-    status: record.status,
-    connectedAt: record.connectedAt?.toISOString() ?? null,
-    disconnectedAt: record.disconnectedAt?.toISOString() ?? null,
-  };
-}
 
 async function requireActiveTenant(
   tenants: TenantRepository,
@@ -89,6 +66,7 @@ export function createContaAzulOAuthService(deps: {
   readonly tokenClient: ContaAzulTokenClient;
   readonly contaAzul: ContaAzulEnvironment;
   readonly encryptionKey: Buffer | null;
+  readonly identifyConnectedAccount?: (tenantId: string) => Promise<void>;
   readonly clock?: () => Date;
   readonly refreshSkewMs?: number;
 }): ContaAzulOAuthService {
@@ -102,7 +80,7 @@ export function createContaAzulOAuthService(deps: {
         throw new NotFoundError('Empresa não encontrada.');
       }
       const record = await deps.integrations.findPublicByTenantId(tenantId);
-      return toPublic(record);
+      return toPublicContaAzulIntegration(record);
     },
 
     async startConnect(tenantId, auth) {
@@ -134,7 +112,7 @@ export function createContaAzulOAuthService(deps: {
         throw new NotFoundError('Empresa não encontrada.');
       }
       const record = await deps.integrations.disconnect(tenantId, now());
-      return toPublic(record);
+      return toPublicContaAzulIntegration(record);
     },
 
     async handleCallback(input) {
@@ -187,6 +165,13 @@ export function createContaAzulOAuthService(deps: {
           tokenType: tokens.tokenType,
           at,
         });
+        if (deps.identifyConnectedAccount) {
+          try {
+            await deps.identifyConnectedAccount(stored.tenantId);
+          } catch {
+            // Falha transitória de identidade não reverte o OAuth nem apaga tokens.
+          }
+        }
         return { tenantId: stored.tenantId, signal: 'connected' };
       } catch {
         return { tenantId: stored.tenantId, signal: 'error' };
@@ -196,7 +181,7 @@ export function createContaAzulOAuthService(deps: {
     async getValidAccessToken(tenantId) {
       const key = requireEncryptionKey(deps.encryptionKey);
       const loaded = await deps.integrations.findByTenantId(tenantId);
-      if (!loaded || loaded.integration.status !== 'CONNECTED' || !loaded.credential) {
+      if (!loaded || loaded.integration.status === 'DISCONNECTED' || !loaded.credential) {
         throw new IntegrationUnavailableError('Esta empresa não está conectada à Conta Azul.');
       }
 
@@ -207,7 +192,7 @@ export function createContaAzulOAuthService(deps: {
       let refreshed;
       try {
         refreshed = await deps.integrations.refreshTokensInLock(tenantId, async (locked) => {
-          if (!locked.credential || locked.integration.status !== 'CONNECTED') {
+          if (!locked.credential || locked.integration.status === 'DISCONNECTED') {
             return null;
           }
           if (isAccessTokenFresh(locked.credential.accessExpiresAt, now(), skewMs)) {

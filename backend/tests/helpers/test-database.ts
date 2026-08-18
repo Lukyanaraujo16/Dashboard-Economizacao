@@ -1,6 +1,7 @@
 type TestDatabaseCleaner = {
   readonly supportSession: { deleteMany: () => Promise<unknown> };
   readonly integrationCredential: { deleteMany: () => Promise<unknown> };
+  readonly integrationExternalAccount: { deleteMany: () => Promise<unknown> };
   readonly integration: { deleteMany: () => Promise<unknown> };
   readonly userCredential: { deleteMany: () => Promise<unknown> };
   readonly user: { deleteMany: () => Promise<unknown> };
@@ -71,6 +72,7 @@ export async function cleanTestDatabase(
 
   await prisma.supportSession.deleteMany();
   await prisma.integrationCredential.deleteMany();
+  await prisma.integrationExternalAccount.deleteMany();
   await prisma.integration.deleteMany();
   await prisma.userCredential.deleteMany();
   await prisma.user.deleteMany();

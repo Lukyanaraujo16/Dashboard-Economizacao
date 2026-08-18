@@ -6,11 +6,8 @@ import { UnauthenticatedError } from '../../../../shared/errors/application-erro
 import { createRequireAuthentication } from '../../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../../auth/repositories/user.repository.js';
 import { createTenantRepository } from '../../../tenant/repositories/tenant.repository.js';
-import { createContaAzulTokenClient } from '../connector/conta-azul-token-client.js';
 import { parseCallbackQuery } from '../schemas/conta-azul.schemas.js';
-import { createContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
-import { createContaAzulOAuthService } from '../services/conta-azul-oauth.service.js';
-import { createContaAzulOAuthStateStore } from '../services/oauth-state.store.js';
+import { createContaAzulRuntime } from '../services/conta-azul-runtime.js';
 import { buildContaAzulReturnUrl } from './conta-azul-return-url.js';
 
 export async function registerContaAzulCallbackRoutes(app: FastifyInstance): Promise<void> {
@@ -19,33 +16,7 @@ export async function registerContaAzulCallbackRoutes(app: FastifyInstance): Pro
   const tenants = createTenantRepository(prisma);
   const users = createUserRepository(prisma);
   const requireAuthentication = createRequireAuthentication({ users, tenants });
-  const contaAzul = environment.contaAzul;
-  const tokenClient = contaAzul
-    ? createContaAzulTokenClient({
-        clientId: contaAzul.clientId,
-        clientSecret: contaAzul.clientSecret,
-      })
-    : {
-        exchangeAuthorizationCode: async () => {
-          throw new Error('unconfigured');
-        },
-        refresh: async () => {
-          throw new Error('unconfigured');
-        },
-      };
-
-  const oauth = createContaAzulOAuthService({
-    tenants,
-    integrations: createContaAzulIntegrationRepository(prisma),
-    stateStore: createContaAzulOAuthStateStore(app.redis, environment.nodeEnv),
-    tokenClient,
-    contaAzul: contaAzul ?? {
-      clientId: 'unconfigured',
-      clientSecret: 'unconfigured',
-      redirectUri: 'http://127.0.0.1:3000/integrations/conta-azul/callback',
-    },
-    encryptionKey: environment.integrationEncryptionKey,
-  });
+  const { oauth } = createContaAzulRuntime(app);
 
   app.get('/integrations/conta-azul/callback', async (request, reply) => {
     const query = parseCallbackQuery(request.query);
