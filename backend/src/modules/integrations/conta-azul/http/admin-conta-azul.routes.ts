@@ -22,7 +22,7 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
-  const { configured, oauth, identity } = createContaAzulRuntime(app);
+  const { configured, oauth, identity, sync } = createContaAzulRuntime(app);
 
   app.get(
     '/admin/tenants/:tenantId/integrations/conta-azul',
@@ -80,6 +80,40 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
         'conta_azul_identity_verified',
       );
       return reply.status(200).send(status);
+    },
+  );
+
+  app.post(
+    '/admin/tenants/:tenantId/integrations/conta-azul/sync',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      if (!configured) {
+        throw new IntegrationUnavailableError(
+          'Integração Conta Azul não configurada neste ambiente.',
+        );
+      }
+      if (!environment.integrationEncryptionKey) {
+        throw new IntegrationUnavailableError(
+          'Cifração de integrações não configurada neste ambiente.',
+        );
+      }
+      const tenantId = parseTenantIdParam(request.params);
+      const accepted = await sync.start(tenantId, request.auth!);
+      request.log.info(
+        { tenantId, actorUserId: request.auth?.userId, syncRunId: accepted.syncRunId },
+        'conta_azul_manual_sync_accepted',
+      );
+      return reply.status(202).send(accepted);
+    },
+  );
+
+  app.get(
+    '/admin/tenants/:tenantId/integrations/conta-azul/sync/current',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const tenantId = parseTenantIdParam(request.params);
+      const current = await sync.current(tenantId);
+      return reply.status(200).send({ run: current });
     },
   );
 

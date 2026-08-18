@@ -67,6 +67,7 @@ export function createContaAzulOAuthService(deps: {
   readonly contaAzul: ContaAzulEnvironment;
   readonly encryptionKey: Buffer | null;
   readonly identifyConnectedAccount?: (tenantId: string) => Promise<void>;
+  readonly assertCanDisconnect?: (tenantId: string) => Promise<void>;
   readonly clock?: () => Date;
   readonly refreshSkewMs?: number;
 }): ContaAzulOAuthService {
@@ -111,6 +112,7 @@ export function createContaAzulOAuthService(deps: {
       if (!tenant) {
         throw new NotFoundError('Empresa não encontrada.');
       }
+      await deps.assertCanDisconnect?.(tenantId);
       const record = await deps.integrations.disconnect(tenantId, now());
       return toPublicContaAzulIntegration(record);
     },

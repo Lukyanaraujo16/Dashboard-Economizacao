@@ -223,7 +223,8 @@ A resposta inclui `id_empresa`, `documento`, `razao_social`, `nome_fantasia`,
 
 O Dashboard Economização utiliza este endpoint na fase 2.2 para identificar a
 conta ERP conectada. Essa chamada é um **probe de identidade/saúde**, não uma
-sincronização financeira. `last_successful_sync_at` permanece nulo até a 2.3.
+sincronização financeira. `last_successful_sync_at` só avança no SUCCESS
+total da sync manual (2.3); o identity probe não o preenche.
 
 O identificador externo não substituirá o ID interno do tenant.
 
@@ -426,6 +427,30 @@ A API atual possui domínio financeiro capaz de trabalhar com conceitos necessá
 * movimentações financeiras.
 
 Os endpoints exatos utilizados pelo Dashboard Economização serão definidos na implementação da integração após validação individual de cada operação de leitura.
+
+Fase 2.3 (leitura somente; homologada com conta ERP real em 2026-08-18):
+
+* `GET /v1/categorias` — `pagina`, `tamanho_pagina`, `permite_apenas_filhos=false` (required na doc; valor usado na carga real);
+* `GET /v1/conta-financeira` — `pagina`, `tamanho_pagina`;
+* `GET /v1/pessoas` — `pagina`, `tamanho_pagina` (`items`/`totalItems`);
+* `GET /v1/financeiro/eventos-financeiros/contas-a-receber/buscar` — `pagina`, `tamanho_pagina`, `data_vencimento_de` e `data_vencimento_ate` **obrigatórios**;
+* `GET /v1/financeiro/eventos-financeiros/contas-a-pagar/buscar` — o mesmo contrato de janela.
+
+`GET /v1/pessoas` em conta sem cadastro de pessoas retornou `items: null`
+(não `[]`). A 2.3 trata **somente** `items === null` como lista vazia.
+Fail-fast permanece para `items` de outro tipo, item inválido, `id` inválido
+e `nome` inválido. A instrumentação sanitizada
+(`conta_azul_sync_payload_invalid`: resource/field/expected/received/page,
+sem token e sem payload bruto) permanece.
+
+Tamanho de página da 2.3: 100. Intervalo de vencimento: 90 dias. Horizonte MVP:
+5 anos atrás e 2 anos à frente. Sem `data_alteracao_*` (isso é 2.4).
+Nenhuma operação de escrita no ERP.
+
+Carga real homologada (duas SUCCESS, mesma identidade): categorias 48,
+contas 1, pessoas 0, a receber 12, a pagar 1266; duração ~33 s.
+Horizonte 5+2 classificado operacionalmente como **adequado** (sem alteração
+automática dos valores). Disconnect OAuth **não** apaga esses dados.
 
 ⸻
 

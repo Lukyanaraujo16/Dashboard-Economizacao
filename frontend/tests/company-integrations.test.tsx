@@ -114,6 +114,7 @@ describe('UI Integrações Conta Azul (2.2)', () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -179,6 +180,7 @@ describe('UI Integrações Conta Azul (2.2)', () => {
     expect(screen.getByText('Última sincronização: Nunca sincronizado')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reconectar' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Verificar conexão' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sincronizar agora' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Desconectar' }));
     expect(screen.getByText('A sincronização com a Conta Azul será interrompida.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar desconexão' }));
@@ -252,5 +254,183 @@ describe('UI Integrações Conta Azul (2.2)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Verificar conexão' }));
     expect(await screen.findByText('Empresa conectada: Empresa Verificada')).toBeTruthy();
     expect(screen.getByText('Conexão com a Conta Azul verificada.')).toBeTruthy();
+  });
+
+  it('sincronizar agora dispara POST e mostra andamento', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.endsWith(`/admin/tenants/${companyId}`)) {
+          return Promise.resolve(jsonResponse(company));
+        }
+        if (url.endsWith('/sync') && init?.method === 'POST') {
+          return Promise.resolve(jsonResponse({ syncRunId: 'run-1', status: 'PENDING' }, 202));
+        }
+        if (url.endsWith('/sync/current')) {
+          return Promise.resolve(jsonResponse({ run: null }));
+        }
+        return Promise.resolve(jsonResponse(connected));
+      }),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Sincronizar agora' }));
+    expect(await screen.findByText('Sincronização em andamento')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Sincronizar agora/ })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.queryByText('Sincronização concluída.')).toBeNull();
+  });
+
+  it('polling 2,5s mostra SUCCESS com counts processed e data da última sync', async () => {
+    const pollers: Array<() => void> = [];
+    vi.spyOn(window, 'setInterval').mockImplementation((handler) => {
+      pollers.push(handler as () => void);
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    });
+    vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
+    let integrationStatus = connected;
+    let currentRun: {
+      id: string;
+      status: string;
+      startedAt: string;
+      finishedAt: string | null;
+      counts: {
+        categories: number;
+        financialAccounts: number;
+        parties: number;
+        receivables: number;
+        payables: number;
+      } | null;
+      errorCode: string | null;
+    } | null = null;
+    const synced = {
+      ...connected,
+      lastSuccessfulSyncAt: '2026-08-18T18:00:00.000Z',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.endsWith(`/admin/tenants/${companyId}`)) {
+          return Promise.resolve(jsonResponse(company));
+        }
+        if (url.endsWith('/sync') && init?.method === 'POST') {
+          return Promise.resolve(
+            jsonResponse({ syncRunId: 'run-success', status: 'PENDING' }, 202),
+          );
+        }
+        if (url.endsWith('/sync/current')) {
+          return Promise.resolve(jsonResponse({ run: currentRun }));
+        }
+        return Promise.resolve(jsonResponse(integrationStatus));
+      }),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Sincronizar agora' }));
+    expect(await screen.findByText('Sincronização em andamento')).toBeTruthy();
+    expect(screen.queryByText('Sincronização concluída.')).toBeNull();
+    expect(window.setInterval).toHaveBeenCalledWith(expect.any(Function), 2500);
+    currentRun = {
+      id: 'run-success',
+      status: 'SUCCESS',
+      startedAt: '2026-08-18T17:59:00.000Z',
+      finishedAt: '2026-08-18T18:00:00.000Z',
+      counts: {
+        categories: 3,
+        financialAccounts: 2,
+        parties: 4,
+        receivables: 10,
+        payables: 8,
+      },
+      errorCode: null,
+    };
+    integrationStatus = synced;
+    await pollers[pollers.length - 1]!();
+    expect(await screen.findByText('Sincronização concluída.')).toBeTruthy();
+    expect(
+      screen.getByText('Categorias: 3 · Contas: 2 · Pessoas: 4 · A receber: 10 · A pagar: 8'),
+    ).toBeTruthy();
+    expect(screen.getByText(/Última sincronização:/)).toBeTruthy();
+    expect(screen.queryByText(/importad/i)).toBeNull();
+  });
+
+  it('FAILED mostra mensagem amigável e permite sincronizar de novo', async () => {
+    const pollers: Array<() => void> = [];
+    vi.spyOn(window, 'setInterval').mockImplementation((handler) => {
+      pollers.push(handler as () => void);
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    });
+    vi.spyOn(window, 'clearInterval').mockImplementation(() => undefined);
+    let currentRun: {
+      id: string;
+      status: string;
+      startedAt: string;
+      finishedAt: string | null;
+      counts: null;
+      errorCode: string | null;
+    } | null = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.endsWith(`/admin/tenants/${companyId}`)) {
+          return Promise.resolve(jsonResponse(company));
+        }
+        if (url.endsWith('/sync') && init?.method === 'POST') {
+          return Promise.resolve(jsonResponse({ syncRunId: 'run-fail', status: 'PENDING' }, 202));
+        }
+        if (url.endsWith('/sync/current')) {
+          return Promise.resolve(jsonResponse({ run: currentRun }));
+        }
+        return Promise.resolve(jsonResponse(connected));
+      }),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Sincronizar agora' }));
+    expect(await screen.findByText('Sincronização em andamento')).toBeTruthy();
+    currentRun = {
+      id: 'run-fail',
+      status: 'FAILED',
+      startedAt: '2026-08-18T17:59:00.000Z',
+      finishedAt: '2026-08-18T18:01:00.000Z',
+      counts: null,
+      errorCode: 'sync_upstream_unavailable',
+    };
+    await pollers[pollers.length - 1]!();
+    expect(
+      await screen.findByText('Não foi possível sincronizar agora. Tente novamente.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('Sincronização concluída.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Sincronizar agora' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+  });
+
+  it('reload com run RUNNING restaura o andamento', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.endsWith(`/admin/tenants/${companyId}`)) {
+          return Promise.resolve(jsonResponse(company));
+        }
+        if (url.endsWith('/sync/current')) {
+          return Promise.resolve(
+            jsonResponse({
+              run: {
+                id: 'run-2',
+                status: 'RUNNING',
+                startedAt: '2026-08-18T15:00:00.000Z',
+                finishedAt: null,
+                counts: null,
+                errorCode: null,
+              },
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse(connected));
+      }),
+    );
+    renderPage();
+    expect(await screen.findByText('Sincronização em andamento')).toBeTruthy();
   });
 });

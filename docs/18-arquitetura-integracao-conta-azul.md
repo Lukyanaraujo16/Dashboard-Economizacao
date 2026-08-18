@@ -1,7 +1,9 @@
 # 18 — Arquitetura da Integração Conta Azul
 
 Status: 2.1 concluída (homologada em 18/08/2026). 2.2 concluída (homologada em
-18/08/2026 — identidade/health; sem sync financeira).
+18/08/2026 — identidade/health). 2.3 concluída (homologada em 18/08/2026 —
+sync manual real, idempotência real, disconnect preserva dados financeiros).
+2.4 não iniciada.
 Projeto: Dashboard Economização
 
 ## 1. Decisão de contrato
@@ -94,12 +96,15 @@ URLs do provider são constantes (allowlist). Timeout 15s. Sem retry agressivo.
 - `GET /admin/tenants/:tenantId/integrations/conta-azul`
 - `POST …/connect` → `{ authorizationUrl }`
 - `POST …/verify` → DTO público (identity probe; não é sync)
+- `POST …/sync` → 202 `{ syncRunId, status }`
+- `GET …/sync/current` → `{ run }`
 - `POST …/disconnect`
 - `GET /integrations/conta-azul/callback` → redirect sanitizado para
   `/empresas/:id/integracoes?contaAzul=`
 
 DTO público: `provider`, `status`, `connectedAt`, `disconnectedAt`,
-`externalAccountId`, `externalCompanyName`, `lastSuccessfulSyncAt` (null na 2.2),
+`externalAccountId`, `externalCompanyName`, `lastSuccessfulSyncAt` (preenchido
+só no SUCCESS total da 2.3; o identity probe não o altera),
 `lastErrorAt`, `lastErrorCode` sanitizado.
 
 Nunca inclui tokens, credenciais nem metadata completa.
@@ -114,7 +119,8 @@ Colisão de `id_empresa` em outra Integration `CONNECTED` → `ERROR` /
 `external_account_conflict` sem compartilhar credencial.
 
 Disconnect remove `IntegrationCredential` e `IntegrationExternalAccount`.
-A linha `Integration` permanece.
+A linha `Integration` permanece. Dados financeiros sincronizados (2.3) **não**
+são apagados no disconnect.
 
 ## 7. UI
 
@@ -123,3 +129,77 @@ Confirm de desconexão pelo Design System (não `window.confirm`).
 Card exibe empresa conectada, identificador externo, data de conexão,
 “Nunca sincronizado” enquanto `lastSuccessfulSyncAt` é nulo, diagnóstico
 amigável de `lastErrorCode` e ação **Verificar conexão**.
+Quando `CONNECTED`: botão **Sincronizar agora**, estados de andamento via
+`GET …/sync/current` (polling 2,5s, não é o scheduler 2.4), resumo de counts
+após sucesso e mensagem amigável em falha.
+
+## 8. Sincronização manual (2.3)
+
+Job único `conta-azul-manual-sync` (BullMQ, uma fila, processo worker separado).
+Payload: `syncRunId`, `tenantId`, `integrationId`. **Sem token.**
+O worker chama `getValidAccessToken`. Rate limit local ≈ 8 req/s.
+
+`SyncRun` é lock/status técnico, não histórico de produto (2.5).
+`lastSuccessfulSyncAt` só avança no sucesso total. Falha de sync não altera
+`Integration.status` para ERROR.
+
+Horizonte MVP default configurável: 5 anos anteriores + 2 anos futuros.
+Homologação real 18/08/2026: ~33 s nesta conta (48 categorias, 1 conta,
+0 pessoas, 12 a receber, 1266 a pagar); horizonte 5+2 classificado como
+**adequado**. `CONTA_AZUL_CATEGORIES_ONLY_CHILDREN=false` foi o valor da
+carga real. Incremental `data_alteracao_*` fica na 2.4. Scheduler fica
+na 2.4.
+
+`GET /v1/pessoas` sem cadastro retornou `items: null`. Tolerância
+homologada: **somente** `items === null` → `[]`. Demais divergências
+(items de outro tipo, item/`id`/`nome` inválidos) continuam fail-fast.
+Instrumentação sanitizada `conta_azul_sync_payload_invalid` permanece.
+
+AR/AP exigem janela de vencimento; a primeira carga pagina 90 dias no horizonte
+configurado (UTC civil, `from`/`to` inclusive, próxima janela no dia seguinte).
+
+Rotas: `POST …/sync` (202) e `GET …/sync/current`.
+API sem worker aceita o POST (202 + PENDING); o job espera no Redis até o
+worker subir. O frontend não trata PENDING como sucesso.
+
+Disconnect com SyncRun ativo: 409 `SYNC_IN_PROGRESS`.
+
+`jobId` BullMQ = `syncRunId`. Timeout operacional:
+`CONTA_AZUL_SYNC_JOB_TIMEOUT_MS` (30 min). Heartbeat por página, no mínimo a
+cada 5s. Anos civis usam clamp (2024-02-29 − 5 anos = 2019-02-28).
+
+### Recuperação de worker / run órfão
+
+O processor tem `attempts: 1`. Enquanto o processo vive, o BullMQ renova o
+lock (`lockDuration` 60s). Se o processo cai:
+
+1. O lock expira. O próximo worker detecta stall (`stalledInterval` 30s,
+   `maxStalledCount` 1) e reexecuta o mesmo job do início. A persistência é
+   upsert por `(integration_id, external_id)`; não duplica. `engine.execute`
+   ignora run já `SUCCESS`/`FAILED`.
+2. Segundo stall no mesmo job → BullMQ falha o job; o handler `failed` marca
+   o `SyncRun` como `FAILED`. `lastSuccessfulSyncAt` não avança.
+3. Reconciliação **oportunística** (sem cron/scheduler), no `POST …/sync`,
+   no `GET …/sync/current`, no disconnect e no startup do worker:
+
+   Um run `PENDING`/`RUNNING` só é órfão se o job BullMQ **não** está vivo
+   (`waiting`/`active`/`delayed`/…) **e** `heartbeatAt ?? startedAt` passou
+   de `CONTA_AZUL_SYNC_JOB_TIMEOUT_MS`. Job waiting sem worker **não** é
+   órfão. Job/heartbeat recentes **não** são órfãos.
+
+   Órfão → `FAILED` `sync_stale_run`, lock liberado, novo POST pode devolver
+   202. Sem SQL no fluxo normal.
+
+Break-glass (só incidente fora desses sinais):
+
+```sql
+UPDATE sync_runs
+SET status = 'FAILED',
+    error_code = 'sync_stale_run',
+    finished_at = NOW()
+WHERE status IN ('PENDING', 'RUNNING');
+```
+
+Homologação real 2.3: sync GET-only; nenhuma mutação financeira no ERP.
+Disconnect remove tokens e identidade; dados financeiros permanecem.
+2.4 (scheduler/incremental) **não** iniciada.

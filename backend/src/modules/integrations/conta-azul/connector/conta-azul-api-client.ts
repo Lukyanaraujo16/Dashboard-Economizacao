@@ -1,8 +1,17 @@
 import {
+  CONTA_AZUL_CATEGORIES_URL,
   CONTA_AZUL_CONNECTED_COMPANY_URL,
+  CONTA_AZUL_FINANCIAL_ACCOUNTS_URL,
   CONTA_AZUL_HTTP_TIMEOUT_MS,
   CONTA_AZUL_IDENTITY_RETRY_BACKOFF_MS,
+  CONTA_AZUL_PAYABLES_SEARCH_URL,
+  CONTA_AZUL_PEOPLE_URL,
+  CONTA_AZUL_RECEIVABLES_SEARCH_URL,
 } from '../domain/conta-azul-oauth.js';
+import {
+  CONTA_AZUL_CATEGORIES_ONLY_CHILDREN,
+  CONTA_AZUL_SYNC_PAGE_SIZE,
+} from '../domain/conta-azul-sync.js';
 
 export type ContaAzulApiFailureKind =
   'unauthorized' | 'rate_limited' | 'unavailable' | 'invalid_response' | 'timeout';
@@ -10,21 +19,42 @@ export type ContaAzulApiFailureKind =
 export class ContaAzulApiError extends Error {
   readonly kind: ContaAzulApiFailureKind;
   readonly httpStatus?: number;
+  readonly retryAfterMs?: number;
 
   constructor(
     kind: ContaAzulApiFailureKind,
     message: string,
-    options?: { readonly httpStatus?: number; readonly cause?: unknown },
+    options?: {
+      readonly httpStatus?: number;
+      readonly retryAfterMs?: number;
+      readonly cause?: unknown;
+    },
   ) {
     super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = 'ContaAzulApiError';
     this.kind = kind;
     this.httpStatus = options?.httpStatus;
+    this.retryAfterMs = options?.retryAfterMs;
   }
 }
 
+export type ContaAzulPageQuery = {
+  readonly pagina: number;
+  readonly tamanhoPagina?: number;
+};
+
+export type ContaAzulInstallmentSearchQuery = ContaAzulPageQuery & {
+  readonly dataVencimentoDe: string;
+  readonly dataVencimentoAte: string;
+};
+
 export type ContaAzulApiClient = {
   getConnectedCompany(accessToken: string): Promise<unknown>;
+  getCategories(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
+  getFinancialAccounts(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
+  getPeople(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
+  searchReceivables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
+  searchPayables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
 };
 
 export type ContaAzulApiClientConfig = {
@@ -40,14 +70,30 @@ function sleepMs(ms: number): Promise<void> {
   });
 }
 
+function parseRetryAfterMs(header: string | null): number | undefined {
+  if (!header) {
+    return undefined;
+  }
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1000, 60_000);
+  }
+  const date = Date.parse(header);
+  if (!Number.isNaN(date)) {
+    return Math.min(Math.max(date - Date.now(), 0), 60_000);
+  }
+  return undefined;
+}
+
 function isRetryable(error: ContaAzulApiError): boolean {
-  if (error.kind === 'rate_limited') {
+  if (error.kind === 'rate_limited' || error.kind === 'timeout') {
     return true;
   }
   return error.kind === 'unavailable' && error.httpStatus !== undefined && error.httpStatus >= 500;
 }
 
-async function getConnectedCompanyOnce(
+async function getJsonOnce(
+  url: string,
   accessToken: string,
   config: ContaAzulApiClientConfig,
 ): Promise<unknown> {
@@ -58,7 +104,7 @@ async function getConnectedCompanyOnce(
 
   let response: Response;
   try {
-    response = await fetchImpl(CONTA_AZUL_CONNECTED_COMPANY_URL, {
+    response = await fetchImpl(url, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -86,9 +132,7 @@ async function getConnectedCompanyOnce(
       throw new ContaAzulApiError(
         'invalid_response',
         'A Conta Azul retornou uma resposta inválida.',
-        {
-          httpStatus: response.status,
-        },
+        { httpStatus: response.status },
       );
     }
   }
@@ -104,6 +148,7 @@ async function getConnectedCompanyOnce(
       'A Conta Azul limitou temporariamente as solicitações.',
       {
         httpStatus: 429,
+        retryAfterMs: parseRetryAfterMs(response.headers.get('Retry-After')),
       },
     );
   }
@@ -116,23 +161,90 @@ async function getConnectedCompanyOnce(
   return json;
 }
 
+function withQuery(url: string, params: Record<string, string | number | boolean>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    search.set(key, String(value));
+  }
+  return `${url}?${search.toString()}`;
+}
+
 export function createContaAzulApiClient(
   config: ContaAzulApiClientConfig = {},
 ): ContaAzulApiClient {
   const backoffMs = config.retryBackoffMs ?? CONTA_AZUL_IDENTITY_RETRY_BACKOFF_MS;
   const sleep = config.sleep ?? sleepMs;
 
-  return {
-    async getConnectedCompany(accessToken) {
-      try {
-        return await getConnectedCompanyOnce(accessToken, config);
-      } catch (error) {
-        if (error instanceof ContaAzulApiError && isRetryable(error)) {
-          await sleep(backoffMs);
-          return getConnectedCompanyOnce(accessToken, config);
-        }
-        throw error;
+  async function getJson(url: string, accessToken: string): Promise<unknown> {
+    try {
+      return await getJsonOnce(url, accessToken, config);
+    } catch (error) {
+      if (error instanceof ContaAzulApiError && isRetryable(error)) {
+        await sleep(error.retryAfterMs ?? backoffMs);
+        return getJsonOnce(url, accessToken, config);
       }
+      throw error;
+    }
+  }
+
+  return {
+    getConnectedCompany(accessToken) {
+      return getJson(CONTA_AZUL_CONNECTED_COMPANY_URL, accessToken);
+    },
+
+    getCategories(accessToken, query) {
+      return getJson(
+        withQuery(CONTA_AZUL_CATEGORIES_URL, {
+          pagina: query.pagina,
+          tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
+          permite_apenas_filhos: CONTA_AZUL_CATEGORIES_ONLY_CHILDREN,
+        }),
+        accessToken,
+      );
+    },
+
+    getFinancialAccounts(accessToken, query) {
+      return getJson(
+        withQuery(CONTA_AZUL_FINANCIAL_ACCOUNTS_URL, {
+          pagina: query.pagina,
+          tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
+        }),
+        accessToken,
+      );
+    },
+
+    getPeople(accessToken, query) {
+      return getJson(
+        withQuery(CONTA_AZUL_PEOPLE_URL, {
+          pagina: query.pagina,
+          tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
+        }),
+        accessToken,
+      );
+    },
+
+    searchReceivables(accessToken, query) {
+      return getJson(
+        withQuery(CONTA_AZUL_RECEIVABLES_SEARCH_URL, {
+          pagina: query.pagina,
+          tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
+          data_vencimento_de: query.dataVencimentoDe,
+          data_vencimento_ate: query.dataVencimentoAte,
+        }),
+        accessToken,
+      );
+    },
+
+    searchPayables(accessToken, query) {
+      return getJson(
+        withQuery(CONTA_AZUL_PAYABLES_SEARCH_URL, {
+          pagina: query.pagina,
+          tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
+          data_vencimento_de: query.dataVencimentoDe,
+          data_vencimento_ate: query.dataVencimentoAte,
+        }),
+        accessToken,
+      );
     },
   };
 }

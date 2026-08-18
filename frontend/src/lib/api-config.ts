@@ -71,6 +71,14 @@ export function adminTenantContaAzulVerifyPath(tenantId: string): string {
   return `${adminTenantContaAzulPath(tenantId)}/verify`;
 }
 
+export function adminTenantContaAzulSyncPath(tenantId: string): string {
+  return `${adminTenantContaAzulPath(tenantId)}/sync`;
+}
+
+export function adminTenantContaAzulSyncCurrentPath(tenantId: string): string {
+  return `${adminTenantContaAzulSyncPath(tenantId)}/current`;
+}
+
 /** Branding global da plataforma (1.5C/1.5D). */
 export function adminPlatformBrandingPath(): string {
   return `${ADMIN_API_PREFIX}/platform/branding`;

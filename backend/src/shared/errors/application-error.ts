@@ -127,6 +127,22 @@ export class ConflictError extends ApplicationError {
   }
 }
 
+export class SyncInProgressError extends ApplicationError {
+  readonly category = 'dominio' as const;
+  readonly code = 'SYNC_IN_PROGRESS' as const;
+  readonly httpStatus = 409;
+  readonly recoverable = true;
+
+  constructor(
+    message = 'Já existe uma sincronização em andamento para esta empresa.',
+    options?: {
+      cause?: unknown;
+    },
+  ) {
+    super(message, options);
+  }
+}
+
 export class IntegrationUnavailableError extends ApplicationError {
   readonly category = 'integracao' as const;
   readonly code = 'INTEGRATION_UNAVAILABLE' as const;

@@ -5,7 +5,8 @@ import type { Environment } from '../../config/env.js';
 
 /**
  * Registra a conexão Redis compartilhada do backend (@fastify/redis).
- * Primeiro uso: persistência de sessão. Não configura BullMQ.
+ * Sessão HTTP e state OAuth usam este cliente. BullMQ da sync manual usa
+ * uma conexão ioredis própria (`infrastructure/jobs`).
  */
 export async function registerRedisPlugin(
   app: FastifyInstance,

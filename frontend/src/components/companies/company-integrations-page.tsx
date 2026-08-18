@@ -9,13 +9,16 @@ import {
   connectContaAzul,
   disconnectContaAzul,
   getContaAzulIntegration,
+  getCurrentContaAzulSync,
+  startContaAzulSync,
   verifyContaAzul,
 } from '../../services/admin/conta-azul';
 import {
   ContaAzulRequestError,
   contaAzulErrorMessage,
+  contaAzulSyncErrorMessage,
 } from '../../services/admin/conta-azul.types';
-import type { ContaAzulIntegration } from '../../services/admin/conta-azul.types';
+import type { ContaAzulIntegration, ContaAzulSyncRun } from '../../services/admin/conta-azul.types';
 import { StateWrapper } from '../financial/state-wrapper';
 import { Badge, Button, Card, Typography } from '../ui';
 import { CompanySectionNav } from './company-section-nav';
@@ -70,6 +73,19 @@ function syncLabel(lastSuccessfulSyncAt: string | null): string {
   return formatCompanyDate(lastSuccessfulSyncAt);
 }
 
+function isActiveSync(run: ContaAzulSyncRun | null): boolean {
+  return run?.status === 'PENDING' || run?.status === 'RUNNING';
+}
+
+function countsSummary(run: ContaAzulSyncRun | null): string | null {
+  // Counts são processed (upsert), não inserted/updated.
+  if (!run?.counts || run.status !== 'SUCCESS') {
+    return null;
+  }
+  const counts = run.counts;
+  return `Categorias: ${counts.categories} · Contas: ${counts.financialAccounts} · Pessoas: ${counts.parties} · A receber: ${counts.receivables} · A pagar: ${counts.payables}`;
+}
+
 export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyIntegrationsPageProps) {
   const router = useRouter();
   const [companyName, setCompanyName] = useState<string | null>(null);
@@ -82,17 +98,21 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncRun, setSyncRun] = useState<ContaAzulSyncRun | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   const load = useCallback(async () => {
     setLoadState('loading');
     try {
-      const [company, status] = await Promise.all([
+      const [company, status, currentRun] = await Promise.all([
         getCompany(companyId),
         getContaAzulIntegration(companyId),
+        getCurrentContaAzulSync(companyId).catch(() => null),
       ]);
       setCompanyName(company.displayName);
       setIntegration(status);
+      setSyncRun(currentRun);
       setLoadState('ready');
     } catch (error) {
       if (
@@ -116,6 +136,33 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
     }
     router.replace(`/empresas/${companyId}/integracoes`);
   }, [companyId, oauthResult, router]);
+
+  useEffect(() => {
+    if (!isActiveSync(syncRun)) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const current = await getCurrentContaAzulSync(companyId);
+          setSyncRun(current);
+          if (current?.status === 'SUCCESS') {
+            const status = await getContaAzulIntegration(companyId);
+            setIntegration(status);
+            setFlash({ text: 'Sincronização concluída.', tone: 'success' });
+            setSyncing(false);
+          } else if (current?.status === 'FAILED') {
+            setActionError(contaAzulSyncErrorMessage(current.errorCode));
+            setSyncing(false);
+          }
+        } catch {
+          setActionError('Não foi possível acompanhar a sincronização.');
+          setSyncing(false);
+        }
+      })();
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [companyId, syncRun?.status]);
 
   async function handleConnect() {
     setActionError(null);
@@ -155,6 +202,36 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
     }
   }
 
+  async function handleSync() {
+    setActionError(null);
+    setFlash(null);
+    setSyncing(true);
+    try {
+      const accepted = await startContaAzulSync(companyId);
+      setSyncRun({
+        id: accepted.syncRunId,
+        status: 'PENDING',
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        counts: null,
+        errorCode: null,
+      });
+    } catch (error) {
+      setSyncing(false);
+      if (error instanceof ContaAzulRequestError && error.kind === 'conflict') {
+        setActionError('Já existe uma sincronização em andamento.');
+        const current = await getCurrentContaAzulSync(companyId).catch(() => null);
+        setSyncRun(current);
+        return;
+      }
+      setActionError(
+        error instanceof ContaAzulRequestError
+          ? error.message
+          : 'Não foi possível iniciar a sincronização.',
+      );
+    }
+  }
+
   async function handleDisconnect() {
     setActionError(null);
     setDisconnecting(true);
@@ -181,6 +258,9 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
       ? 'Empresa não encontrada.'
       : 'Não foi possível carregar as integrações.';
   const canManageConnection = integration && integration.status !== 'DISCONNECTED';
+  const syncInProgress = isActiveSync(syncRun);
+  const connected = integration?.status === 'CONNECTED';
+  const summary = countsSummary(syncRun);
 
   return (
     <CompanySectionNav companyId={companyId} companyName={companyName}>
@@ -246,6 +326,16 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
               <Typography as="p" variant="body" className={styles.pageDescription}>
                 Última sincronização: {syncLabel(integration.lastSuccessfulSyncAt)}
               </Typography>
+              {syncInProgress ? (
+                <Typography as="p" variant="body" className={styles.pageDescription} role="status">
+                  Sincronização em andamento
+                </Typography>
+              ) : null}
+              {summary ? (
+                <Typography as="p" variant="body" className={styles.pageDescription}>
+                  {summary}
+                </Typography>
+              ) : null}
             </div>
           ) : null}
 
@@ -301,16 +391,28 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
                   type="button"
                   variant="secondary"
                   loading={verifying}
-                  disabled={connecting}
+                  disabled={connecting || syncInProgress}
                   onClick={() => void handleVerify()}
                 >
                   Verificar conexão
+                </Button>
+              ) : null}
+              {connected ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  loading={syncing || syncInProgress}
+                  disabled={connecting || verifying || syncInProgress}
+                  onClick={() => void handleSync()}
+                >
+                  Sincronizar agora
                 </Button>
               ) : null}
               {canManageConnection ? (
                 <Button
                   type="button"
                   variant="secondary"
+                  disabled={connecting || syncInProgress}
                   onClick={() => setConfirmDisconnect(true)}
                 >
                   Desconectar

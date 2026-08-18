@@ -8,7 +8,7 @@ Fundação:
 Concluída
 
 Versão atual:
-2.2 — Gestão das conexões
+2.3 — Primeira sincronização manual (preflight local concluído; homologação real pendente)
 
 Último checkpoint:
 
@@ -20,9 +20,7 @@ feat(integrations): conclui gestao de conexoes conta azul
 
 Próxima fase executável:
 
-2.3 — Primeira sincronização manual
-
-**Não iniciada.**
+2.3 — Primeira sincronização manual (código pronto; preflight local concluído; homologação real pendente)
 
 Estado atual
 
@@ -695,7 +693,69 @@ Próxima fase: 2.3.
 
 2.3 Primeira sincronização manual
 
+Status:
+Concluída
+
+Primeira carga **manual** e assíncrona do domínio financeiro mínimo.
+Não é scheduler (2.4) nem histórico de produto (2.5).
+
+Escopo:
+
+* disparo admin `POST /admin/tenants/:tenantId/integrations/conta-azul/sync` → 202;
+* acompanhamento `GET …/sync/current` (run atual/última; sem listagem);
+* job único BullMQ `conta-azul-manual-sync` em processo `pnpm worker`;
+* `SyncRun` técnico (PENDING/RUNNING/SUCCESS/FAILED);
+* lock: unique parcial uma sync ativa por Integration;
+* reconciliação oportunística de SyncRun órfão (`sync_stale_run`) sem cron:
+  job BullMQ ausente **e** timeout operacional; job waiting sem worker não é órfão;
+* timeout efetivo `CONTA_AZUL_SYNC_JOB_TIMEOUT_MS` (30 min) no engine e na reconciliação;
+* horizonte civil com clamp (29/02 → último dia válido do mês destino);
+* entidades: categorias, contas financeiras, pessoas, contas a receber, contas a pagar;
+* paginação `tamanho_pagina=100`; AR/AP por janelas de vencimento de 90 dias;
+* horizonte MVP da primeira carga: 5 anos para trás e 2 anos para frente (UTC civil);
+* persistência por página; idempotência `(integration_id, external_id)`;
+* `lastSuccessfulSyncAt` só no sucesso **total**;
+* falha financeira **não** marca Integration `ERROR` (exceto OAuth 2.1);
+* disconnect recusado (409) enquanto houver SyncRun ativo;
+* disconnect OAuth **não** apaga dados financeiros já sincronizados;
+* UI: botão “Sincronizar agora” no card Integrações + polling do run atual.
+
+Fora desta fase: vendas, notas, faturamento, saldo, baixas detalhadas, centros de
+custo como cadastro, cron, scheduler, incremental (`data_alteracao_*`), dashboard
+financeiro, UI de histórico, 2.4, 2.5.
+
+Homologação real em 18/08/2026 (App de Produção, GET-only, nenhuma mutação ERP):
+
+* OAuth real e identity probe: homologados (2.1/2.2 revalidados nesta conta);
+* primeira sync manual: SUCCESS (categorias 48, contas 1, pessoas 0,
+  a receber 12, a pagar 1266, ~33 s);
+* segunda sync manual: mesmos counts e mesmos hashes de `external_id`;
+  zero duplicatas — idempotência real homologada;
+* `lastSuccessfulSyncAt` avançou para o `finishedAt` da segunda SUCCESS;
+* partial failure: FAILED `sync_invalid_payload` em Pessoas persistiu
+  categorias/contas já gravadas e não avançou `lastSuccessfulSyncAt`;
+* `GET /v1/pessoas` com `items: null` (sem pessoas) → `[]`; fail-fast
+  para os demais shapes; instrumentação sanitizada permanece;
+* worker restart/stall e stale run recovery: homologados em preflight/testes;
+* disconnect final: Integration `DISCONNECTED`, 0 credentials, 0
+  `IntegrationExternalAccount`; dados financeiros preservados como massa DEV.
+
+Horizonte 5+2: operacionalmente **adequado** nesta conta; valores não
+alterados. BullMQ mínimo: 1 fila, 1 job type, 1 worker, concurrency 1,
+sem scheduler/cron/repeatable. Payload do job sem tokens.
+
+Migration: `20260818140000_conta_azul_first_manual_sync` (SHA-256
+`15bcaccc12af51604ca913c208ee56f2570f3d4c7e14b00d9cf5f51c244ce8af`).
+Aplicada em DEV e TEST via `prisma migrate deploy`. Sem
+`migrate reset` / `db push`.
+
+Worker DEV: `pnpm worker` (processo separado do HTTP). Produção:
+`pnpm --filter @dashboard-economizacao/backend worker:start` após o build.
+
 2.4 Sincronização automática
+
+Status:
+Não iniciada
 
 2.5 Histórico de sincronizações
 

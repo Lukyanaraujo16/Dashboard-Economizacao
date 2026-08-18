@@ -4,8 +4,19 @@ export const CONTA_AZUL_AUTHORIZATION_URL = 'https://login.contaazul.com/#/oauth
 
 export const CONTA_AZUL_TOKEN_URL = 'https://api-v2.contaazul.com/oauth/token';
 
-export const CONTA_AZUL_CONNECTED_COMPANY_URL =
-  'https://api-v2.contaazul.com/v1/pessoas/conta-conectada';
+export const CONTA_AZUL_API_BASE_URL = 'https://api-v2.contaazul.com';
+
+export const CONTA_AZUL_CONNECTED_COMPANY_URL = `${CONTA_AZUL_API_BASE_URL}/v1/pessoas/conta-conectada`;
+
+export const CONTA_AZUL_CATEGORIES_URL = `${CONTA_AZUL_API_BASE_URL}/v1/categorias`;
+
+export const CONTA_AZUL_FINANCIAL_ACCOUNTS_URL = `${CONTA_AZUL_API_BASE_URL}/v1/conta-financeira`;
+
+export const CONTA_AZUL_PEOPLE_URL = `${CONTA_AZUL_API_BASE_URL}/v1/pessoas`;
+
+export const CONTA_AZUL_RECEIVABLES_SEARCH_URL = `${CONTA_AZUL_API_BASE_URL}/v1/financeiro/eventos-financeiros/contas-a-receber/buscar`;
+
+export const CONTA_AZUL_PAYABLES_SEARCH_URL = `${CONTA_AZUL_API_BASE_URL}/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar`;
 
 export const CONTA_AZUL_IDENTITY_RETRY_BACKOFF_MS = 250;
 

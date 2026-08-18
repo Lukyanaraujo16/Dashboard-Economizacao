@@ -2,12 +2,16 @@ import {
   adminTenantContaAzulConnectPath,
   adminTenantContaAzulDisconnectPath,
   adminTenantContaAzulPath,
+  adminTenantContaAzulSyncCurrentPath,
+  adminTenantContaAzulSyncPath,
   adminTenantContaAzulVerifyPath,
 } from '../../lib/api-config';
 import {
   ContaAzulRequestError,
   type ContaAzulConnectResult,
   type ContaAzulIntegration,
+  type ContaAzulSyncAccepted,
+  type ContaAzulSyncRun,
 } from './conta-azul.types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -104,6 +108,9 @@ function toFailure(response: Response, body: unknown): ContaAzulRequestError {
   if (response.status === 422 || code === 'VALIDATION_ERROR') {
     return new ContaAzulRequestError('validation', message, { httpStatus: response.status, code });
   }
+  if (response.status === 409 || code === 'SYNC_IN_PROGRESS' || code === 'CONFLICT') {
+    return new ContaAzulRequestError('conflict', message, { httpStatus: response.status, code });
+  }
   return new ContaAzulRequestError('unavailable', message, { httpStatus: response.status, code });
 }
 
@@ -190,4 +197,95 @@ export async function verifyContaAzul(tenantId: string): Promise<ContaAzulIntegr
     );
   }
   return body;
+}
+
+function isSyncCounts(value: unknown): value is NonNullable<ContaAzulSyncRun['counts']> | null {
+  if (value === null) {
+    return true;
+  }
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.categories === 'number' &&
+    typeof value.financialAccounts === 'number' &&
+    typeof value.parties === 'number' &&
+    typeof value.receivables === 'number' &&
+    typeof value.payables === 'number'
+  );
+}
+
+function isSyncErrorCode(value: unknown): value is ContaAzulSyncRun['errorCode'] {
+  return (
+    value === null ||
+    value === 'sync_unauthorized' ||
+    value === 'sync_rate_limited' ||
+    value === 'sync_upstream_unavailable' ||
+    value === 'sync_invalid_payload' ||
+    value === 'sync_persistence_failed' ||
+    value === 'sync_tenant_disabled' ||
+    value === 'sync_disconnected' ||
+    value === 'sync_timeout' ||
+    value === 'sync_enqueue_failed' ||
+    value === 'sync_stale_run'
+  );
+}
+
+function isSyncRun(value: unknown): value is ContaAzulSyncRun {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.id === 'string' &&
+    (value.status === 'PENDING' ||
+      value.status === 'RUNNING' ||
+      value.status === 'SUCCESS' ||
+      value.status === 'FAILED') &&
+    typeof value.startedAt === 'string' &&
+    isNullableString(value.finishedAt) &&
+    isSyncCounts(value.counts) &&
+    isSyncErrorCode(value.errorCode)
+  );
+}
+
+export async function startContaAzulSync(tenantId: string): Promise<ContaAzulSyncAccepted> {
+  const response = await contaAzulFetch(adminTenantContaAzulSyncPath(tenantId), { method: 'POST' });
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toFailure(response, body);
+  }
+  if (!isRecord(body) || typeof body.syncRunId !== 'string' || body.status !== 'PENDING') {
+    throw new ContaAzulRequestError('unavailable', 'Não foi possível iniciar a sincronização.', {
+      httpStatus: response.status,
+    });
+  }
+  return { syncRunId: body.syncRunId, status: 'PENDING' };
+}
+
+export async function getCurrentContaAzulSync(tenantId: string): Promise<ContaAzulSyncRun | null> {
+  const response = await contaAzulFetch(adminTenantContaAzulSyncCurrentPath(tenantId), {
+    method: 'GET',
+  });
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toFailure(response, body);
+  }
+  if (!isRecord(body) || !('run' in body)) {
+    throw new ContaAzulRequestError(
+      'unavailable',
+      'Não foi possível ler o status da sincronização.',
+      { httpStatus: response.status },
+    );
+  }
+  if (body.run === null) {
+    return null;
+  }
+  if (!isSyncRun(body.run)) {
+    throw new ContaAzulRequestError(
+      'unavailable',
+      'Não foi possível ler o status da sincronização.',
+      { httpStatus: response.status },
+    );
+  }
+  return body.run;
 }

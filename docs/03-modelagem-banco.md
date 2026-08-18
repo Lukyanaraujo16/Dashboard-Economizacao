@@ -262,6 +262,13 @@ Provider inicial:
 
 Estrutura deverá permitir outros provedores futuramente.
 
+Na fase 2.3 a linha `integrations` permanece após o disconnect. O disconnect
+oficial remove `integration_credentials` e `integration_external_accounts`
+e **não** apaga dados financeiros já importados
+(`financial_categories`, `financial_accounts`, `parties`, `receivables`,
+`payables`). `last_successful_sync_at` permanece o `finished_at` do último
+SUCCESS total.
+
 ⸻
 
 5.2 integration_credentials
@@ -307,6 +314,13 @@ Campos conceituais:
 6.1 sync_runs
 
 Representa cada execução de sincronização.
+
+Na fase 2.3 existe um registro **técnico** mínimo (`trigger_type = MANUAL`,
+status PENDING/RUNNING/SUCCESS/FAILED, counts sanitizados, error_code
+sanitizado). Não é o produto de histórico da fase 2.5: não há UI de listagem,
+retenção automática nem scheduler. Homologação real 18/08/2026: sync manual
+assíncrona (202 + worker), idempotência por `(integration_id, external_id)`
+e preservação dos dados financeiros no disconnect.
 
 Campos conceituais:
 
@@ -431,6 +445,10 @@ Tipos conceituais:
 7.3 customers
 
 Representa clientes ou entidades pagadoras quando disponibilizados pela integração.
+
+Na fase 2.3 a persistência usa a tabela única `parties` (cliente e fornecedor
+no mesmo cadastro, via `profiles`). Customers/suppliers separados permanecem
+conceito analítico, não tabelas distintas nesta fase.
 
 Campos conceituais:
 
