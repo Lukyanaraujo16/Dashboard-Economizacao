@@ -255,6 +255,9 @@ KPIs iniciais:
 * saldo ou posição financeira quando confirmado;
 * resultado do período quando confirmado.
 
+O primeiro Dashboard utilizável segue o recorte vigente em docs/11;
+os demais itens desta lista permanecem no roadmap do MVP completo.
+
 Cada card deverá apresentar, quando aplicável:
 
 * valor;

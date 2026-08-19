@@ -16,7 +16,9 @@ deste documento prevalece. Fases executadas até o momento:
     com ressalvas de observabilidade adiadas para a Fase 17 / §21)
   - Fase 8 detalhada (§12) — Modelo Financeiro Normalizado: concluída
     (recorte orientado à necessidade comprovada de produto; 8A incluída)
-Próxima fase: Fase 9 detalhada (§13) — Motor Analítico (9A/9B/9C concluídas; Grupo A concluído; Fase 9 macro não encerrada).
+  - Fase 9 detalhada (§13) — Motor Analítico: concluída no recorte do
+    primeiro Dashboard (Grupo A; 9A/9B/9C)
+Próxima fase: Fase 10 detalhada (§14) — Dashboard do Cliente.
 Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
 
 ⸻
@@ -450,15 +452,42 @@ Atendidos no recorte concluído.
 
 13. Fase 9 — Motor Analítico
 
-Status: Em andamento (9A/9B/9C CONCLUÍDAS; Grupo A CONCLUÍDO).
-Fase 9 macro ainda não encerrada: aguardando auditoria residual da
-Fase 9 antes de avançar para Fase 10. Sem HTTP nesta subfase.
+Status: CONCLUÍDA NO RECORTE DO PRIMEIRO DASHBOARD (GRUPO A)
+(19/08/2026; auditoria residual APPROVE).
+
+"Concluída" neste recorte NÃO significa que todos os KPIs
+aspiracionais do escopo inicial abaixo foram implementados.
+O MVP financeiro completo permanece no backlog (§13 backlog e docs/11).
+
+9A — snapshots AR/AP: CONCLUÍDA.
+9B — inadimplência: CONCLUÍDA.
+9C — próximos vencimentos + fluxo previsto 90 dias: CONCLUÍDA.
+Grupo A — CONCLUÍDO. Sem 9D.
+
+Entregue (fórmulas em docs/11):
+
+* AR aberto, vencido, a vencer (unpaid; dueDate vs hoje SP);
+* AP aberto, vencido, a vencer (simétrico);
+* inadimplência snapshot atual (overdue/open × 100; open=0 → null);
+* próximos vencimentos parametrizados (`nDays` obrigatório, sem default);
+* fluxo previsto 90 dias, buckets mensais YYYY-MM, net não acumulado.
+
+`lastSuccessfulSyncAt` já existe na Integration e será consumido na
+Fase 10. Não é fórmula do Motor Analítico.
+
+Fronteira: Fase 9 = regras determinísticas, contratos internos,
+tenant isolation, Decimal, sem LLM, sem HTTP obrigatório.
+Fase 10 = facade/API, serialização, cards, gráficos, estados,
+freshness, responsividade.
+
+Critérios de aceite (§ abaixo) — ATENDIDOS no Grupo A.
 
 Objetivo
 
 Criar as regras oficiais dos indicadores.
 
-Escopo inicial
+Escopo inicial (universo do Motor Analítico / MVP completo — NÃO
+apagar; itens não entregues no Grupo A permanecem backlog):
 
 * faturamento;
 * contas a receber;
@@ -483,9 +512,29 @@ Critérios de aceite
 * mesma regra pode ser reutilizada por dashboard, relatórios e IA;
 * nenhum cálculo financeiro depende do LLM.
 
+Atendidos no Grupo A implementado (9A–9C). Fórmulas oficiais: docs/11.
+
+Backlog explícito (não bloqueia Fase 10):
+
+* faturamento (sem fonte oficial);
+* receita/despesa por categoria (D8; extensão analítica);
+* rateio valorado (exige GET /parcelas/{id});
+* fluxo de caixa realizado / ledger / baixas;
+* saldo (endpoint não integrado);
+* despesas fixas/variáveis (sem regra determinística);
+* Receita × Despesa (D7 adiada).
+
+Próxima fase: Fase 10 — Dashboard do Cliente.
+
 ⸻
 
 14. Fase 10 — Dashboard do Cliente
+
+Status: NÃO INICIADA. Próxima fase executável.
+
+O primeiro Dashboard utilizável consome o Grupo A (docs/11 §15).
+DASH-001–010 e categorias/receita×despesa deste escopo permanecem
+no roadmap do MVP completo; não são pré-requisito do primeiro fio.
 
 Objetivo
 

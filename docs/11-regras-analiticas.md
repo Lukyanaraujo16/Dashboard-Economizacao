@@ -12,9 +12,9 @@ duplicar fórmulas completas.
 Implementação 9A (estoque AR/AP, timezone America/Sao_Paulo): CONCLUÍDA.
 9B (inadimplência, fórmula §4): CONCLUÍDA.
 9C (próximos vencimentos + fluxo previsto 90 dias): CONCLUÍDA.
-Grupo A (itens 1–9 do motor, §15): CONCLUÍDO.
-Fase 9 macro: NÃO ENCERRADA. Aguardando auditoria residual da Fase 9
-antes de avançar para Fase 10.
+Grupo A (itens 1–9 do motor, §15): IMPLEMENTADO / CONCLUÍDO.
+Fase 9: CONCLUÍDA NO RECORTE DO PRIMEIRO DASHBOARD (Grupo A).
+MVP financeiro completo: NÃO. Próxima fase: Fase 10 (NÃO INICIADA).
 
 ⸻
 
@@ -415,12 +415,12 @@ GRUPO A — Primeiro recorte (dados atuais, regra aprovada):
   9. Fluxo de caixa previsto — 90 dias, apresentação mensal (§7)
   10. Última sincronização — `lastSuccessfulSyncAt` da Integration
 
-Itens 1–9 do Motor Analítico: implementados (9A–9C). Item 10 já existe
-na Integration. Grupo A do motor: CONCLUÍDO. Fase 9 macro ainda não
-encerrada (auditoria residual antes da Fase 10).
+Itens 1–9 do Motor Analítico: IMPLEMENTADOS (9A–9C). Item 10 já existe
+na Integration (consumo na Fase 10; não é fórmula do analytics).
+Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA neste recorte. Sem 9D.
 
-GRUPO B — Sem novo dado da Conta Azul; Motor Analítico (Fase 9),
-não obrigatório no primeiro recorte mínimo:
+GRUPO B — Sem novo dado da Conta Azul; extensão analítica futura.
+Não obrigatório no primeiro recorte. Não bloqueia Fase 10:
 
   11. Receita por categoria — categoria única segura + buckets (§9)
   12. Despesa por categoria — simétrico (§10)
@@ -474,8 +474,8 @@ D9. Denominador zero — APROVADA.
 
 17. Pendências que NÃO são D1–D9
 
-Ainda abertas. Não são requisitos da Fase 8 concluída e não bloqueiam
-o início da Fase 9 (Grupo A):
+Ainda abertas. Não bloqueiam a Fase 10 nem o primeiro Dashboard
+utilizável (Grupo A):
 
 * copy/UX da taxa null e distinção visual "sem aberto" vs "sem sync"
   (Fase 10);
@@ -491,5 +491,28 @@ o início da Fase 9 (Grupo A):
 * delete físico no ERP (ausência ≠ tombstone; limitação da sync 2.4);
 * hardening futuro: `partyIdsByExternalId` (write) pode passar a filtrar
   `tenantId` (SAFE_BY_INVARIANT hoje; Fase 18).
+
+⸻
+
+18. Backlog analítico após o Grupo A
+
+Não bloqueia Fase 10. Não apagar do MVP completo.
+
+A — Depende de decisão/fonte:
+* faturamento (§12)
+
+B — Extensão analítica com dados parcialmente disponíveis:
+* receita por categoria (D8, §9)
+* despesa por categoria (D8, §10)
+
+C — Depende de dados adicionais:
+* rateio valorado (`GET /parcelas/{id}`)
+* fluxo de caixa realizado / ledger / baixas (§8)
+* saldo (§13)
+
+D — Depende de regra futura:
+* despesas fixas/variáveis (§14)
+* Receita × Despesa (D7, §11)
+* as-of / coorte histórica (D2)
 
 ⸻

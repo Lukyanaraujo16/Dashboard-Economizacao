@@ -827,9 +827,11 @@ Não bloqueia:
 - Fase 9 — Motor Analítico
 - Fase 10 — Dashboard do Cliente
 
-Próxima fase executável: auditoria residual da Fase 9 (não iniciar Dashboard).
-Fase 8: CONCLUÍDA. 8B: DESNECESSÁRIA. 9A: CONCLUÍDA. 9B: CONCLUÍDA. 9C: CONCLUÍDA.
-Grupo A: CONCLUÍDO. Fase 9 macro: NÃO ENCERRADA. 2.5: ADIADA PARA FASE 17.
+Próxima fase executável: Fase 10 — Dashboard do Cliente (NÃO INICIADA).
+Fase 8: CONCLUÍDA. 8B: DESNECESSÁRIA.
+9A: CONCLUÍDA. 9B: CONCLUÍDA. 9C: CONCLUÍDA. Grupo A: CONCLUÍDO.
+Fase 9: CONCLUÍDA NO RECORTE APROVADO (primeiro Dashboard / Grupo A).
+Sem 9D. KPIs residuais não bloqueiam a Fase 10. 2.5: ADIADA PARA FASE 17.
 
 Referências:
 - `docs/06` §21 (Fase 17): escopo explícito "histórico de sync"
@@ -849,7 +851,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: auditoria residual da Fase 9 (não iniciar Dashboard). 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO.
+Próxima fase: Fase 10 — Dashboard do Cliente (NÃO INICIADA). 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -970,18 +972,28 @@ Não executar como 8B. Não bloquear Fase 9.
 D1–D9: RESOLVIDAS (docs/11 §16). Não reabrir na Fase 8.
 -------------------------------------------------------
 
-Fase 9 implementa as fórmulas. Fase 10 implementa visual de taxa null
-e copy de empty states. Pendências restantes: docs/11 §17.
+Fase 9 implementou as fórmulas do Grupo A. Fase 10 implementa visual de
+taxa null, copy de empty states e consumo HTTP do motor. Pendências
+analíticas residuais: docs/11 §17–§18 (não bloqueiam Fase 10).
 
 -------------------------------------------------------
 Caminho até o primeiro Dashboard
 -------------------------------------------------------
 
 1. Fase 8 — CONCLUÍDA (8A incluída; 8B desnecessária)
-2. Fase 9 — Motor Analítico: 9A/9B/9C CONCLUÍDAS; Grupo A CONCLUÍDO; Fase 9 macro NÃO ENCERRADA
-3. Fase 10 — ligar dados no shell já existente
+2. Fase 9 — Motor Analítico: CONCLUÍDA NO RECORTE APROVADO
+   (9A CONCLUÍDA; 9B CONCLUÍDA; 9C CONCLUÍDA; Grupo A CONCLUÍDO; sem 9D)
+3. Fase 10 — Dashboard do Cliente (NÃO INICIADA)
 
-2.5/Fase 17 e deploy ficam depois. Dashboard e IA não entram na 8A.
+Sequência recomendada da Fase 10 (planejamento; NÃO implementação):
+
+10A — facade/API tenant-scoped para o Motor Analítico
+10B — cards + freshness (`lastSuccessfulSyncAt`) + empty/loading/error
+10C — próximos vencimentos + gráfico de fluxo previsto
+
+KPIs residuais (categorias, faturamento, realizado, saldo, fixas,
+Receita × Despesa) não bloqueiam este caminho. 2.5/Fase 17 e deploy
+ficam depois.
 
 ===========================================================
 
@@ -1015,7 +1027,7 @@ Status: Concluída
 KpiCard, ChartCard, FinancialSection, FinancialGrid, StateWrapper e PanelIcon —
 desacoplados de backend/API, orientados por props, reutilizáveis por módulos futuros.
 
-KPIs — Grupo A CONCLUÍDO (9A/9B/9C). Dashboard não iniciada. Aguardando auditoria residual da Fase 9 antes da Fase 10.
+KPIs — Fase 9 CONCLUÍDA NO RECORTE DO GRUPO A. Fase 10 NÃO INICIADA.
 
 Recorte do primeiro Dashboard aprovado (19/08/2026):
 
@@ -1027,16 +1039,17 @@ GRUPO A — Dados disponíveis, regra aprovada:
 - Fluxo de caixa previsto 90 dias (docs/11 §7)
 - Última sincronização (lastSuccessfulSyncAt)
 
-GRUPO B — Sem novo dado; Fase 9 (não na 8A):
+GRUPO B — Extensão analítica (dados parciais; D8). NÃO bloqueia Fase 10:
 - Receita por categoria (docs/11 §9, D8)
 - Despesa por categoria (docs/11 §10, D8)
 
-GRUPO D — Adiados:
+GRUPO C/D — Adiados; NÃO bloqueiam Fase 10:
 - Receita × Despesa (D7; docs/11 §11)
 - Faturamento (docs/11 §12)
-- Fluxo de caixa realizado (docs/11 §8)
+- Fluxo de caixa realizado / ledger (docs/11 §8)
 - Saldo (docs/11 §13)
 - Despesas fixas/variáveis (docs/11 §14)
+- Rateio valorado (`GET /parcelas/{id}`)
 
 Referência normativa: docs/11-regras-analiticas.md
 
