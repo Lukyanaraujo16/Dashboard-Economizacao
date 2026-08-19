@@ -11,7 +11,10 @@ normativa única. Outros documentos referenciam esta fonte; não
 duplicar fórmulas completas.
 Implementação 9A (estoque AR/AP, timezone America/Sao_Paulo): CONCLUÍDA.
 9B (inadimplência, fórmula §4): CONCLUÍDA.
-9C (fluxo previsto): NÃO INICIADA.
+9C (próximos vencimentos + fluxo previsto 90 dias): CONCLUÍDA.
+Grupo A (itens 1–9 do motor, §15): CONCLUÍDO.
+Fase 9 macro: NÃO ENCERRADA. Aguardando auditoria residual da Fase 9
+antes de avançar para Fase 10.
 
 ⸻
 
@@ -198,10 +201,12 @@ D. Recebido no período
 E. Próximos vencimentos
    AR WHERE status IN (OPEN, OVERDUE, PARTIALLY_PAID)
      AND unpaid > 0
-     AND dueDate BETWEEN hoje AND hoje + N dias
-   Ordenado por dueDate ASC.
-   Janela N (além do horizonte de 90 dias do fluxo) é detalhe de UX /
-   Fase 9; não altera persistência.
+     AND dueDate BETWEEN hoje AND hoje + N dias (INCLUSIVO nas duas pontas)
+   Ordenado por dueDate ASC, id ASC.
+   N é parâmetro técnico do Motor Analítico (`nDays` inteiro >= 0).
+   Não há default de produto neste recorte: o caller informa N.
+   `nDays = 0` seleciona somente o dia civil corrente.
+   Janela N não altera persistência nem o horizonte de 90 dias do fluxo.
 
 Nota: todas as análises acima filtram por `tenantId` (fronteira de
 segurança) e, quando aplicável, `integrationId`.
@@ -235,9 +240,23 @@ Fórmula conceitual por período (agregação sobre dueDate real):
   saldo_previsto(período) = entradas_previstas - saídas_previstas
 
 Horizonte inicial (D4): 90 dias à frente a partir de hoje (D5).
+Contrato do primeiro recorte (datas civis America/Sao_Paulo):
+intervalo [hoje, hoje + 90 dias], INCLUSIVO nas duas pontas.
+Hoje entra. Exatamente hoje + 90 entra. Hoje + 91 não entra.
+
 Granularidade padrão de APRESENTAÇÃO (D4): mensal.
+Buckets técnicos: chave `YYYY-MM` (ex.: 2026-08).
+Todos os meses civis que intersectam o intervalo aparecem, em ordem
+crescente. Mês sem movimentos: inflows/outflows/net = Decimal 0.
+O primeiro e o último bucket podem ser meses parciais: só entram
+títulos com dueDate dentro de [hoje, hoje+90], não o mês civil inteiro.
+
 O Motor Analítico trabalha com dueDate real e agrega ao mês na
 apresentação. Não transformar dueDate em mês no banco.
+
+`saldo_previsto` / `net` é o líquido DO BUCKET
+(inflows - outflows). Não é saldo acumulado, running balance,
+saldo bancário nem abertura de caixa. Não carregar net entre meses.
 
 D3: RENEGOTIATED não entra neste fluxo (nem em aberto, vencido,
 a vencer ou inadimplência). Objetivo: evitar dupla contagem do título
@@ -395,6 +414,10 @@ GRUPO A — Primeiro recorte (dados atuais, regra aprovada):
   8. Próximos vencimentos — AR e AP (§5E / §6E)
   9. Fluxo de caixa previsto — 90 dias, apresentação mensal (§7)
   10. Última sincronização — `lastSuccessfulSyncAt` da Integration
+
+Itens 1–9 do Motor Analítico: implementados (9A–9C). Item 10 já existe
+na Integration. Grupo A do motor: CONCLUÍDO. Fase 9 macro ainda não
+encerrada (auditoria residual antes da Fase 10).
 
 GRUPO B — Sem novo dado da Conta Azul; Motor Analítico (Fase 9),
 não obrigatório no primeiro recorte mínimo:
