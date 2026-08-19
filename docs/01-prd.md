@@ -593,6 +593,10 @@ Critérios de aceite
 
 5.7 DASH — Dashboard
 
+Recorte incremental do primeiro Dashboard utilizável: `docs/11-regras-analiticas.md` §15.
+DASH-001 (faturamento) permanece requisito do MVP completo e está adiado
+nesse primeiro recorte até haver fonte oficial. Fórmulas: docs/11.
+
 DASH-001 — Faturamento
 
 Requisito

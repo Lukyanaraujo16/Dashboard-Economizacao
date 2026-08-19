@@ -812,7 +812,193 @@ Aplicada em DEV e TEST via `prisma migrate deploy`. Sem
 2.5 Histórico de sincronizações
 
 Status:
-Não iniciada
+Adiada — Fase 17 (decisão aprovada em 19/08/2026)
+
+Decisão: o núcleo técnico de execução (persistência de SyncRun,
+lock, diagnóstico mínimo de run atual e `lastSuccessfulSyncAt`) já
+existe e é suficiente para o Motor de Sincronização e para o primeiro
+Dashboard. O produto de histórico — tela administrativa com listagem
+paginada, filtros, detalhe de falha, retenção formal e métricas
+operacionais — é escopo da Fase 17 (Logs, Auditoria e
+Observabilidade), conforme `docs/06` §21.
+
+Não bloqueia:
+- Fase 8 — Modelo Financeiro Normalizado
+- Fase 9 — Motor Analítico
+- Fase 10 — Dashboard do Cliente
+
+Próxima fase executável após 2.4: Fase 8 — Modelo Financeiro Normalizado.
+8A (read model): CONCLUÍDA. Fase 9 não iniciada.
+
+Referências:
+- `docs/06` §21 (Fase 17): escopo explícito "histórico de sync"
+- `docs/01` LOG-001: requisito de histórico mapeado para Fase 17
+- `docs/05` §59: tela administrativa de histórico (Fase 17)
+- `docs/18` §8 e schema: SyncRun como lock/diagnóstico técnico
+
+Épico de integração e sincronização Conta Azul encerrado no 2.4.
+
+===========================================================
+
+# FASE 8 — MODELO FINANCEIRO NORMALIZADO
+===========================================================
+
+Status: Parcialmente concluída (8A CONCLUÍDA; 8B pendente)
+
+Regras financeiras e recorte: docs/11-regras-analiticas.md
+
+-------------------------------------------------------
+Estado do domínio atual (auditoria 19/08/2026)
+-------------------------------------------------------
+
+JÁ IMPLEMENTADO (schema + sync operacional):
+
+- FinancialCategory: externalId, name, type (REVENUE/EXPENSE/UNKNOWN),
+  parentExternalId, upstreamVersion, syncedAt
+- FinancialAccount: externalId, name, type, active, syncedAt
+- Party: externalId, name, document?, active, profiles[] (CUSTOMER/SUPPLIER)
+- Receivable: externalId, dueDate, competenceDate?, status normalizado,
+  upstreamStatus, total/paid/unpaid (Decimal 19,4), partyId?,
+  categoryExternalIds[], upstreamCreatedAt/UpdatedAt, syncedAt
+- Payable: simetria com Receivable
+- Integration.lastSuccessfulSyncAt
+- External IDs únicos por integração (idempotência)
+- Tenant isolation em todos os índices e queries
+
+NÃO PERTENCE À FASE 8 / CALCULÁVEL NA FASE 9
+(conforme docs/11; D1–D9 aprovadas):
+
+- isOverdue → derivado de dueDate + unpaid + hoje (America/Sao_Paulo)
+- inadimplência snapshot → calculado sobre campos existentes
+- fluxo previsto 90d → calculado sobre unpaid + dueDate; apresentação mensal
+- buckets de categoria / cobertura (D8)
+- taxa com denominador zero → null (D9); visual na Fase 10
+
+NÃO NECESSÁRIO NO PRIMEIRO RECORTE (adiar):
+
+- paidAt / data efetiva de baixa (exige endpoint de movimentos)
+- rateio valorado por categoria (exige /parcelas/{id})
+- saldo de conta financeira (exige endpoint de saldo)
+- tabela de transações/movimentações (só para fluxo realizado)
+
+-------------------------------------------------------
+FASE 8A — Repositórios de leitura
+
+Status: CONCLUÍDA
+
+Módulo: `backend/src/modules/finance/`
+Intervalo dueDate: inclusivo `[from, to]`.
+Sem Party read repo. Sem FinancialAccount read repo. Sem HTTP.
+-------------------------------------------------------
+
+Objetivo:
+Expor leitura do modelo já persistido para o Motor Analítico (Fase 9).
+NÃO calcular KPI. NÃO derivar overdue. NÃO agregar mês. NÃO aplicar D8.
+
+Schema: NÃO
+Migration: NÃO
+Conta Azul: NÃO (usar massa já sincronizada)
+Frontend / Dashboard / IA / 2.5: NÃO
+
+Backend (módulo financeiro de leitura; nomes ilustrativos):
+- ReceivableReadRepository:
+  * findActiveByTenant({ tenantId, integrationId? })
+    status IN (OPEN, OVERDUE, PARTIALLY_PAID)
+  * findActiveByDueDateRange({ tenantId, integrationId?, from, to })
+- PayableReadRepository: simétrico
+- FinancialCategoryReadRepository:
+  * findByTenantAndExternalIds({ tenantId, externalIds })
+    (lookup; sem classificar parcela)
+
+Toda query de leitura deve incluir tenantId. Não buscar só por
+externalId ou integrationId.
+
+Frontend: NÃO
+
+Testes da 8A:
+- isolamento cross-tenant
+- exclusão de PAID / LOST / RENEGOTIATED / UNKNOWN nas queries "ativas"
+- PARTIALLY_PAID com unpaid residual retorna
+- dueDate é Date civil (não Instant de servidor)
+- Decimal preservado (sem Number)
+
+Critério de aceite:
+- tenantId obrigatório nas leituras
+- dados de outro tenant nunca retornam
+- sem fórmula de KPI no repositório
+- testes da 8A verdes
+
+-------------------------------------------------------
+FASE 8B — Hardenings de domínio e documentação
+-------------------------------------------------------
+
+Objetivo:
+Garantir que o modelo atual está completo e auditado antes da Fase 9.
+
+Schema: NÃO
+Migration: NÃO
+Conta Azul: NÃO
+
+Tarefas:
+- documentar limitações confirmadas do modelo atual em docs/11:
+  * paid acumulado ≠ ledger temporal
+  * sem paidAt / sem endpoint de movimentos
+  * sem rateio valorado
+  * sem saldo de conta
+  * delete físico no ERP não detectado (sem tombstone)
+- adicionar testes unitários de domínio ausentes (ver §17 desta rodada)
+- confirmar que índices existentes cobrem os padrões de query da Fase 8A:
+  * idx_receivables_tenant_due_date → sim
+  * idx_receivables_tenant_status → sim
+  * idx_payables_tenant_due_date → sim
+  * idx_payables_tenant_status → sim
+
+Critério de aceite:
+- todos os testes de domínio passam
+- limitações documentadas em docs/11
+- índices confirmados
+- nenhuma coluna computada desnecessária adicionada ao schema
+
+-------------------------------------------------------
+Testes necessários para fechar Fase 8 (auditoria 19/08/2026)
+-------------------------------------------------------
+
+JÁ COBERTO:
+- Decimal: parseContaAzulMoney (4 casas, non-finite, tipo inválido)
+- dueDate civil sem conversão local
+- datas com clamp (29/fev)
+- status upstream → interno (OVERDUE, PAGO, ATRASADO, UNKNOWN, etc.)
+- mapPartyPage: items null, items inválido, perfis, PII sanitizado
+- mapReceivablePage / mapPayablePage: money, categorias, partyId
+- idempotência (homologada em prod)
+- isolamento de tenant (via test-database-safety e tenant-auth-isolation)
+
+FALTA COBRIR (Fase 8A/8B):
+- Receivable: categoryExternalIds com 0 entradas (sem categoria)
+- Receivable: categoryExternalIds com N > 1 entradas (múltiplas)
+- Receivable: status PARTIALLY_PAID com paid > 0 e unpaid > 0
+- Receivable: status RENEGOTIATED — persistência e exclusão de queries abertas
+- Payable: simetria dos casos acima
+- Party: vínculo receivable/payable via partyId (nullable SetNull)
+- Repositórios de leitura: isolamento cross-tenant em queries analíticas
+
+-------------------------------------------------------
+D1–D9: RESOLVIDAS (docs/11 §16). Não reabrir na Fase 8.
+-------------------------------------------------------
+
+Fase 9 implementa as fórmulas. Fase 10 implementa visual de taxa null
+e copy de empty states. Pendências restantes: docs/11 §17.
+
+-------------------------------------------------------
+Caminho até o primeiro Dashboard
+-------------------------------------------------------
+
+1. Fase 8A — CONCLUÍDA (read model tenant-scoped)
+2. Fase 8B — testes residuais de domínio (próxima decisão da Fase 8)
+3. Fase 9 — Motor Analítico: NÃO INICIADA
+4. Fase 10 — ligar dados no shell já existente
+
+2.5/Fase 17 e deploy ficam depois. Dashboard e IA não entram na 8A.
 
 ===========================================================
 
@@ -846,7 +1032,30 @@ Status: Concluída
 KpiCard, ChartCard, FinancialSection, FinancialGrid, StateWrapper e PanelIcon —
 desacoplados de backend/API, orientados por props, reutilizáveis por módulos futuros.
 
-KPIs
+KPIs — aguardando Fases 8 (repositórios analíticos) e 9 (Motor Analítico)
+
+Recorte do primeiro Dashboard aprovado (19/08/2026):
+
+GRUPO A — Dados disponíveis, regra aprovada:
+- Contas a receber: total em aberto / vencido / a vencer
+- Contas a pagar: total em aberto / vencido / a vencer
+- Inadimplência (taxa — fórmula em docs/11 §4)
+- Próximos vencimentos (AR e AP)
+- Fluxo de caixa previsto 90 dias (docs/11 §7)
+- Última sincronização (lastSuccessfulSyncAt)
+
+GRUPO B — Sem novo dado; Fase 9 (não na 8A):
+- Receita por categoria (docs/11 §9, D8)
+- Despesa por categoria (docs/11 §10, D8)
+
+GRUPO D — Adiados:
+- Receita × Despesa (D7; docs/11 §11)
+- Faturamento (docs/11 §12)
+- Fluxo de caixa realizado (docs/11 §8)
+- Saldo (docs/11 §13)
+- Despesas fixas/variáveis (docs/11 §14)
+
+Referência normativa: docs/11-regras-analiticas.md
 
 Indicadores
 
@@ -892,23 +1101,23 @@ Infraestrutura Complementar
 
 Status:
 
-Pendente
+Em andamento (parcialmente entregue)
 
 Fases
 
-Redis
+Redis — Concluída (sessão, BullMQ, planner)
 
-BullMQ
+BullMQ — Concluída (fila manual 2.3, planner global 2.4)
 
-Workers
+Workers — Concluída (worker separado HTTP; `pnpm worker` / `worker:start`)
 
-Scheduler
+Scheduler — Concluído (Job Scheduler global `conta-azul-plan-syncs`, BullMQ 6.1.2)
 
-Notificações
+Notificações — Pendente
 
-OneSignal
+OneSignal — Pendente
 
-PWA
+PWA — Pendente
 
 ===========================================================
 

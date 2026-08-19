@@ -6,6 +6,17 @@ Status: Em elaboração
 Projeto: Dashboard Economização
 Tipo: Plano de execução por fases
 
+Nota de alinhamento (19/08/2026): A numeração da Ordem Macro (§3) e a
+numeração das seções detalhadas (§§4–23) estão defasadas por um —
+a Ordem Macro usa rótulos conceituais e não foi renumerada para evitar
+quebra de referências históricas. A sequência detalhada das seções
+deste documento prevalece. Fases executadas até o momento:
+  - Fase 6 detalhada (§10) — Integração Conta Azul: concluída (2.1–2.4)
+  - Fase 7 detalhada (§11) — Motor de Sincronização: concluída (2.3–2.4,
+    com ressalvas de observabilidade adiadas para a Fase 17 / §21)
+Próxima fase: Fase 8 detalhada (§12) — Modelo Financeiro Normalizado.
+Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
+
 ⸻
 
 1. Objetivo
@@ -336,6 +347,11 @@ Critérios de aceite
 
 11. Fase 7 — Motor de Sincronização
 
+Status: Concluída (19/08/2026, commit 18593bb)
+Ressalva: histórico de sync como produto (UI, retenção, métricas)
+adiado para Fase 17. Todos os critérios de aceite abaixo foram
+atendidos nas fases 2.3 e 2.4 e homologados com conta ERP real.
+
 Objetivo
 
 Construir o mecanismo automático de importação.
@@ -372,23 +388,44 @@ Critérios de aceite
 
 12. Fase 8 — Modelo Financeiro Normalizado
 
+Status: Parcialmente concluída (8A CONCLUÍDA; 8B pendente)
+
+Entidades já implementadas e sincronizadas com conta ERP real:
+FinancialCategory, FinancialAccount, Party, Receivable, Payable
+(schema, mappers, repositório de escrita, idempotência por externalId).
+
+D1–D9 fechadas em docs/11 (19/08/2026). Escopo residual da Fase 8:
+* 8A — CONCLUÍDA: repositórios de leitura (AR/AP por tenant, status ativo, dueDate);
+  sem calcular KPI;
+* 8B — testes residuais de domínio e confirmação de índices.
+
+Fora do escopo da Fase 8 (Fase 9 ou posterior): fórmulas de KPI,
+agregação mensal do fluxo, buckets de categoria (D8), taxa null (D9).
+
+Fora do escopo da Fase 8 (pertence à Fase 9 ou posterior):
+* transações/movimentações (só se fluxo realizado for KPI do recorte);
+* saldo de conta financeira;
+* rateio valorado por categoria.
+
+Regras financeiras e recorte do primeiro Dashboard: ver docs/11.
+
 Objetivo
 
 Persistir no domínio interno os dados necessários ao produto.
 
 Escopo
 
-Conforme disponibilidade comprovada:
+Conforme disponibilidade comprovada e necessidade de produto:
 
-* contas financeiras;
-* categorias;
-* clientes;
-* fornecedores;
-* contas a receber;
-* contas a pagar;
-* transações/movimentações;
-* identificadores externos;
-* normalização de status.
+* contas financeiras — concluída;
+* categorias — concluída;
+* clientes/fornecedores (Party) — concluída;
+* contas a receber — concluída;
+* contas a pagar — concluída;
+* repositórios de leitura analítica — pendente (Fase 8 residual);
+* transações/movimentações — adiado (Fase 9 ou posterior, se KPI exigir);
+* identificadores externos — concluído;
+* normalização de status — concluída.
 
 Critérios de aceite
 

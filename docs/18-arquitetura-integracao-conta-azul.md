@@ -4,7 +4,7 @@ Status: 2.1 concluída (homologada em 18/08/2026). 2.2 concluída (homologada em
 18/08/2026 — identidade/health). 2.3 concluída (homologada em 18/08/2026 —
 sync manual real, idempotência real, disconnect preserva dados financeiros).
 2.4 concluída (homologada em 18–19/08/2026 — planner SCHEDULED incremental
-real). 2.5 não iniciada.
+real). 2.5 adiada para Fase 17 (histórico visual/retenção/métricas).
 Projeto: Dashboard Economização
 
 ## 1. Decisão de contrato
@@ -140,7 +140,11 @@ Job único `conta-azul-manual-sync` (BullMQ, uma fila, processo worker separado)
 Payload: `syncRunId`, `tenantId`, `integrationId`. **Sem token.**
 O worker chama `getValidAccessToken`. Rate limit local ≈ 8 req/s.
 
-`SyncRun` é lock/status técnico, não histórico de produto (2.5).
+`SyncRun` é lock/status técnico, não histórico de produto. A fase 2.5
+(histórico visual, retenção, métricas, listagem admin) foi adiada para
+a Fase 17 — Logs, Auditoria e Observabilidade (decisão aprovada em
+19/08/2026). O `SyncRun` existente suporta plenamente o Motor de
+Sincronização, o diagnóstico mínimo e o primeiro Dashboard.
 `lastSuccessfulSyncAt` só avança no sucesso total. Falha de sync não altera
 `Integration.status` para ERROR.
 
@@ -207,7 +211,8 @@ Disconnect remove tokens e identidade; dados financeiros permanecem.
 ## 9. Sincronização automática incremental (2.4)
 
 Homologada contra a Conta Azul real em 18–19/08/2026 (GET-only).
-2.5 (histórico de produto / dashboard) **não** iniciada.
+2.5 (histórico de produto / UI) **adiada para Fase 17** (decisão
+aprovada 19/08/2026; não bloqueia Fases 8, 9 ou 10).
 
 - Um Job Scheduler global (`conta-azul-plan-syncs`), `upsertJobScheduler`
   no boot, BullMQ 6.1.2. Sem scheduler por tenant. Sem cron. Sem

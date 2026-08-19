@@ -320,8 +320,9 @@ status PENDING/RUNNING/SUCCESS/FAILED, counts sanitizados, error_code
 sanitizado). A fase 2.4 acrescenta `trigger_type = SCHEDULED` no mesmo
 `sync_runs`. Não há campo `sync_type`: FULL vs incremental é derivado do
 trigger (manual = FULL; scheduled = incremental) e dos cursores. Não é o
-produto de histórico da fase 2.5: não há UI de listagem, retenção automática
-nem dashboard de runs. Homologação real 18/08/2026: sync manual assíncrona
+produto de histórico da fase 2.5 (adiada para Fase 17 — Logs, Auditoria
+e Observabilidade, decisão aprovada em 19/08/2026): não há UI de
+listagem, retenção automática nem dashboard de runs. Homologação real 18/08/2026: sync manual assíncrona
 (202 + worker), idempotência por `(integration_id, external_id)` e
 preservação dos dados financeiros no disconnect. Homologação real
 18–19/08/2026 (2.4): trigger `SCHEDULED` incremental pelo planner global,

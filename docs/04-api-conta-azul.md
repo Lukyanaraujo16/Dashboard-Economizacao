@@ -559,6 +559,9 @@ Não deverá existir cálculo de “faturamento” sem uma definição funcional
 
 ⸻
 
+
+Decisão aprovada (19/08/2026): faturamento ADIADO do primeiro Dashboard.
+Não buscar endpoint de vendas nem NF nesta rodada. Ponto de extensão: docs/11 §12.
 29. Contas a receber
 
 Indicador confirmado como tecnicamente compatível com o domínio disponível.
@@ -613,7 +616,7 @@ saldo ainda em aberto
 =
 valor inadimplente
 
-A fórmula final deverá ser documentada no Motor Analítico antes da implementação.
+Fórmula e decisões D1/D2/D9: fonte normativa `docs/11-regras-analiticas.md` §4.
 
 ⸻
 
@@ -1033,29 +1036,46 @@ CAZ-015 — Cálculos analíticos não serão responsabilidade do Connector.
 
 58. Pendências para Spike Técnico
 
-Antes de fechar a implementação da sincronização deverão ser testados na Conta de Desenvolvimento:
+Situação atualizada em 19/08/2026 após homologações reais das fases
+2.1 a 2.4. Os itens abaixo foram reclassificados:
 
-1. listagem real de contas a receber;
-2. listagem real de contas a pagar;
-3. paginação;
-4. filtros por alteração;
-5. filtros por vencimento;
-6. filtros por pagamento;
-7. consulta de categorias;
-8. rateios;
-9. centros de custo;
-10. contas financeiras;
-11. saldos;
-12. clientes;
-13. fornecedores;
-14. vendas;
-15. comportamento dos status;
-16. registros cancelados;
-17. exclusões;
-18. datas e timezone;
-19. comportamento do refresh token;
-20. headers de rate limit;
-21. volume real de chamadas necessárias para sincronizar uma empresa.
+HOMOLOGADO com conta ERP real (Fases 2.1–2.4):
+
+1. listagem real de contas a receber — homologada (12 títulos reais);
+2. listagem real de contas a pagar — homologada (1266 títulos reais);
+3. paginação — homologada (tamanho 100, horizonte 5+2 anos);
+4. filtros por alteração (`data_alteracao_de/ate`) — homologados (2.4);
+5. filtros por vencimento (`data_vencimento_de/ate`) — homologados (2.3/2.4);
+7. consulta de categorias — homologada (48 categorias reais);
+10. contas financeiras — homologadas (1 conta real);
+12. clientes / fornecedores — homologados em estrutura (0 pessoas
+    nesta conta de teste; `items:null` tratado);
+15. comportamento dos status — mapeados (OPEN/OVERDUE/PAID/
+    PARTIALLY_PAID/LOST/RENEGOTIATED/UNKNOWN);
+18. datas e timezone — homologados (`America/Sao_Paulo`, ISO local);
+19. comportamento do refresh token — homologado (rotação, refresh lock);
+20. headers de rate limit — operacional (~8 req/s sem 429);
+21. volume real: ~33 s para 48 cat + 1 conta + 0 pessoas + 12 AR +
+    1266 AP; horizonte 5+2 classificado como adequado.
+
+PENDENTE — necessidade condicional ao recorte de produto:
+
+6.  filtros por pagamento (data efetiva de baixa) — não consumido;
+    necessário para fluxo de caixa realizado fiel;
+8.  rateios valorados (`categorias` com percentual/valor por parcela)
+    — endpoint de detalhe `/parcelas/{id}` documentado; não consumido;
+    necessário para KPI de receita/despesa por categoria precisa;
+9.  centros de custo — não consumidos; necessário se KPI exigir;
+11. saldos — endpoint de saldo documentado; não consumido;
+    necessário se saldo for KPI do primeiro Dashboard;
+14. vendas — não consumidas; necessárias para definir faturamento
+    (ver §28 — fórmula de faturamento pendente de decisão de produto);
+16. registros cancelados / exclusões — ausência não é delete;
+    reconciliação futura exigirá estratégia (limitação conhecida).
+
+Os itens pendentes não precisam ser consumidos automaticamente.
+A decisão de consumi-los é orientada pelo recorte de KPIs do
+primeiro Dashboard (ver Fase 8 / Fase 9 em docs/06).
 
 ⸻
 
