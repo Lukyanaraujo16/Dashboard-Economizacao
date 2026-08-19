@@ -26,6 +26,19 @@ export const CONTA_AZUL_SYNC_LOOKAHEAD_YEARS = 2;
 
 export const CONTA_AZUL_MANUAL_SYNC_JOB_NAME = 'conta-azul-manual-sync';
 
+export const CONTA_AZUL_PLAN_SYNCS_JOB_NAME = 'conta-azul-plan-syncs';
+
+export const CONTA_AZUL_PLAN_SYNCS_SCHEDULER_ID = 'conta-azul-plan-syncs';
+
+/** Tick do planner (1 min). O intervalo de sync por tenant é outro env. */
+export const CONTA_AZUL_PLAN_SYNCS_TICK_MS = 60_000;
+
+export const CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_DEFAULT = 60;
+
+export const CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_MIN = 5;
+
+export const CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_MAX = 24 * 60;
+
 /** Limite operacional da execução e da detecção de SyncRun órfão. */
 export const CONTA_AZUL_SYNC_JOB_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -42,7 +55,8 @@ export type ContaAzulSyncErrorCode =
   | 'sync_disconnected'
   | 'sync_timeout'
   | 'sync_enqueue_failed'
-  | 'sync_stale_run';
+  | 'sync_stale_run'
+  | 'sync_identity_changed';
 
 /** Itens processados (upsert) por recurso; não distingue insert de update. */
 export type ContaAzulSyncCounts = {
@@ -61,10 +75,17 @@ export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
   payables: 0,
 };
 
+export type ContaAzulSyncTrigger = 'MANUAL' | 'SCHEDULED';
+
 export type ContaAzulManualSyncJobPayload = {
   readonly syncRunId: string;
   readonly tenantId: string;
   readonly integrationId: string;
+  readonly trigger: ContaAzulSyncTrigger;
+};
+
+export type ContaAzulPlanSyncsJobPayload = {
+  readonly kind: 'plan';
 };
 
 export type PublicContaAzulSyncRun = {
@@ -96,10 +117,29 @@ export function isContaAzulSyncErrorCode(value: string | null): value is ContaAz
     value === 'sync_disconnected' ||
     value === 'sync_timeout' ||
     value === 'sync_enqueue_failed' ||
-    value === 'sync_stale_run'
+    value === 'sync_stale_run' ||
+    value === 'sync_identity_changed'
   );
 }
 
 export function toPublicSyncErrorCode(code: string | null): ContaAzulSyncErrorCode | null {
   return isContaAzulSyncErrorCode(code) ? code : null;
+}
+
+export function parseAutoSyncIntervalMinutes(value: string | undefined): number {
+  const raw = value?.trim();
+  if (!raw) {
+    return CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_DEFAULT;
+  }
+  const parsed = Number(raw);
+  if (
+    !Number.isInteger(parsed) ||
+    parsed < CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_MIN ||
+    parsed > CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_MAX
+  ) {
+    throw new Error(
+      `CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES deve ser um inteiro entre ${CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_MIN} e ${CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_MAX}.`,
+    );
+  }
+  return parsed;
 }

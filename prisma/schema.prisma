@@ -52,6 +52,7 @@ model Tenant {
   receivables         Receivable[]
   payables            Payable[]
   syncRuns            SyncRun[]
+  syncCursors         IntegrationSyncCursor[]
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
@@ -199,6 +200,7 @@ model Integration {
   receivables           Receivable[]
   payables              Payable[]
   syncRuns              SyncRun[]
+  syncCursors           IntegrationSyncCursor[]
 
   @@unique([tenantId, provider], map: "uq_integrations_tenant_provider")
   @@index([tenantId], map: "idx_integrations_tenant_id")
@@ -267,8 +269,17 @@ enum FinancialInstallmentStatus {
 
 enum SyncRunTriggerType {
   MANUAL
+  SCHEDULED
 
   @@map("sync_run_trigger_type")
+}
+
+enum IntegrationSyncCursorResource {
+  PEOPLE
+  RECEIVABLES
+  PAYABLES
+
+  @@map("integration_sync_cursor_resource")
 }
 
 enum SyncRunStatus {
@@ -411,7 +422,7 @@ model Payable {
   @@map("payables")
 }
 
-/// Execução técnica da sync manual (2.3). Não é o produto de histórico da 2.5.
+/// Execução técnica da sync (2.3 manual / 2.4 scheduled). Não é o produto de histórico da 2.5.
 /// Índice único parcial RUNNING/PENDING: ver migration SQL.
 model SyncRun {
   id            String              @id @default(uuid()) @db.Uuid
@@ -428,10 +439,32 @@ model SyncRun {
   updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
   tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   integration   Integration         @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  syncCursors   IntegrationSyncCursor[]
 
   @@index([tenantId], map: "idx_sync_runs_tenant_id")
   @@index([integrationId, startedAt], map: "idx_sync_runs_integration_started_at")
   @@map("sync_runs")
+}
+
+/// Watermark incremental por recurso (2.4). cursorAt = limite superior da janela processada.
+/// Categorias e contas financeiras não usam cursor (full barato a cada ciclo).
+model IntegrationSyncCursor {
+  id                 String                         @id @default(uuid()) @db.Uuid
+  tenantId           String                         @map("tenant_id") @db.Uuid
+  integrationId      String                         @map("integration_id") @db.Uuid
+  resource           IntegrationSyncCursorResource
+  cursorAt           DateTime                       @map("cursor_at") @db.Timestamptz(3)
+  externalAccountId  String                         @map("external_account_id")
+  lastRunId          String?                        @map("last_run_id") @db.Uuid
+  createdAt          DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant             Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  integration        Integration                    @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  lastRun            SyncRun?                       @relation(fields: [lastRunId], references: [id], onDelete: SetNull)
+
+  @@unique([integrationId, resource], map: "uq_integration_sync_cursors_integration_resource")
+  @@index([tenantId], map: "idx_integration_sync_cursors_tenant_id")
+  @@map("integration_sync_cursors")
 }
 
 /// Credencial de senha 1:1. Usuário PENDING pode existir sem registro.

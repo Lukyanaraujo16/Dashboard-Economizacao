@@ -240,6 +240,7 @@ describe('Preflight E2E mock da sync manual Conta Azul', () => {
       syncRunId,
       tenantId: tenant.id,
       integrationId: integration.id,
+      trigger: 'MANUAL',
     });
     expect(JSON.stringify(job?.data)).not.toMatch(FORBIDDEN_PAYLOAD);
     expect(await queue.getDelayedCount()).toBe(0);
@@ -277,7 +278,7 @@ describe('Preflight E2E mock da sync manual Conta Azul', () => {
     expect(await prisma.party.count()).toBe(1);
   }, 20_000);
 
-  it('BullMQ permanece mínimo: uma fila, um job, sem scheduler', async () => {
+  it('BullMQ da sync de trabalho permanece uma fila com payload mínimo', async () => {
     const queue = createContaAzulTestQueue();
     try {
       expect(queue.name).toBe('conta-azul-manual-sync');
@@ -290,9 +291,13 @@ describe('Preflight E2E mock da sync manual Conta Azul', () => {
         syncRunId: '00000000-0000-4000-8000-000000000001',
         tenantId: '00000000-0000-4000-8000-000000000002',
         integrationId: '00000000-0000-4000-8000-000000000003',
+        trigger: 'MANUAL',
       });
       const job = await queue.getJob('00000000-0000-4000-8000-000000000001');
-      expect(Object.keys(job?.data ?? {})).toEqual(['syncRunId', 'tenantId', 'integrationId']);
+      expect(Object.keys(job?.data ?? {}).sort()).toEqual(
+        ['integrationId', 'syncRunId', 'tenantId', 'trigger'].sort(),
+      );
+      expect(job?.data.trigger).toBe('MANUAL');
       await publisher.close();
     } finally {
       await queue.close();
@@ -314,6 +319,7 @@ describe('Preflight E2E mock da sync manual Conta Azul', () => {
       syncRunId: run.id,
       tenantId: tenant.id,
       integrationId: integration.id,
+      trigger: 'MANUAL',
     });
     await publisher.close();
 

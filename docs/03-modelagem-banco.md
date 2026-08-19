@@ -317,10 +317,18 @@ Representa cada execução de sincronização.
 
 Na fase 2.3 existe um registro **técnico** mínimo (`trigger_type = MANUAL`,
 status PENDING/RUNNING/SUCCESS/FAILED, counts sanitizados, error_code
-sanitizado). Não é o produto de histórico da fase 2.5: não há UI de listagem,
-retenção automática nem scheduler. Homologação real 18/08/2026: sync manual
-assíncrona (202 + worker), idempotência por `(integration_id, external_id)`
-e preservação dos dados financeiros no disconnect.
+sanitizado). A fase 2.4 acrescenta `trigger_type = SCHEDULED` no mesmo
+`sync_runs`. Não há campo `sync_type`: FULL vs incremental é derivado do
+trigger (manual = FULL; scheduled = incremental) e dos cursores. Não é o
+produto de histórico da fase 2.5: não há UI de listagem, retenção automática
+nem dashboard de runs. Homologação real 18/08/2026: sync manual assíncrona
+(202 + worker), idempotência por `(integration_id, external_id)` e
+preservação dos dados financeiros no disconnect. Homologação real
+18–19/08/2026 (2.4): trigger `SCHEDULED` incremental pelo planner global,
+cursores por recurso, overlap 2h e `lastSuccessfulSyncAt` só no SUCCESS
+total. Observação de homologação: na segunda `SCHEDULED`, due foi
+simulado no relógio do planner — `startedAt` refletiu esse relógio;
+engine/cursor/`finishedAt` usaram wall-clock. Produção usa `Date` real.
 
 Campos conceituais:
 
@@ -354,21 +362,43 @@ Sync types serão definidos conforme os recursos reais da API.
 
 ⸻
 
-6.2 sync_cursors
+6.2 sync_cursors / integration_sync_cursors
 
-Representa marcadores utilizados para sincronização incremental.
+Representa o watermark incremental por recurso (2.4).
 
-Campos conceituais:
+Implementação: tabela `integration_sync_cursors`, unique
+`(integration_id, resource)`. Recursos: `PEOPLE`, `RECEIVABLES`,
+`PAYABLES`. Categorias e contas financeiras **não** usam cursor (full
+barato a cada ciclo automático).
+
+`cursor_at` é o **limite superior da janela processada com sucesso**
+(não `lastSuccessfulSyncAt`, nem necessariamente o máximo
+`data_alteracao` observado). Janela vazia também avança o cursor até
+`windowTo`. Overlap da próxima execução: `cursor_at − 2 horas`.
+O cursor só avança depois que o recurso inteiro conclui. Falha no
+recurso: cursor permanece. Upserts já gravados permanecem.
+
+`external_account_id` no cursor guarda a identidade usada ao avançar.
+No reconnect, só reutilizar se for igual à identidade atual; mismatch
+bloqueia incremental (`sync_identity_changed`) sem apagar financeiro
+nem resetar o cursor. Disconnect **preserva** as linhas de cursor, mas
+o planner não usa enquanto `DISCONNECTED` (sem identidade válida o
+cursor não é elegível). Delete físico no ERP continua não detectado
+(ausência de registro ≠ remoção).
+
+Não armazena token.
+
+Campos:
 
 * id;
 * tenant_id;
 * integration_id;
-* resource_type;
-* cursor_value;
-* last_external_update_at;
+* resource;
+* cursor_at;
+* external_account_id;
+* last_run_id (nullable);
+* created_at;
 * updated_at.
-
-A existência e formato real dependerão dos recursos oferecidos pela API.
 
 ⸻
 

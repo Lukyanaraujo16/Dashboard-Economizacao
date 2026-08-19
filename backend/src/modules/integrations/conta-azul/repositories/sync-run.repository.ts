@@ -1,11 +1,15 @@
 import { Prisma, type PrismaClient } from '../../../../generated/prisma/client.js';
-import type { ContaAzulSyncCounts, ContaAzulSyncErrorCode } from '../domain/conta-azul-sync.js';
+import type {
+  ContaAzulSyncCounts,
+  ContaAzulSyncErrorCode,
+  ContaAzulSyncTrigger,
+} from '../domain/conta-azul-sync.js';
 
 export type SyncRunRecord = {
   readonly id: string;
   readonly tenantId: string;
   readonly integrationId: string;
-  readonly triggerType: 'MANUAL';
+  readonly triggerType: ContaAzulSyncTrigger;
   readonly status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   readonly startedAt: Date;
   readonly finishedAt: Date | null;
@@ -19,6 +23,7 @@ export type ContaAzulSyncRunRepository = {
     readonly tenantId: string;
     readonly integrationId: string;
     readonly startedAt: Date;
+    readonly triggerType?: ContaAzulSyncTrigger;
   }): Promise<SyncRunRecord>;
   findById(id: string): Promise<SyncRunRecord | null>;
   findActiveByIntegrationId(integrationId: string): Promise<SyncRunRecord | null>;
@@ -76,7 +81,7 @@ function mapRun(row: {
   id: string;
   tenantId: string;
   integrationId: string;
-  triggerType: 'MANUAL';
+  triggerType: ContaAzulSyncTrigger;
   status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   startedAt: Date;
   finishedAt: Date | null;
@@ -122,7 +127,7 @@ export function createContaAzulSyncRunRepository(prisma: PrismaClient): ContaAzu
         data: {
           tenantId: input.tenantId,
           integrationId: input.integrationId,
-          triggerType: 'MANUAL',
+          triggerType: input.triggerType ?? 'MANUAL',
           status: 'PENDING',
           startedAt: input.startedAt,
         },

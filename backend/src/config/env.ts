@@ -1,4 +1,5 @@
 import { parseIntegrationEncryptionKey } from '../infrastructure/crypto/secret-box.js';
+import { parseAutoSyncIntervalMinutes } from '../modules/integrations/conta-azul/domain/conta-azul-sync.js';
 
 const nodeEnvironments = ['development', 'test', 'production'] as const;
 
@@ -24,6 +25,7 @@ export interface Environment {
   redisUrl: string;
   storagePath: string;
   storageProvider: StorageProvider;
+  autoSyncIntervalMinutes: number;
 }
 
 const TEST_INTEGRATION_ENCRYPTION_KEY = '0'.repeat(64);
@@ -198,5 +200,8 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
     redisUrl: parseRedisUrl(source.REDIS_URL),
     storagePath: parseStoragePath(source, nodeEnv),
     storageProvider: parseStorageProvider(source.STORAGE_PROVIDER),
+    autoSyncIntervalMinutes: parseAutoSyncIntervalMinutes(
+      source.CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES,
+    ),
   };
 }

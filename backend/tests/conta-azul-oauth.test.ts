@@ -116,6 +116,8 @@ const disconnectedPublic = {
   lastSuccessfulSyncAt: null,
   lastErrorAt: null,
   lastErrorCode: null,
+  autoSyncEligible: false,
+  autoSyncIntervalMinutes: 60,
 };
 
 function stubContaAzulNetwork(options?: {

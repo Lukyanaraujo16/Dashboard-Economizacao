@@ -167,6 +167,7 @@ describe('API interna da sync manual Conta Azul', () => {
       syncRunId: response.json().syncRunId,
       tenantId: tenant.id,
       integrationId: expect.any(String),
+      trigger: 'MANUAL',
     });
     expect(JSON.stringify(job?.data)).not.toMatch(/access|refresh|Bearer/i);
     await job?.remove();

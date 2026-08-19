@@ -1,6 +1,11 @@
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
 import { buildDueDateWindows, ContaAzulDateError } from '../domain/conta-azul-dates.js';
 import {
+  buildIncrementalWindow,
+  splitAlterationChunks,
+  type InstantWindow,
+} from '../domain/conta-azul-incremental.js';
+import {
   mapFinancialAccountPage,
   mapFinancialCategoryPage,
   mapPartyPage,
@@ -24,8 +29,15 @@ import {
   type ContaAzulSyncCounts,
   type ContaAzulSyncErrorCode,
 } from '../domain/conta-azul-sync.js';
+import { cursorsHaveIdentityMismatch } from '../domain/conta-azul-sync-identity.js';
+import { formatSaoPauloDateTime } from '../domain/conta-azul-timezone.js';
 import { IntegrationUnavailableError } from '../../../../shared/errors/application-error.js';
 import type { ContaAzulFinancialRepository } from '../repositories/financial.repository.js';
+import type {
+  ContaAzulSyncCursorRepository,
+  IntegrationSyncCursorRecord,
+  IntegrationSyncCursorResource,
+} from '../repositories/sync-cursor.repository.js';
 import type { ContaAzulSyncRunRepository } from '../repositories/sync-run.repository.js';
 import type { TenantRepository } from '../../../tenant/repositories/tenant.repository.js';
 import type { ContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
@@ -127,6 +139,17 @@ function annotatePeopleError(error: unknown, pagina: number): unknown {
   return error;
 }
 
+function isUnauthorized(error: unknown): boolean {
+  return error instanceof ContaAzulApiError && error.kind === 'unauthorized';
+}
+
+function cursorByResource(
+  cursors: readonly IntegrationSyncCursorRecord[],
+  resource: IntegrationSyncCursorResource,
+): IntegrationSyncCursorRecord | undefined {
+  return cursors.find((cursor) => cursor.resource === resource);
+}
+
 export function createContaAzulManualSyncEngine(deps: {
   readonly tenants: TenantRepository;
   readonly integrations: ContaAzulIntegrationRepository;
@@ -135,6 +158,8 @@ export function createContaAzulManualSyncEngine(deps: {
   readonly apiClient: ContaAzulApiClient;
   readonly getValidAccessToken: (tenantId: string) => Promise<string>;
   readonly rateLimiter: ContaAzulRateLimiter;
+  readonly cursors?: ContaAzulSyncCursorRepository;
+  readonly forceRefresh?: (tenantId: string) => Promise<string>;
   readonly clock?: () => Date;
   readonly timeoutMs?: number;
   readonly heartbeatMinIntervalMs?: number;
@@ -191,6 +216,8 @@ export function createContaAzulManualSyncEngine(deps: {
       if (run.status === 'SUCCESS' || run.status === 'FAILED') {
         return;
       }
+      const runId = run.id;
+      const triggerType = run.triggerType;
 
       const processed = {
         categories: 0,
@@ -225,8 +252,33 @@ export function createContaAzulManualSyncEngine(deps: {
           );
         }
 
+        const incremental = triggerType === 'SCHEDULED';
+        const existingCursors = incremental
+          ? await (deps.cursors?.listByIntegrationId(input.integrationId) ?? Promise.resolve([]))
+          : [];
+        if (incremental) {
+          if (!loaded.integration.lastSuccessfulSyncAt) {
+            throw new ContaAzulSyncExecutionError(
+              'sync_invalid_payload',
+              'Sincronização automática exige uma carga inicial manual.',
+            );
+          }
+          if (!loaded.integration.externalAccountId) {
+            throw new ContaAzulSyncExecutionError(
+              'sync_disconnected',
+              'Esta empresa não está conectada à Conta Azul.',
+            );
+          }
+          if (cursorsHaveIdentityMismatch(existingCursors, loaded.integration.externalAccountId)) {
+            throw new ContaAzulSyncExecutionError(
+              'sync_identity_changed',
+              'A identidade da Conta Azul mudou. Execute uma sincronização manual.',
+            );
+          }
+        }
+
         const startedAt = now();
-        await deps.syncRuns.markRunning(run.id, startedAt);
+        await deps.syncRuns.markRunning(runId, startedAt);
         let lastHeartbeatWrite = startedAt.getTime();
 
         const heartbeat = async () => {
@@ -239,7 +291,7 @@ export function createContaAzulManualSyncEngine(deps: {
           }
           if (at.getTime() - lastHeartbeatWrite >= heartbeatMinIntervalMs) {
             lastHeartbeatWrite = at.getTime();
-            await deps.syncRuns.heartbeat(run.id, at);
+            await deps.syncRuns.heartbeat(runId, at);
           }
         };
         const scopeOf = () => ({
@@ -248,63 +300,169 @@ export function createContaAzulManualSyncEngine(deps: {
           syncedAt: now(),
         });
 
-        const token = () => deps.getValidAccessToken(input.tenantId);
+        async function requestWithAuth<T>(work: (accessToken: string) => Promise<T>): Promise<T> {
+          let accessToken = await deps.getValidAccessToken(input.tenantId);
+          try {
+            return await work(accessToken);
+          } catch (error) {
+            if (!isUnauthorized(error) || !deps.forceRefresh) {
+              throw error;
+            }
+            accessToken = await deps.forceRefresh(input.tenantId);
+            try {
+              await deps.rateLimiter.wait();
+              return await work(accessToken);
+            } catch (retryError) {
+              if (isUnauthorized(retryError)) {
+                await deps.integrations.markError(input.tenantId, 'identity_unauthorized', now());
+              }
+              throw retryError;
+            }
+          }
+        }
 
         processed.categories = await paginate({
-          fetchPage: async (pagina) => deps.apiClient.getCategories(await token(), { pagina }),
+          fetchPage: (pagina) =>
+            requestWithAuth((accessToken) => deps.apiClient.getCategories(accessToken, { pagina })),
           mapPage: mapFinancialCategoryPage,
           persist: (items) => deps.financial.upsertCategories(scopeOf(), items),
           heartbeat,
         });
 
         processed.financialAccounts = await paginate({
-          fetchPage: async (pagina) =>
-            deps.apiClient.getFinancialAccounts(await token(), { pagina }),
+          fetchPage: (pagina) =>
+            requestWithAuth((accessToken) =>
+              deps.apiClient.getFinancialAccounts(accessToken, { pagina }),
+            ),
           mapPage: mapFinancialAccountPage,
           persist: (items) => deps.financial.upsertAccounts(scopeOf(), items),
           heartbeat,
         });
 
-        processed.parties = await paginate({
-          fetchPage: async (pagina) => deps.apiClient.getPeople(await token(), { pagina }),
-          mapPage: mapPartyPage,
-          persist: (items) => deps.financial.upsertParties(scopeOf(), items),
-          heartbeat,
-          annotateError: annotatePeopleError,
-        });
-
-        const windows = buildDueDateWindows(now(), {
+        const dueWindows = buildDueDateWindows(now(), {
           lookbackYears: CONTA_AZUL_SYNC_LOOKBACK_YEARS,
           lookaheadYears: CONTA_AZUL_SYNC_LOOKAHEAD_YEARS,
           windowDays: CONTA_AZUL_SYNC_WINDOW_DAYS,
         });
 
-        for (const window of windows) {
-          processed.receivables += await paginate({
-            fetchPage: async (pagina) =>
-              deps.apiClient.searchReceivables(await token(), {
-                pagina,
-                dataVencimentoDe: window.from,
-                dataVencimentoAte: window.to,
-              }),
-            mapPage: mapReceivablePage,
-            persist: (items) => deps.financial.upsertReceivables(scopeOf(), items),
-            heartbeat,
+        async function advanceCursor(
+          resource: IntegrationSyncCursorResource,
+          windowTo: Date,
+          externalAccountId: string,
+        ): Promise<void> {
+          if (!deps.cursors) {
+            return;
+          }
+          await deps.cursors.upsert({
+            tenantId: input.tenantId,
+            integrationId: input.integrationId,
+            resource,
+            cursorAt: windowTo,
+            externalAccountId,
+            lastRunId: runId,
           });
         }
 
-        for (const window of windows) {
-          processed.payables += await paginate({
-            fetchPage: async (pagina) =>
-              deps.apiClient.searchPayables(await token(), {
-                pagina,
-                dataVencimentoDe: window.from,
-                dataVencimentoAte: window.to,
-              }),
-            mapPage: mapPayablePage,
-            persist: (items) => deps.financial.upsertPayables(scopeOf(), items),
-            heartbeat,
+        async function peopleWindow(window: InstantWindow | null): Promise<number> {
+          if (!window) {
+            return paginate({
+              fetchPage: (pagina) =>
+                requestWithAuth((accessToken) => deps.apiClient.getPeople(accessToken, { pagina })),
+              mapPage: mapPartyPage,
+              persist: (items) => deps.financial.upsertParties(scopeOf(), items),
+              heartbeat,
+              annotateError: annotatePeopleError,
+            });
+          }
+          let count = 0;
+          for (const chunk of splitAlterationChunks(window)) {
+            count += await paginate({
+              fetchPage: (pagina) =>
+                requestWithAuth((accessToken) =>
+                  deps.apiClient.getPeople(accessToken, {
+                    pagina,
+                    dataAlteracaoDe: formatSaoPauloDateTime(chunk.from),
+                    dataAlteracaoAte: formatSaoPauloDateTime(chunk.to),
+                  }),
+                ),
+              mapPage: mapPartyPage,
+              persist: (items) => deps.financial.upsertParties(scopeOf(), items),
+              heartbeat,
+              annotateError: annotatePeopleError,
+            });
+          }
+          return count;
+        }
+
+        async function installmentWindows(
+          kind: 'receivables' | 'payables',
+          window: InstantWindow | null,
+        ): Promise<number> {
+          const search =
+            kind === 'receivables'
+              ? deps.apiClient.searchReceivables.bind(deps.apiClient)
+              : deps.apiClient.searchPayables.bind(deps.apiClient);
+          const persist =
+            kind === 'receivables'
+              ? (items: Parameters<typeof deps.financial.upsertReceivables>[1]) =>
+                  deps.financial.upsertReceivables(scopeOf(), items)
+              : (items: Parameters<typeof deps.financial.upsertPayables>[1]) =>
+                  deps.financial.upsertPayables(scopeOf(), items);
+          const mapPage = kind === 'receivables' ? mapReceivablePage : mapPayablePage;
+          const alterationChunks = window ? splitAlterationChunks(window) : [null];
+          let count = 0;
+          for (const chunk of alterationChunks) {
+            for (const dueWindow of dueWindows) {
+              count += await paginate({
+                fetchPage: (pagina) =>
+                  requestWithAuth((accessToken) =>
+                    search(accessToken, {
+                      pagina,
+                      dataVencimentoDe: dueWindow.from,
+                      dataVencimentoAte: dueWindow.to,
+                      dataAlteracaoDe: chunk ? formatSaoPauloDateTime(chunk.from) : undefined,
+                      dataAlteracaoAte: chunk ? formatSaoPauloDateTime(chunk.to) : undefined,
+                    }),
+                  ),
+                mapPage,
+                persist,
+                heartbeat,
+              });
+            }
+          }
+          return count;
+        }
+
+        if (incremental) {
+          const baselineAt = loaded.integration.lastSuccessfulSyncAt!;
+          const externalAccountId = loaded.integration.externalAccountId!;
+          const peopleRange = buildIncrementalWindow({
+            cursorAt: cursorByResource(existingCursors, 'PEOPLE')?.cursorAt ?? null,
+            baselineAt,
+            executionStartedAt: startedAt,
           });
+          processed.parties = await peopleWindow(peopleRange);
+          await advanceCursor('PEOPLE', peopleRange.to, externalAccountId);
+
+          const receivablesRange = buildIncrementalWindow({
+            cursorAt: cursorByResource(existingCursors, 'RECEIVABLES')?.cursorAt ?? null,
+            baselineAt,
+            executionStartedAt: startedAt,
+          });
+          processed.receivables = await installmentWindows('receivables', receivablesRange);
+          await advanceCursor('RECEIVABLES', receivablesRange.to, externalAccountId);
+
+          const payablesRange = buildIncrementalWindow({
+            cursorAt: cursorByResource(existingCursors, 'PAYABLES')?.cursorAt ?? null,
+            baselineAt,
+            executionStartedAt: startedAt,
+          });
+          processed.payables = await installmentWindows('payables', payablesRange);
+          await advanceCursor('PAYABLES', payablesRange.to, externalAccountId);
+        } else {
+          processed.parties = await peopleWindow(null);
+          processed.receivables = await installmentWindows('receivables', null);
+          processed.payables = await installmentWindows('payables', null);
         }
 
         const tenantAgain = await deps.tenants.findById(input.tenantId);
@@ -328,7 +486,7 @@ export function createContaAzulManualSyncEngine(deps: {
 
         const finalCounts: ContaAzulSyncCounts = { ...processed };
         await deps.syncRuns.markSuccess({
-          id: run.id,
+          id: runId,
           integrationId: input.integrationId,
           counts: finalCounts,
           at: now(),
@@ -336,7 +494,7 @@ export function createContaAzulManualSyncEngine(deps: {
       } catch (error) {
         const mapped = mapUpstreamError(error);
         await deps.syncRuns.markFailed({
-          id: run.id,
+          id: runId,
           errorCode: mapped.code,
           counts: { ...processed },
           at: now(),

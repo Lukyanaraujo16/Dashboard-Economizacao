@@ -8,7 +8,10 @@ import type { ContaAzulJobLifecycle } from '../../modules/integrations/conta-azu
 import { bullmqPrefix, type BullmqRedisOptions } from './bullmq-connection.js';
 
 export type ContaAzulManualSyncPublisher = {
-  enqueue(payload: ContaAzulManualSyncJobPayload): Promise<void>;
+  enqueue(
+    payload: ContaAzulManualSyncJobPayload,
+    options?: { readonly delayMs?: number },
+  ): Promise<void>;
   getJobState(syncRunId: string): Promise<ContaAzulJobLifecycle>;
   close(): Promise<void>;
 };
@@ -28,9 +31,10 @@ export function createContaAzulManualSyncPublisher(input: {
   });
 
   return {
-    async enqueue(payload) {
+    async enqueue(payload, options) {
       await queue.add(CONTA_AZUL_MANUAL_SYNC_JOB_NAME, payload, {
         jobId: payload.syncRunId,
+        delay: options?.delayMs,
       });
     },
     async getJobState(syncRunId) {

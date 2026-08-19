@@ -8,19 +8,19 @@ Fundação:
 Concluída
 
 Versão atual:
-2.3 — Primeira sincronização manual (preflight local concluído; homologação real pendente)
+2.4 — Sincronização automática incremental (homologada)
 
 Último checkpoint:
 
-2.2 — Gestão das conexões (homologada com OAuth real + identidade e commitada)
+2.4 — Sincronização automática incremental (homologada com planner SCHEDULED real)
 
 Último commit:
 
-feat(integrations): conclui gestao de conexoes conta azul
+feat(sync): adiciona sincronizacao automatica incremental conta azul
 
 Próxima fase executável:
 
-2.3 — Primeira sincronização manual (código pronto; preflight local concluído; homologação real pendente)
+2.5 — Histórico de sincronizações (não iniciada)
 
 Estado atual
 
@@ -117,6 +117,10 @@ Estado atual
 ✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
 
 ✔ 2.2 — Gestão das conexões concluída (identidade/health homologados; sem sync financeira)
+
+✔ 2.3 — Primeira sincronização manual concluída (GET-only homologada; massa DEV preservada)
+
+✔ 2.4 — Sincronização automática incremental concluída (planner SCHEDULED homologado)
 
 ✔ Autenticação, sessão, shell autenticado e logout operacionais
 
@@ -755,9 +759,60 @@ Worker DEV: `pnpm worker` (processo separado do HTTP). Produção:
 2.4 Sincronização automática
 
 Status:
-Não iniciada
+Concluída
+
+Scheduler global BullMQ 6.1.2 (`upsertJobScheduler`, id estável
+`conta-azul-plan-syncs`), tick 1 min. Intervalo:
+`CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES` (default 60, mínimo 5,
+máximo 1440). Jitter determinístico no delay do job (hash do
+integrationId, janela ≤ 60s). Sem scheduler por tenant. Sem cron.
+Sem `QueueScheduler` legado. Sem backlog temporal: downtime é uma
+execução incremental cobrindo o gap (cursor − overlap 2h → now).
+
+Auto = incremental após baseline manual (`lastSuccessfulSyncAt`).
+Categorias/contas = full barato. Pessoas = `data_alteracao_de/ate`.
+AR/AP = janelas de vencimento 90d + `data_alteracao_de/ate`, chunks
+de alteração ≤ 365d. Trigger `SCHEDULED` (não existe `AUTOMATIC`).
+Manual permanece FULL. Cursor por recurso = upper bound processado
+(`windowTo`); janela vazia avança; não usa `lastSuccessfulSyncAt`
+como watermark. Lock único com a 2.3: manual vs scheduled
+serializados. Planner skipa se já há run ativa. Worker concurrency 1.
+Identity guard: mesmo ERP reutiliza cursor; identidade diferente →
+`sync_identity_changed` sem misturar nem apagar financeiro. 401 na
+sync: um `forceRefresh` + retry; segundo 401 → FAILED / Integration
+ERROR. Delete físico não detectado continua limitação conhecida
+(ausência ≠ remoção). Sem UI de histórico (2.5 não iniciada).
+
+Homologação real em 18–19/08/2026 (GET-only, nenhuma mutação ERP):
+
+* planner global real enfileirou `SCHEDULED` incremental (sem FULL
+  automática e sem `POST …/sync` manual);
+* pessoas incremental + `items:null` compatível; AR/AP aceitaram
+  vencimento 90d + `data_alteracao` simultaneamente;
+* cursores PEOPLE/RECEIVABLES/PAYABLES avançaram, inclusive em janela
+  vazia; overlap 2h reaplicado; `lastSuccessfulSyncAt` só no SUCCESS
+  total;
+* `not_due` e segunda incremental idempotente (zero duplicatas;
+  massa 48/1/0/12/1266 preservada);
+* disconnect: Integration `DISCONNECTED`, 0 credential, 0 conta
+  externa; financeiro e cursores preservados; cursor sem identidade
+  válida não é utilizado.
+
+Observação de homologação (não é comportamento de produção): na
+segunda `SCHEDULED` real, a condição de due foi simulada avançando o
+relógio da avaliação do planner. `SyncRun.startedAt` refletiu esse
+relógio; engine/cursor/`finishedAt` usaram wall-clock. Produção usa
+`Date` real.
+
+Migration: `20260818220000_conta_azul_auto_sync_cursors` (SHA-256
+`a01c2cb81381f9078dbd0196a90549a61952751723bb05433b19cc64c6dca865`).
+Aplicada em DEV e TEST via `prisma migrate deploy`. Sem
+`migrate reset` / `db push`.
 
 2.5 Histórico de sincronizações
+
+Status:
+Não iniciada
 
 ===========================================================
 

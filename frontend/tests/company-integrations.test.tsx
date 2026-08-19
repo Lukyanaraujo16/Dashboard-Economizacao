@@ -34,6 +34,8 @@ const disconnected: ContaAzulIntegration = {
   lastSuccessfulSyncAt: null,
   lastErrorAt: null,
   lastErrorCode: null,
+  autoSyncEligible: false,
+  autoSyncIntervalMinutes: 60,
 };
 
 const connected: ContaAzulIntegration = {
@@ -46,6 +48,8 @@ const connected: ContaAzulIntegration = {
   lastSuccessfulSyncAt: null,
   lastErrorAt: null,
   lastErrorCode: null,
+  autoSyncEligible: false,
+  autoSyncIntervalMinutes: 60,
 };
 
 const attention: ContaAzulIntegration = {
@@ -130,6 +134,7 @@ describe('UI Integrações Conta Azul (2.2)', () => {
     );
     renderPage();
     expect(await screen.findByRole('heading', { name: 'Conta Azul' })).toBeTruthy();
+    expect(screen.getByText('Sincronização automática indisponível.')).toBeTruthy();
     const nav = screen.getByRole('navigation', { name: 'Seções da empresa' });
     expect(within(nav).getByRole('link', { name: 'Integrações' }).getAttribute('href')).toBe(
       `/empresas/${companyId}/integracoes`,
@@ -178,6 +183,13 @@ describe('UI Integrações Conta Azul (2.2)', () => {
     expect(screen.getByText('Empresa conectada: Conta Azul Software Ltda')).toBeTruthy();
     expect(screen.getByText('Identificador: 123456')).toBeTruthy();
     expect(screen.getByText('Última sincronização: Nunca sincronizado')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'A sincronização automática será ativada após a primeira sincronização manual.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Frequência:/)).toBeNull();
+    expect(screen.queryByText(/Próxima sincronização/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Reconectar' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Verificar conexão' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Sincronizar agora' })).toBeTruthy();
@@ -307,6 +319,7 @@ describe('UI Integrações Conta Azul (2.2)', () => {
     const synced = {
       ...connected,
       lastSuccessfulSyncAt: '2026-08-18T18:00:00.000Z',
+      autoSyncEligible: true,
     };
     vi.stubGlobal(
       'fetch',
@@ -351,6 +364,9 @@ describe('UI Integrações Conta Azul (2.2)', () => {
       screen.getByText('Categorias: 3 · Contas: 2 · Pessoas: 4 · A receber: 10 · A pagar: 8'),
     ).toBeTruthy();
     expect(screen.getByText(/Última sincronização:/)).toBeTruthy();
+    expect(screen.getByText('Sincronização automática: Ativa')).toBeTruthy();
+    expect(screen.getByText('Frequência: a cada 60 minutos')).toBeTruthy();
+    expect(screen.queryByText(/Próxima sincronização/)).toBeNull();
     expect(screen.queryByText(/importad/i)).toBeNull();
   });
 

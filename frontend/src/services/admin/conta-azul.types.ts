@@ -13,7 +13,8 @@ export type ContaAzulSyncErrorCode =
   | 'sync_disconnected'
   | 'sync_timeout'
   | 'sync_enqueue_failed'
-  | 'sync_stale_run';
+  | 'sync_stale_run'
+  | 'sync_identity_changed';
 
 export type ContaAzulSyncStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
 
@@ -49,6 +50,8 @@ export type ContaAzulIntegration = {
   readonly lastSuccessfulSyncAt: string | null;
   readonly lastErrorAt: string | null;
   readonly lastErrorCode: ContaAzulPublicErrorCode | null;
+  readonly autoSyncEligible: boolean;
+  readonly autoSyncIntervalMinutes: number;
 };
 
 export type ContaAzulConnectResult = {

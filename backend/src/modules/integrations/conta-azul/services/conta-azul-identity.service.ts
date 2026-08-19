@@ -30,8 +30,10 @@ export function createContaAzulIdentityService(deps: {
   readonly apiClient: ContaAzulApiClient;
   readonly getValidAccessToken: (tenantId: string) => Promise<string>;
   readonly clock?: () => Date;
+  readonly autoSyncIntervalMinutes?: number;
 }): ContaAzulIdentityService {
   const now = deps.clock ?? (() => new Date());
+  const autoSyncIntervalMinutes = deps.autoSyncIntervalMinutes;
 
   return {
     async identify(tenantId, mode) {
@@ -40,13 +42,13 @@ export function createContaAzulIdentityService(deps: {
         if (mode === 'verify') {
           throw new IntegrationUnavailableError('Esta empresa não está conectada à Conta Azul.');
         }
-        return toPublicContaAzulIntegration(null);
+        return toPublicContaAzulIntegration(null, autoSyncIntervalMinutes);
       }
       if (loaded.integration.status === 'DISCONNECTED' || !loaded.credential) {
         if (mode === 'verify') {
           throw new IntegrationUnavailableError('Esta empresa não está conectada à Conta Azul.');
         }
-        return toPublicContaAzulIntegration(loaded.integration);
+        return toPublicContaAzulIntegration(loaded.integration, autoSyncIntervalMinutes);
       }
 
       let accessToken: string;
@@ -57,7 +59,7 @@ export function createContaAzulIdentityService(deps: {
           throw error;
         }
         const current = await deps.integrations.findPublicByTenantId(tenantId);
-        return toPublicContaAzulIntegration(current);
+        return toPublicContaAzulIntegration(current, autoSyncIntervalMinutes);
       }
 
       try {
@@ -91,7 +93,7 @@ export function createContaAzulIdentityService(deps: {
       }
 
       const current = await deps.integrations.findPublicByTenantId(tenantId);
-      return toPublicContaAzulIntegration(current);
+      return toPublicContaAzulIntegration(current, autoSyncIntervalMinutes);
     },
   };
 }

@@ -76,6 +76,7 @@ export function createContaAzulRuntime(app: FastifyInstance): ContaAzulRuntime {
       redirectUri: 'http://127.0.0.1:3000/integrations/conta-azul/callback',
     },
     encryptionKey: environment.integrationEncryptionKey,
+    autoSyncIntervalMinutes: environment.autoSyncIntervalMinutes,
     identifyConnectedAccount: async (tenantId) => {
       const service = identityRef.service;
       if (!service) {
@@ -96,6 +97,7 @@ export function createContaAzulRuntime(app: FastifyInstance): ContaAzulRuntime {
     integrations,
     apiClient,
     getValidAccessToken: (tenantId) => oauth.getValidAccessToken(tenantId),
+    autoSyncIntervalMinutes: environment.autoSyncIntervalMinutes,
   });
   identityRef.service = identity;
 

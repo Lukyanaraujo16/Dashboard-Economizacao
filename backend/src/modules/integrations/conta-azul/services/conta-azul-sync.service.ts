@@ -44,7 +44,10 @@ export function createContaAzulSyncService(deps: {
   readonly integrations: ContaAzulIntegrationRepository;
   readonly syncRuns: ContaAzulSyncRunRepository;
   readonly publisher: {
-    enqueue(payload: ContaAzulManualSyncJobPayload): Promise<void>;
+    enqueue(
+      payload: ContaAzulManualSyncJobPayload,
+      options?: { readonly delayMs?: number },
+    ): Promise<void>;
     getJobState(syncRunId: string): Promise<ContaAzulJobLifecycle>;
   };
   readonly clock?: () => Date;
@@ -120,6 +123,7 @@ export function createContaAzulSyncService(deps: {
           syncRunId: run.id,
           tenantId,
           integrationId: loaded.integration.id,
+          trigger: 'MANUAL',
         });
       } catch (error) {
         await deps.syncRuns.markFailed({

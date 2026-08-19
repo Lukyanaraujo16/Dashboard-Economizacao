@@ -3,7 +3,8 @@
 Status: 2.1 concluída (homologada em 18/08/2026). 2.2 concluída (homologada em
 18/08/2026 — identidade/health). 2.3 concluída (homologada em 18/08/2026 —
 sync manual real, idempotência real, disconnect preserva dados financeiros).
-2.4 não iniciada.
+2.4 concluída (homologada em 18–19/08/2026 — planner SCHEDULED incremental
+real). 2.5 não iniciada.
 Projeto: Dashboard Economização
 
 ## 1. Decisão de contrato
@@ -147,8 +148,8 @@ Horizonte MVP default configurável: 5 anos anteriores + 2 anos futuros.
 Homologação real 18/08/2026: ~33 s nesta conta (48 categorias, 1 conta,
 0 pessoas, 12 a receber, 1266 a pagar); horizonte 5+2 classificado como
 **adequado**. `CONTA_AZUL_CATEGORIES_ONLY_CHILDREN=false` foi o valor da
-carga real. Incremental `data_alteracao_*` fica na 2.4. Scheduler fica
-na 2.4.
+carga real. Incremental `data_alteracao_*` e o scheduler estão na 2.4
+(homologada). A 2.3 permanece a carga FULL manual.
 
 `GET /v1/pessoas` sem cadastro retornou `items: null`. Tolerância
 homologada: **somente** `items === null` → `[]`. Demais divergências
@@ -202,4 +203,45 @@ WHERE status IN ('PENDING', 'RUNNING');
 
 Homologação real 2.3: sync GET-only; nenhuma mutação financeira no ERP.
 Disconnect remove tokens e identidade; dados financeiros permanecem.
-2.4 (scheduler/incremental) **não** iniciada.
+
+## 9. Sincronização automática incremental (2.4)
+
+Homologada contra a Conta Azul real em 18–19/08/2026 (GET-only).
+2.5 (histórico de produto / dashboard) **não** iniciada.
+
+- Um Job Scheduler global (`conta-azul-plan-syncs`), `upsertJobScheduler`
+  no boot, BullMQ 6.1.2. Sem scheduler por tenant. Sem cron. Sem
+  `QueueScheduler` legado. Planner só fala com Postgres + Redis.
+- Frequência default 60 min (`CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES`,
+  inteiro 5–1440). Jitter determinístico no delay do job de trabalho.
+  Tick do planner: 1 min. Worker concurrency 1.
+- Elegível: tenant ACTIVE, Integration CONNECTED, credential + identidade,
+  `lastSuccessfulSyncAt` (baseline manual), sem run ativa, cursores com a
+  mesma `externalAccountId`. `DISCONNECTED` / cursor sem identidade válida
+  → skip (`disconnected` / `external_account_missing` / `identity_changed`).
+- Scheduled = incremental. Manual = FULL. Categorias e contas = full barato
+  também no automático. Pessoas = `data_alteracao_de/ate`. AR/AP = vencimento
+  90d + `data_alteracao_de/ate` em `America/Sao_Paulo`, chunks ≤ 365d,
+  overlap 2h. Sem FULL automática silenciosa.
+- Cursor = upper bound da janela processada (`windowTo`). Janela vazia
+  avança. Avanço por recurso após sucesso daquele recurso. Não usa
+  `lastSuccessfulSyncAt` como watermark.
+- AR/AP: janelas de vencimento 90d (como 2.3) + filtro de alteração
+  (homologado: API aceitou a combinação; sem fallback silencioso).
+- Downtime coalescido: um incremental cobre o gap; não há replay de ticks.
+  Manual e scheduled compartilham o lock; planner skipa se já há run ativa.
+- Identity change: `sync_identity_changed`; não mistura ERP; não apaga
+  financeiro; não reseta cursor. Disconnect preserva cursor e não o usa.
+  Reconnect no mesmo ERP reutiliza o cursor.
+- 401 durante sync: um `forceRefresh` + retry; segundo 401 → run FAILED e
+  Integration ERROR `identity_unauthorized`. Cobertura automatizada; não
+  forçada na conta real.
+- Deletes: ausência ≠ remoção física. Sem tombstone. Limitação conhecida.
+- UI: card existente; frequência somente leitura; sem próxima execução;
+  sem histórico. DTO: `autoSyncEligible`, `autoSyncIntervalMinutes`.
+
+Observação de homologação (não é produção): a segunda `SCHEDULED` real
+simulou due avançando o relógio da avaliação do planner.
+`SyncRun.startedAt` refletiu esse relógio; engine/cursor/`finishedAt`
+usaram wall-clock. Produção usa `Date` real.
+

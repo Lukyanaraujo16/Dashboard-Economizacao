@@ -58,6 +58,33 @@ describe('Cliente HTTP financeiro Conta Azul', () => {
     expect(String(fetchImpl.mock.calls[1]![0])).toContain(CONTA_AZUL_PAYABLES_SEARCH_URL);
   });
 
+  it('envia data_alteracao opcional em pessoas e AR/AP e omite quando ausente', async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => jsonResponse({ items: [], itens: [] }));
+    const client = createContaAzulApiClient({ fetchImpl });
+    await client.getPeople('token', {
+      pagina: 1,
+      dataAlteracaoDe: '2026-01-01T00:00:00',
+      dataAlteracaoAte: '2026-01-31T23:59:59',
+    });
+    await client.searchReceivables('token', {
+      pagina: 1,
+      dataVencimentoDe: '2026-01-01',
+      dataVencimentoAte: '2026-03-31',
+      dataAlteracaoDe: '2026-02-01T00:00:00',
+      dataAlteracaoAte: '2026-02-28T23:59:59',
+    });
+    const peopleUrl = String(fetchImpl.mock.calls[0]![0]);
+    expect(peopleUrl).toContain('data_alteracao_de=2026-01-01T00%3A00%3A00');
+    expect(peopleUrl).toContain('data_alteracao_ate=2026-01-31T23%3A59%3A59');
+    const arUrl = String(fetchImpl.mock.calls[1]![0]);
+    expect(arUrl).toContain('data_vencimento_de=2026-01-01');
+    expect(arUrl).toContain('data_alteracao_de=2026-02-01T00%3A00%3A00');
+    expect(arUrl).toContain('data_alteracao_ate=2026-02-28T23%3A59%3A59');
+
+    await client.getPeople('token', { pagina: 1 });
+    expect(String(fetchImpl.mock.calls[2]![0])).not.toContain('data_alteracao');
+  });
+
   it('401 não faz retry; 429 faz um retry respeitando Retry-After', async () => {
     const unauthorized = vi.fn().mockResolvedValue(jsonResponse({ error: 'x' }, 401));
     const client401 = createContaAzulApiClient({ fetchImpl: unauthorized });

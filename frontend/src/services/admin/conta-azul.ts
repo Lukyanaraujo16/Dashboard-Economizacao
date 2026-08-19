@@ -45,7 +45,9 @@ function isIntegration(value: unknown): value is ContaAzulIntegration {
     isNullableString(value.externalCompanyName) &&
     isNullableString(value.lastSuccessfulSyncAt) &&
     isNullableString(value.lastErrorAt) &&
-    isPublicErrorCode(value.lastErrorCode)
+    isPublicErrorCode(value.lastErrorCode) &&
+    typeof value.autoSyncEligible === 'boolean' &&
+    typeof value.autoSyncIntervalMinutes === 'number'
   );
 }
 

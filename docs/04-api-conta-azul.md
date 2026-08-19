@@ -298,9 +298,17 @@ A execução deverá ser distribuída ao longo do tempo para evitar picos desnec
 
 17. Frequência de sincronização
 
-A frequência definitiva ainda não está fechada.
+Default operacional da 2.4: 60 minutos, configurável por
+`CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES` (inteiro, mínimo 5, máximo 1440).
+Jitter determinístico no delay do job (0..min(intervalo, 60s)). Tick do
+planner global: 1 minuto (`upsertJobScheduler`, id `conta-azul-plan-syncs`).
+Não é cron do SO nem scheduler por tenant.
 
-Deverá ser definida através de teste real considerando:
+Homologação real 18–19/08/2026: intervalo de 60 min respeitado (`not_due`
+no tick seguinte); scheduled incremental ~38 s e ~29 s nesta conta, sem
+429.
+
+Ajuste fino futuro ainda pode considerar:
 
 * limite de 600 requisições/minuto;
 * limite de 10 requisições/segundo;
@@ -444,8 +452,14 @@ e `nome` inválido. A instrumentação sanitizada
 sem token e sem payload bruto) permanece.
 
 Tamanho de página da 2.3: 100. Intervalo de vencimento: 90 dias. Horizonte MVP:
-5 anos atrás e 2 anos à frente. Sem `data_alteracao_*` (isso é 2.4).
-Nenhuma operação de escrita no ERP.
+5 anos atrás e 2 anos à frente. Fase 2.4 (homologada em 18–19/08/2026):
+pessoas e AR/AP enviam `data_alteracao_de` / `data_alteracao_ate` em
+`America/Sao_Paulo` (ISO local sem offset), chunks ≤ 365 dias, overlap 2h.
+AR/AP **mantêm** janelas de vencimento de 90 dias e somam o filtro de
+alteração (API real aceitou a combinação; sem fallback silencioso
+5+2 → 90d). Categorias e contas continuam full barato, sem
+`data_alteracao`. Ausência de registro não é delete (sem tombstone) —
+limitação conhecida. Nenhuma operação de escrita no ERP.
 
 Carga real homologada (duas SUCCESS, mesma identidade): categorias 48,
 contas 1, pessoas 0, a receber 12, a pagar 1266; duração ~33 s.

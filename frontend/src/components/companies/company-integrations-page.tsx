@@ -66,6 +66,23 @@ function statusLabel(status: ContaAzulIntegration['status']): {
   return { label: 'Não conectada', variant: 'neutral' };
 }
 
+function autoSyncStatusLabel(integration: ContaAzulIntegration): string {
+  if (integration.status !== 'CONNECTED') {
+    return 'Sincronização automática indisponível.';
+  }
+  if (!integration.autoSyncEligible) {
+    return 'A sincronização automática será ativada após a primeira sincronização manual.';
+  }
+  return 'Sincronização automática: Ativa';
+}
+
+function autoSyncFrequencyLabel(integration: ContaAzulIntegration): string | null {
+  if (integration.status !== 'CONNECTED' || !integration.autoSyncEligible) {
+    return null;
+  }
+  return `Frequência: a cada ${integration.autoSyncIntervalMinutes} minutos`;
+}
+
 function syncLabel(lastSuccessfulSyncAt: string | null): string {
   if (!lastSuccessfulSyncAt) {
     return 'Nunca sincronizado';
@@ -306,6 +323,12 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
             </Typography>
           ) : null}
 
+          {integration.status === 'DISCONNECTED' ? (
+            <Typography as="p" variant="body" className={styles.pageDescription}>
+              {autoSyncStatusLabel(integration)}
+            </Typography>
+          ) : null}
+
           {canManageConnection ? (
             <div className={styles.integrationMeta}>
               {integration.externalCompanyName ? (
@@ -326,6 +349,14 @@ export function CompanyIntegrationsPage({ companyId, oauthResult }: CompanyInteg
               <Typography as="p" variant="body" className={styles.pageDescription}>
                 Última sincronização: {syncLabel(integration.lastSuccessfulSyncAt)}
               </Typography>
+              <Typography as="p" variant="body" className={styles.pageDescription}>
+                {autoSyncStatusLabel(integration)}
+              </Typography>
+              {autoSyncFrequencyLabel(integration) ? (
+                <Typography as="p" variant="body" className={styles.pageDescription}>
+                  {autoSyncFrequencyLabel(integration)}
+                </Typography>
+              ) : null}
               {syncInProgress ? (
                 <Typography as="p" variant="body" className={styles.pageDescription} role="status">
                   Sincronização em andamento

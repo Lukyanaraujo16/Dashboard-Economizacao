@@ -1,3 +1,5 @@
+import { CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_DEFAULT } from './conta-azul-sync.js';
+
 export type IntegrationStatus = 'DISCONNECTED' | 'CONNECTED' | 'ERROR';
 
 export type ContaAzulPublicErrorCode =
@@ -64,6 +66,8 @@ export type PublicContaAzulIntegration = {
   readonly lastSuccessfulSyncAt: string | null;
   readonly lastErrorAt: string | null;
   readonly lastErrorCode: ContaAzulPublicErrorCode | null;
+  readonly autoSyncEligible: boolean;
+  readonly autoSyncIntervalMinutes: number;
 };
 
 export type ContaAzulOAuthState = {
@@ -87,7 +91,18 @@ export function toPublicErrorCode(code: string | null): ContaAzulPublicErrorCode
   return code as ContaAzulPublicErrorCode;
 }
 
-export function disconnectedPublicIntegration(): PublicContaAzulIntegration {
+export function isAutoSyncEligible(record: ContaAzulIntegrationRecord | null): boolean {
+  return Boolean(
+    record &&
+    record.status === 'CONNECTED' &&
+    record.lastSuccessfulSyncAt &&
+    record.externalAccountId,
+  );
+}
+
+export function disconnectedPublicIntegration(
+  autoSyncIntervalMinutes = CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_DEFAULT,
+): PublicContaAzulIntegration {
   return {
     provider: 'CONTA_AZUL',
     status: 'DISCONNECTED',
@@ -98,14 +113,17 @@ export function disconnectedPublicIntegration(): PublicContaAzulIntegration {
     lastSuccessfulSyncAt: null,
     lastErrorAt: null,
     lastErrorCode: null,
+    autoSyncEligible: false,
+    autoSyncIntervalMinutes,
   };
 }
 
 export function toPublicContaAzulIntegration(
   record: ContaAzulIntegrationRecord | null,
+  autoSyncIntervalMinutes = CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_DEFAULT,
 ): PublicContaAzulIntegration {
   if (!record) {
-    return disconnectedPublicIntegration();
+    return disconnectedPublicIntegration(autoSyncIntervalMinutes);
   }
   return {
     provider: 'CONTA_AZUL',
@@ -117,5 +135,7 @@ export function toPublicContaAzulIntegration(
     lastSuccessfulSyncAt: record.lastSuccessfulSyncAt?.toISOString() ?? null,
     lastErrorAt: record.lastErrorAt?.toISOString() ?? null,
     lastErrorCode: toPublicErrorCode(record.lastErrorCode),
+    autoSyncEligible: isAutoSyncEligible(record),
+    autoSyncIntervalMinutes,
   };
 }

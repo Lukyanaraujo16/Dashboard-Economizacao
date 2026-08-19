@@ -34,6 +34,7 @@ export type ContaAzulOAuthService = {
     readonly auth: AuthenticatedRequestContext | null;
   }): Promise<{ readonly tenantId: string | null; readonly signal: ContaAzulCallbackSignal }>;
   getValidAccessToken(tenantId: string): Promise<string>;
+  forceRefresh(tenantId: string): Promise<string>;
 };
 
 async function requireActiveTenant(
@@ -70,9 +71,57 @@ export function createContaAzulOAuthService(deps: {
   readonly assertCanDisconnect?: (tenantId: string) => Promise<void>;
   readonly clock?: () => Date;
   readonly refreshSkewMs?: number;
+  readonly autoSyncIntervalMinutes?: number;
 }): ContaAzulOAuthService {
   const now = deps.clock ?? (() => new Date());
   const skewMs = deps.refreshSkewMs ?? CONTA_AZUL_ACCESS_TOKEN_REFRESH_SKEW_MS;
+  const autoSyncIntervalMinutes = deps.autoSyncIntervalMinutes;
+
+  async function refreshAccessToken(tenantId: string, force: boolean): Promise<string> {
+    const key = requireEncryptionKey(deps.encryptionKey);
+    if (!force) {
+      const loaded = await deps.integrations.findByTenantId(tenantId);
+      if (!loaded || loaded.integration.status === 'DISCONNECTED' || !loaded.credential) {
+        throw new IntegrationUnavailableError('Esta empresa não está conectada à Conta Azul.');
+      }
+      if (isAccessTokenFresh(loaded.credential.accessExpiresAt, now(), skewMs)) {
+        return decryptSecret(loaded.credential.encryptedAccessToken, key);
+      }
+    }
+
+    let refreshed;
+    try {
+      refreshed = await deps.integrations.refreshTokensInLock(tenantId, async (locked) => {
+        if (!locked.credential || locked.integration.status === 'DISCONNECTED') {
+          return null;
+        }
+        if (!force && isAccessTokenFresh(locked.credential.accessExpiresAt, now(), skewMs)) {
+          return null;
+        }
+
+        const refreshToken = decryptSecret(locked.credential.encryptedRefreshToken, key);
+        const tokens = await deps.tokenClient.refresh(refreshToken);
+        const at = now();
+        return {
+          encryptedAccessToken: encryptSecret(tokens.accessToken, key),
+          encryptedRefreshToken: encryptSecret(tokens.refreshToken, key),
+          accessExpiresAt: new Date(at.getTime() + tokens.expiresIn * 1000),
+          tokenType: tokens.tokenType,
+        };
+      });
+    } catch {
+      await deps.integrations.markError(tenantId, 'refresh_failed', now());
+      throw new IntegrationUnavailableError(
+        'Não foi possível renovar a autorização da Conta Azul. Reconecte a empresa.',
+      );
+    }
+
+    if (!refreshed) {
+      throw new IntegrationUnavailableError('Esta empresa não está conectada à Conta Azul.');
+    }
+
+    return decryptSecret(refreshed.encryptedAccessToken, key);
+  }
 
   return {
     async getStatus(tenantId) {
@@ -81,7 +130,7 @@ export function createContaAzulOAuthService(deps: {
         throw new NotFoundError('Empresa não encontrada.');
       }
       const record = await deps.integrations.findPublicByTenantId(tenantId);
-      return toPublicContaAzulIntegration(record);
+      return toPublicContaAzulIntegration(record, autoSyncIntervalMinutes);
     },
 
     async startConnect(tenantId, auth) {
@@ -114,7 +163,7 @@ export function createContaAzulOAuthService(deps: {
       }
       await deps.assertCanDisconnect?.(tenantId);
       const record = await deps.integrations.disconnect(tenantId, now());
-      return toPublicContaAzulIntegration(record);
+      return toPublicContaAzulIntegration(record, autoSyncIntervalMinutes);
     },
 
     async handleCallback(input) {
@@ -181,48 +230,11 @@ export function createContaAzulOAuthService(deps: {
     },
 
     async getValidAccessToken(tenantId) {
-      const key = requireEncryptionKey(deps.encryptionKey);
-      const loaded = await deps.integrations.findByTenantId(tenantId);
-      if (!loaded || loaded.integration.status === 'DISCONNECTED' || !loaded.credential) {
-        throw new IntegrationUnavailableError('Esta empresa não está conectada à Conta Azul.');
-      }
+      return refreshAccessToken(tenantId, false);
+    },
 
-      if (isAccessTokenFresh(loaded.credential.accessExpiresAt, now(), skewMs)) {
-        return decryptSecret(loaded.credential.encryptedAccessToken, key);
-      }
-
-      let refreshed;
-      try {
-        refreshed = await deps.integrations.refreshTokensInLock(tenantId, async (locked) => {
-          if (!locked.credential || locked.integration.status === 'DISCONNECTED') {
-            return null;
-          }
-          if (isAccessTokenFresh(locked.credential.accessExpiresAt, now(), skewMs)) {
-            return null;
-          }
-
-          const refreshToken = decryptSecret(locked.credential.encryptedRefreshToken, key);
-          const tokens = await deps.tokenClient.refresh(refreshToken);
-          const at = now();
-          return {
-            encryptedAccessToken: encryptSecret(tokens.accessToken, key),
-            encryptedRefreshToken: encryptSecret(tokens.refreshToken, key),
-            accessExpiresAt: new Date(at.getTime() + tokens.expiresIn * 1000),
-            tokenType: tokens.tokenType,
-          };
-        });
-      } catch {
-        await deps.integrations.markError(tenantId, 'refresh_failed', now());
-        throw new IntegrationUnavailableError(
-          'Não foi possível renovar a autorização da Conta Azul. Reconecte a empresa.',
-        );
-      }
-
-      if (!refreshed) {
-        throw new IntegrationUnavailableError('Esta empresa não está conectada à Conta Azul.');
-      }
-
-      return decryptSecret(refreshed.encryptedAccessToken, key);
+    async forceRefresh(tenantId) {
+      return refreshAccessToken(tenantId, true);
     },
   };
 }

@@ -21,9 +21,20 @@ export type PersistConnectedTokensInput = {
   readonly at: Date;
 };
 
+export type AutoSyncCandidateRecord = {
+  readonly integrationId: string;
+  readonly tenantId: string;
+  readonly status: IntegrationStatus;
+  readonly lastSuccessfulSyncAt: Date | null;
+  readonly externalAccountId: string | null;
+  readonly tenantStatus: 'ACTIVE' | 'DISABLED';
+  readonly hasCredential: boolean;
+};
+
 export type ContaAzulIntegrationRepository = {
   findByTenantId(tenantId: string): Promise<IntegrationWithCredential | null>;
   findPublicByTenantId(tenantId: string): Promise<ContaAzulIntegrationRecord | null>;
+  listAutoSyncCandidates(): Promise<readonly AutoSyncCandidateRecord[]>;
   persistConnectedTokens(input: PersistConnectedTokensInput): Promise<ContaAzulIntegrationRecord>;
   disconnect(tenantId: string, at: Date): Promise<ContaAzulIntegrationRecord>;
   markError(tenantId: string, code: string, at: Date): Promise<void>;
@@ -149,6 +160,37 @@ export function createContaAzulIntegrationRepository(
         },
       });
       return row ? mapIntegration(row) : null;
+    },
+
+    async listAutoSyncCandidates() {
+      const rows = await prisma.integration.findMany({
+        where: {
+          provider: CONTA_AZUL_PROVIDER,
+          status: 'CONNECTED',
+          lastSuccessfulSyncAt: { not: null },
+          credential: { isNot: null },
+          externalAccount: { isNot: null },
+          tenant: { status: 'ACTIVE' },
+        },
+        select: {
+          id: true,
+          tenantId: true,
+          status: true,
+          lastSuccessfulSyncAt: true,
+          tenant: { select: { status: true } },
+          credential: { select: { id: true } },
+          externalAccount: { select: { externalAccountId: true } },
+        },
+      });
+      return rows.map((row) => ({
+        integrationId: row.id,
+        tenantId: row.tenantId,
+        status: row.status,
+        lastSuccessfulSyncAt: row.lastSuccessfulSyncAt,
+        externalAccountId: row.externalAccount?.externalAccountId ?? null,
+        tenantStatus: row.tenant.status,
+        hasCredential: Boolean(row.credential),
+      }));
     },
 
     async persistConnectedTokens(input) {

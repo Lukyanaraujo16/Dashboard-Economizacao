@@ -43,16 +43,23 @@ export type ContaAzulPageQuery = {
   readonly tamanhoPagina?: number;
 };
 
+export type ContaAzulPeopleQuery = ContaAzulPageQuery & {
+  readonly dataAlteracaoDe?: string;
+  readonly dataAlteracaoAte?: string;
+};
+
 export type ContaAzulInstallmentSearchQuery = ContaAzulPageQuery & {
   readonly dataVencimentoDe: string;
   readonly dataVencimentoAte: string;
+  readonly dataAlteracaoDe?: string;
+  readonly dataAlteracaoAte?: string;
 };
 
 export type ContaAzulApiClient = {
   getConnectedCompany(accessToken: string): Promise<unknown>;
   getCategories(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
   getFinancialAccounts(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
-  getPeople(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
+  getPeople(accessToken: string, query: ContaAzulPeopleQuery): Promise<unknown>;
   searchReceivables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
   searchPayables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
 };
@@ -161,9 +168,15 @@ async function getJsonOnce(
   return json;
 }
 
-function withQuery(url: string, params: Record<string, string | number | boolean>): string {
+function withQuery(
+  url: string,
+  params: Record<string, string | number | boolean | undefined>,
+): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) {
+      continue;
+    }
     search.set(key, String(value));
   }
   return `${url}?${search.toString()}`;
@@ -218,6 +231,8 @@ export function createContaAzulApiClient(
         withQuery(CONTA_AZUL_PEOPLE_URL, {
           pagina: query.pagina,
           tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
+          data_alteracao_de: query.dataAlteracaoDe,
+          data_alteracao_ate: query.dataAlteracaoAte,
         }),
         accessToken,
       );
@@ -230,6 +245,8 @@ export function createContaAzulApiClient(
           tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
           data_vencimento_de: query.dataVencimentoDe,
           data_vencimento_ate: query.dataVencimentoAte,
+          data_alteracao_de: query.dataAlteracaoDe,
+          data_alteracao_ate: query.dataAlteracaoAte,
         }),
         accessToken,
       );
@@ -242,6 +259,8 @@ export function createContaAzulApiClient(
           tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
           data_vencimento_de: query.dataVencimentoDe,
           data_vencimento_ate: query.dataVencimentoAte,
+          data_alteracao_de: query.dataAlteracaoDe,
+          data_alteracao_ate: query.dataAlteracaoAte,
         }),
         accessToken,
       );
