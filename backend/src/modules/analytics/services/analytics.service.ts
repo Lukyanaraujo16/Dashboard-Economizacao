@@ -3,6 +3,7 @@ import type { ReceivableReadRepository } from '../../finance/repositories/receiv
 import { assertTenantId } from '../../finance/repositories/read-query.js';
 import { civilTodayInSaoPaulo } from '../domain/analytical-timezone.js';
 import { calculateInstallmentStockSnapshot } from '../domain/installment-snapshot.js';
+import { calculateReceivableDelinquency } from '../domain/receivable-delinquency.js';
 import type { FinancialStockSnapshot, GetFinancialStockSnapshotInput } from '../domain/types.js';
 
 export type AnalyticsService = {
@@ -25,11 +26,13 @@ export function createAnalyticsService(deps: AnalyticsServiceDependencies): Anal
         deps.receivables.findActiveByTenant(scope),
         deps.payables.findActiveByTenant(scope),
       ]);
+      const receivables = calculateInstallmentStockSnapshot(receivableRows, today);
       return {
         tenantId: input.tenantId,
         today,
-        receivables: calculateInstallmentStockSnapshot(receivableRows, today),
+        receivables,
         payables: calculateInstallmentStockSnapshot(payableRows, today),
+        receivableDelinquency: calculateReceivableDelinquency(receivables),
       };
     },
   };

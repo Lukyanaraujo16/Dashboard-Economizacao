@@ -16,7 +16,7 @@ deste documento prevalece. Fases executadas até o momento:
     com ressalvas de observabilidade adiadas para a Fase 17 / §21)
   - Fase 8 detalhada (§12) — Modelo Financeiro Normalizado: concluída
     (recorte orientado à necessidade comprovada de produto; 8A incluída)
-Próxima fase: Fase 9 detalhada (§13) — Motor Analítico (9A concluída; 9B/9C não iniciadas).
+Próxima fase: Fase 9 detalhada (§13) — Motor Analítico (9A/9B concluídas; 9C não iniciada).
 Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
 
 ⸻
@@ -450,7 +450,7 @@ Atendidos no recorte concluído.
 
 13. Fase 9 — Motor Analítico
 
-Status: Em andamento (9A CONCLUÍDA — núcleo temporal + snapshots AR/AP). 9B/9C não iniciadas.
+Status: Em andamento (9A CONCLUÍDA; 9B CONCLUÍDA — taxa de inadimplência). 9C não iniciada.
 Fórmulas oficiais: docs/11. Sem HTTP nesta subfase.
 
 Objetivo

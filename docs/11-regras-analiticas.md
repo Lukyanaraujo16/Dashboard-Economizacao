@@ -10,7 +10,8 @@ Decisões D1–D9: APROVADAS (19/08/2026). Este arquivo é a fonte
 normativa única. Outros documentos referenciam esta fonte; não
 duplicar fórmulas completas.
 Implementação 9A (estoque AR/AP, timezone America/Sao_Paulo): CONCLUÍDA.
-9B (inadimplência) e 9C (fluxo previsto): NÃO INICIADAS.
+9B (inadimplência, fórmula §4): CONCLUÍDA.
+9C (fluxo previsto): NÃO INICIADA.
 
 ⸻
 

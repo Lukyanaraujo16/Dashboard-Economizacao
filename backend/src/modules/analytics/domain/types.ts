@@ -6,11 +6,18 @@ export type InstallmentStockSnapshot = {
   readonly upcoming: Prisma.Decimal;
 };
 
+export type ReceivableDelinquency = {
+  readonly overdueUnpaid: Prisma.Decimal;
+  readonly openUnpaid: Prisma.Decimal;
+  readonly rate: Prisma.Decimal | null;
+};
+
 export type FinancialStockSnapshot = {
   readonly tenantId: string;
   readonly today: Date;
   readonly receivables: InstallmentStockSnapshot;
   readonly payables: InstallmentStockSnapshot;
+  readonly receivableDelinquency: ReceivableDelinquency;
 };
 
 export type GetFinancialStockSnapshotInput = {

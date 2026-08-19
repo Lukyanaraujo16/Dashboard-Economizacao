@@ -827,9 +827,9 @@ Não bloqueia:
 - Fase 9 — Motor Analítico
 - Fase 10 — Dashboard do Cliente
 
-Próxima fase executável: Fase 9B — inadimplência (NÃO INICIADA).
-Fase 8 (modelo + read model 8A): CONCLUÍDA. 8B: DESNECESSÁRIA. 9A: CONCLUÍDA.
-2.5: ADIADA PARA FASE 17. 9C não iniciada.
+Próxima fase executável: Fase 9C — fluxo previsto (NÃO INICIADA).
+Fase 8 (modelo + read model 8A): CONCLUÍDA. 8B: DESNECESSÁRIA. 9A: CONCLUÍDA. 9B: CONCLUÍDA.
+2.5: ADIADA PARA FASE 17.
 
 Referências:
 - `docs/06` §21 (Fase 17): escopo explícito "histórico de sync"
@@ -849,7 +849,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 9B — inadimplência (NÃO INICIADA). 9A: CONCLUÍDA. 9C: NÃO INICIADA.
+Próxima fase: Fase 9C — fluxo previsto (NÃO INICIADA). 9A: CONCLUÍDA. 9B: CONCLUÍDA.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -978,7 +978,7 @@ Caminho até o primeiro Dashboard
 -------------------------------------------------------
 
 1. Fase 8 — CONCLUÍDA (8A incluída; 8B desnecessária)
-2. Fase 9 — Motor Analítico: 9A CONCLUÍDA; 9B/9C NÃO INICIADAS
+2. Fase 9 — Motor Analítico: 9A CONCLUÍDA; 9B CONCLUÍDA; 9C NÃO INICIADA
 3. Fase 10 — ligar dados no shell já existente
 
 2.5/Fase 17 e deploy ficam depois. Dashboard e IA não entram na 8A.
@@ -1015,7 +1015,7 @@ Status: Concluída
 KpiCard, ChartCard, FinancialSection, FinancialGrid, StateWrapper e PanelIcon —
 desacoplados de backend/API, orientados por props, reutilizáveis por módulos futuros.
 
-KPIs — 9A (AR/AP estoque) CONCLUÍDA. 9B/9C e Dashboard não iniciadas.
+KPIs — 9A e 9B CONCLUÍDAS. 9C e Dashboard não iniciadas.
 
 Recorte do primeiro Dashboard aprovado (19/08/2026):
 

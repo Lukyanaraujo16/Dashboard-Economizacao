@@ -198,5 +198,64 @@ describe('AnalyticsService — snapshot AR/AP tenant-scoped', () => {
     const snap = await analytics.getFinancialStockSnapshot({ tenantId: seeded.tenant.id, now });
     expect(snap.receivables.open.equals(0)).toBe(true);
     expect(snap.payables.open.equals(0)).toBe(true);
+    expect(snap.receivableDelinquency.rate).toBeNull();
+  });
+
+  it('taxa de inadimplência é isolada por tenant e ignora AP', async () => {
+    const a = await seedConnected('an-9b-a');
+    const b = await seedConnected('an-9b-b');
+    const syncedAt = new Date();
+    await financial.upsertReceivables(
+      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
+      [
+        installment({
+          externalId: 'ar-overdue',
+          status: 'OPEN',
+          dueDate: '2026-08-10',
+          unpaid: '50',
+        }),
+        installment({
+          externalId: 'ar-upcoming',
+          status: 'OPEN',
+          dueDate: '2026-08-25',
+          unpaid: '50',
+        }),
+      ],
+    );
+    await financial.upsertPayables(
+      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
+      [
+        installment({
+          externalId: 'ap-overdue',
+          status: 'OPEN',
+          dueDate: '2026-08-01',
+          unpaid: '999',
+        }),
+      ],
+    );
+    await financial.upsertReceivables(
+      { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt },
+      [
+        installment({
+          externalId: 'ar-overdue',
+          status: 'OPEN',
+          dueDate: '2026-08-01',
+          unpaid: '20',
+        }),
+        installment({
+          externalId: 'ar-upcoming',
+          status: 'OPEN',
+          dueDate: '2026-08-30',
+          unpaid: '80',
+        }),
+      ],
+    );
+
+    const snapA = await analytics.getFinancialStockSnapshot({ tenantId: a.tenant.id, now });
+    const snapB = await analytics.getFinancialStockSnapshot({ tenantId: b.tenant.id, now });
+    expect(snapA.receivableDelinquency.rate!.equals(50)).toBe(true);
+    expect(snapA.payables.overdue.equals(new Prisma.Decimal('999'))).toBe(true);
+    expect(snapB.receivableDelinquency.rate!.equals(20)).toBe(true);
+    expect(snapB.receivableDelinquency.openUnpaid.equals(100)).toBe(true);
   });
 });
