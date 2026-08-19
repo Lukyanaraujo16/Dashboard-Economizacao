@@ -31,6 +31,10 @@ const nextConfig: NextConfig = {
         destination: `${backendOrigin}/branding/:path*`,
       },
       {
+        source: '/dashboard/:path*',
+        destination: `${backendOrigin}/dashboard/:path*`,
+      },
+      {
         source: '/integrations/:path*',
         destination: `${backendOrigin}/integrations/:path*`,
       },

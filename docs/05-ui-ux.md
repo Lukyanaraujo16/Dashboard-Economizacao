@@ -258,6 +258,23 @@ KPIs iniciais:
 O primeiro Dashboard utilizável segue o recorte vigente em docs/11;
 os demais itens desta lista permanecem no roadmap do MVP completo.
 
+Composição 10B (CONCLUÍDA / HOMOLOGADA em 19/08/2026 — perspectiva da empresa cliente):
+
+* Contas a receber (`receivables.open`, meta vencido / a vencer);
+* Contas a pagar (`payables.open`, meta vencido / a vencer);
+* Recebíveis vencidos (`receivables.overdue`);
+* Inadimplência (`delinquency.rate`).
+
+Não usar Receita, Despesas, Saldo ou Resultado neste recorte.
+Taxa null → "—" e “Sem valores em aberto.” (nunca 0%).
+Taxa "0" → "0%".
+`lastSuccessfulSyncAt` null → “Aguardando a primeira sincronização”
+(não exibir zeros como fato).
+Pós-sync com estoque zero → R$ 0,00.
+DISCONNECTED/ERROR com baseline: KPIs visíveis + aviso; sem botão conectar nesta fase.
+Freshness absoluta: “Última sincronização: {data/hora}”. Sem timer relativo.
+Fluxo previsto / movimentações / alertas permanecem placeholder da 10C.
+
 Cada card deverá apresentar, quando aplicável:
 
 * valor;

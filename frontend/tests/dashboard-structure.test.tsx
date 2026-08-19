@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,6 +11,8 @@ import {
   EmptyState,
   resolveGreetingPrefix,
 } from '../src/components/dashboard';
+import { getDashboardOverview } from '../src/services/dashboard/overview';
+import { DashboardOverviewRequestError } from '../src/services/dashboard/overview.types';
 import { ThemeProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
@@ -25,74 +27,231 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+vi.mock('../src/services/dashboard/overview', () => ({
+  getDashboardOverview: vi.fn(),
+}));
+
+const getOverview = vi.mocked(getDashboardOverview);
+
+const syncedOverview = {
+  today: '2026-08-19',
+  receivables: { open: '8.5', overdue: '3', upcoming: '5.5' },
+  payables: { open: '20', overdue: '4', upcoming: '16' },
+  delinquency: { overdueUnpaid: '3', openUnpaid: '8.5', rate: '35.2941' },
+  integration: {
+    status: 'CONNECTED' as const,
+    lastSuccessfulSyncAt: '2026-08-10T09:00:00.000Z',
+    lastErrorCode: null,
+  },
+};
+
+function kpiCard(title: string) {
+  const heading = screen.getByRole('heading', { name: title });
+  const card = heading.closest('[data-kpi-card]');
+  expect(card).toBeTruthy();
+  return within(card as HTMLElement);
+}
+
+function renderDashboard(
+  user = mockAuthenticatedUser,
+  support:
+    | { active: false }
+    | {
+        active: true;
+        tenantId: string;
+        tenantDisplayName: string;
+        startedAt: string;
+        supportSessionId: string;
+      } = {
+    active: false,
+  },
+) {
+  return renderWithAuth(
+    <ThemeProvider>
+      <DashboardPage />
+    </ThemeProvider>,
+    {
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(user, support),
+      hydrateOnMount: true,
+    },
+  );
+}
+
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   localStorage.clear();
   sessionStorage.clear();
   document.documentElement.removeAttribute('data-theme');
   document.documentElement.removeAttribute('style');
 });
 
-function renderDashboard() {
-  return renderWithAuth(
-    <ThemeProvider>
-      <DashboardPage />
-    </ThemeProvider>,
-    {
-      getCurrentUserAction: createAuthenticatedGetCurrentUser(mockAuthenticatedUser),
-      hydrateOnMount: true,
-    },
-  );
-}
-
-describe('Dashboard structure (1.2A)', () => {
+describe('Dashboard structure (10B)', () => {
   it('resolveGreetingPrefix cobre manhã, tarde e noite', () => {
     expect(resolveGreetingPrefix(new Date('2026-08-13T08:00:00'))).toBe('Bom dia');
     expect(resolveGreetingPrefix(new Date('2026-08-13T15:00:00'))).toBe('Boa tarde');
     expect(resolveGreetingPrefix(new Date('2026-08-13T21:00:00'))).toBe('Boa noite');
   });
 
-  it('renderiza estrutura principal em empty state', async () => {
+  it('mostra loading e depois KPIs reais em BRL e percentual', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
     renderDashboard();
 
-    expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: /(bom dia|boa tarde|boa noite), usuário teste/i,
-      }),
-    ).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Resumo Financeiro' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Fluxo de Caixa' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Movimentações Recentes' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Alertas' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Resumo Financeiro' })).toBeTruthy();
+    await waitFor(() => {
+      expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
+    });
 
-    expect(screen.getByRole('heading', { name: 'Receita' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Despesas' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Saldo' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Resultado' })).toBeTruthy();
-
-    expect(screen.getAllByText('Disponível após sincronização.').length).toBe(4);
-    expect(screen.getByText('Nenhuma movimentação disponível.')).toBeTruthy();
-    expect(screen.getByText('Nenhum alerta disponível.')).toBeTruthy();
-    expect(document.querySelector('[data-dashboard-page="true"]')).toBeTruthy();
-    expect(document.querySelectorAll('[data-kpi-empty="true"]').length).toBe(4);
-    expect(document.querySelector('[data-panel-icon="chart"]')).toBeTruthy();
-    expect(document.querySelector('[data-panel-icon="list"]')).toBeTruthy();
-    expect(document.querySelector('[data-panel-icon="alert"]')).toBeTruthy();
-    expect(document.querySelector('[data-financial-grid="true"]')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Contas a receber' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Contas a pagar' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Recebíveis vencidos' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Inadimplência' })).toBeTruthy();
+    expect(kpiCard('Contas a receber').getByText(/R\$\s*8,50/)).toBeTruthy();
+    expect(kpiCard('Contas a pagar').getByText(/R\$\s*20,00/)).toBeTruthy();
+    expect(kpiCard('Recebíveis vencidos').getByText(/R\$\s*3,00/)).toBeTruthy();
+    expect(kpiCard('Inadimplência').getByText('35,3%')).toBeTruthy();
+    expect(screen.getByText(/Última sincronização:/)).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Receita' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Despesas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Saldo' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Resultado' })).toBeNull();
+    expect(screen.getByText('O fluxo previsto entra em uma próxima etapa.')).toBeTruthy();
   });
 
-  it('não apresenta valores financeiros fictícios', async () => {
+  it('never-sync não mostra zeros como dado financeiro', async () => {
+    getOverview.mockResolvedValue({
+      ...syncedOverview,
+      receivables: { open: '0', overdue: '0', upcoming: '0' },
+      payables: { open: '0', overdue: '0', upcoming: '0' },
+      delinquency: { overdueUnpaid: '0', openUnpaid: '0', rate: null },
+      integration: {
+        status: 'CONNECTED',
+        lastSuccessfulSyncAt: null,
+        lastErrorCode: null,
+      },
+    });
     renderDashboard();
 
-    await screen.findByRole('heading', { name: 'Resumo Financeiro' });
-    expect(screen.queryByText(/R\$\s*\d/)).toBeNull();
-    expect(screen.queryByText(/\d+([.,]\d+)?\s*%/)).toBeNull();
-    expect(screen.queryByText(/R\$/)).toBeNull();
+    await waitFor(() => {
+      expect(document.querySelector('[data-overview-state="never-sync"]')).toBeTruthy();
+    });
+    expect(screen.getAllByText('Aguardando a primeira sincronização').length).toBe(4);
+    expect(screen.queryByText(/R\$\s*0,00/)).toBeNull();
+  });
+
+  it('zero pós-sync mostra R$ 0,00 e rate null como travessão', async () => {
+    getOverview.mockResolvedValue({
+      ...syncedOverview,
+      receivables: { open: '0', overdue: '0', upcoming: '0' },
+      payables: { open: '0', overdue: '0', upcoming: '0' },
+      delinquency: { overdueUnpaid: '0', openUnpaid: '0', rate: null },
+    });
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
+    });
+    expect(screen.getAllByText(/R\$\s*0,00/).length).toBeGreaterThan(0);
+    expect(screen.getByText('—')).toBeTruthy();
+    expect(screen.getByText('Sem valores em aberto.')).toBeTruthy();
+    expect(screen.queryByText('0%')).toBeNull();
+  });
+
+  it('rate zero exato aparece como 0%', async () => {
+    getOverview.mockResolvedValue({
+      ...syncedOverview,
+      receivables: { open: '10', overdue: '0', upcoming: '10' },
+      delinquency: { overdueUnpaid: '0', openUnpaid: '10', rate: '0' },
+    });
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(screen.getByText('0%')).toBeTruthy();
+    });
+  });
+
+  it('DISCONNECTED com dados mantém KPIs e aviso', async () => {
+    getOverview.mockResolvedValue({
+      ...syncedOverview,
+      integration: {
+        status: 'DISCONNECTED',
+        lastSuccessfulSyncAt: '2026-08-10T09:00:00.000Z',
+        lastErrorCode: null,
+      },
+    });
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(kpiCard('Contas a receber').getByText(/R\$\s*8,50/)).toBeTruthy();
+    });
+    expect(
+      screen.getByText('Integração desconectada. Exibindo os últimos dados sincronizados.'),
+    ).toBeTruthy();
+  });
+
+  it('ERROR de integração não é fetch error e não mostra código cru', async () => {
+    getOverview.mockResolvedValue({
+      ...syncedOverview,
+      integration: {
+        status: 'ERROR',
+        lastSuccessfulSyncAt: '2026-08-10T09:00:00.000Z',
+        lastErrorCode: 'refresh_failed',
+      },
+    });
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(kpiCard('Contas a receber').getByText(/R\$\s*8,50/)).toBeTruthy();
+    });
+    expect(
+      screen.getByText(
+        'Não foi possível atualizar a integração. Exibindo os últimos dados sincronizados.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText('refresh_failed')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tentar novamente' })).toBeNull();
+  });
+
+  it('fetch error oferece retry', async () => {
+    getOverview
+      .mockRejectedValueOnce(
+        new DashboardOverviewRequestError(
+          'unavailable',
+          'Não foi possível carregar os indicadores da sua empresa.',
+        ),
+      )
+      .mockResolvedValueOnce(syncedOverview);
+    renderDashboard();
+
+    expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    await waitFor(() => {
+      expect(kpiCard('Contas a receber').getByText(/R\$\s*8,50/)).toBeTruthy();
+    });
+    expect(getOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it('ADMIN sem Support Mode não dispara overview como falha financeira', async () => {
+    renderDashboard({
+      id: 'admin-1',
+      name: 'Admin',
+      email: 'admin@plataforma.com',
+      role: 'ADMIN',
+      tenantId: null,
+    });
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-overview-state="forbidden"]')).toBeTruthy();
+    });
+    expect(
+      screen.getAllByText('Selecione uma empresa pelo modo suporte para visualizar esta Dashboard.')
+        .length,
+    ).toBeGreaterThan(0);
+    expect(getOverview).not.toHaveBeenCalled();
   });
 
   it('EmptyState e EmptyPanel renderizam descrição', () => {
-    render(
+    renderWithAuth(
       <ThemeProvider>
         <EmptyState description="Estado vazio de teste." />
         <EmptyPanel description="Painel vazio de teste." />

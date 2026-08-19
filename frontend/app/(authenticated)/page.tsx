@@ -2,7 +2,7 @@
 
 import { AuthenticatedHome } from '../../src/components/layout';
 
-/** Home autenticada em `/` — estrutura do Dashboard (empty state, sem dados). */
+/** Home autenticada em `/` — Dashboard da empresa cliente (10B). */
 export default function AuthenticatedHomePage() {
   return <AuthenticatedHome />;
 }

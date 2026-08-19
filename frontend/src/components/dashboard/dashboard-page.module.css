@@ -6,25 +6,25 @@
   min-width: 0;
 }
 
-.footer {
+.freshness {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.notice {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-2);
-  padding-block: var(--space-1);
-  margin-top: var(--space-1);
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
-.footerDivider {
-  opacity: 0.55;
-}
-
-.footerCopy {
+.forbidden {
   margin: 0;
-  color: color-mix(in srgb, var(--color-text-muted) 82%, transparent);
+  color: var(--color-text-secondary);
   max-width: 36rem;
-  font-size: 0.6875rem;
-  line-height: 1.4;
-  letter-spacing: 0.01em;
 }
 
 @media (max-width: 767px) {

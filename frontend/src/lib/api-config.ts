@@ -150,6 +150,13 @@ export function adminTenantUserResetPasswordPath(tenantId: string, userId: strin
   return `${adminTenantUserPath(tenantId, userId)}/reset-password`;
 }
 
+/** Prefixo same-origin da Dashboard financeira do cliente (10A/10B). */
+export const DASHBOARD_API_PREFIX = '/dashboard';
+
+export function dashboardOverviewPath(): string {
+  return `${DASHBOARD_API_PREFIX}/overview`;
+}
+
 /** Prefixo same-origin do branding da sessão autenticada. */
 export const BRANDING_API_PREFIX = '/branding';
 

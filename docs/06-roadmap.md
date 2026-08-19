@@ -19,7 +19,8 @@ deste documento prevalece. Fases executadas até o momento:
   - Fase 9 detalhada (§13) — Motor Analítico: concluída no recorte do
     primeiro Dashboard (Grupo A; 9A/9B/9C)
   - Fase 10A — GET /dashboard/overview: CONCLUÍDA
-Próxima fase: Fase 10B (cards/freshness). 10C NÃO INICIADA.
+  - Fase 10B — primeiros números reais na Dashboard: CONCLUÍDA / HOMOLOGADA
+Próxima fase: Fase 10C (upcoming + forecast HTTP).
 Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
 
 ⸻
@@ -525,7 +526,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Próxima fase: Fase 10B. 10A CONCLUÍDA. 10C NÃO INICIADA.
+Próxima fase: Fase 10C. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA.
 
 ⸻
 
@@ -533,8 +534,14 @@ Próxima fase: Fase 10B. 10A CONCLUÍDA. 10C NÃO INICIADA.
 
 Status: EM ANDAMENTO (recorte).
 10A (API/facade GET /dashboard/overview): CONCLUÍDA.
-10B (cards, freshness, empty/loading/error): NÃO INICIADA.
+10B (cards, freshness, empty/loading/error): CONCLUÍDA / HOMOLOGADA.
 10C (upcoming HTTP + forecast HTTP): NÃO INICIADA.
+
+Homologação humana (19/08/2026): Dashboard `/` em Support Mode — quatro
+cards Grupo A com números persistidos, freshness visível, estados
+never-sync / zero pós-sync / DISCONNECTED / ERROR, sem 10C. Integração
+DISCONNECTED manteve KPIs e aviso; reload estável. Composição aprovada
+como MVP desta etapa. Fase 10 (A+B+C) permanece EM ANDAMENTO.
 
 Contrato 10A (sem fórmulas; fórmulas em docs/11):
 GET /dashboard/overview — autenticado; tenant só da sessão/Support Mode.

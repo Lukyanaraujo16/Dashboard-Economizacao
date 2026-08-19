@@ -20,6 +20,20 @@ import {
 
 const replaceMock = vi.fn();
 
+vi.mock('../src/services/dashboard/overview', () => ({
+  getDashboardOverview: vi.fn().mockResolvedValue({
+    today: '2026-08-19',
+    receivables: { open: '0', overdue: '0', upcoming: '0' },
+    payables: { open: '0', overdue: '0', upcoming: '0' },
+    delinquency: { overdueUnpaid: '0', openUnpaid: '0', rate: null },
+    integration: {
+      status: 'DISCONNECTED',
+      lastSuccessfulSyncAt: null,
+      lastErrorCode: null,
+    },
+  }),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     replace: replaceMock,

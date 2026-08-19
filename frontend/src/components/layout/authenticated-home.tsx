@@ -3,7 +3,7 @@
 import { DashboardPage } from '../dashboard';
 
 /**
- * Home autenticada em `/` — estrutura definitiva do Dashboard (1.2A), empty state.
+ * Home autenticada em `/` — Dashboard da empresa cliente (10B).
  */
 export function AuthenticatedHome() {
   return <DashboardPage />;

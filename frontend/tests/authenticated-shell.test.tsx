@@ -30,6 +30,20 @@ function createPlatformBrandingAction() {
   return vi.fn().mockResolvedValue(platformBranding);
 }
 
+vi.mock('../src/services/dashboard/overview', () => ({
+  getDashboardOverview: vi.fn().mockResolvedValue({
+    today: '2026-08-19',
+    receivables: { open: '0', overdue: '0', upcoming: '0' },
+    payables: { open: '0', overdue: '0', upcoming: '0' },
+    delinquency: { overdueUnpaid: '0', openUnpaid: '0', rate: null },
+    integration: {
+      status: 'DISCONNECTED',
+      lastSuccessfulSyncAt: null,
+      lastErrorCode: null,
+    },
+  }),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     replace: replaceMock,
@@ -199,13 +213,15 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
         user: superAdmin,
         support: { active: false },
       });
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          user: superAdmin,
-          support: { active: false },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            user: superAdmin,
+            support: { active: false },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
       ),
     );
     vi.stubGlobal('fetch', fetchMock);

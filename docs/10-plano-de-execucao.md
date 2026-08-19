@@ -827,8 +827,8 @@ Não bloqueia:
 - Fase 9 — Motor Analítico
 - Fase 10 — Dashboard do Cliente
 
-Próxima fase executável: Fase 10B (NÃO INICIADA).
-10A: CONCLUÍDA. 10C: NÃO INICIADA.
+Próxima fase executável: Fase 10C (NÃO INICIADA).
+10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA.
 Fase 8: CONCLUÍDA. 8B: DESNECESSÁRIA.
 9A: CONCLUÍDA. 9B: CONCLUÍDA. 9C: CONCLUÍDA. Grupo A: CONCLUÍDO.
 Fase 9: CONCLUÍDA NO RECORTE APROVADO (primeiro Dashboard / Grupo A).
@@ -852,7 +852,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 10B (NÃO INICIADA). 10A: CONCLUÍDA. 10C: NÃO INICIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
+Próxima fase: Fase 10C (NÃO INICIADA). 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -988,8 +988,13 @@ Caminho até o primeiro Dashboard
 
 10A — facade/API tenant-scoped: CONCLUÍDA
      GET /dashboard/overview (contrato em docs/09.6 §10)
-10B — cards + freshness (`lastSuccessfulSyncAt`) + empty/loading/error: NÃO INICIADA
+10B — cards + freshness + empty/loading/error: CONCLUÍDA / HOMOLOGADA
+     (Dashboard já exibe os primeiros números reais; próxima etapa = 10C)
 10C — próximos vencimentos + gráfico de fluxo previsto: NÃO INICIADA
+
+Backlog (não 10B/10C): a mesma Integration CONTA_AZUL do tenant deverá
+poder ser operada pela área administrativa e, no futuro, pela área do
+próprio cliente. Uma conexão; dois contextos de UX. Não implementar agora.
 
 KPIs residuais (categorias, faturamento, realizado, saldo, fixas,
 Receita × Despesa) não bloqueiam este caminho. 2.5/Fase 17 e deploy
@@ -1028,7 +1033,7 @@ KpiCard, ChartCard, FinancialSection, FinancialGrid, StateWrapper e PanelIcon �
 desacoplados de backend/API, orientados por props, reutilizáveis por módulos futuros.
 
 KPIs — Fase 9 CONCLUÍDA NO RECORTE DO GRUPO A.
-10A CONCLUÍDA. 10B NÃO INICIADA. 10C NÃO INICIADA.
+10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C NÃO INICIADA.
 
 Recorte do primeiro Dashboard aprovado (19/08/2026):
 
