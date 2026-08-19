@@ -9,6 +9,8 @@ Tipo: Fonte normativa das regras do Motor Analítico
 Decisões D1–D9: APROVADAS (19/08/2026). Este arquivo é a fonte
 normativa única. Outros documentos referenciam esta fonte; não
 duplicar fórmulas completas.
+Implementação 9A (estoque AR/AP, timezone America/Sao_Paulo): CONCLUÍDA.
+9B (inadimplência) e 9C (fluxo previsto): NÃO INICIADAS.
 
 ⸻
 
@@ -448,18 +450,22 @@ D9. Denominador zero — APROVADA.
 
 17. Pendências que NÃO são D1–D9
 
-Ainda abertas (não bloqueiam Fase 8A):
+Ainda abertas. Não são requisitos da Fase 8 concluída e não bloqueiam
+o início da Fase 9 (Grupo A):
 
 * copy/UX da taxa null e distinção visual "sem aberto" vs "sem sync"
   (Fase 10);
 * janela N de "próximos vencimentos" além da regra dueDate >= hoje
   (detalhe de apresentação; horizonte de 90 dias já define o fluxo);
-* definição futura de faturamento (§12);
-* ledger / data efetiva de baixa (§8);
+* definição futura de faturamento (§12) — sem fonte oficial;
+* ledger / data efetiva de baixa (§8) — `paid` acumulado ≠ ledger;
 * saldo de conta (§13);
 * fixas/variáveis (§14);
 * análise por competência com rótulo próprio (§11);
 * rateio valorado (`GET /parcelas/{id}`);
-* série histórica / as-of / coorte de inadimplência (§4 D2).
+* série histórica / as-of / coorte de inadimplência (§4 D2);
+* delete físico no ERP (ausência ≠ tombstone; limitação da sync 2.4);
+* hardening futuro: `partyIdsByExternalId` (write) pode passar a filtrar
+  `tenantId` (SAFE_BY_INVARIANT hoje; Fase 18).
 
 ⸻

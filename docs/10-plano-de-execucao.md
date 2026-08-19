@@ -827,8 +827,9 @@ Não bloqueia:
 - Fase 9 — Motor Analítico
 - Fase 10 — Dashboard do Cliente
 
-Próxima fase executável após 2.4: Fase 8 — Modelo Financeiro Normalizado.
-8A (read model): CONCLUÍDA. Fase 9 não iniciada.
+Próxima fase executável: Fase 9B — inadimplência (NÃO INICIADA).
+Fase 8 (modelo + read model 8A): CONCLUÍDA. 8B: DESNECESSÁRIA. 9A: CONCLUÍDA.
+2.5: ADIADA PARA FASE 17. 9C não iniciada.
 
 Referências:
 - `docs/06` §21 (Fase 17): escopo explícito "histórico de sync"
@@ -843,7 +844,13 @@ Referências:
 # FASE 8 — MODELO FINANCEIRO NORMALIZADO
 ===========================================================
 
-Status: Parcialmente concluída (8A CONCLUÍDA; 8B pendente)
+Status: CONCLUÍDA
+
+Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
+8A (read model): CONCLUÍDA.
+8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
+Próxima fase: Fase 9B — inadimplência (NÃO INICIADA). 9A: CONCLUÍDA. 9C: NÃO INICIADA.
+2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
 
@@ -930,34 +937,15 @@ Critério de aceite:
 
 -------------------------------------------------------
 FASE 8B — Hardenings de domínio e documentação
--------------------------------------------------------
 
-Objetivo:
-Garantir que o modelo atual está completo e auditado antes da Fase 9.
+Status: DESNECESSÁRIA (auditoria 19/08/2026)
 
-Schema: NÃO
-Migration: NÃO
-Conta Azul: NÃO
+Não é contrato do PRD. Subdivisão operacional. Sem implementação
+pendente antes da Fase 9. Testes residuais de mapper (0/N categorias)
+e partyId SetNull são polish opcional, não bloqueiam o Motor Analítico.
+Índices da 8A já existem no schema. Limitações conhecidas: docs/11.
 
-Tarefas:
-- documentar limitações confirmadas do modelo atual em docs/11:
-  * paid acumulado ≠ ledger temporal
-  * sem paidAt / sem endpoint de movimentos
-  * sem rateio valorado
-  * sem saldo de conta
-  * delete físico no ERP não detectado (sem tombstone)
-- adicionar testes unitários de domínio ausentes (ver §17 desta rodada)
-- confirmar que índices existentes cobrem os padrões de query da Fase 8A:
-  * idx_receivables_tenant_due_date → sim
-  * idx_receivables_tenant_status → sim
-  * idx_payables_tenant_due_date → sim
-  * idx_payables_tenant_status → sim
-
-Critério de aceite:
-- todos os testes de domínio passam
-- limitações documentadas em docs/11
-- índices confirmados
-- nenhuma coluna computada desnecessária adicionada ao schema
+Não é a próxima implementação.
 
 -------------------------------------------------------
 Testes necessários para fechar Fase 8 (auditoria 19/08/2026)
@@ -973,14 +961,10 @@ JÁ COBERTO:
 - idempotência (homologada em prod)
 - isolamento de tenant (via test-database-safety e tenant-auth-isolation)
 
-FALTA COBRIR (Fase 8A/8B):
-- Receivable: categoryExternalIds com 0 entradas (sem categoria)
-- Receivable: categoryExternalIds com N > 1 entradas (múltiplas)
-- Receivable: status PARTIALLY_PAID com paid > 0 e unpaid > 0
-- Receivable: status RENEGOTIATED — persistência e exclusão de queries abertas
-- Payable: simetria dos casos acima
-- Party: vínculo receivable/payable via partyId (nullable SetNull)
-- Repositórios de leitura: isolamento cross-tenant em queries analíticas
+COBERTURA RESIDUAL (não bloqueia encerrar Fase 8):
+- mapper 0/N categoryExternalIds (persistência/read já exercitam `[]`)
+- Party partyId SetNull
+Não executar como 8B. Não bloquear Fase 9.
 
 -------------------------------------------------------
 D1–D9: RESOLVIDAS (docs/11 §16). Não reabrir na Fase 8.
@@ -993,10 +977,9 @@ e copy de empty states. Pendências restantes: docs/11 §17.
 Caminho até o primeiro Dashboard
 -------------------------------------------------------
 
-1. Fase 8A — CONCLUÍDA (read model tenant-scoped)
-2. Fase 8B — testes residuais de domínio (próxima decisão da Fase 8)
-3. Fase 9 — Motor Analítico: NÃO INICIADA
-4. Fase 10 — ligar dados no shell já existente
+1. Fase 8 — CONCLUÍDA (8A incluída; 8B desnecessária)
+2. Fase 9 — Motor Analítico: 9A CONCLUÍDA; 9B/9C NÃO INICIADAS
+3. Fase 10 — ligar dados no shell já existente
 
 2.5/Fase 17 e deploy ficam depois. Dashboard e IA não entram na 8A.
 
@@ -1032,7 +1015,7 @@ Status: Concluída
 KpiCard, ChartCard, FinancialSection, FinancialGrid, StateWrapper e PanelIcon —
 desacoplados de backend/API, orientados por props, reutilizáveis por módulos futuros.
 
-KPIs — aguardando Fases 8 (repositórios analíticos) e 9 (Motor Analítico)
+KPIs — 9A (AR/AP estoque) CONCLUÍDA. 9B/9C e Dashboard não iniciadas.
 
 Recorte do primeiro Dashboard aprovado (19/08/2026):
 

@@ -1075,7 +1075,7 @@ PENDENTE — necessidade condicional ao recorte de produto:
 
 Os itens pendentes não precisam ser consumidos automaticamente.
 A decisão de consumi-los é orientada pelo recorte de KPIs do
-primeiro Dashboard (ver Fase 8 / Fase 9 em docs/06).
+primeiro Dashboard (Fase 9 e docs/11; Fase 8 já concluída no recorte de produto).
 
 ⸻
 

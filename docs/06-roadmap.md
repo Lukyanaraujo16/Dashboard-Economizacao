@@ -14,7 +14,9 @@ deste documento prevalece. Fases executadas até o momento:
   - Fase 6 detalhada (§10) — Integração Conta Azul: concluída (2.1–2.4)
   - Fase 7 detalhada (§11) — Motor de Sincronização: concluída (2.3–2.4,
     com ressalvas de observabilidade adiadas para a Fase 17 / §21)
-Próxima fase: Fase 8 detalhada (§12) — Modelo Financeiro Normalizado.
+  - Fase 8 detalhada (§12) — Modelo Financeiro Normalizado: concluída
+    (recorte orientado à necessidade comprovada de produto; 8A incluída)
+Próxima fase: Fase 9 detalhada (§13) — Motor Analítico (9A concluída; 9B/9C não iniciadas).
 Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
 
 ⸻
@@ -388,26 +390,31 @@ Critérios de aceite
 
 12. Fase 8 — Modelo Financeiro Normalizado
 
-Status: Parcialmente concluída (8A CONCLUÍDA; 8B pendente)
+Status: Concluída (19/08/2026, recorte orientado à necessidade comprovada
+de produto; commit do read model 8A: d8103e7)
 
-Entidades já implementadas e sincronizadas com conta ERP real:
+A Fase 8 persiste o domínio interno necessário ao produto. Não é
+obrigatório importar todo recurso da Conta Azul. Extensões condicionadas
+a KPIs futuros (não requisitos universais desta fase concluída):
+
+* transações/movimentações detalhadas e ledger/baixas;
+* saldo de conta financeira;
+* rateio valorado;
+* vendas / notas fiscais / faturamento (fonte ainda indefinida).
+
+Entidades entregues e sincronizadas com conta ERP real:
 FinancialCategory, FinancialAccount, Party, Receivable, Payable
 (schema, mappers, repositório de escrita, idempotência por externalId).
 
-D1–D9 fechadas em docs/11 (19/08/2026). Escopo residual da Fase 8:
-* 8A — CONCLUÍDA: repositórios de leitura (AR/AP por tenant, status ativo, dueDate);
-  sem calcular KPI;
-* 8B — testes residuais de domínio e confirmação de índices.
+Read model tenant-scoped (8A): ReceivableReadRepository,
+PayableReadRepository, FinancialCategoryReadRepository
+(`backend/src/modules/finance/`). Sem KPI. Sem HTTP.
 
-Fora do escopo da Fase 8 (Fase 9 ou posterior): fórmulas de KPI,
-agregação mensal do fluxo, buckets de categoria (D8), taxa null (D9).
+8B (subdivisão operacional de testes/hardening): DESNECESSÁRIA após
+auditoria — sem lacuna estrutural antes do Motor Analítico.
 
-Fora do escopo da Fase 8 (pertence à Fase 9 ou posterior):
-* transações/movimentações (só se fluxo realizado for KPI do recorte);
-* saldo de conta financeira;
-* rateio valorado por categoria.
-
-Regras financeiras e recorte do primeiro Dashboard: ver docs/11.
+D1–D9 fechadas em docs/11. Fórmulas, overdue derivado, fluxo previsto
+e buckets D8 pertencem à Fase 9.
 
 Objetivo
 
@@ -422,8 +429,8 @@ Conforme disponibilidade comprovada e necessidade de produto:
 * clientes/fornecedores (Party) — concluída;
 * contas a receber — concluída;
 * contas a pagar — concluída;
-* repositórios de leitura analítica — pendente (Fase 8 residual);
-* transações/movimentações — adiado (Fase 9 ou posterior, se KPI exigir);
+* repositórios de leitura (8A) — concluída;
+* transações/movimentações — adiado (KPI de fluxo realizado, se houver);
 * identificadores externos — concluído;
 * normalização de status — concluída.
 
@@ -433,11 +440,18 @@ Critérios de aceite
 * external IDs são preservados;
 * tenant é obrigatório;
 * sincronização repetida mantém consistência;
-* valores financeiros possuem precisão adequada.
+* valores financeiros possuem precisão adequada (Decimal);
+* read model tenant-scoped disponível para o Motor Analítico;
+* a futura camada analítica não chama a Conta Azul (CAZ-011).
+
+Atendidos no recorte concluído.
 
 ⸻
 
 13. Fase 9 — Motor Analítico
+
+Status: Em andamento (9A CONCLUÍDA — núcleo temporal + snapshots AR/AP). 9B/9C não iniciadas.
+Fórmulas oficiais: docs/11. Sem HTTP nesta subfase.
 
 Objetivo
 
