@@ -18,7 +18,8 @@ deste documento prevalece. Fases executadas até o momento:
     (recorte orientado à necessidade comprovada de produto; 8A incluída)
   - Fase 9 detalhada (§13) — Motor Analítico: concluída no recorte do
     primeiro Dashboard (Grupo A; 9A/9B/9C)
-Próxima fase: Fase 10 detalhada (§14) — Dashboard do Cliente.
+  - Fase 10A — GET /dashboard/overview: CONCLUÍDA
+Próxima fase: Fase 10B (cards/freshness). 10C NÃO INICIADA.
 Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
 
 ⸻
@@ -524,13 +525,22 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Próxima fase: Fase 10 — Dashboard do Cliente.
+Próxima fase: Fase 10B. 10A CONCLUÍDA. 10C NÃO INICIADA.
 
 ⸻
 
 14. Fase 10 — Dashboard do Cliente
 
-Status: NÃO INICIADA. Próxima fase executável.
+Status: EM ANDAMENTO (recorte).
+10A (API/facade GET /dashboard/overview): CONCLUÍDA.
+10B (cards, freshness, empty/loading/error): NÃO INICIADA.
+10C (upcoming HTTP + forecast HTTP): NÃO INICIADA.
+
+Contrato 10A (sem fórmulas; fórmulas em docs/11):
+GET /dashboard/overview — autenticado; tenant só da sessão/Support Mode.
+ADMIN/SUPER_ADMIN sem Support Mode → 403.
+Cache-Control: private, no-store.
+Decimais em string; today YYYY-MM-DD (America/Sao_Paulo); lastSuccessfulSyncAt ISO ou null.
 
 O primeiro Dashboard utilizável consome o Grupo A (docs/11 §15).
 DASH-001–010 e categorias/receita×despesa deste escopo permanecem
