@@ -19,7 +19,7 @@ function overview(
   };
 }
 
-describe('toDashboardKpis', () => {
+describe('toDashboardKpis (estoque reutilizável; não alimenta a Home)', () => {
   it('mapeia open/overdue/rate sem somar', () => {
     const cards = toDashboardKpis(
       overview({
@@ -29,16 +29,36 @@ describe('toDashboardKpis', () => {
       }),
     );
     expect(cards.map((card) => card.title)).toEqual([
-      'Contas a receber',
-      'Contas a pagar',
+      'A receber em aberto',
+      'A pagar em aberto',
       'Recebíveis vencidos',
       'Inadimplência',
     ]);
     expect(cards[0]?.value).toBe('R$\u00a08,00');
     expect(cards[1]?.value).toBe('R$\u00a020,00');
+    expect(cards[0]?.meta).toContain('Estoque total');
+    expect(cards[1]?.meta).toContain('todos os vencimentos');
     expect(cards[2]?.value).toBe('R$\u00a03,00');
+    expect(cards[2]?.meta).toContain('estoque');
     expect(cards[3]?.value).toBe('37,5%');
     expect(cards[3]?.meta).toContain('R$\u00a03,00 vencido de R$\u00a08,00 em aberto');
+  });
+
+  it('estoque AP/AR não muda com selectedMonth — mapping é só overview', () => {
+    const cards = toDashboardKpis(
+      overview({
+        receivables: { open: '1075516.03', overdue: '1953.95', upcoming: '1073562.08' },
+        payables: { open: '1075516.03', overdue: '1953.95', upcoming: '1073562.08' },
+        delinquency: {
+          overdueUnpaid: '1953.95',
+          openUnpaid: '1075516.03',
+          rate: '0.18',
+        },
+      }),
+    );
+    expect(cards[1]?.title).toBe('A pagar em aberto');
+    expect(cards[1]?.value).toBe('R$\u00a01.075.516,03');
+    expect(cards[1]?.meta).toMatch(/Estoque total/);
   });
 
   it('rate null vira travessão e não 0%', () => {

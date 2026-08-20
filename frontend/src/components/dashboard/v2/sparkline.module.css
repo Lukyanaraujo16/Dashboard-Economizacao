@@ -1,0 +1,123 @@
+.root {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 2.5rem;
+  color: var(--sparkline-color, var(--color-series-revenue));
+}
+
+.interactive {
+  cursor: crosshair;
+  border-radius: var(--radius-sm);
+}
+
+.interactive:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.area {
+  fill: color-mix(in srgb, currentColor 16%, transparent);
+  stroke: none;
+}
+
+.marker {
+  stroke: color-mix(in srgb, var(--color-text-muted) 60%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.zeroLine {
+  stroke: color-mix(in srgb, var(--color-border) 90%, transparent);
+  stroke-width: 1;
+}
+
+.dot {
+  fill: currentColor;
+  stroke: var(--color-surface);
+  stroke-width: 1;
+}
+
+.flat {
+  height: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+.flatLine {
+  stroke: color-mix(in srgb, var(--color-border) 90%, transparent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.flatLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.2;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  white-space: nowrap;
+  pointer-events: none;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--elevation-sm);
+  z-index: var(--z-dropdown);
+}
+
+.tooltipDay {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+}
+
+.tooltipValue {
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltipCaption {
+  max-inline-size: 11rem;
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.liveRegion {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

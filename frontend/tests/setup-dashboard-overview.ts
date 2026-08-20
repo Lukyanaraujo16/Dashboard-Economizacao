@@ -20,9 +20,25 @@ beforeEach(() => {
   const previous = globalThis.fetch;
   vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    if (url.includes('/dashboard/overview')) {
+    const path = url.split('?')[0] ?? url;
+    if (path.endsWith('/dashboard/overview')) {
       return Promise.resolve(
         new Response(JSON.stringify(NEVER_SYNCED_OVERVIEW), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
+    if (
+      path.endsWith('/dashboard/upcoming') ||
+      path.endsWith('/dashboard/cash-flow-forecast') ||
+      path.endsWith('/dashboard/expense-composition') ||
+      path.endsWith('/dashboard/receivable-composition') ||
+      path.endsWith('/dashboard/monthly-revenue') ||
+      path.endsWith('/dashboard/executive-insights')
+    ) {
+      return Promise.resolve(
+        new Response(JSON.stringify({}), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         }),

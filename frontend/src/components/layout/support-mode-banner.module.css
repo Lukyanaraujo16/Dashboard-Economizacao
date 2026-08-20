@@ -1,6 +1,6 @@
 .banner {
-  border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border));
-  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+  background: color-mix(in srgb, var(--color-warning) 6%, var(--color-surface));
 }
 
 .inner {
@@ -10,15 +10,17 @@
   gap: var(--space-3);
   width: 100%;
   max-width: 84rem;
+  min-height: 2.25rem;
   margin-inline: auto;
-  padding: var(--space-2) clamp(var(--space-5), 3vw, var(--space-10));
+  padding: 0.1875rem clamp(var(--space-5), 3vw, var(--space-10));
 }
 
 .message {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 0.125rem;
   min-width: 0;
+  font-size: 0.75rem;
 }
 
 .error {
@@ -29,6 +31,8 @@
   .inner {
     align-items: flex-start;
     flex-direction: column;
+    gap: var(--space-2);
+    padding-block: var(--space-2);
     padding-inline: var(--space-4);
   }
 }

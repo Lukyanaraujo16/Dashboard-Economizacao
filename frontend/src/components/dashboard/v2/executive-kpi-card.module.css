@@ -1,0 +1,160 @@
+.root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  block-size: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: var(--radius-lg);
+  transition:
+    border-color var(--duration-fast) ease,
+    background var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
+}
+
+.root:hover {
+  border-color: color-mix(in srgb, var(--kpi-tone) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface-elevated) 55%, var(--color-surface));
+  box-shadow: var(--elevation-sm);
+}
+
+.expandable {
+  cursor: pointer;
+  text-align: left;
+}
+
+.expandable:hover {
+  border-color: color-mix(in srgb, var(--kpi-tone) 55%, var(--color-border));
+}
+
+.expandable:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: var(--radius-full);
+  color: var(--kpi-tone);
+  background: color-mix(in srgb, var(--kpi-tone) 14%, transparent);
+}
+
+.title {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.expand {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity var(--duration-fast) ease;
+}
+
+.root:hover .expand,
+.expand:focus-visible {
+  opacity: 1;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.value {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 1.375rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.valuePlaceholder {
+  color: color-mix(in srgb, var(--color-text-muted) 68%, transparent);
+}
+
+.meta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+/* Altura fixa mantém todos os cards da faixa alinhados, com ou sem série. */
+.microviz {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  margin-top: var(--space-1);
+  min-block-size: 2.5rem;
+}
+
+.footer {
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-divider);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.skeletonValue,
+.skeletonMeta {
+  display: block;
+  height: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-border) 55%, transparent);
+}
+
+.skeletonValue {
+  width: 60%;
+  height: 1.375rem;
+}
+
+.skeletonMeta {
+  width: 40%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .expand {
+    transition: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .expand {
+    opacity: 1;
+  }
+}

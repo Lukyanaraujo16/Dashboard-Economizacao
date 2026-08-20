@@ -1,0 +1,157 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-block-size: 100%;
+}
+
+.emptyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-series-revenue) 14%, var(--color-surface-raised));
+  color: var(--color-series-revenue);
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.emptyCopy {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.fact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.fact dt {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fact dd {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.9375rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.fact dd[data-tone='revenue'] {
+  color: var(--color-series-revenue);
+}
+
+.meter {
+  height: 0.375rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.meterFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-series-revenue);
+}
+
+.meterFill[data-status='behind'] {
+  background: var(--color-series-expense);
+}
+
+.meterFill[data-status='exceeded'],
+.meterFill[data-status='met'] {
+  background: var(--color-series-revenue);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.stat {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.stat strong {
+  color: var(--color-text-primary);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat[data-tone='exceeded'] strong {
+  color: var(--color-series-revenue);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-divider);
+  padding-top: var(--space-2);
+}
+
+.historyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.historyMonth {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.historyPct {
+  color: var(--color-text-primary);
+  font-weight: 650;
+}
+
+.historyRow[data-status='exceeded'] .historyPct,
+.historyRow[data-status='met'] .historyPct {
+  color: var(--color-series-revenue);
+}
+
+.historyRow[data-status='behind'] .historyPct {
+  color: var(--color-series-expense);
+}
+
+.historyRow[data-status='unconfigured'] .historyPct {
+  color: var(--color-text-muted);
+}

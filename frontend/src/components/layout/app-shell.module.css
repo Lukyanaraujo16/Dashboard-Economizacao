@@ -320,6 +320,15 @@
 }
 
 @media (min-width: 768px) {
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100svh;
+    max-height: 100svh;
+    overflow-y: auto;
+  }
+
   .main {
     padding-top: var(--space-8);
   }

@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { Prisma } from '../src/generated/prisma/client.js';
 import type { FinancialInstallmentReadRecord } from '../src/modules/finance/domain/types.js';
-import { assertNDays, mapUpcomingInstallments } from '../src/modules/analytics/domain/upcoming.js';
+import {
+  assertNDays,
+  mapUpcomingInstallments,
+  summarizeUpcomingWindow,
+} from '../src/modules/analytics/domain/upcoming.js';
 
 function record(input: {
   readonly id: string;
@@ -59,5 +63,23 @@ describe('mapUpcomingInstallments', () => {
     expect(items.map((item) => item.id)).toEqual(['a', 'c']);
     expect(items[0]?.unpaid.equals(new Prisma.Decimal('1.25'))).toBe(true);
     expect(items[0]).not.toHaveProperty('description');
+  });
+});
+
+describe('summarizeUpcomingWindow', () => {
+  it('soma unpaid com Decimal, inclusive PARTIALLY_PAID, e net = receber - pagar', () => {
+    const summary = summarizeUpcomingWindow(
+      [{ unpaid: new Prisma.Decimal('8.5') }, { unpaid: new Prisma.Decimal('1.5') }],
+      [{ unpaid: new Prisma.Decimal('4') }],
+    );
+    expect(summary.receivable.toString()).toBe('10');
+    expect(summary.payable.toString()).toBe('4');
+    expect(summary.net.toString()).toBe('6');
+  });
+
+  it('janela vazia é zero e net negativo usa Decimal', () => {
+    expect(summarizeUpcomingWindow([], []).receivable.toString()).toBe('0');
+    const negative = summarizeUpcomingWindow([], [{ unpaid: new Prisma.Decimal('10') }]);
+    expect(negative.net.toString()).toBe('-10');
   });
 });

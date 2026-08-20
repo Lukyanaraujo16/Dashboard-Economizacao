@@ -14,6 +14,11 @@ export type DueDateRangeQuery = FinanceReadScope & {
   readonly to: Date;
 };
 
+export type CompetenceDateRangeQuery = FinanceReadScope & {
+  readonly from: Date;
+  readonly to: Date;
+};
+
 export type CategoryLookupQuery = FinanceReadScope & {
   readonly externalIds: readonly string[];
 };

@@ -1,0 +1,165 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(6rem, 6.5rem) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  min-width: 0;
+}
+
+.layout[data-size='md'] {
+  grid-template-columns: minmax(7.5rem, 8rem) minmax(0, 1fr);
+}
+
+.donutWrap {
+  position: relative;
+  width: 6.5rem;
+  height: 6.5rem;
+  flex-shrink: 0;
+}
+
+.donutWrap[data-size='md'] {
+  width: 8rem;
+  height: 8rem;
+}
+
+.donut {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.halo {
+  position: absolute;
+  inset: -0.25rem;
+  border-radius: 50%;
+  opacity: 0.55;
+}
+
+.hole {
+  position: absolute;
+  inset: 24%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.0625rem;
+  padding: 0.125rem;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.donutWrap[data-size='md'] .hole {
+  inset: 22%;
+  padding: 0.2rem;
+}
+
+/*
+ * O total nunca quebra no meio do número: rótulo compacto em uma linha,
+ * com corpo elástico dentro do furo do anel.
+ */
+.centerLabel {
+  max-inline-size: 100%;
+  color: var(--color-text-primary);
+  font-size: clamp(0.5rem, 0.58rem, 0.625rem);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.donutWrap[data-size='md'] .centerLabel {
+  font-size: clamp(0.625rem, 0.72rem, 0.8125rem);
+}
+
+.centerCaption {
+  max-inline-size: 100%;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.5rem;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.donutWrap[data-size='md'] .centerCaption {
+  font-size: 0.5625rem;
+}
+
+.legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 0.5rem minmax(0, 1fr) auto auto;
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+  padding: 0.0625rem 0;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--duration-fast) ease;
+}
+
+.legendDimmed .legendRow {
+  opacity: 0.45;
+}
+
+.legendDimmed .legendActive {
+  opacity: 1;
+}
+
+.swatch {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+}
+
+.legendName {
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+
+.legendValue {
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.legendPercent {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legendRow {
+    transition: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .layout {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .legend {
+    width: 100%;
+  }
+}

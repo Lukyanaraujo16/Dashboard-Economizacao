@@ -2,29 +2,33 @@ import type { ColorTokens } from '../types/colors';
 
 /**
  * Tema escuro próprio (não é inversão do light).
- * Três níveis: background → surface → surfaceElevated.
- * Success/danger/accent seguem a paleta oficial; primary adapta contraste.
+ * Dashboard V2: charcoal neutro, superfícies hierárquicas, séries financeiras protegidas.
  */
 export const darkColorTokens = {
-  background: '#0B0B14',
-  surface: '#12121F',
-  surfaceElevated: '#1A1A2C',
-  primary: '#9A9AD4',
-  onPrimary: '#0B0B14',
-  secondary: '#B4B4DC',
+  background: '#0E1117',
+  surface: '#171A21',
+  surfaceElevated: '#22262F',
+  primary: '#8B9CF7',
+  onPrimary: '#0E1117',
+  secondary: '#A5B4CF',
   accent: '#F2C200',
-  textPrimary: '#F2F2F8',
-  textSecondary: '#B4B4C4',
-  textMuted: '#8E8EA0',
-  border: '#2A2A3E',
-  success: '#1E9E5A',
+  textPrimary: '#F3F4F8',
+  textSecondary: '#B8C0D0',
+  textMuted: '#8B95A8',
+  border: '#2D323C',
+  success: '#22C55E',
   warning: '#FBBF24',
-  danger: '#C7402F',
+  danger: '#EF4444',
   onDanger: '#FFFFFF',
-  info: '#8B8BC4',
-  focus: '#8B8BC4',
-  disabled: '#6A6A7C',
-  overlay: 'rgba(0, 0, 0, 0.56)',
-  shadow: 'rgba(0, 0, 0, 0.4)',
-  divider: '#1E1E2E',
+  info: '#60A5FA',
+  focus: '#8B9CF7',
+  disabled: '#6B7280',
+  overlay: 'rgba(0, 0, 0, 0.62)',
+  shadow: 'rgba(0, 0, 0, 0.45)',
+  divider: '#232830',
+  seriesRevenue: '#22C55E',
+  seriesExpense: '#F97316',
+  seriesReceivable: '#38BDF8',
+  seriesReceived: '#3B82F6',
+  seriesResult: '#A855F7',
 } as const satisfies ColorTokens;

@@ -50,6 +50,7 @@ vi.mock('next/navigation', () => ({
     push: vi.fn(),
   }),
   usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('next/link', () => ({
@@ -120,10 +121,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     });
 
     expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: /(bom dia|boa tarde|boa noite), usuário teste/i,
-      }),
+      await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' }),
     ).toBeTruthy();
     expect(screen.getByRole('navigation', { name: /navegação principal|seções/i })).toBeTruthy();
     expect(screen.getByRole('main')).toBeTruthy();
@@ -132,7 +130,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     expect(screen.queryByText(mockAuthenticatedUser.tenantId!)).toBeNull();
     expect(screen.queryByText(/sessionId/i)).toBeNull();
     expect(screen.queryByText(/R\$\s*\d/)).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Resumo Financeiro' })).toBeTruthy();
+    expect(screen.getByLabelText('Visão mensal por competência')).toBeTruthy();
 
     const banner = screen.getByRole('banner', { name: 'Barra do sistema' });
     expect(banner.querySelector('h1')).toBeNull();
@@ -256,7 +254,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
       expect(replaceMock).toHaveBeenCalledWith('/login');
     });
     expect(screen.queryByRole('heading', { name: /olá/i })).toBeNull();
-    expect(screen.queryByRole('heading', { name: /resumo financeiro/i })).toBeNull();
+    expect(screen.queryByRole('heading', { name: /dashboard financeiro/i })).toBeNull();
   });
 
   it('error mostra retry e chama refreshSession', async () => {
@@ -286,10 +284,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
       expect(getCurrentUserAction).toHaveBeenCalledTimes(2);
     });
     expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: /(bom dia|boa tarde|boa noite), usuário teste/i,
-      }),
+      await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' }),
     ).toBeTruthy();
   });
 
@@ -340,12 +335,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     rejectLogout?.(new SessionRequestError('Não foi possível encerrar a sessão.'));
 
     expect(await screen.findByText(/não foi possível encerrar a sessão/i)).toBeTruthy();
-    expect(
-      screen.getByRole('heading', {
-        level: 1,
-        name: /(bom dia|boa tarde|boa noite), usuário teste/i,
-      }),
-    ).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Dashboard financeiro' })).toBeTruthy();
     expect(replaceMock).not.toHaveBeenCalledWith('/login');
 
     // evita unhandled rejection residual
@@ -370,10 +360,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
       hydrateOnMount: true,
     });
 
-    await screen.findByRole('heading', {
-      level: 1,
-      name: /(bom dia|boa tarde|boa noite)/i,
-    });
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' });
     expect(JSON.stringify(localStorage)).not.toMatch(/token|session|jwt|refresh|userId/i);
     expect(JSON.stringify(sessionStorage)).not.toMatch(/token|session|jwt|refresh|userId/i);
   });

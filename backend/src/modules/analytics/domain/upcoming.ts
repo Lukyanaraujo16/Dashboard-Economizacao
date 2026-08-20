@@ -22,3 +22,33 @@ export function mapUpcomingInstallments(
       status: record.status,
     }));
 }
+
+export type UpcomingWindowSummary = {
+  readonly receivable: Prisma.Decimal;
+  readonly payable: Prisma.Decimal;
+  readonly net: Prisma.Decimal;
+};
+
+/** Soma o unpaid já filtrado pelo upcoming 9C. Não recalcula janela nem status. */
+export function sumUpcomingUnpaid(
+  items: readonly Pick<UpcomingInstallment, 'unpaid'>[],
+): Prisma.Decimal {
+  let total = ZERO;
+  for (const item of items) {
+    total = total.plus(item.unpaid);
+  }
+  return total;
+}
+
+export function summarizeUpcomingWindow(
+  receivables: readonly Pick<UpcomingInstallment, 'unpaid'>[],
+  payables: readonly Pick<UpcomingInstallment, 'unpaid'>[],
+): UpcomingWindowSummary {
+  const receivable = sumUpcomingUnpaid(receivables);
+  const payable = sumUpcomingUnpaid(payables);
+  return {
+    receivable,
+    payable,
+    net: receivable.minus(payable),
+  };
+}

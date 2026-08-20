@@ -258,14 +258,20 @@ KPIs iniciais:
 O primeiro Dashboard utilizável segue o recorte vigente em docs/11;
 os demais itens desta lista permanecem no roadmap do MVP completo.
 
-Composição 10B (CONCLUÍDA / HOMOLOGADA em 19/08/2026 — perspectiva da empresa cliente):
+Composição 10B (CONCLUÍDA / HOMOLOGADA; reorientada em P1.1 — 20/08/2026):
 
-* Contas a receber (`receivables.open`, meta vencido / a vencer);
-* Contas a pagar (`payables.open`, meta vencido / a vencer);
-* Recebíveis vencidos (`receivables.overdue`);
-* Inadimplência (`delinquency.rate`).
+A Home é **month-scoped**. `selectedMonth` é o contexto global.
+A pergunta da tela é “Como está {mês}?”, não um misto mensal + estoque.
 
-Não usar Receita, Despesas, Saldo ou Resultado neste recorte.
+* Faturamento Gerencial (F1-G) — `monthly-revenue.total` (competência AR);
+* A receber — `monthly-revenue.outstanding` (saldo da competência);
+* A pagar — `monthly-expenses.outstanding` (saldo da competência AP);
+* Recebíveis vencidos — `monthly-revenue.overdue` (D1 sobre unpaid da competência);
+* Inadimplência — `overdue ÷ outstanding` da competência AR (não o estoque global).
+
+KPIs de estoque (`GET /dashboard/overview` open/overdue/rate) permanecem
+como capacidade reutilizável; **não** alimentam os cards principais da Home.
+Não usar Saldo ou Resultado neste recorte.
 Taxa null → "—" e “Sem valores em aberto.” (nunca 0%).
 Taxa "0" → "0%".
 `lastSuccessfulSyncAt` null → “Aguardando a primeira sincronização”
@@ -273,7 +279,199 @@ Taxa "0" → "0%".
 Pós-sync com estoque zero → R$ 0,00.
 DISCONNECTED/ERROR com baseline: KPIs visíveis + aviso; sem botão conectar nesta fase.
 Freshness absoluta: “Última sincronização: {data/hora}”. Sem timer relativo.
-Fluxo previsto / movimentações / alertas permanecem placeholder da 10C.
+
+Composição V2.3 — Home Architecture (HOMOLOGADA):
+
+Delta de arquitetura da Home sobre V2.2; semântica financeira intocada
+(competência ≠ caixa). Widget de meta **preparado** no UI — API/persistência
+de meta **NÃO IMPLEMENTADAS** (F2 NÃO INICIADA).
+
+V2.3.1 — Final Home Polish (HOMOLOGADA): baseline visual/funcional **congelado**
+da Home (copy comercial da Meta, ícones semânticos da Leitura, Comparativo sem
+colisão de labels + hover/tooltip). Não redesenhar a Home sem nova fase.
+
+Grade principal (`mainGrid`):
+* Receitas × Despesas (`sectionId` `receitas-mes`);
+* Despesas por categoria (`sectionId` `despesas-mes`, `id` `despesas-categoria`);
+* Receitas por categoria (`sectionId` `receitas-categoria`, `id` `receitas-categoria`).
+
+Removidos da Home:
+* widget independente “Top 5 despesas”;
+* card dual “Composição por categoria” (dois anéis no mesmo card);
+* diálogo dual `categories`; botões “Abrir receitas/despesas por categoria”
+  no donut.
+
+Interação: `CategoryDonutChart` sem `onActivate`/botão próprio — o card
+inteiro (`WidgetShell`) é clicável (e Enter/Espaço) e abre
+`categories-expense` ou `categories-revenue` com ranking de TODAS as categorias.
+
+Grade secundária (`secondaryGrid`):
+* Meta de faturamento (`sectionId` `meta-faturamento`) — empty comercial
+  V2.3.1 (título “Meta ainda não definida” + apoio “Defina uma meta mensal
+  para acompanhar o desempenho do faturamento.”) enquanto `snapshot=null`
+  (sem números inventados; API/persistência de meta ainda não existem);
+* Até o fim do mês (só mês civil atual);
+* Leitura executiva;
+* Inadimplência.
+
+Composição V2.2 — Visual Fidelity Pass (IMPLEMENTADA / SUPERSEDED pela V2.3.1 como baseline da Home):
+
+Delta visual sobre V2.1; semântica financeira intocada (competência ≠ caixa).
+
+Chrome:
+* seletor mensal + freshness formam um único agrupamento de controles;
+  freshness virou pílula (ícone + “Última atualização” + data/hora absoluta);
+* rótulo do mês centralizado com largura fixa — não desliza ao navegar.
+
+KPIs executivos (os 5 continuam os mesmos):
+* todos ganham microvisualização diária quando há competência carregada:
+  - Faturamento / Despesas → `daily.amount` (Σ total do dia);
+  - Já recebido → `daily.received`; A receber → `daily.outstanding`;
+    copy obrigatória de snapshot (“valor atualmente recebido/em aberto dos
+    títulos com competência neste dia”) — nunca “recebido neste dia”;
+  - Resultado gerencial → receitas − despesas do mesmo dia de competência,
+    série assinada com zero no meio do eixo;
+* área de microvisualização com altura mínima fixa: cards da faixa alinhados;
+* rodapés: Faturamento (Recebido | A receber), Despesas (Pago | A pagar),
+  Já recebido / A receber (participação no total), Resultado (Margem = resultado
+  ÷ receitas da competência, com sinal; omitida quando não há receita).
+
+Composição por categoria:
+* o toggle Despesas|Receitas deixa de ser o controle primário — os dois anéis
+  aparecem juntos no mesmo card (Receitas e Despesas);
+* cada anel é acionável e abre o detalhe do próprio lado (todas as categorias);
+  o card inteiro abre a visão dupla no diálogo;
+* total no furo do anel em rótulo compacto, uma linha, sem quebrar no meio do
+  número; legenda “competência” com elipse apenas na legenda;
+* paleta categórica derivada só das séries protegidas (sem `accent`), com
+  misturas em `oklch` para matizes vizinhos distinguíveis.
+
+Grade e superfícies:
+* grade principal rebalanceada (composição recebe a coluna mais larga);
+* terceira faixa com cards de altura igual (`stretch` + corpo elástico);
+* elevação discreta no hover de WidgetShell e ExecutiveKpiCard (tokens);
+* CTA “Ver todas as categorias” centralizada no rodapé do card.
+
+Comparativo mensal: barras agrupadas verticais (uma barra por competência em
+cada métrica), valores e variação abaixo, zero no meio quando há negativo.
+Aceita lista de competências — pronto para histórico de 6 meses.
+
+Composição V2.1 — Fidelity Pass (baseline visual da V2.2):
+
+Convergência visual com mockup DARK (referência canônica), mesma geometria no LIGHT.
+Semântica financeira da V2/P2 preservada.
+
+Chrome:
+* cabeçalho compacto: “Dashboard financeiro” + “Visão executiva · Competência selecionada”;
+* seletor mensal compacto `< AGO 2026 >` (+ Hoje / popover de 12 meses);
+* freshness “Última atualização” ao lado; sem saudação/hero/régua anual de meses.
+
+Widgets (títulos DENTRO dos cards — WidgetShell):
+* 5 KPIs: Faturamento, Já recebido, A receber, Despesas, Resultado gerencial;
+  sparklines só em Faturamento/Despesas (`daily` por competenceDate);
+  Já recebido/A receber usam RatioMeter (snapshot received|outstanding ÷ total);
+* Receitas × Despesas (acumulado competência) + totais no card;
+* Composição por categoria com toggle Despesas|Receitas; Top 5 + Outras;
+  expand mostra TODAS as categorias;
+* Top 5 despesas + Ver todas;
+* Até o fim do mês (só mês atual);
+* Leitura executiva em sinais compactos (tom só onde seguro);
+* Inadimplência compacta;
+* Comparativo mensal (mês selecionado × imediatamente anterior via 2× endpoints);
+* Movimentação diária da competência (barras diárias ≠ caixa);
+* Forecast 90d densificado (só mês atual).
+
+Interações: card inteiro expansível; ESC/X; focus restore; donut hover sync.
+Próximos vencimentos: continuam FORA da Home (upcoming preservado no backend).
+
+Composição V2 — Redesign executivo (baseline; visual supersedido por V2.1):
+
+Referência canônica: mockup DARK anexado (linguagem visual, não especificação matemática).
+Light mode deriva do mesmo sistema de tokens (série financeira protegida).
+
+Layout modular denso (não relatório A4):
+
+1. Header + seletor mensal + freshness;
+2. Faixa de 5 KPIs executivos: Faturamento, Já recebido, A receber, Despesas,
+   Resultado gerencial (receitas − despesas da competência; NÃO saldo bancário);
+3. Tira compacta: Recebíveis vencidos + Inadimplência;
+4. Grid: Receitas × Despesas (acumulado por competenceDate) | Donut despesas |
+   Top despesas;
+5. Grid: Até o fim do mês (só mês atual) | Leitura executiva | Qualidade recebíveis;
+6. Fluxo previsto 90d (só mês atual) — painel denso, sem tabela espremida.
+
+Interações: sparklines/tooltips (séries de competência), hover donut↔legenda,
+cards expansíveis (modal ESC/X), ranking Top 5.
+
+Série diária: `receivables.daily` / `payables.daily` — dia = competenceDate;
+valor = Σ total. Não inventar caixa diário (L1-B bloqueado).
+“Já recebido” / “A receber” sem sparkline de evolução de caixa.
+
+Composição P2 — Home Executiva (baseline semântico preservado; visual supersedido por V2):
+
+Ordem final da Home:
+
+1. Saudação + seletor mensal (`/?month=YYYY-MM`);
+2. Resumo Financeiro (KPIs por competência — §10B/P1.1);
+3. **Até o fim do mês** — somente no mês civil atual;
+4. Leitura executiva mensal;
+5. Receitas por categoria | Despesas por categoria (lado a lado no desktop);
+6. Fluxo previsto — somente no mês civil atual;
+7. fim da Home.
+
+**Removidos da Home (capacidade preservada no backend):**
+
+* Próximos vencimentos (`GET /dashboard/upcoming`) — reservado para futura área Financeiro / D1;
+* Alertas placeholder;
+* seletor 7/15/30 da antiga Pressão de caixa.
+
+**Até o fim do mês** (`GET /dashboard/month-end-cash-pressure`):
+
+* título: “Até o fim do mês”; subtítulo: compromissos restantes da competência civil atual;
+* recorte: `from = hoje civil`, `to = último dia do mês civil`, timezone America/Sao_Paulo;
+* títulos ACTIVE unpaid com `dueDate` no intervalo; exclui vencidos antes de hoje;
+* três KPIs: A receber, A pagar, Diferença prevista (`receivable − payable`);
+* não usar saldo/resultado/lucro/prejuízo/caixa disponível;
+* mês passado/futuro selecionado: bloco oculto (não fingir histórico).
+
+**Fluxo previsto** (90 dias a partir de hoje — inalterado):
+
+* barras CSS Entradas × Saídas + tabela compacta;
+* líquido = `net` do bucket, não saldo acumulado;
+* visível apenas no mês civil atual nesta fase.
+
+Composição E2 — Despesas por categoria na Home (P2):
+
+* `GET /dashboard/monthly-expenses?month=` (competência);
+* título: “Despesas por categoria”; subtítulo: “Competência do mês selecionado.”;
+* mini-resumo: Total / Já pago / A pagar (sem Vencido — já no Resumo);
+* visual: donut compacto Top 5 + “Outras” (soma exata; percentuais do backend);
+* `GET /dashboard/expense-composition` permanece como estoque AP (fora da Home).
+
+Composição — Receitas por categoria na Home (P2):
+
+* `GET /dashboard/monthly-revenue?month=` (competência);
+* título: “Receitas por categoria”; subtítulo: “Competência do mês selecionado.”;
+* mini-resumo: Total / Já recebido / A receber;
+* visual: donut compacto Top 5 + “Outras”;
+* Faturamento Gerencial = `total` deste contrato; NÃO é caixa do mês;
+* `GET /dashboard/receivable-composition` permanece como estoque (fora da Home).
+
+Composição E3 — Leitura executiva mensal (P2):
+
+* `GET /dashboard/executive-insights?month=` (month opcional, espelha monthly-revenue);
+* insights determinísticos da competência selecionada (máx. 4); não é IA;
+* fatos: totais receita/despesa, balanço, top categoria receita/despesa, gap de classificação;
+* sem 30d/90d/estoque; sem semáforo; frontend não calcula diferença nem escolhe categoria;
+* mês vazio: empty honesto; mês futuro: apenas dados já lançados por competência.
+
+Estoque total (`GET /dashboard/overview`) permanece capacidade operacional,
+mas saiu da narrativa principal da Home.
+
+Composição 10C legado (capacidade preservada, fora da Home P2):
+
+* `GET /dashboard/upcoming?days=7|15|30` — detalhamento por vencimento;
+* não aparece na Home executiva P2.
 
 Cada card deverá apresentar, quando aplicável:
 

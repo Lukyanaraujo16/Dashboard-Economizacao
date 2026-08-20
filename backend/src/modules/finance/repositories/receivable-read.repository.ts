@@ -1,16 +1,24 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import type {
+  CompetenceDateRangeQuery,
   DueDateRangeQuery,
   FinanceReadScope,
   FinancialInstallmentReadRecord,
 } from '../domain/types.js';
 import { mapReceivableReadRecord } from './mappers.js';
-import { assertTenantId, buildActiveInstallmentWhere } from './read-query.js';
+import {
+  assertTenantId,
+  buildActiveInstallmentWhere,
+  buildMonthlyCompetenceRevenueWhere,
+} from './read-query.js';
 
 export type ReceivableReadRepository = {
   findActiveByTenant(scope: FinanceReadScope): Promise<readonly FinancialInstallmentReadRecord[]>;
   findActiveByDueDateRange(
     query: DueDateRangeQuery,
+  ): Promise<readonly FinancialInstallmentReadRecord[]>;
+  findMonthlyCompetenceRevenue(
+    query: CompetenceDateRangeQuery,
   ): Promise<readonly FinancialInstallmentReadRecord[]>;
 };
 
@@ -36,6 +44,18 @@ export function createReceivableReadRepository(prisma: PrismaClient): Receivable
           dueDate: { gte: query.from, lte: query.to },
         },
         orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map(mapReceivableReadRecord);
+    },
+
+    async findMonthlyCompetenceRevenue(query) {
+      assertTenantId(query.tenantId);
+      if (query.from.getTime() > query.to.getTime()) {
+        return [];
+      }
+      const rows = await prisma.receivable.findMany({
+        where: buildMonthlyCompetenceRevenueWhere(query, query.from, query.to),
+        orderBy: [{ competenceDate: 'asc' }, { id: 'asc' }],
       });
       return rows.map(mapReceivableReadRecord);
     },

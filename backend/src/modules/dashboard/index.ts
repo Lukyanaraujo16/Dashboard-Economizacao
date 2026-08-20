@@ -1,5 +1,15 @@
 export { registerDashboardOverviewRoutes } from './http/dashboard-overview.routes.js';
-export type { DashboardOverviewResponse } from './domain/types.js';
+export type {
+  DashboardCashFlowForecastResponse,
+  DashboardExecutiveInsightsResponse,
+  DashboardExpenseCompositionResponse,
+  DashboardMonthEndCashPressureResponse,
+  DashboardMonthlyExpenseResponse,
+  DashboardMonthlyRevenueResponse,
+  DashboardOverviewResponse,
+  DashboardReceivableCompositionResponse,
+  DashboardUpcomingResponse,
+} from './domain/types.js';
 export { createDashboardOverviewFacade } from './services/dashboard-overview.facade.js';
 export type {
   DashboardOverviewFacade,

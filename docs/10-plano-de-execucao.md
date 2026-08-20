@@ -827,8 +827,13 @@ Não bloqueia:
 - Fase 9 — Motor Analítico
 - Fase 10 — Dashboard do Cliente
 
-Próxima fase executável: Fase 10C (NÃO INICIADA).
-10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA.
+Próxima fase executável: Fase 11 (NÃO INICIADA).
+10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE.
+E1 Pressão de caixa: HOMOLOGADA VISUALMENTE.
+E2 composição das despesas: HOMOLOGADA.
+Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
+E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
+E4: ADIADA.
 Fase 8: CONCLUÍDA. 8B: DESNECESSÁRIA.
 9A: CONCLUÍDA. 9B: CONCLUÍDA. 9C: CONCLUÍDA. Grupo A: CONCLUÍDO.
 Fase 9: CONCLUÍDA NO RECORTE APROVADO (primeiro Dashboard / Grupo A).
@@ -852,7 +857,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 10C (NÃO INICIADA). 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
+Próxima fase: Fase 11 (NÃO INICIADA). 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -989,16 +994,91 @@ Caminho até o primeiro Dashboard
 10A — facade/API tenant-scoped: CONCLUÍDA
      GET /dashboard/overview (contrato em docs/09.6 §10)
 10B — cards + freshness + empty/loading/error: CONCLUÍDA / HOMOLOGADA
-     (Dashboard já exibe os primeiros números reais; próxima etapa = 10C)
-10C — próximos vencimentos + gráfico de fluxo previsto: NÃO INICIADA
+10C — próximos vencimentos + fluxo previsto 90 dias: IMPLEMENTADA / HOMOLOGADA VISUALMENTE
+E1 — Pressão de caixa 7/15/30 (síntese da mesma janela upcoming): HOMOLOGADA VISUALMENTE
+     Default visual 15. Diferença prevista ≠ saldo. Lista detalhada permanece
+     provisoriamente na Home até a futura área Financeiro.
+E2 — Composição das despesas (AP em aberto / D8 / barras horizontais):
+     HOMOLOGADA
+     Dívida de apresentação (não E2/E3): tabela do Fluxo previsto parece
+     visualmente espremida — não corrigir neste incremento.
+Receitas do mês por competência (AR / competenceDate / inclui PAID):
+     HOMOLOGADA (M1)
+     Query `month=YYYY-MM` opcional; URL `/?month=`; a Home é month-scoped
+     (P1.1). Estoque AP/AR do overview NÃO alimenta os cards principais.
+     Já recebido = snapshot de paid das receitas do mês, não caixa.
+F1-G — Faturamento Gerencial (`monthly-revenue.total`):
+     IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+P1-UX — Semântica estoque × mês na Home: SUPERSEDED (rejeitada na homologação humana)
+P1.1 — Monthly context: IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+     A receber/pagar/categorias/inadimplência da Home seguem a competência.
+     Janelas 7/15/30, forecast 90d, upcoming e E3: só no mês civil atual
+     (fórmulas dueDate-from-today preservadas; sem janela inventada no mês selecionado).
+P2 — Consolidação Home Executiva: IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+     Home = visão mensal por competência. Até o fim do mês (month-end-cash-pressure)
+     substitui pressão 7/15/30 no mês atual. Leitura executiva mensal (executive-insights?month=).
+     Categorias: donut Top 5 + Outras. Próximos vencimentos e Alertas placeholder removidos da Home.
+     Forecast 90d permanece today-anchored; só visível no mês atual. Upcoming preservado no backend.
+V2 — Redesign executivo: IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+     Linguagem visual DARK (ref. canônica) + LIGHT. KPIs densos com sparklines de competência
+     (competenceDate / Σ total). Resultado gerencial = receitas − despesas da competência.
+     Comparação acumulada, donut+ranking, modal expand, forecast denso.
+     Sem caixa diário (L1-B). Sem próximos vencimentos na Home.
+V2.1 — Fidelity Pass: IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+     Cabeçalho compacto; títulos dentro dos cards; card inteiro clicável;
+     RatioMeter nos KPIs sem série diária; toggle Despesas|Receitas na composição;
+     expand com todas as categorias; comparativo mensal (mês × anterior);
+     movimentação diária por competência (não caixa); upcoming permanece fora da Home.
+V2.2 — Visual Fidelity Pass: IMPLEMENTADO / SUPERSEDED (baseline atual = V2.3.1)
+     Cluster seletor + pill de última atualização; 5 KPIs com microviz alinhada;
+     `daily.received`/`outstanding` = snapshot por competenceDate (não caixa);
+     Resultado com série B assinada; composição Receitas+Despesas simultânea
+     (sem toggle primário); grade ~34|40|26; Top 5 CTA centralizado;
+     terceira faixa alinhada; comparativo em barras agrupadas; polish DARK/LIGHT.
+     Sem L1-B / caixa diário / upcoming na Home / migration / sync Conta Azul.
+V2.3 — Home Architecture: HOMOLOGADA
+     Remove Top 5 despesas e o dual “Composição por categoria”.
+     mainGrid: Receitas × Despesas | Despesas por categoria | Receitas por categoria
+     (sectionIds: `receitas-mes` | `despesas-mes` | `receitas-categoria`).
+     secondaryGrid: Meta de faturamento (empty “Meta ainda não definida”,
+     snapshot=null) | Até o fim (mês atual) | Leitura | Inadimplência.
+     Expand só `categories-revenue` / `categories-expense` via clique no card.
+     API/persistência de meta: NÃO IMPLEMENTADAS (stub em docs/09.6 §15). F2 NÃO INICIADA.
+V2.3.1 — Final Home Polish: HOMOLOGADA — baseline visual/funcional congelado da Home
+     Copy comercial da Meta; ícones semânticos na Leitura executiva;
+     Comparativo sem colisão de labels + hover/tooltip (card e expand).
+     Sem redesign; Meta permanece PREPARADA (sem persistência).
 
-Backlog (não 10B/10C): a mesma Integration CONTA_AZUL do tenant deverá
+Sidebar sticky desktop (AppShell): HOMOLOGADA.
+L0 — Spike real de baixas Conta Azul (GET-only): PARCIAL / SUFICIENTE PARA L1-A
+L1-A — Persistência/ingestão read-only (`financial_transactions`):
+     IMPLEMENTADA / HOMOLOGADA (bootstrap DEV: 77 baixas ACTIVE)
+     Bootstrap/incremental após AR/AP; GET `/parcelas/{id}/baixa` apenas.
+     Tombstone automático DESLIGADO. KPI recebido/pago por período: NÃO.
+L1-B — Semântica oficial do caixa + read model mensal:
+     BLOCKED_BY_CASH_SEMANTICS (20/08/2026)
+     Doc oficial ValorComposicaoDTO da baixa: 5 campos (valor_bruto required +
+     juros/multa/desconto/taxa); valor_liquido NÃO documentado no contrato de
+     baixas; sem fórmula “valor efetivamente movimentado”.
+     Payload real traz valor_liquido; na massa DEV coincide com valor_bruto
+     (componentes zero). Σ valor_bruto == installment.paid (77/77) prova
+     reconciliação do título, NÃO o valor de caixa bancário.
+     NÃO inventar fórmula. gross/net/componentes permanecem separados.
+     API GET /dashboard/monthly-cash-flow: NÃO CRIADA.
+     UI / Previsto×Realizado: NÃO.
+Faturamento Fiscal / meta / fixa×variável / D1 drill-down: NÃO IMPLEMENTADOS.
+E4: ADIADA.
+E3 — Leitura executiva (insights determinísticos 30d / D8 / 90d):
+     IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO
+E4: ADIADA
+
+Backlog (não 10B/10C/E1/E2): a mesma Integration CONTA_AZUL do tenant deverá
 poder ser operada pela área administrativa e, no futuro, pela área do
 próprio cliente. Uma conexão; dois contextos de UX. Não implementar agora.
 
-KPIs residuais (categorias, faturamento, realizado, saldo, fixas,
-Receita × Despesa) não bloqueiam este caminho. 2.5/Fase 17 e deploy
-ficam depois.
+KPIs residuais (meta de faturamento, faturamento fiscal, realizado, saldo,
+fixas×variáveis, Receita × Despesa, D1 drill-down) não bloqueiam este caminho. 2.5/Fase 17 e
+deploy ficam depois.
 
 ===========================================================
 
@@ -1033,7 +1113,8 @@ KpiCard, ChartCard, FinancialSection, FinancialGrid, StateWrapper e PanelIcon �
 desacoplados de backend/API, orientados por props, reutilizáveis por módulos futuros.
 
 KPIs — Fase 9 CONCLUÍDA NO RECORTE DO GRUPO A.
-10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C NÃO INICIADA.
+10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE.
+E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Valores a receber por categoria IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA.
 
 Recorte do primeiro Dashboard aprovado (19/08/2026):
 

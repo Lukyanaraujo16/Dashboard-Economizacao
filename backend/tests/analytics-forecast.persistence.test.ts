@@ -6,6 +6,7 @@ import type { FinancialInstallmentStatus } from '../src/generated/prisma/client.
 import { encryptSecret } from '../src/infrastructure/crypto/secret-box.js';
 import { disconnectPrisma, getPrismaClient } from '../src/infrastructure/database/prisma.js';
 import { createAnalyticsService } from '../src/modules/analytics/services/analytics.service.js';
+import { createFinancialCategoryReadRepository } from '../src/modules/finance/repositories/financial-category-read.repository.js';
 import { createPayableReadRepository } from '../src/modules/finance/repositories/payable-read.repository.js';
 import { createReceivableReadRepository } from '../src/modules/finance/repositories/receivable-read.repository.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
@@ -20,6 +21,7 @@ const financial = createContaAzulFinancialRepository(prisma);
 const analytics = createAnalyticsService({
   receivables: createReceivableReadRepository(prisma),
   payables: createPayableReadRepository(prisma),
+  categories: createFinancialCategoryReadRepository(prisma),
 });
 
 beforeAll(() => {

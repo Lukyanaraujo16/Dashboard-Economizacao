@@ -20,6 +20,11 @@ export const COLOR_TOKEN_NAMES = [
   'overlay',
   'shadow',
   'divider',
+  'seriesRevenue',
+  'seriesExpense',
+  'seriesReceivable',
+  'seriesReceived',
+  'seriesResult',
 ] as const;
 
 export type ColorTokenName = (typeof COLOR_TOKEN_NAMES)[number];
@@ -35,6 +40,11 @@ export const PROTECTED_COLOR_TOKEN_NAMES = [
   'info',
   'focus',
   'disabled',
+  'seriesRevenue',
+  'seriesExpense',
+  'seriesReceivable',
+  'seriesReceived',
+  'seriesResult',
 ] as const satisfies readonly ColorTokenName[];
 
 export type ProtectedColorTokenName = (typeof PROTECTED_COLOR_TOKEN_NAMES)[number];

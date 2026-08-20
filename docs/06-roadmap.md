@@ -20,7 +20,36 @@ deste documento prevalece. Fases executadas até o momento:
     primeiro Dashboard (Grupo A; 9A/9B/9C)
   - Fase 10A — GET /dashboard/overview: CONCLUÍDA
   - Fase 10B — primeiros números reais na Dashboard: CONCLUÍDA / HOMOLOGADA
-Próxima fase: Fase 10C (upcoming + forecast HTTP).
+  - Fase 10C — upcoming + forecast: IMPLEMENTADA / HOMOLOGADA VISUALMENTE
+  - Dashboard Executiva V1 / E1 — Pressão de caixa 7/15/30: HOMOLOGADA VISUALMENTE
+  - Dashboard Executiva V1 / E2 — Composição das despesas (D8): HOMOLOGADA
+  - Dashboard Executiva V1 — Receitas do mês por competência (M1): HOMOLOGADA
+  - Dashboard Executiva V1 — Sidebar sticky desktop: HOMOLOGADA
+  - F0-G — Auditoria faturamento gerencial + paridade estoque: CONCLUÍDA
+  - P1-UX — Semântica temporal estoque × mês: SUPERSEDED (rejeitada na homologação humana)
+  - P1.1 — Monthly context (Home month-scoped): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+  - P2 — Consolidação Home Executiva Financeira: IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+  - V2 — Redesign executivo (DARK ref. + LIGHT + KPIs/gráficos/expand): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+  - V2.1 — Fidelity Pass (convergência mockup DARK + mesma geometria LIGHT): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+  - V2.2 — Visual Fidelity + data visualization pass: IMPLEMENTADO / HOMOLOGADO (superseded pela V2.3.1 como baseline)
+  - V2.3 — Home Architecture (categorias separadas + Meta de faturamento UI): HOMOLOGADA
+  - V2.3.1 — Final Home Polish (copy Meta + Leitura semântica + Comparativo tooltip): HOMOLOGADA — baseline visual/funcional congelado da Home
+  - F1-G — Faturamento Gerencial (monthly-revenue): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+  - L0 — Spike real de baixas Conta Azul: PARCIAL / SUFICIENTE PARA INFRA L1
+  - L1-A — Persistência/ingestão read-only do ledger: IMPLEMENTADA / HOMOLOGADA (bootstrap DEV)
+  - L1-B — Semântica oficial do caixa + read model mensal: BLOCKED_BY_CASH_SEMANTICS
+  - Dashboard Executiva V1 / E3 — Leitura executiva (insights determinísticos): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO
+  - F2 — Meta de faturamento (persistência/API/CRUD): NÃO INICIADA (UI empty PREPARADA na Home)Próxima fase: Fase 11 (filtros e comparações) — NÃO INICIADA.
+M1 (seletor mensal por competência + `?month=`): HOMOLOGADA.
+L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
+L1-A (financial_transactions): IMPLEMENTADA / HOMOLOGADA (bootstrap DEV).
+L1-B: BLOCKED_BY_CASH_SEMANTICS — valor oficial de caixa (bruto vs líquido) NÃO FECHADO;
+  KPI mensal / API monthly-cash-flow NÃO criados.
+KPI recebido/pago por período: NÃO IMPLEMENTADO. Valor oficial de caixa: NÃO DEFINIDO.
+Faturamento Gerencial (F1-G): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO (fonte = monthly-revenue / competência).
+Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
+D1 drill-down / F2 meta / FV1 fixa×variável: NÃO INICIADOS.
+E4: ADIADA.
 Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
 
 ⸻
@@ -526,7 +555,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Próxima fase: Fase 10C. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA.
+Próxima fase: Fase 11 (NÃO INICIADA). 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: aguardando execução real. L1: NÃO INICIADA.
 
 ⸻
 
@@ -535,13 +564,24 @@ Próxima fase: Fase 10C. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA.
 Status: EM ANDAMENTO (recorte).
 10A (API/facade GET /dashboard/overview): CONCLUÍDA.
 10B (cards, freshness, empty/loading/error): CONCLUÍDA / HOMOLOGADA.
-10C (upcoming HTTP + forecast HTTP): NÃO INICIADA.
+10C (upcoming HTTP + forecast HTTP): IMPLEMENTADA / HOMOLOGADA VISUALMENTE.
+E1 (Pressão de caixa 7/15/30): HOMOLOGADA VISUALMENTE.
+E2 (Composição das despesas, D8): HOMOLOGADA.
+Receitas do mês por competência (M1): HOMOLOGADA.
+E3 (Leitura executiva): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
 
 Homologação humana (19/08/2026): Dashboard `/` em Support Mode — quatro
 cards Grupo A com números persistidos, freshness visível, estados
-never-sync / zero pós-sync / DISCONNECTED / ERROR, sem 10C. Integração
-DISCONNECTED manteve KPIs e aviso; reload estável. Composição aprovada
-como MVP desta etapa. Fase 10 (A+B+C) permanece EM ANDAMENTO.
+never-sync / zero pós-sync / DISCONNECTED / ERROR. Integração
+DISCONNECTED manteve KPIs e aviso; reload estável. 10C (lista 7/15/30
+default 15 + fluxo previsto 90 dias) homologada visualmente. E1 adiciona
+a síntese executiva da mesma janela (A receber / A pagar / Diferença
+prevista). A lista de próximos vencimentos permanece provisória na Home
+até a futura área Financeiro. E2 composição das despesas HOMOLOGADA.
+Receitas do mês por competência (M1) HOMOLOGADA (PAID permanece no mês;
+não é faturamento nem caixa). E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
+E4 ADIADA. Fase 11 NÃO INICIADA. Faturamento / meta / fixas×variáveis:
+somente auditoria — não implementados.
 
 Contrato 10A (sem fórmulas; fórmulas em docs/11):
 GET /dashboard/overview — autenticado; tenant só da sessão/Support Mode.

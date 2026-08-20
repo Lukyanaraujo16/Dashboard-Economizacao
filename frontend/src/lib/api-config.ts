@@ -157,6 +157,53 @@ export function dashboardOverviewPath(): string {
   return `${DASHBOARD_API_PREFIX}/overview`;
 }
 
+export function dashboardUpcomingPath(days: 7 | 15 | 30): string {
+  return `${DASHBOARD_API_PREFIX}/upcoming?days=${days}`;
+}
+
+export function dashboardCashFlowForecastPath(): string {
+  return `${DASHBOARD_API_PREFIX}/cash-flow-forecast`;
+}
+
+export function dashboardExpenseCompositionPath(): string {
+  return `${DASHBOARD_API_PREFIX}/expense-composition`;
+}
+
+export function dashboardReceivableCompositionPath(): string {
+  return `${DASHBOARD_API_PREFIX}/receivable-composition`;
+}
+
+export function dashboardMonthlyRevenuePath(monthKey?: string | null): string {
+  const base = `${DASHBOARD_API_PREFIX}/monthly-revenue`;
+  if (monthKey === undefined || monthKey === null || monthKey.trim() === '') {
+    return base;
+  }
+  const params = new URLSearchParams({ month: monthKey.trim() });
+  return `${base}?${params.toString()}`;
+}
+
+export function dashboardMonthlyExpensesPath(monthKey?: string | null): string {
+  const base = `${DASHBOARD_API_PREFIX}/monthly-expenses`;
+  if (monthKey === undefined || monthKey === null || monthKey.trim() === '') {
+    return base;
+  }
+  const params = new URLSearchParams({ month: monthKey.trim() });
+  return `${base}?${params.toString()}`;
+}
+
+export function dashboardExecutiveInsightsPath(monthKey?: string | null): string {
+  const base = `${DASHBOARD_API_PREFIX}/executive-insights`;
+  if (monthKey === undefined || monthKey === null || monthKey.trim() === '') {
+    return base;
+  }
+  const params = new URLSearchParams({ month: monthKey.trim() });
+  return `${base}?${params.toString()}`;
+}
+
+export function dashboardMonthEndCashPressurePath(): string {
+  return `${DASHBOARD_API_PREFIX}/month-end-cash-pressure`;
+}
+
 /** Prefixo same-origin do branding da sessão autenticada. */
 export const BRANDING_API_PREFIX = '/branding';
 

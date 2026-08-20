@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DashboardCard,
@@ -12,7 +12,32 @@ import {
   resolveGreetingPrefix,
 } from '../src/components/dashboard';
 import { getDashboardOverview } from '../src/services/dashboard/overview';
-import { DashboardOverviewRequestError } from '../src/services/dashboard/overview.types';
+import {
+  DashboardOverviewRequestError,
+  type DashboardOverviewResponse,
+} from '../src/services/dashboard/overview.types';
+import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/month-end-cash-pressure';
+import {
+  DashboardMonthEndCashPressureRequestError,
+  type DashboardMonthEndCashPressureResponse,
+} from '../src/services/dashboard/month-end-cash-pressure.types';
+import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
+import type { DashboardCashFlowForecastResponse } from '../src/services/dashboard/forecast.types';
+import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
+import {
+  DashboardMonthlyRevenueRequestError,
+  type DashboardMonthlyRevenueResponse,
+} from '../src/services/dashboard/monthly-revenue.types';
+import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
+import {
+  DashboardMonthlyExpenseRequestError,
+  type DashboardMonthlyExpenseResponse,
+} from '../src/services/dashboard/monthly-expenses.types';
+import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
+import {
+  DashboardExecutiveInsightsRequestError,
+  type DashboardExecutiveInsightsResponse,
+} from '../src/services/dashboard/executive-insights.types';
 import { ThemeProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
@@ -20,36 +45,216 @@ import {
   renderWithAuth,
 } from './helpers/render-with-auth';
 
+let dashboardSearchParams = new URLSearchParams();
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     replace: vi.fn(),
     push: vi.fn(),
   }),
+  usePathname: () => '/',
+  useSearchParams: () => dashboardSearchParams,
 }));
 
 vi.mock('../src/services/dashboard/overview', () => ({
   getDashboardOverview: vi.fn(),
 }));
 
-const getOverview = vi.mocked(getDashboardOverview);
+vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
+  getDashboardMonthEndCashPressure: vi.fn(),
+}));
 
-const syncedOverview = {
+vi.mock('../src/services/dashboard/forecast', () => ({
+  getDashboardCashFlowForecast: vi.fn(),
+}));
+
+vi.mock('../src/services/dashboard/monthly-expenses', () => ({
+  getDashboardMonthlyExpenses: vi.fn(),
+}));
+
+vi.mock('../src/services/dashboard/monthly-revenue', () => ({
+  getDashboardMonthlyRevenue: vi.fn(),
+}));
+
+vi.mock('../src/services/dashboard/executive-insights', () => ({
+  getDashboardExecutiveInsights: vi.fn(),
+}));
+
+const getOverview = vi.mocked(getDashboardOverview);
+const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
+const getForecast = vi.mocked(getDashboardCashFlowForecast);
+const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
+const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
+const getInsights = vi.mocked(getDashboardExecutiveInsights);
+
+const emptyMonthEnd: DashboardMonthEndCashPressureResponse = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-19',
+  to: '2026-08-31',
+  summary: { receivable: '0', payable: '0', net: '0' },
+};
+
+const emptyForecast: DashboardCashFlowForecastResponse = {
+  today: '2026-08-19',
+  from: '2026-08-19',
+  to: '2026-11-17',
+  horizonDays: 90,
+  buckets: [
+    { key: '2026-08', inflows: '0', outflows: '0', net: '0' },
+    { key: '2026-09', inflows: '0', outflows: '0', net: '0' },
+  ],
+};
+
+const emptyMonthlyExpenses: DashboardMonthlyExpenseResponse = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  payables: {
+    total: '0',
+    paid: '0',
+    outstanding: '0',
+    overdue: '0',
+    classified: '0',
+    uncategorized: '0',
+    imprecise: '0',
+    coverageRate: null,
+    items: [],
+    daily: [],
+  },
+};
+
+const emptyMonthlyRevenue: DashboardMonthlyRevenueResponse = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  receivables: {
+    total: '0',
+    received: '0',
+    outstanding: '0',
+    overdue: '0',
+    classified: '0',
+    uncategorized: '0',
+    imprecise: '0',
+    coverageRate: null,
+    items: [],
+    daily: [],
+  },
+};
+
+/** Receitas de competência com série diária — habilita gráficos e expansão. */
+const loadedMonthlyRevenue: DashboardMonthlyRevenueResponse = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  receivables: {
+    total: '10000',
+    received: '4000',
+    outstanding: '6000',
+    overdue: '0',
+    classified: '10000',
+    uncategorized: '0',
+    imprecise: '0',
+    coverageRate: '100',
+    items: [
+      {
+        kind: 'category',
+        name: 'Serviços',
+        amount: '10000',
+        received: '4000',
+        outstanding: '6000',
+        percentage: '100',
+      },
+    ],
+    daily: [
+      { date: '2026-08-05', amount: '4000', received: '4000', outstanding: '0' },
+      { date: '2026-08-12', amount: '6000', received: '0', outstanding: '6000' },
+    ],
+  },
+};
+
+const loadedMonthlyExpenses: DashboardMonthlyExpenseResponse = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  payables: {
+    total: '100',
+    paid: '20',
+    outstanding: '80',
+    overdue: '0',
+    classified: '80',
+    uncategorized: '20',
+    imprecise: '0',
+    coverageRate: '80',
+    items: [
+      {
+        kind: 'category',
+        name: 'Salários',
+        amount: '80',
+        paid: '0',
+        outstanding: '80',
+        percentage: '99',
+      },
+      {
+        kind: 'uncategorized',
+        name: 'Sem categoria',
+        amount: '20',
+        paid: '20',
+        outstanding: '0',
+        percentage: '1',
+      },
+    ],
+    daily: [
+      { date: '2026-08-03', amount: '20', received: '20', outstanding: '0' },
+      { date: '2026-08-18', amount: '80', received: '0', outstanding: '80' },
+    ],
+  },
+};
+
+const emptyInsights: DashboardExecutiveInsightsResponse = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  insights: [],
+};
+
+const syncedOverview: DashboardOverviewResponse = {
   today: '2026-08-19',
   receivables: { open: '8.5', overdue: '3', upcoming: '5.5' },
   payables: { open: '20', overdue: '4', upcoming: '16' },
   delinquency: { overdueUnpaid: '3', openUnpaid: '8.5', rate: '35.2941' },
   integration: {
-    status: 'CONNECTED' as const,
+    status: 'CONNECTED',
     lastSuccessfulSyncAt: '2026-08-10T09:00:00.000Z',
     lastErrorCode: null,
   },
 };
 
-function kpiCard(title: string) {
-  const heading = screen.getByRole('heading', { name: title });
-  const card = heading.closest('[data-kpi-card]');
+function section(id: string): HTMLElement {
+  const node = document.querySelector(`[data-financial-section="${id}"]`);
+  expect(node).toBeTruthy();
+  return node as HTMLElement;
+}
+
+function sectionScope(id: string) {
+  return within(section(id));
+}
+
+/** Card de KPI executivo (V2) localizado pelo título dentro da seção. */
+function kpiCard(title: string, sectionId = 'resumo-financeiro') {
+  const heading = sectionScope(sectionId).getByRole('heading', { name: title });
+  const card = heading.closest('[data-tone]');
   expect(card).toBeTruthy();
-  return within(card as HTMLElement);
+  return card as HTMLElement;
+}
+
+function kpiScope(title: string, sectionId = 'resumo-financeiro') {
+  return within(kpiCard(title, sectionId));
 }
 
 function renderDashboard(
@@ -77,6 +282,15 @@ function renderDashboard(
   );
 }
 
+beforeEach(() => {
+  dashboardSearchParams = new URLSearchParams();
+  getMonthEnd.mockResolvedValue(emptyMonthEnd);
+  getForecast.mockResolvedValue(emptyForecast);
+  getMonthlyExpenses.mockResolvedValue(emptyMonthlyExpenses);
+  getMonthlyRevenue.mockResolvedValue(emptyMonthlyRevenue);
+  getInsights.mockResolvedValue(emptyInsights);
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -86,36 +300,105 @@ afterEach(() => {
   document.documentElement.removeAttribute('style');
 });
 
-describe('Dashboard structure (10B)', () => {
+describe('Dashboard V2 structure', () => {
   it('resolveGreetingPrefix cobre manhã, tarde e noite', () => {
     expect(resolveGreetingPrefix(new Date('2026-08-13T08:00:00'))).toBe('Bom dia');
     expect(resolveGreetingPrefix(new Date('2026-08-13T15:00:00'))).toBe('Boa tarde');
     expect(resolveGreetingPrefix(new Date('2026-08-13T21:00:00'))).toBe('Boa noite');
   });
 
-  it('mostra loading e depois KPIs reais em BRL e percentual', async () => {
+  it('monta a grade executiva do mês corrente sem blocos legados', async () => {
     getOverview.mockResolvedValue(syncedOverview);
     renderDashboard();
 
-    expect(await screen.findByRole('heading', { name: 'Resumo Financeiro' })).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' }),
+    ).toBeTruthy();
     await waitFor(() => {
       expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
     });
+    expect((await screen.findAllByText(/Sem saldo na competência/)).length).toBeGreaterThan(0);
 
-    expect(screen.getByRole('heading', { name: 'Contas a receber' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Contas a pagar' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Recebíveis vencidos' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Inadimplência' })).toBeTruthy();
-    expect(kpiCard('Contas a receber').getByText(/R\$\s*8,50/)).toBeTruthy();
-    expect(kpiCard('Contas a pagar').getByText(/R\$\s*20,00/)).toBeTruthy();
-    expect(kpiCard('Recebíveis vencidos').getByText(/R\$\s*3,00/)).toBeTruthy();
-    expect(kpiCard('Inadimplência').getByText('35,3%')).toBeTruthy();
-    expect(screen.getByText(/Última sincronização:/)).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Receita' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Despesas' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Saldo' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Resultado' })).toBeNull();
-    expect(screen.getByText('O fluxo previsto entra em uma próxima etapa.')).toBeTruthy();
+    for (const title of [
+      'Faturamento',
+      'Já recebido',
+      'A receber',
+      'Despesas',
+      'Resultado gerencial',
+    ]) {
+      expect(kpiCard(title)).toBeTruthy();
+    }
+
+    for (const title of [
+      'Receitas × Despesas',
+      'Despesas por categoria',
+      'Receitas por categoria',
+      'Meta de faturamento',
+      'Até o fim do mês',
+      'Leitura executiva',
+      'Inadimplência',
+      'Comparativo mensal',
+      'Movimentação diária da competência',
+      'Fluxo previsto',
+    ]) {
+      expect(screen.getByRole('heading', { name: title })).toBeTruthy();
+    }
+
+    expect(screen.queryByRole('heading', { name: 'Top 5 despesas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Composição por categoria' })).toBeNull();
+    expect(screen.getByText('Meta ainda não definida')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="top-despesas"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="receitas-categoria"]')).toBeTruthy();
+
+    expect(screen.getByText('Última atualização')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Próximos vencimentos' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Recebíveis vencidos' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Qualidade dos recebíveis' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Alertas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Pressão de caixa' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Movimentações Recentes' })).toBeNull();
+    expect(screen.queryByRole('columnheader')).toBeNull();
+    expect(screen.queryByText('15 dias')).toBeNull();
+    expect(document.querySelector('[data-kpi-card]')).toBeNull();
+
+    expect(getMonthEnd).toHaveBeenCalledTimes(1);
+    expect(getForecast).toHaveBeenCalledTimes(1);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith(null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null);
+    expect(getInsights).toHaveBeenCalledWith(null);
+    // Comparativo mensal também busca a competência anterior.
+    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07');
+    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07');
+  });
+
+  it('sem competência os KPIs ficam vazios com copy honesta', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(kpiCard('Faturamento').dataset.state).toBe('empty');
+    });
+    expect(kpiScope('Faturamento').getByText('Sem receitas na competência')).toBeTruthy();
+    expect(kpiScope('A receber').getByText('Sem saldo na competência')).toBeTruthy();
+    expect(kpiScope('Despesas').getByText('Sem despesas na competência')).toBeTruthy();
+    expect(
+      kpiScope('Resultado gerencial').getByText('Sem receitas ou despesas na competência'),
+    ).toBeTruthy();
+    expect(sectionScope('inadimplencia').getByText('Sem títulos na competência')).toBeTruthy();
+
+    expect(
+      (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
+    ).toBeGreaterThan(0);
+    expect(
+      await screen.findByText('Sem dados de competência para leitura neste mês.'),
+    ).toBeTruthy();
+    expect(
+      sectionScope('receitas-mes').getByText(/Sem receitas ou despesas na competência de ago\/2026/),
+    ).toBeTruthy();
+    expect(
+      sectionScope('fluxo-previsto').getByText('Sem lançamentos previstos no horizonte.'),
+    ).toBeTruthy();
   });
 
   it('never-sync não mostra zeros como dado financeiro', async () => {
@@ -135,42 +418,48 @@ describe('Dashboard structure (10B)', () => {
     await waitFor(() => {
       expect(document.querySelector('[data-overview-state="never-sync"]')).toBeTruthy();
     });
-    expect(screen.getAllByText('Aguardando a primeira sincronização').length).toBe(4);
+    expect(
+      screen.getAllByText('Aguardando a primeira sincronização').length,
+    ).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText(/R\$\s*0,00/)).toBeNull();
-  });
-
-  it('zero pós-sync mostra R$ 0,00 e rate null como travessão', async () => {
-    getOverview.mockResolvedValue({
-      ...syncedOverview,
-      receivables: { open: '0', overdue: '0', upcoming: '0' },
-      payables: { open: '0', overdue: '0', upcoming: '0' },
-      delinquency: { overdueUnpaid: '0', openUnpaid: '0', rate: null },
-    });
-    renderDashboard();
-
-    await waitFor(() => {
-      expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
-    });
-    expect(screen.getAllByText(/R\$\s*0,00/).length).toBeGreaterThan(0);
-    expect(screen.getByText('—')).toBeTruthy();
-    expect(screen.getByText('Sem valores em aberto.')).toBeTruthy();
-    expect(screen.queryByText('0%')).toBeNull();
+    expect(getMonthEnd).not.toHaveBeenCalled();
+    expect(getForecast).not.toHaveBeenCalled();
+    expect(getMonthlyExpenses).not.toHaveBeenCalled();
+    expect(getMonthlyRevenue).not.toHaveBeenCalled();
+    expect(getInsights).not.toHaveBeenCalled();
   });
 
   it('rate zero exato aparece como 0%', async () => {
-    getOverview.mockResolvedValue({
-      ...syncedOverview,
-      receivables: { open: '10', overdue: '0', upcoming: '10' },
-      delinquency: { overdueUnpaid: '0', openUnpaid: '10', rate: '0' },
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyRevenue.mockResolvedValue({
+      ...loadedMonthlyRevenue,
+      receivables: {
+        ...loadedMonthlyRevenue.receivables,
+        total: '10',
+        received: '0',
+        outstanding: '10',
+        overdue: '0',
+        classified: '10',
+        items: [
+          {
+            kind: 'category',
+            name: 'Serviços',
+            amount: '10',
+            received: '0',
+            outstanding: '10',
+            percentage: '100',
+          },
+        ],
+      },
     });
     renderDashboard();
 
     await waitFor(() => {
-      expect(screen.getByText('0%')).toBeTruthy();
+      expect(sectionScope('inadimplencia').getByText('0%')).toBeTruthy();
     });
   });
 
-  it('DISCONNECTED com dados mantém KPIs e aviso', async () => {
+  it('DISCONNECTED com dados mantém widgets e mantém o aviso fora deles', async () => {
     getOverview.mockResolvedValue({
       ...syncedOverview,
       integration: {
@@ -181,12 +470,20 @@ describe('Dashboard structure (10B)', () => {
     });
     renderDashboard();
 
-    await waitFor(() => {
-      expect(kpiCard('Contas a receber').getByText(/R\$\s*8,50/)).toBeTruthy();
-    });
     expect(
-      screen.getByText('Integração desconectada. Exibindo os últimos dados sincronizados.'),
+      await screen.findByText('Integração desconectada. Exibindo os últimos dados sincronizados.'),
     ).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Até o fim do mês' })).toBeTruthy();
+    await waitFor(() => {
+      expect(sectionScope('ate-fim-do-mes').getByText('Diferença prevista')).toBeTruthy();
+    });
+    for (const id of ['ate-fim-do-mes', 'despesas-mes', 'receitas-categoria', 'meta-faturamento', 'leitura-executiva']) {
+      expect(sectionScope(id).queryByText(/Integração desconectada/)).toBeNull();
+    }
+    expect(getMonthEnd).toHaveBeenCalledTimes(1);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith(null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null);
+    expect(getInsights).toHaveBeenCalledWith(null);
   });
 
   it('ERROR de integração não é fetch error e não mostra código cru', async () => {
@@ -200,15 +497,15 @@ describe('Dashboard structure (10B)', () => {
     });
     renderDashboard();
 
-    await waitFor(() => {
-      expect(kpiCard('Contas a receber').getByText(/R\$\s*8,50/)).toBeTruthy();
-    });
     expect(
-      screen.getByText(
+      await screen.findByText(
         'Não foi possível atualizar a integração. Exibindo os últimos dados sincronizados.',
       ),
     ).toBeTruthy();
     expect(screen.queryByText('refresh_failed')).toBeNull();
+    await waitFor(() => {
+      expect(sectionScope('ate-fim-do-mes').getAllByText(/R\$\s*0,00/).length).toBe(3);
+    });
     expect(screen.queryByRole('button', { name: 'Tentar novamente' })).toBeNull();
   });
 
@@ -224,9 +521,12 @@ describe('Dashboard structure (10B)', () => {
     renderDashboard();
 
     expect(await screen.findByRole('button', { name: 'Tentar novamente' })).toBeTruthy();
+    expect(
+      screen.getAllByText('Disponível junto com os indicadores da empresa.').length,
+    ).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
     await waitFor(() => {
-      expect(kpiCard('Contas a receber').getByText(/R\$\s*8,50/)).toBeTruthy();
+      expect(kpiCard('Faturamento')).toBeTruthy();
     });
     expect(getOverview).toHaveBeenCalledTimes(2);
   });
@@ -248,6 +548,381 @@ describe('Dashboard structure (10B)', () => {
         .length,
     ).toBeGreaterThan(0);
     expect(getOverview).not.toHaveBeenCalled();
+    expect(getMonthEnd).not.toHaveBeenCalled();
+    expect(getForecast).not.toHaveBeenCalled();
+    expect(getMonthlyExpenses).not.toHaveBeenCalled();
+    expect(getMonthlyRevenue).not.toHaveBeenCalled();
+    expect(getInsights).not.toHaveBeenCalled();
+  });
+
+  it('Até o fim do mês usa summary do backend sem recalcular net', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthEnd.mockResolvedValue({
+      ...emptyMonthEnd,
+      summary: { receivable: '8.5', payable: '4', net: '4.5' },
+    });
+    renderDashboard();
+
+    const scope = await waitFor(() => {
+      const node = sectionScope('ate-fim-do-mes');
+      expect(node.getByText(/R\$\s*4,50/)).toBeTruthy();
+      return node;
+    });
+    expect(scope.getByText(/R\$\s*8,50/)).toBeTruthy();
+    expect(scope.getByText(/R\$\s*4,00/)).toBeTruthy();
+    expect(scope.getByText('Faltam 13 dias no mês')).toBeTruthy();
+    expect(scope.getByText('Diferença prevista; não é saldo bancário.')).toBeTruthy();
+    expect(scope.queryByText('Saldo')).toBeNull();
+    expect(getMonthEnd).toHaveBeenCalledTimes(1);
+    expect(getOverview).toHaveBeenCalledTimes(1);
+    expect(getForecast).toHaveBeenCalledTimes(1);
+  });
+
+  it('erro local de month-end não derruba KPIs nem o fluxo previsto', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthEnd.mockRejectedValue(
+      new DashboardMonthEndCashPressureRequestError(
+        'unavailable',
+        'Não foi possível carregar a agenda até o fim do mês.',
+      ),
+    );
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(kpiCard('Faturamento')).toBeTruthy();
+    });
+    expect(
+      await screen.findByText('Não foi possível carregar a agenda até o fim do mês.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
+    getMonthEnd.mockResolvedValue(emptyMonthEnd);
+    fireEvent.click(
+      sectionScope('ate-fim-do-mes').getByRole('button', { name: 'Tentar novamente' }),
+    );
+    await waitFor(() => {
+      expect(sectionScope('ate-fim-do-mes').getByText('Diferença prevista')).toBeTruthy();
+    });
+  });
+
+  it('loading de month-end cobre apenas Até o fim do mês', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    const pending: Array<(value: DashboardMonthEndCashPressureResponse) => void> = [];
+    getMonthEnd.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          pending.push(resolve);
+        }),
+    );
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(getMonthEnd).toHaveBeenCalledTimes(1);
+    });
+    expect((await screen.findAllByText('Carregando agenda do mês')).length).toBe(1);
+    for (const resolve of pending) {
+      resolve(emptyMonthEnd);
+    }
+    await waitFor(() => {
+      expect(sectionScope('ate-fim-do-mes').getByText('Diferença prevista')).toBeTruthy();
+    });
+  });
+
+  it('mês passado oculta Até o fim do mês e Fluxo previsto', async () => {
+    dashboardSearchParams = new URLSearchParams('month=2026-07');
+    getOverview.mockResolvedValue(syncedOverview);
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07');
+    });
+    expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
+    expect(getMonthEnd).not.toHaveBeenCalled();
+    expect(getForecast).not.toHaveBeenCalled();
+    expect(getInsights).toHaveBeenCalledWith('2026-07');
+    expect(screen.getByRole('heading', { name: 'Leitura executiva' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Receitas × Despesas' })).toBeTruthy();
+  });
+
+  it('fluxo previsto usa o líquido do backend e resume os picos do horizonte', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getForecast.mockResolvedValue({
+      ...emptyForecast,
+      buckets: [
+        { key: '2026-08', inflows: '10', outflows: '4', net: '6' },
+        { key: '2026-09', inflows: '0', outflows: '0', net: '0' },
+      ],
+    });
+    renderDashboard();
+
+    const scope = await waitFor(() => {
+      const node = sectionScope('fluxo-previsto');
+      expect(node.getAllByText('ago/2026').length).toBeGreaterThan(0);
+      return node;
+    });
+    expect(scope.getAllByText('set/2026').length).toBeGreaterThan(0);
+    expect(scope.getAllByText(/R\$\s*6,00/).length).toBeGreaterThan(0);
+    expect(scope.getByText('Meses previstos')).toBeTruthy();
+    expect(scope.getByText('Maior entrada prevista')).toBeTruthy();
+    expect(scope.getByText('Maior saída prevista')).toBeTruthy();
+    expect(
+      scope.getByText(
+        'O líquido é a diferença prevista de cada mês e não o saldo bancário acumulado.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/saldo projetado/i)).toBeNull();
+  });
+
+  it('Receitas × Despesas usa a série diária de competência de ambos os lados', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyRevenue.mockResolvedValue(loadedMonthlyRevenue);
+    getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
+    renderDashboard();
+
+    const scope = await waitFor(() => {
+      const node = sectionScope('receitas-mes');
+      expect(
+        node.getByRole('img', {
+          name: 'Receitas e despesas acumuladas por competência em ago/2026',
+        }),
+      ).toBeTruthy();
+      return node;
+    });
+    expect(scope.getAllByText('Receitas').length).toBeGreaterThan(0);
+    expect(scope.getAllByText('Despesas').length).toBeGreaterThan(0);
+    expect(
+      scope.getByText('Acumulado por competência no mês selecionado. Não representa saldo bancário.'),
+    ).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText(/R\$\s*10.000,00/)).toBeTruthy();
+    expect(kpiScope('Já recebido').getByText(/R\$\s*4.000,00/)).toBeTruthy();
+    expect(kpiScope('Já recebido').getByText('40,0% do total da competência')).toBeTruthy();
+    expect(kpiScope('Resultado gerencial').getByText(/R\$\s*9.900,00/)).toBeTruthy();
+    expect(section('receitas-mes').textContent?.toLowerCase()).not.toMatch(/recebido no mês/);
+  });
+
+  it('erro das receitas do mês não derruba as despesas nem o fluxo previsto', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyRevenue.mockRejectedValue(
+      new DashboardMonthlyRevenueRequestError(
+        'unavailable',
+        'Não foi possível carregar as receitas do mês.',
+      ),
+    );
+    renderDashboard();
+
+    expect(
+      (await screen.findAllByText('Não foi possível carregar as receitas do mês.')).length,
+    ).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
+    expect(
+      kpiScope('Resultado gerencial').getByText('Depende das receitas e despesas da competência.'),
+    ).toBeTruthy();
+  });
+
+  it('Despesas e Receitas por categoria usam percentuais do backend', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
+    getMonthlyRevenue.mockResolvedValue(loadedMonthlyRevenue);
+    renderDashboard();
+
+    expect((await screen.findAllByText('Salários')).length).toBeGreaterThan(0);
+    const expenses = sectionScope('despesas-mes');
+    expect(expenses.getAllByText(/R\$\s*80,00/).length).toBeGreaterThan(0);
+    expect(expenses.getByText('99,0%')).toBeTruthy();
+    expect(expenses.queryByText('80,0%')).toBeNull();
+    expect(
+      expenses.getByRole('img', { name: 'Despesas por categoria do mês selecionado' }),
+    ).toBeTruthy();
+    expect(expenses.getByText('Sem categoria')).toBeTruthy();
+
+    const revenues = sectionScope('receitas-categoria');
+    expect(revenues.getByText('Serviços')).toBeTruthy();
+    expect(
+      revenues.getByRole('img', { name: 'Receitas por categoria do mês selecionado' }),
+    ).toBeTruthy();
+
+    expect(screen.queryByRole('heading', { name: 'Top 5 despesas' })).toBeNull();
+    expect(document.querySelector('[data-financial-section="top-despesas"]')).toBeNull();
+    expect(section('despesas-mes').textContent?.toLowerCase()).not.toMatch(/saldo|realizado/);
+    expect(screen.queryByRole('heading', { name: 'Próximos vencimentos' })).toBeNull();
+  });
+
+  it('erro da composição não derruba KPIs nem o fluxo previsto', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyExpenses.mockRejectedValue(
+      new DashboardMonthlyExpenseRequestError(
+        'unavailable',
+        'Não foi possível carregar as despesas do mês.',
+      ),
+    );
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(kpiCard('Faturamento')).toBeTruthy();
+    });
+    expect(
+      (await screen.findAllByText('Não foi possível carregar as despesas do mês.')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
+    getMonthlyExpenses.mockResolvedValue(emptyMonthlyExpenses);
+    fireEvent.click(sectionScope('despesas-mes').getByRole('button', { name: 'Tentar novamente' }));
+    expect(
+      (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('Leitura executiva usa fatos mensais do backend', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getInsights.mockResolvedValue({
+      ...emptyInsights,
+      insights: [
+        {
+          id: 'revenue-expense-total',
+          body: 'Agosto de 2026 gerou R$ 100,00 em receitas de competência e R$ 150,00 em despesas de competência.',
+        },
+        {
+          id: 'revenue-expense-balance',
+          body: 'As despesas da competência superam as receitas em R$ 50,00.',
+        },
+        {
+          id: 'top-expense-category',
+          body: 'A categoria Salário Colaboradores representa 49,0% das despesas classificadas do mês.',
+        },
+      ],
+    });
+    renderDashboard();
+
+    const scope = await waitFor(() => {
+      const node = sectionScope('leitura-executiva');
+      expect(node.getByText(/R\$\s*50,00/)).toBeTruthy();
+      return node;
+    });
+    expect(scope.getByText(/superam as receitas/)).toBeTruthy();
+    expect(scope.getByText(/Salário Colaboradores/)).toBeTruthy();
+    expect(scope.getByText(/49,0%/)).toBeTruthy();
+    expect(section('leitura-executiva').querySelectorAll('[data-signal]').length).toBe(3);
+    expect(section('leitura-executiva').textContent?.toLowerCase()).not.toMatch(
+      /saldo|déficit|prejuízo|inteligência/,
+    );
+  });
+
+  it('erro da leitura executiva não derruba os demais widgets', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getInsights.mockRejectedValue(
+      new DashboardExecutiveInsightsRequestError(
+        'unavailable',
+        'Não foi possível carregar a leitura executiva.',
+      ),
+    );
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(kpiCard('Faturamento')).toBeTruthy();
+    });
+    expect(await screen.findByText('Não foi possível carregar a leitura executiva.')).toBeTruthy();
+    expect(
+      (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
+  });
+
+  it('Inadimplência mostra vencido e taxa da competência', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyRevenue.mockResolvedValue({
+      ...loadedMonthlyRevenue,
+      receivables: {
+        ...loadedMonthlyRevenue.receivables,
+        overdue: '3000',
+        outstanding: '6000',
+      },
+    });
+    renderDashboard();
+
+    const scope = await waitFor(() => {
+      const node = sectionScope('inadimplencia');
+      expect(node.getByText('Vencido')).toBeTruthy();
+      return node;
+    });
+    expect(scope.getByText(/R\$\s*3.000,00/)).toBeTruthy();
+    expect(scope.getByText('Taxa da competência')).toBeTruthy();
+    expect(scope.getByText('50,0%')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="qualidade-recebiveis"]')).toBeNull();
+  });
+
+  it('expande o KPI de faturamento e fecha o diálogo com ESC', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyRevenue.mockResolvedValue(loadedMonthlyRevenue);
+    getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(kpiScope('Faturamento').getByRole('button', { name: 'Expandir' })).toBeTruthy();
+    });
+    fireEvent.click(kpiScope('Faturamento').getByRole('button', { name: 'Expandir' }));
+
+    const dialog = await screen.findByRole('dialog');
+    const dialogScope = within(dialog);
+    expect(dialogScope.getByRole('heading', { name: 'Faturamento' })).toBeTruthy();
+    expect(dialogScope.getByText('Competência de ago/2026')).toBeTruthy();
+    expect(dialogScope.getByText('Receitas por dia de competência')).toBeTruthy();
+    expect(dialogScope.getByText('Acumulado da competência')).toBeTruthy();
+    expect(dialogScope.getByText('Serviços')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  it('clique no card de despesas abre o detalhe com todas as categorias', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
+    renderDashboard();
+
+    const card = await waitFor(() => {
+      const node = section('despesas-mes');
+      expect(node.getAttribute('role')).toBe('button');
+      return node;
+    });
+    fireEvent.click(card);
+
+    const dialog = await screen.findByRole('dialog');
+    const dialogScope = within(dialog);
+    expect(dialogScope.getByRole('heading', { name: 'Despesas por categoria' })).toBeTruthy();
+    expect(
+      dialogScope.getByRole('img', {
+        name: 'Todas as despesas por categoria do mês selecionado',
+      }),
+    ).toBeTruthy();
+    expect(dialogScope.getAllByText('Sem categoria').length).toBeGreaterThan(0);
+    expect(dialogScope.getAllByText('Salários').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Abrir receitas por categoria' })).toBeNull();
+
+    fireEvent.click(dialogScope.getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+  });
+
+  it('exibe régua de competência sem refetch dos demais blocos ao carregar', async () => {
+    getOverview.mockResolvedValue(syncedOverview);
+    renderDashboard();
+
+    expect(await screen.findByLabelText('Visão mensal por competência')).toBeTruthy();
+    await waitFor(() => {
+      expect(getMonthlyRevenue).toHaveBeenCalledWith(null);
+    });
+    expect(getOverview).toHaveBeenCalledTimes(1);
+    expect(getMonthEnd).toHaveBeenCalledTimes(1);
+    expect(getForecast).toHaveBeenCalledTimes(1);
+    // Competência selecionada + competência anterior do comparativo.
+    expect(getMonthlyExpenses).toHaveBeenCalledTimes(2);
+    expect(getMonthlyRevenue).toHaveBeenCalledTimes(2);
+    expect(getInsights).toHaveBeenCalledTimes(1);
+    expect(getInsights).toHaveBeenCalledWith(null);
   });
 
   it('EmptyState e EmptyPanel renderizam descrição', () => {

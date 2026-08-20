@@ -1,34 +1,392 @@
 .root {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-3);
   width: 100%;
   min-width: 0;
 }
 
-.freshness {
-  margin: 0 0 var(--space-3);
+.pageHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.pageHeaderCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.pageTitle {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 1.25rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.pageSubtitle {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+/* Controles da competência em um único agrupamento: seletor + frescor. */
+.controlsCluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.freshnessPill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  min-height: 2.25rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  min-width: 0;
+}
+
+.freshnessIcon {
+  flex-shrink: 0;
   color: var(--color-text-muted);
+}
+
+.freshnessLabel {
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  font-weight: 550;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.freshnessValue {
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .notice {
   display: flex;
   align-items: flex-start;
   gap: var(--space-2);
-  margin: 0 0 var(--space-4);
+  margin: 0;
   color: var(--color-text-secondary);
   font-size: 0.875rem;
   line-height: 1.45;
 }
 
 .forbidden {
-  margin: 0;
+  margin: var(--space-3) 0 0;
   color: var(--color-text-secondary);
   max-width: 36rem;
 }
 
+.kpiSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .kpiRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .kpiRow {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.mainGrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+  min-width: 0;
+}
+
+/* Linha 2: RxD | Despesas por categoria | Receitas por categoria */
+@media (min-width: 1100px) {
+  .mainGrid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+}
+
+.secondaryGrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .secondaryGrid[data-cols='3'] {
+    grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .secondaryGrid[data-cols='4'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+}
+
+@media (min-width: 1200px) {
+  .secondaryGrid[data-cols='4'] {
+    grid-template-columns: minmax(0, 1.15fr) repeat(3, minmax(0, 1fr));
+  }
+}
+
+.tertiaryGrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .tertiaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+}
+
+/* dualDonuts removido na V2.3 — composição virou dois widgets independentes. */
+
+
+.kpiFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.125rem var(--space-4);
+  margin: 0;
+  min-width: 0;
+}
+
+.kpiFooterItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+
+.kpiFooterLabel {
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  font-weight: 550;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.kpiFooterValue {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kpiNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
+.totalsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
+  min-width: 0;
+}
+
+.totalsItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+
+.totalsLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.totalsLabel::before {
+  content: '';
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-series-result);
+}
+
+.totalsItem[data-tone='revenue'] .totalsLabel::before {
+  background: var(--color-series-revenue);
+}
+
+.totalsItem[data-tone='expense'] .totalsLabel::before {
+  background: var(--color-series-expense);
+}
+
+.totalsValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.factList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  min-width: 0;
+}
+
+.factRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.3125rem 0;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.factRow:last-child {
+  border-bottom: none;
+}
+
+.factLabel {
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+}
+
+.factValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+.expandBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.expandLabel {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.expandChart > div {
+  height: 6rem;
+}
+
+.expandColumns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .expandColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.statsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+  min-width: 0;
+}
+
+.statsItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+}
+
+.statsLabel {
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.statsValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 @media (max-width: 767px) {
   .root {
-    gap: var(--space-5);
+    gap: var(--space-4);
+  }
+
+  .controlsCluster {
+    width: 100%;
+  }
+
+  .freshnessPill {
+    flex: 1;
   }
 }

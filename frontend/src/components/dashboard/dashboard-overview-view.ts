@@ -39,9 +39,13 @@ export function formatSyncTimestamp(iso: string | null): string | null {
   return formatCompanyDate(iso);
 }
 
+/**
+ * Capacidade reutilizável de estoque (carteira ACTIVE persistida).
+ * Independente do selectedMonth. A Home month-scoped NÃO consome estes cards.
+ */
 export function toDashboardKpis(overview: DashboardOverviewResponse): readonly DashboardKpiView[] {
-  const receivablesMeta = `Vencido ${formatMoneyBrl(overview.receivables.overdue)}\nA vencer ${formatMoneyBrl(overview.receivables.upcoming)}`;
-  const payablesMeta = `Vencido ${formatMoneyBrl(overview.payables.overdue)}\nA vencer ${formatMoneyBrl(overview.payables.upcoming)}`;
+  const receivablesMeta = `Estoque total · todos os vencimentos\nVencido ${formatMoneyBrl(overview.receivables.overdue)}\nA vencer ${formatMoneyBrl(overview.receivables.upcoming)}`;
+  const payablesMeta = `Estoque total · todos os vencimentos\nVencido ${formatMoneyBrl(overview.payables.overdue)}\nA vencer ${formatMoneyBrl(overview.payables.upcoming)}`;
   const rate = overview.delinquency.rate;
   const delinquencyMeta =
     rate === null
@@ -51,13 +55,13 @@ export function toDashboardKpis(overview: DashboardOverviewResponse): readonly D
   return [
     {
       id: 'receivables-open',
-      title: 'Contas a receber',
+      title: 'A receber em aberto',
       value: formatMoneyBrl(overview.receivables.open),
       meta: receivablesMeta,
     },
     {
       id: 'payables-open',
-      title: 'Contas a pagar',
+      title: 'A pagar em aberto',
       value: formatMoneyBrl(overview.payables.open),
       meta: payablesMeta,
     },
@@ -65,7 +69,7 @@ export function toDashboardKpis(overview: DashboardOverviewResponse): readonly D
       id: 'receivables-overdue',
       title: 'Recebíveis vencidos',
       value: formatMoneyBrl(overview.receivables.overdue),
-      meta: 'Do valor em aberto que já venceu.',
+      meta: 'Do estoque em aberto que já venceu.',
     },
     {
       id: 'delinquency',

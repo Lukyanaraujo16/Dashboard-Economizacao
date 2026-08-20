@@ -58,6 +58,7 @@ function installment(input: {
   readonly total?: string;
   readonly paid?: string;
   readonly unpaid?: string;
+  readonly competenceDate?: string | null;
   readonly categoryExternalIds?: readonly string[];
 }) {
   const total = new Prisma.Decimal(input.total ?? '100.0000');
@@ -67,7 +68,10 @@ function installment(input: {
     externalId: input.externalId,
     description: input.externalId,
     dueDate: civilDate(input.dueDate),
-    competenceDate: null,
+    competenceDate:
+      input.competenceDate === undefined || input.competenceDate === null
+        ? null
+        : civilDate(input.competenceDate),
     upstreamCreatedAt: null,
     upstreamUpdatedAt: null,
     status: input.status,
@@ -303,5 +307,46 @@ describe('Read model financeiro (Fase 8A)', () => {
     expect(otherTenant).toHaveLength(1);
     expect(otherTenant[0]?.name).toBe('Receita B');
     expect(otherTenant[0]?.tenantId).toBe(b.tenant.id);
+  });
+
+  it('findMonthlyCompetenceRevenue inclui PAID e ignora competência nula', async () => {
+    const seeded = await seedConnected('fin-comp');
+    const syncedAt = new Date();
+    await financial.upsertReceivables(
+      { tenantId: seeded.tenant.id, integrationId: seeded.integration.id, syncedAt },
+      [
+        installment({
+          externalId: 'paid-aug',
+          status: 'PAID',
+          dueDate: '2026-09-01',
+          competenceDate: '2026-08-10',
+          total: '50',
+          paid: '50',
+          unpaid: '0',
+        }),
+        installment({
+          externalId: 'null-comp',
+          status: 'OPEN',
+          dueDate: '2026-08-10',
+          competenceDate: null,
+          total: '9',
+        }),
+        installment({
+          externalId: 'reneg',
+          status: 'RENEGOTIATED',
+          dueDate: '2026-08-10',
+          competenceDate: '2026-08-10',
+          total: '8',
+        }),
+      ],
+    );
+    const rows = await receivables.findMonthlyCompetenceRevenue({
+      tenantId: seeded.tenant.id,
+      from: civilDate('2026-08-01'),
+      to: civilDate('2026-08-31'),
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.externalId).toBe('paid-aug');
+    expect(rows[0]?.status).toBe('PAID');
   });
 });
