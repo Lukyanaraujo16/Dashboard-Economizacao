@@ -51,6 +51,7 @@ model Tenant {
   parties             Party[]
   receivables         Receivable[]
   payables            Payable[]
+  revenueGoals        RevenueGoal[]
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
 
@@ -420,6 +421,23 @@ model Payable {
   @@index([tenantId, dueDate], map: "idx_payables_tenant_due_date")
   @@index([tenantId, status], map: "idx_payables_tenant_status")
   @@map("payables")
+}
+
+
+/// Meta mensal de faturamento gerencial por tenant (F2).
+/// `actual` NÃO é persistido — calculado via monthly-revenue / competência.
+model RevenueGoal {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  monthKey     String   @map("month_key") @db.VarChar(7)
+  targetAmount Decimal  @map("target_amount") @db.Decimal(19, 4)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, monthKey], map: "uq_revenue_goals_tenant_month")
+  @@index([tenantId, monthKey], map: "idx_revenue_goals_tenant_month")
+  @@map("revenue_goals")
 }
 
 /// Execução técnica da sync (2.3 manual / 2.4 scheduled). Não é o produto de histórico da 2.5.

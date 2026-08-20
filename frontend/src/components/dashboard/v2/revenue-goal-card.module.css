@@ -80,12 +80,14 @@
   background: var(--color-series-revenue);
 }
 
-.meterFill[data-status='behind'] {
+.meterFill[data-status='behind'],
+.meterFill[data-status='missed'] {
   background: var(--color-series-expense);
 }
 
 .meterFill[data-status='exceeded'],
-.meterFill[data-status='met'] {
+.meterFill[data-status='met'],
+.meterFill[data-status='planned'] {
   background: var(--color-series-revenue);
 }
 
@@ -93,6 +95,28 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
+  align-items: baseline;
+}
+
+.statusLine {
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.statusLine[data-status='behind'],
+.statusLine[data-status='planned'] {
+  color: var(--color-text-primary);
+}
+
+.statusLine[data-status='missed'] {
+  color: var(--color-text-secondary);
+}
+
+.statusLine[data-status='met'],
+.statusLine[data-status='exceeded'] {
+  color: var(--color-series-revenue);
 }
 
 .stat {
@@ -138,6 +162,18 @@
   text-transform: uppercase;
 }
 
+.historyAmount {
+  margin-inline-start: auto;
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-block-start: auto;
+  padding-block-start: var(--space-2);
+}
+
 .historyPct {
   color: var(--color-text-primary);
   font-weight: 650;
@@ -148,8 +184,13 @@
   color: var(--color-series-revenue);
 }
 
-.historyRow[data-status='behind'] .historyPct {
+.historyRow[data-status='behind'] .historyPct,
+.historyRow[data-status='missed'] .historyPct {
   color: var(--color-series-expense);
+}
+
+.historyRow[data-status='planned'] .historyPct {
+  color: var(--color-text-secondary);
 }
 
 .historyRow[data-status='unconfigured'] .historyPct {

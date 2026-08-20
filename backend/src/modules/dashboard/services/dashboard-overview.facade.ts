@@ -1,8 +1,17 @@
+import type { Prisma } from '../../../generated/prisma/client.js';
+import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
+import { civilMonthKey } from '../../analytics/domain/civil-calendar.js';
 import type { AnalyticsService } from '../../analytics/services/analytics.service.js';
 import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import type { ContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
 import { ForbiddenError } from '../../../shared/errors/application-error.js';
 import { resolveOperationalTenantId } from '../domain/operational-tenant.js';
+import {
+  calculateRevenueGoalProgress,
+  listRevenueGoalHistoryMonthKeys,
+  type RevenueGoalProgress,
+} from '../domain/revenue-goal-math.js';
+import type { RevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
 import type {
   DashboardCashFlowForecastResponse,
   DashboardExecutiveInsightsResponse,
@@ -12,6 +21,7 @@ import type {
   DashboardReceivableCompositionResponse,
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyRevenueResponse,
+  DashboardRevenueGoalResponse,
   DashboardUpcomingDays,
   DashboardUpcomingResponse,
 } from '../domain/types.js';
@@ -23,7 +33,11 @@ import { toDashboardMonthlyExpenseResponse } from '../http/to-dashboard-monthly-
 import { toDashboardMonthlyRevenueResponse } from '../http/to-dashboard-monthly-revenue-response.js';
 import { toDashboardOverviewResponse } from '../http/to-dashboard-overview-response.js';
 import { toDashboardReceivableCompositionResponse } from '../http/to-dashboard-receivable-composition-response.js';
+import { toDashboardRevenueGoalResponse } from '../http/to-dashboard-revenue-goal-response.js';
 import { toDashboardUpcomingResponse } from '../http/to-dashboard-upcoming-response.js';
+
+/** Competências exibidas no histórico compacto da meta, incluindo a selecionada. */
+export const REVENUE_GOAL_HISTORY_MONTHS = 6;
 
 export type DashboardOverviewFacade = {
   getOverview(auth: AuthenticatedRequestContext): Promise<DashboardOverviewResponse>;
@@ -55,11 +69,23 @@ export type DashboardOverviewFacade = {
   getMonthEndCashPressure(
     auth: AuthenticatedRequestContext,
   ): Promise<DashboardMonthEndCashPressureResponse>;
+  getRevenueGoal(
+    auth: AuthenticatedRequestContext,
+    monthKey: string | null,
+    historyMonths?: number,
+  ): Promise<DashboardRevenueGoalResponse>;
+  upsertRevenueGoal(
+    auth: AuthenticatedRequestContext,
+    monthKey: string,
+    targetAmount: Prisma.Decimal,
+    historyMonths?: number,
+  ): Promise<DashboardRevenueGoalResponse>;
 };
 
 export type DashboardOverviewFacadeDependencies = {
   readonly analytics: AnalyticsService;
   readonly integrations: ContaAzulIntegrationRepository;
+  readonly revenueGoals: RevenueGoalRepository;
 };
 
 export function createDashboardOverviewFacade(
@@ -134,7 +160,73 @@ export function createDashboardOverviewFacade(
       const pressure = await deps.analytics.getMonthEndCashPressure({ tenantId });
       return toDashboardMonthEndCashPressureResponse(pressure);
     },
+
+    async getRevenueGoal(auth, monthKey, historyMonths = REVENUE_GOAL_HISTORY_MONTHS) {
+      const tenantId = requireOperationalTenantId(auth);
+      return loadRevenueGoal(deps, tenantId, monthKey, historyMonths);
+    },
+
+    async upsertRevenueGoal(
+      auth,
+      monthKey,
+      targetAmount,
+      historyMonths = REVENUE_GOAL_HISTORY_MONTHS,
+    ) {
+      const tenantId = requireOperationalTenantId(auth);
+      await deps.revenueGoals.upsert(tenantId, monthKey, targetAmount);
+      return loadRevenueGoal(deps, tenantId, monthKey, historyMonths);
+    },
   };
+}
+
+/** Realizado da competência — mesma fórmula de `monthly-revenue`, sem duplicação. */
+async function loadCompetenceActual(
+  deps: DashboardOverviewFacadeDependencies,
+  tenantId: string,
+  monthKey: string | null,
+): Promise<{ readonly monthKey: string; readonly actual: Prisma.Decimal }> {
+  const revenue = await deps.analytics.getMonthlyCompetenceRevenue({
+    tenantId,
+    ...(monthKey === null ? {} : { monthKey }),
+  });
+  return { monthKey: revenue.monthKey, actual: revenue.total };
+}
+
+async function loadRevenueGoal(
+  deps: DashboardOverviewFacadeDependencies,
+  tenantId: string,
+  monthKey: string | null,
+  historyMonths: number,
+): Promise<DashboardRevenueGoalResponse> {
+  const selectedActual = await loadCompetenceActual(deps, tenantId, monthKey);
+  const referenceMonthKey = civilMonthKey(civilTodayInSaoPaulo(new Date()));
+  const historyKeys = listRevenueGoalHistoryMonthKeys(selectedActual.monthKey, historyMonths);
+  const goals = await deps.revenueGoals.listByTenantMonths(tenantId, historyKeys);
+  const targetsByMonth = new Map(goals.map((goal) => [goal.monthKey, goal.targetAmount] as const));
+
+  const actuals = await Promise.all(
+    historyKeys.map(async (key) =>
+      key === selectedActual.monthKey ? selectedActual : loadCompetenceActual(deps, tenantId, key),
+    ),
+  );
+
+  const history: readonly RevenueGoalProgress[] = actuals.map((entry) =>
+    calculateRevenueGoalProgress({
+      monthKey: entry.monthKey,
+      target: targetsByMonth.get(entry.monthKey) ?? null,
+      actual: entry.actual,
+      referenceMonthKey,
+    }),
+  );
+
+  const selected = calculateRevenueGoalProgress({
+    monthKey: selectedActual.monthKey,
+    target: targetsByMonth.get(selectedActual.monthKey) ?? null,
+    actual: selectedActual.actual,
+    referenceMonthKey,
+  });
+
+  return toDashboardRevenueGoalResponse(selected, history);
 }
 
 function requireOperationalTenantId(auth: AuthenticatedRequestContext): string {

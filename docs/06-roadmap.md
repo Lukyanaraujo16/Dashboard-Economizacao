@@ -39,7 +39,8 @@ deste documento prevalece. Fases executadas até o momento:
   - L1-A — Persistência/ingestão read-only do ledger: IMPLEMENTADA / HOMOLOGADA (bootstrap DEV)
   - L1-B — Semântica oficial do caixa + read model mensal: BLOCKED_BY_CASH_SEMANTICS
   - Dashboard Executiva V1 / E3 — Leitura executiva (insights determinísticos): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO
-  - F2 — Meta de faturamento (persistência/API/CRUD): NÃO INICIADA (UI empty PREPARADA na Home)Próxima fase: Fase 11 (filtros e comparações) — NÃO INICIADA.
+  - F2 — Meta de faturamento (persistência/API/CRUD): HOMOLOGADA (widget funcional na Home; F2.0.1 status temporal)
+Próxima fase: Fase 11 (filtros e comparações) — NÃO INICIADA.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
 L1-A (financial_transactions): IMPLEMENTADA / HOMOLOGADA (bootstrap DEV).
@@ -48,7 +49,16 @@ L1-B: BLOCKED_BY_CASH_SEMANTICS — valor oficial de caixa (bruto vs líquido) N
 KPI recebido/pago por período: NÃO IMPLEMENTADO. Valor oficial de caixa: NÃO DEFINIDO.
 Faturamento Gerencial (F1-G): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO (fonte = monthly-revenue / competência).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
-D1 drill-down / F2 meta / FV1 fixa×variável: NÃO INICIADOS.
+F2 meta de faturamento: HOMOLOGADA
+  (`revenue_goals` + `GET`/`PUT /dashboard/revenue-goal`; realizado = competência,
+  sem duplicar fórmula; sem histórico de revisões da meta).
+  Persistência SIM · por tenant SIM · por competência SIM · cadastro/edição SIM ·
+  histórico SIM · Meta × Realizado SIM · falta/excesso SIM · futuro = planejada.
+  F2.0.1: status temporal — atual abaixo `IN_PROGRESS`; passado abaixo
+  `NOT_ACHIEVED`; futuro com meta `PLANNED` (não julga atingimento antecipado).
+  IA / sugestão automática de meta: FUTURA / NÃO IMPLEMENTADA.
+  Gráfico histórico Meta × Realizado: melhoria futura (fora da F2 homologada).
+D1 drill-down / FV1 fixa×variável: NÃO INICIADOS.
 E4: ADIADA.
 Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
 

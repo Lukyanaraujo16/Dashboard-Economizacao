@@ -1043,11 +1043,22 @@ V2.3 — Home Architecture: HOMOLOGADA
      secondaryGrid: Meta de faturamento (empty “Meta ainda não definida”,
      snapshot=null) | Até o fim (mês atual) | Leitura | Inadimplência.
      Expand só `categories-revenue` / `categories-expense` via clique no card.
-     API/persistência de meta: NÃO IMPLEMENTADAS (stub em docs/09.6 §15). F2 NÃO INICIADA.
+     API/persistência de meta na época: NÃO IMPLEMENTADAS.
 V2.3.1 — Final Home Polish: HOMOLOGADA — baseline visual/funcional congelado da Home
      Copy comercial da Meta; ícones semânticos na Leitura executiva;
      Comparativo sem colisão de labels + hover/tooltip (card e expand).
-     Sem redesign; Meta permanece PREPARADA (sem persistência).
+     Sem redesign.
+F2 — Meta de faturamento: HOMOLOGADA
+     Persistência SIM · por tenant SIM · por competência SIM · cadastro SIM ·
+     edição SIM · histórico SIM · Meta × Realizado SIM · falta/excesso SIM ·
+     competência futura = planejada (F2.0.1).
+     `revenue_goals` (uma linha por tenant + competência, sem revisões) +
+     `GET`/`PUT /dashboard/revenue-goal` (docs/09.6 §15).
+     Realizado vem de monthly-revenue (competência) — fórmula não duplicada.
+     Escrita permitida em Support Mode; ADMIN sem suporte recebe 403.
+     Widget da Home com CTA e diálogo de meta; layout V2.3.1 preservado.
+     IA / sugestão automática de meta: FUTURA / NÃO IMPLEMENTADA.
+     Gráfico histórico Meta × Realizado: melhoria futura (fora da F2 homologada).
 
 Sidebar sticky desktop (AppShell): HOMOLOGADA.
 L0 — Spike real de baixas Conta Azul (GET-only): PARCIAL / SUFICIENTE PARA L1-A

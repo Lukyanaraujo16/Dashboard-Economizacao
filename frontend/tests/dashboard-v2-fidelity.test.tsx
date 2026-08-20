@@ -14,6 +14,11 @@ import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-e
 import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
 import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
 import type { DashboardExecutiveInsightsResponse } from '../src/services/dashboard/executive-insights.types';
+import {
+  getDashboardRevenueGoal,
+  putDashboardRevenueGoal,
+} from '../src/services/dashboard/revenue-goal';
+import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { ThemeProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
@@ -56,12 +61,59 @@ vi.mock('../src/services/dashboard/executive-insights', () => ({
   getDashboardExecutiveInsights: vi.fn(),
 }));
 
+vi.mock('../src/services/dashboard/revenue-goal', () => ({
+  getDashboardRevenueGoal: vi.fn(),
+  putDashboardRevenueGoal: vi.fn(),
+}));
+
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getInsights = vi.mocked(getDashboardExecutiveInsights);
+const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
+const putRevenueGoal = vi.mocked(putDashboardRevenueGoal);
+
+const unconfiguredGoal: RevenueGoalSnapshot = {
+  monthKey: '2026-08',
+  target: null,
+  actual: '30',
+  achievementRate: null,
+  remaining: null,
+  exceeded: null,
+  status: 'NO_TARGET',
+  history: [
+    {
+      monthKey: '2026-07',
+      target: null,
+      actual: '24',
+      achievementRate: null,
+      status: 'NO_TARGET',
+    },
+    { monthKey: '2026-08', target: null, actual: '30', achievementRate: null, status: 'NO_TARGET' },
+  ],
+};
+
+const configuredGoal: RevenueGoalSnapshot = {
+  monthKey: '2026-08',
+  target: '40',
+  actual: '30',
+  achievementRate: '75',
+  remaining: '10',
+  exceeded: '0',
+  status: 'IN_PROGRESS',
+  history: [
+    { monthKey: '2026-07', target: '20', actual: '24', achievementRate: '120', status: 'EXCEEDED' },
+    {
+      monthKey: '2026-08',
+      target: '40',
+      actual: '30',
+      achievementRate: '75',
+      status: 'IN_PROGRESS',
+    },
+  ],
+};
 
 const syncedOverview: DashboardOverviewResponse = {
   today: '2026-08-19',
@@ -228,6 +280,8 @@ beforeEach(() => {
   getMonthlyExpenses.mockResolvedValue(loadedExpenses);
   getMonthlyRevenue.mockResolvedValue(loadedRevenue);
   getInsights.mockResolvedValue(insights);
+  getRevenueGoal.mockResolvedValue(unconfiguredGoal);
+  putRevenueGoal.mockResolvedValue(configuredGoal);
 });
 
 afterEach(() => {
@@ -412,9 +466,46 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(
       scope.getByText('Defina uma meta mensal para acompanhar o desempenho do faturamento.'),
     ).toBeTruthy();
-    expect(scope.queryByText(/configuração|disponível|API|persistência|IA|histórico/i)).toBeNull();
-    expect(scope.queryByRole('button', { name: /definir meta/i })).toBeNull();
+    expect(scope.queryByText(/configuração|disponível|API|persistência|histórico/i)).toBeNull();
+    expect(scope.getByRole('button', { name: /definir meta/i })).toBeTruthy();
     expect(document.querySelector('[data-revenue-goal="unconfigured"]')).toBeTruthy();
+  });
+
+  it('define a meta pelo diálogo e passa decimal-string para a API', async () => {
+    await renderReadyDashboard();
+
+    fireEvent.click(widgetScope('meta-faturamento').getByRole('button', { name: 'Definir meta' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByRole('heading', { name: 'Definir meta de faturamento' }),
+    ).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByLabelText(/Meta do mês/), {
+      target: { value: '40.000,00' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar meta' }));
+
+    await waitFor(() => {
+      expect(putRevenueGoal).toHaveBeenCalledWith({ month: '2026-08', target: '40000.00' });
+    });
+    await waitFor(() => {
+      expect(document.querySelector('[data-revenue-goal="behind"]')).toBeTruthy();
+    });
+    const updated = widgetScope('meta-faturamento');
+    expect(updated.getAllByText('75,0%').length).toBeGreaterThan(0);
+    expect(updated.getByRole('button', { name: 'Editar meta' })).toBeTruthy();
+  });
+
+  it('meta inválida não chega à API', async () => {
+    await renderReadyDashboard();
+
+    fireEvent.click(widgetScope('meta-faturamento').getByRole('button', { name: 'Definir meta' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/Meta do mês/), { target: { value: '0' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar meta' }));
+
+    expect(await within(dialog).findByText('Informe um valor maior que zero.')).toBeTruthy();
+    expect(putRevenueGoal).not.toHaveBeenCalled();
   });
 
   it('os cinco KPIs executivos têm microvisualização diária', async () => {

@@ -3,32 +3,55 @@
 import { Target } from 'lucide-react';
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
+import { Button } from '../../ui';
 import { UI_ICON_STROKE } from '../../ui/icons';
-import type { RevenueGoalSnapshot } from '../../../services/dashboard/revenue-goal.types';
-import { presentGoalProgress } from './revenue-goal-math';
+import type {
+  RevenueGoalHistoryPoint,
+  RevenueGoalSnapshot,
+} from '../../../services/dashboard/revenue-goal.types';
+import {
+  goalProgressStatusFromApi,
+  presentApiGoalProgress,
+  revenueGoalHistoryCaption,
+} from './revenue-goal-math';
 import styles from './revenue-goal-card.module.css';
+
+const COMPACT_HISTORY_LIMIT = 4;
 
 export type RevenueGoalCardProps = {
   readonly monthLabel: string;
-  /**
-   * Snapshot real quando a API existir.
-   * Hoje a Home passa `null` — empty state preparado, sem números inventados.
-   */
+  /** Snapshot da API; `null` enquanto a competência ainda não carregou. */
   readonly snapshot: RevenueGoalSnapshot | null;
-  /** Realizado da competência (monthly-revenue) — exibido só com meta configurada. */
-  readonly realizedAmount: string | null;
+  readonly onEdit?: () => void;
+  /** Competências exibidas no histórico compacto; o diálogo usa o histórico inteiro. */
+  readonly historyLimit?: number;
 };
 
 /**
  * Widget executivo de Meta de Faturamento (fora dos 5 KPIs).
- * Sem persistência: estado "não configurada". Com snapshot: progresso + histórico compacto.
+ * Sem meta cadastrada: estado "não configurada" com CTA. Com meta: progresso + histórico.
  */
-export function RevenueGoalCard({ monthLabel, snapshot, realizedAmount }: RevenueGoalCardProps) {
-  const target = snapshot?.targetAmount ?? null;
-  const realized = snapshot?.realizedAmount ?? realizedAmount;
-  const progress = presentGoalProgress(realized ?? '0', target);
+export function RevenueGoalCard({
+  monthLabel,
+  snapshot,
+  onEdit,
+  historyLimit = COMPACT_HISTORY_LIMIT,
+}: RevenueGoalCardProps) {
+  const progress = snapshot === null ? null : presentApiGoalProgress(snapshot);
+  const target = snapshot?.target ?? null;
 
-  if (progress.status === 'unconfigured' || target === null || realized === null) {
+  const editButton = onEdit ? (
+    <Button variant="secondary" size="sm" data-stop-expand onClick={onEdit}>
+      {target === null ? 'Definir meta' : 'Editar meta'}
+    </Button>
+  ) : null;
+
+  if (
+    snapshot === null ||
+    progress === null ||
+    progress.status === 'unconfigured' ||
+    target === null
+  ) {
     return (
       <div
         className={styles.root}
@@ -42,18 +65,17 @@ export function RevenueGoalCard({ monthLabel, snapshot, realizedAmount }: Revenu
         <p className={styles.emptyCopy}>
           Defina uma meta mensal para acompanhar o desempenho do faturamento.
         </p>
+        {editButton ? <div className={styles.actions}>{editButton}</div> : null}
       </div>
     );
   }
-
-  const history = snapshot?.history ?? [];
 
   return (
     <div className={styles.root} data-revenue-goal={progress.status}>
       <dl className={styles.facts}>
         <div className={styles.fact}>
           <dt>Realizado</dt>
-          <dd data-tone="revenue">{formatMoneyBrl(realized)}</dd>
+          <dd data-tone="revenue">{formatMoneyBrl(snapshot.actual)}</dd>
         </div>
         <div className={styles.fact}>
           <dt>Meta</dt>
@@ -61,7 +83,7 @@ export function RevenueGoalCard({ monthLabel, snapshot, realizedAmount }: Revenu
         </div>
       </dl>
 
-      {progress.progressPct !== null ? (
+      {progress.progressPct !== null && progress.status !== 'planned' ? (
         <div
           className={styles.meter}
           role="meter"
@@ -79,14 +101,24 @@ export function RevenueGoalCard({ monthLabel, snapshot, realizedAmount }: Revenu
       ) : null}
 
       <div className={styles.stats}>
-        {progress.achievementPercentLabel ? (
+        {progress.statusLabel ? (
+          <span className={styles.statusLine} data-status={progress.status}>
+            {progress.statusLabel}
+          </span>
+        ) : null}
+        {progress.achievementPercentLabel && progress.status !== 'planned' ? (
           <span className={styles.stat}>
             <strong>{progress.achievementPercentLabel}</strong> atingido
           </span>
         ) : null}
-        {progress.remainingLabel ? (
+        {progress.remainingLabel && progress.status === 'behind' ? (
           <span className={styles.stat}>
             Faltam <strong>{progress.remainingLabel}</strong>
+          </span>
+        ) : null}
+        {progress.remainingLabel && progress.status === 'missed' ? (
+          <span className={styles.stat}>
+            Ficou abaixo em <strong>{progress.remainingLabel}</strong>
           </span>
         ) : null}
         {progress.exceededLabel ? (
@@ -96,21 +128,40 @@ export function RevenueGoalCard({ monthLabel, snapshot, realizedAmount }: Revenu
         ) : null}
       </div>
 
-      {history.length > 0 ? (
-        <ul className={styles.history} aria-label="Histórico de metas">
-          {history.map((point) => {
-            const pointProgress = presentGoalProgress(point.realizedAmount, point.targetAmount);
-            return (
-              <li key={point.monthKey} className={styles.historyRow} data-status={pointProgress.status}>
-                <span className={styles.historyMonth}>{point.monthKey.slice(5)}</span>
-                <span className={styles.historyPct}>
-                  {pointProgress.achievementPercentLabel ?? '—'}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+      <RevenueGoalHistoryList points={snapshot.history} limit={historyLimit} />
+
+      {editButton ? <div className={styles.actions}>{editButton}</div> : null}
     </div>
+  );
+}
+
+export type RevenueGoalHistoryListProps = {
+  readonly points: readonly RevenueGoalHistoryPoint[];
+  /** Sem limite = histórico inteiro (diálogo expandido). */
+  readonly limit?: number;
+};
+
+/** Histórico por competência — mais recente primeiro, com o status temporal da API. */
+export function RevenueGoalHistoryList({ points, limit }: RevenueGoalHistoryListProps) {
+  const ordered = [...points].reverse();
+  const visible = limit === undefined ? ordered : ordered.slice(0, limit);
+
+  if (visible.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul className={styles.history} aria-label="Histórico de metas">
+      {visible.map((point) => {
+        const visual = goalProgressStatusFromApi(point.status);
+        return (
+          <li key={point.monthKey} className={styles.historyRow} data-status={visual}>
+            <span className={styles.historyMonth}>{point.monthKey.slice(5)}</span>
+            <span className={styles.historyAmount}>{formatMoneyBrl(point.actual)}</span>
+            <span className={styles.historyPct}>{revenueGoalHistoryCaption(point.status)}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

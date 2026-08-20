@@ -45,8 +45,16 @@ import {
   DashboardOverviewRequestError,
   type DashboardOverviewResponse,
 } from '../../services/dashboard/overview.types';
+import {
+  getDashboardRevenueGoal,
+  putDashboardRevenueGoal,
+} from '../../services/dashboard/revenue-goal';
+import {
+  DashboardRevenueGoalRequestError,
+  type RevenueGoalSnapshot,
+} from '../../services/dashboard/revenue-goal.types';
 import { StateWrapper } from '../financial';
-import { Badge, Typography } from '../ui';
+import { Badge, Button, Typography } from '../ui';
 import { UI_ICON_STROKE } from '../ui/icons';
 import { CategoryDonutChart } from './category-donut-chart';
 import { presentTopCategoryDonutSlices, type CategoryDonutSlice } from './category-donut-view';
@@ -85,6 +93,8 @@ import {
   ForecastPanel,
   MonthlyCompare,
   RevenueGoalCard,
+  RevenueGoalEditDialog,
+  RevenueGoalHistoryList,
   Sparkline,
   WidgetExpandDialog,
   WidgetShell,
@@ -94,6 +104,7 @@ import {
   parseAmount,
   receivedSeries,
   resultDailySeries,
+  revenueGoalStatusLabel,
   signedSharePercent,
   subtractDecimalStrings,
   summarizeActiveDays,
@@ -152,6 +163,12 @@ type MonthlyRevenueView =
   | { readonly kind: 'empty'; readonly data: DashboardMonthlyRevenueResponse }
   | { readonly kind: 'ready'; readonly data: DashboardMonthlyRevenueResponse };
 
+type RevenueGoalView =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'ready'; readonly data: RevenueGoalSnapshot };
+
 type InsightsView =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
@@ -187,7 +204,8 @@ type ExpandKind =
   | 'categories-revenue'
   | 'categories-expense'
   | 'compare'
-  | 'daily';
+  | 'daily'
+  | 'goal';
 
 function widgetGate(view: OverviewView): WidgetGate {
   if (view.kind === 'loading') {
@@ -393,6 +411,10 @@ export function DashboardPage() {
   });
   const [insightsView, setInsightsView] = useState<InsightsView>({ kind: 'idle' });
   const [previousMonthView, setPreviousMonthView] = useState<PreviousMonthView>({ kind: 'idle' });
+  const [revenueGoalView, setRevenueGoalView] = useState<RevenueGoalView>({ kind: 'idle' });
+  const [goalEditOpen, setGoalEditOpen] = useState(false);
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [goalSaveError, setGoalSaveError] = useState<string | null>(null);
   const [expandKind, setExpandKind] = useState<ExpandKind | null>(null);
 
   const loadOverview = useCallback(
@@ -405,6 +427,7 @@ export function DashboardPage() {
         setMonthlyRevenueView({ kind: 'idle' });
         setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
+        setRevenueGoalView({ kind: 'idle' });
         return;
       }
       if (!hasOperationalDashboardTenant(user, support)) {
@@ -415,8 +438,10 @@ export function DashboardPage() {
         setMonthlyRevenueView({ kind: 'idle' });
         setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
+        setRevenueGoalView({ kind: 'idle' });
         return;
       }
+
 
       setView({ kind: 'loading' });
       try {
@@ -432,6 +457,7 @@ export function DashboardPage() {
           setMonthlyRevenueView({ kind: 'idle' });
           setInsightsView({ kind: 'idle' });
           setPreviousMonthView({ kind: 'idle' });
+        setRevenueGoalView({ kind: 'idle' });
           return;
         }
         setView({ kind: 'ready', data });
@@ -447,6 +473,7 @@ export function DashboardPage() {
           setMonthlyRevenueView({ kind: 'idle' });
           setInsightsView({ kind: 'idle' });
           setPreviousMonthView({ kind: 'idle' });
+        setRevenueGoalView({ kind: 'idle' });
           return;
         }
         const message =
@@ -460,6 +487,7 @@ export function DashboardPage() {
         setMonthlyRevenueView({ kind: 'idle' });
         setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
+        setRevenueGoalView({ kind: 'idle' });
       }
     },
     [support, user],
@@ -614,6 +642,29 @@ export function DashboardPage() {
     [],
   );
 
+  const loadRevenueGoal = useCallback(
+    async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
+      setRevenueGoalView({ kind: 'loading' });
+      try {
+        const data = await getDashboardRevenueGoal(monthKey === todayMonthKey ? null : monthKey);
+        if (signal.aborted) {
+          return;
+        }
+        setRevenueGoalView({ kind: 'ready', data });
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        const message =
+          error instanceof DashboardRevenueGoalRequestError
+            ? error.message
+            : 'Não foi possível carregar a meta de faturamento.';
+        setRevenueGoalView({ kind: 'error', message });
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (status !== 'authenticated') {
       return;
@@ -677,6 +728,16 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (view.kind !== 'ready') {
+      setRevenueGoalView({ kind: 'idle' });
+      return;
+    }
+    const controller = new AbortController();
+    void loadRevenueGoal(controller.signal, selectedMonthKey, todayMonthKey);
+    return () => controller.abort();
+  }, [loadRevenueGoal, selectedMonthKey, todayMonthKey, view.kind]);
+
+  useEffect(() => {
+    if (view.kind !== 'ready') {
       setPreviousMonthView({ kind: 'idle' });
       return;
     }
@@ -724,6 +785,35 @@ export function DashboardPage() {
   const retryPreviousMonth = () => {
     void loadPreviousMonth(new AbortController().signal, previousMonthKey, todayMonthKey);
   };
+  const retryRevenueGoal = () => {
+    void loadRevenueGoal(new AbortController().signal, selectedMonthKey, todayMonthKey);
+  };
+
+  const openGoalEditor = useCallback(() => {
+    setGoalSaveError(null);
+    setGoalEditOpen(true);
+  }, []);
+
+  const saveRevenueGoal = useCallback(
+    (target: string) => {
+      setGoalSaving(true);
+      setGoalSaveError(null);
+      void putDashboardRevenueGoal({ month: selectedMonthKey, target })
+        .then((data) => {
+          setRevenueGoalView({ kind: 'ready', data });
+          setGoalEditOpen(false);
+        })
+        .catch((error: unknown) => {
+          setGoalSaveError(
+            error instanceof DashboardRevenueGoalRequestError
+              ? error.message
+              : 'Não foi possível salvar a meta de faturamento.',
+          );
+        })
+        .finally(() => setGoalSaving(false));
+    },
+    [selectedMonthKey],
+  );
 
   const lastSyncAt = view.kind === 'ready' ? view.data.integration.lastSuccessfulSyncAt : null;
   const freshness = formatSyncTimestamp(lastSyncAt);
@@ -746,6 +836,9 @@ export function DashboardPage() {
   const revenueError = monthlyRevenueView.kind === 'error' ? monthlyRevenueView.message : null;
   const expenseError = monthlyExpenseView.kind === 'error' ? monthlyExpenseView.message : null;
   const insightsError = insightsView.kind === 'error' ? insightsView.message : null;
+  const revenueGoalData = revenueGoalView.kind === 'ready' ? revenueGoalView.data : null;
+  const revenueGoalError = revenueGoalView.kind === 'error' ? revenueGoalView.message : null;
+  const canExpandGoal = gate === 'ready' && revenueGoalData !== null;
   const monthEndError = monthEndView.kind === 'error' ? monthEndView.message : null;
   const forecastError = forecastView.kind === 'error' ? forecastView.message : null;
   const previousMonthError =
@@ -1261,18 +1354,20 @@ export function DashboardPage() {
           sectionId="meta-faturamento"
           title="Meta de faturamento"
           subtitle={monthLabel}
+          expandable={canExpandGoal}
+          onExpand={canExpandGoal ? () => setExpandKind('goal') : undefined}
         >
           <WidgetBody
             gate={gate}
             loadingLabel="Carregando meta de faturamento"
-            error={revenueError}
-            onRetry={retryRevenue}
-            pending={revenueData === null}
+            error={revenueGoalError}
+            onRetry={retryRevenueGoal}
+            pending={revenueGoalData === null}
           >
             <RevenueGoalCard
               monthLabel={monthLabel}
-              snapshot={null}
-              realizedAmount={revenueData?.receivables.total ?? null}
+              snapshot={revenueGoalData}
+              onEdit={openGoalEditor}
             />
           </WidgetBody>
         </WidgetShell>
@@ -1595,6 +1690,59 @@ export function DashboardPage() {
           </div>
         </WidgetExpandDialog>
       ) : null}
+
+      {expandKind === 'goal' && revenueGoalData ? (
+        <WidgetExpandDialog
+          open
+          title="Meta de faturamento"
+          subtitle={`Competência de ${monthLabel}`}
+          onClose={() => setExpandKind(null)}
+        >
+          <div className={styles.expandBody}>
+            <dl className={styles.statsRow}>
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>Realizado</dt>
+                <dd className={styles.statsValue}>{formatMoneyBrl(revenueGoalData.actual)}</dd>
+              </div>
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>Meta</dt>
+                <dd className={styles.statsValue}>
+                  {revenueGoalData.target === null ? '—' : formatMoneyBrl(revenueGoalData.target)}
+                </dd>
+              </div>
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>Atingimento</dt>
+                <dd className={styles.statsValue}>
+                  {formatDelinquencyRate(revenueGoalData.achievementRate)}
+                </dd>
+              </div>
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>Status</dt>
+                <dd className={styles.statsValue}>
+                  {revenueGoalStatusLabel(revenueGoalData.status) ?? '—'}
+                </dd>
+              </div>
+            </dl>
+            <p className={styles.expandLabel}>Histórico por competência</p>
+            <RevenueGoalHistoryList points={revenueGoalData.history} />
+            <div>
+              <Button variant="secondary" size="sm" onClick={openGoalEditor}>
+                {revenueGoalData.target === null ? 'Definir meta' : 'Editar meta'}
+              </Button>
+            </div>
+          </div>
+        </WidgetExpandDialog>
+      ) : null}
+
+      <RevenueGoalEditDialog
+        open={goalEditOpen}
+        monthLabel={monthLabel}
+        currentTarget={revenueGoalData?.target ?? null}
+        saving={goalSaving}
+        error={goalSaveError}
+        onSubmit={saveRevenueGoal}
+        onClose={() => setGoalEditOpen(false)}
+      />
 
       {expandKind === 'daily' && revenueData && expenseData ? (
         <WidgetExpandDialog

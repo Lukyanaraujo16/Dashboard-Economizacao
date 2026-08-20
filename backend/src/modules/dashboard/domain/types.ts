@@ -186,6 +186,38 @@ export type DashboardExecutiveInsightsResponse = {
   }[];
 };
 
+export type DashboardRevenueGoalStatus =
+  | 'NO_TARGET'
+  | 'IN_PROGRESS'
+  | 'NOT_ACHIEVED'
+  | 'ACHIEVED'
+  | 'EXCEEDED'
+  | 'PLANNED';
+
+export type DashboardRevenueGoalHistoryPoint = {
+  readonly monthKey: string;
+  /** null = competência sem meta cadastrada. */
+  readonly target: string | null;
+  readonly actual: string;
+  readonly achievementRate: string | null;
+  readonly status: DashboardRevenueGoalStatus;
+};
+
+/**
+ * Meta mensal de faturamento (F2). `actual` é o total por competência de
+ * `monthly-revenue`; `achievementRate` já vem × 100, como as demais taxas.
+ */
+export type DashboardRevenueGoalResponse = {
+  readonly monthKey: string;
+  readonly target: string | null;
+  readonly actual: string;
+  readonly achievementRate: string | null;
+  readonly remaining: string | null;
+  readonly exceeded: string | null;
+  readonly status: DashboardRevenueGoalStatus;
+  readonly history: readonly DashboardRevenueGoalHistoryPoint[];
+};
+
 export type DashboardMonthEndCashPressureResponse = {
   readonly today: string;
   readonly monthKey: string;

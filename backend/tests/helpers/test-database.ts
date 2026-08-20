@@ -1,6 +1,7 @@
 type TestDatabaseCleaner = {
   readonly integrationSyncCursor: { deleteMany: () => Promise<unknown> };
   readonly syncRun: { deleteMany: () => Promise<unknown> };
+  readonly revenueGoal: { deleteMany: () => Promise<unknown> };
   readonly receivable: { deleteMany: () => Promise<unknown> };
   readonly payable: { deleteMany: () => Promise<unknown> };
   readonly party: { deleteMany: () => Promise<unknown> };
@@ -79,6 +80,7 @@ export async function cleanTestDatabase(
 
   await prisma.integrationSyncCursor.deleteMany();
   await prisma.syncRun.deleteMany();
+  await prisma.revenueGoal.deleteMany();
   await prisma.receivable.deleteMany();
   await prisma.payable.deleteMany();
   await prisma.party.deleteMany();

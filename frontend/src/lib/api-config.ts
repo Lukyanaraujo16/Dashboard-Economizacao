@@ -200,6 +200,16 @@ export function dashboardExecutiveInsightsPath(monthKey?: string | null): string
   return `${base}?${params.toString()}`;
 }
 
+/** Meta mensal de faturamento (F2) — leitura por competência e gravação via PUT. */
+export function dashboardRevenueGoalPath(monthKey?: string | null): string {
+  const base = `${DASHBOARD_API_PREFIX}/revenue-goal`;
+  if (monthKey === undefined || monthKey === null || monthKey.trim() === '') {
+    return base;
+  }
+  const params = new URLSearchParams({ month: monthKey.trim() });
+  return `${base}?${params.toString()}`;
+}
+
 export function dashboardMonthEndCashPressurePath(): string {
   return `${DASHBOARD_API_PREFIX}/month-end-cash-pressure`;
 }

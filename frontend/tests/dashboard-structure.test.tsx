@@ -38,6 +38,8 @@ import {
   DashboardExecutiveInsightsRequestError,
   type DashboardExecutiveInsightsResponse,
 } from '../src/services/dashboard/executive-insights.types';
+import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
+import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { ThemeProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
@@ -80,12 +82,29 @@ vi.mock('../src/services/dashboard/executive-insights', () => ({
   getDashboardExecutiveInsights: vi.fn(),
 }));
 
+vi.mock('../src/services/dashboard/revenue-goal', () => ({
+  getDashboardRevenueGoal: vi.fn(),
+  putDashboardRevenueGoal: vi.fn(),
+}));
+
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getInsights = vi.mocked(getDashboardExecutiveInsights);
+const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
+
+const emptyRevenueGoal: RevenueGoalSnapshot = {
+  monthKey: '2026-08',
+  target: null,
+  actual: '0',
+  achievementRate: null,
+  remaining: null,
+  exceeded: null,
+  status: 'NO_TARGET',
+  history: [],
+};
 
 const emptyMonthEnd: DashboardMonthEndCashPressureResponse = {
   today: '2026-08-19',
@@ -289,6 +308,7 @@ beforeEach(() => {
   getMonthlyExpenses.mockResolvedValue(emptyMonthlyExpenses);
   getMonthlyRevenue.mockResolvedValue(emptyMonthlyRevenue);
   getInsights.mockResolvedValue(emptyInsights);
+  getRevenueGoal.mockResolvedValue(emptyRevenueGoal);
 });
 
 afterEach(() => {

@@ -10,9 +10,11 @@ import { createPayableReadRepository } from '../../finance/repositories/payable-
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { createContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
+import { createRevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
 import { createDashboardOverviewFacade } from '../services/dashboard-overview.facade.js';
 import { assertNoTenantIdQuery } from './assert-no-tenant-id-query.js';
 import { parseDashboardMonth } from './parse-dashboard-month.js';
+import { parseDashboardRevenueGoalBody } from './parse-dashboard-revenue-goal-body.js';
 import { parseDashboardUpcomingDays } from './parse-dashboard-upcoming-days.js';
 
 export async function registerDashboardOverviewRoutes(app: FastifyInstance): Promise<void> {
@@ -27,6 +29,7 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       categories: createFinancialCategoryReadRepository(prisma),
     }),
     integrations: createContaAzulIntegrationRepository(prisma),
+    revenueGoals: createRevenueGoalRepository(prisma),
   });
 
   app.get('/dashboard/overview', { preHandler: requireAuthentication }, async (request, reply) => {
@@ -132,6 +135,36 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       }
       assertNoTenantIdQuery(request.query);
       const body = await dashboard.getMonthEndCashPressure(auth);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
+    '/dashboard/revenue-goal',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const monthKey = parseDashboardMonth(request.query);
+      const body = await dashboard.getRevenueGoal(auth, monthKey);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.put(
+    '/dashboard/revenue-goal',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const command = parseDashboardRevenueGoalBody(request.body);
+      const body = await dashboard.upsertRevenueGoal(auth, command.monthKey, command.targetAmount);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

@@ -68,11 +68,21 @@ export type { RatioMeterProps } from './ratio-meter';
 export { Sparkline } from './sparkline';
 export type { SparklineProps } from './sparkline';
 
-export { presentGoalProgress } from './revenue-goal-math';
-export type { GoalProgressView } from './revenue-goal-math';
+export {
+  goalProgressStatusFromApi,
+  presentApiGoalProgress,
+  presentGoalProgress,
+  revenueGoalHistoryCaption,
+  revenueGoalStatusLabel,
+  toRevenueGoalTargetDecimal,
+} from './revenue-goal-math';
+export type { GoalProgressStatus, GoalProgressView } from './revenue-goal-math';
 
-export { RevenueGoalCard } from './revenue-goal-card';
-export type { RevenueGoalCardProps } from './revenue-goal-card';
+export { RevenueGoalCard, RevenueGoalHistoryList } from './revenue-goal-card';
+export type { RevenueGoalCardProps, RevenueGoalHistoryListProps } from './revenue-goal-card';
+
+export { RevenueGoalEditDialog } from './revenue-goal-edit-dialog';
+export type { RevenueGoalEditDialogProps } from './revenue-goal-edit-dialog';
 
 export { WidgetExpandDialog } from './widget-expand-dialog';
 export type { WidgetExpandDialogProps } from './widget-expand-dialog';

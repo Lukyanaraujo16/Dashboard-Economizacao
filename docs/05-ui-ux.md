@@ -283,8 +283,16 @@ Freshness absoluta: “Última sincronização: {data/hora}”. Sem timer relati
 Composição V2.3 — Home Architecture (HOMOLOGADA):
 
 Delta de arquitetura da Home sobre V2.2; semântica financeira intocada
-(competência ≠ caixa). Widget de meta **preparado** no UI — API/persistência
-de meta **NÃO IMPLEMENTADAS** (F2 NÃO INICIADA).
+(competência ≠ caixa). Widget de meta **funcional** (F2 HOMOLOGADA / F2.0.1
+status temporal): CTA “Definir meta” / “Editar meta” com `data-stop-expand`,
+diálogo de valor (decimal-string, sem `parseFloat` como fonte), progresso
+Meta × Realizado, falta/excesso, histórico compacto e diálogo expandido.
+Status na UI: mês atual abaixo → “Em andamento”; mês passado abaixo → “Meta não
+atingida”; mês futuro com meta → “Meta planejada”; atingida → “Meta atingida”;
+superada → “Meta superada”. Sem meta cadastrada, o empty state “Meta ainda não
+definida” permanece — nenhum número inventado. Layout da Home inalterado.
+Gráfico histórico Meta × Realizado: melhoria futura (fora da F2 homologada).
+IA / sugestão automática de meta: FUTURA / NÃO IMPLEMENTADA.
 
 V2.3.1 — Final Home Polish (HOMOLOGADA): baseline visual/funcional **congelado**
 da Home (copy comercial da Meta, ícones semânticos da Leitura, Comparativo sem
@@ -308,8 +316,8 @@ inteiro (`WidgetShell`) é clicável (e Enter/Espaço) e abre
 Grade secundária (`secondaryGrid`):
 * Meta de faturamento (`sectionId` `meta-faturamento`) — empty comercial
   V2.3.1 (título “Meta ainda não definida” + apoio “Defina uma meta mensal
-  para acompanhar o desempenho do faturamento.”) enquanto `snapshot=null`
-  (sem números inventados; API/persistência de meta ainda não existem);
+  para acompanhar o desempenho do faturamento.”) enquanto sem meta; com meta,
+  card funcional F2/F2.0.1 (status temporal por competência);
 * Até o fim do mês (só mês civil atual);
 * Leitura executiva;
 * Inadimplência.

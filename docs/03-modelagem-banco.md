@@ -592,6 +592,31 @@ Campos conceituais:
 
 ⸻
 
+7.7.1 revenue_goals
+
+Meta mensal de faturamento gerencial por empresa (F2 — HOMOLOGADA). Entidade
+de produto: não depende da Conta Azul e não é alimentada por sincronização.
+Persistência SIM · por tenant SIM · por competência SIM · cadastro/edição SIM ·
+histórico de competências via API · Meta × Realizado / falta / excesso derivados.
+Competência futura: status `PLANNED`. IA / sugestão automática: FUTURA.
+Gráfico histórico Meta × Realizado: melhoria futura (fora da F2 homologada).
+
+Campos físicos:
+
+* id;
+* tenant_id;
+* month_key (VARCHAR(7), competência `YYYY-MM`);
+* target_amount (Decimal 19,4, sempre > 0 — validado na escrita);
+* created_at / updated_at.
+
+Unique: (tenant_id, month_key). Índice: (tenant_id, month_key).
+
+O realizado **não** é persistido: é calculado por competência a partir de
+`receivables`, pela mesma fórmula de monthly-revenue (docs/11). Não existe
+tabela de revisões da meta — apenas o último valor por competência é guardado.
+
+⸻
+
 7.8 revenue_records
 
 Representação normalizada de receitas quando necessária para cálculo analítico.
