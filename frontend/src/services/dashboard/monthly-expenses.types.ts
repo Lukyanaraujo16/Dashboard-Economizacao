@@ -4,8 +4,10 @@ export type DashboardMonthlyExpenseItem = {
   readonly kind: DashboardMonthlyExpenseKind;
   readonly name: string;
   readonly amount: string;
-  readonly paid: string;
-  readonly outstanding: string;
+  /** null com filtro por centro (cash split indisponível). */
+  readonly paid: string | null;
+  /** null com filtro por centro (cash split indisponível). */
+  readonly outstanding: string | null;
   readonly percentage: string;
 };
 
@@ -13,12 +15,13 @@ export type DashboardMonthlyExpenseItem = {
  * Ponto diário por competência: `date` = competenceDate do título.
  * `amount` = Σ total do dia; `received` (pago) e `outstanding` (a pagar) são
  * snapshots atuais dos títulos daquela competência — não caixa daquele dia.
+ * Com filtro por centro, received/outstanding podem ser null.
  */
 export type DashboardCompetenceDailyPoint = {
   readonly date: string;
   readonly amount: string;
-  readonly received: string;
-  readonly outstanding: string;
+  readonly received: string | null;
+  readonly outstanding: string | null;
 };
 
 export type DashboardMonthlyExpenseResponse = {
@@ -26,11 +29,12 @@ export type DashboardMonthlyExpenseResponse = {
   readonly monthKey: string;
   readonly from: string;
   readonly to: string;
+  readonly costCenterCashSplit?: boolean;
   readonly payables: {
     readonly total: string;
-    readonly paid: string;
-    readonly outstanding: string;
-    readonly overdue: string;
+    readonly paid: string | null;
+    readonly outstanding: string | null;
+    readonly overdue: string | null;
     readonly classified: string;
     readonly uncategorized: string;
     readonly imprecise: string;

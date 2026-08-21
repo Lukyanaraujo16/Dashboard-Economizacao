@@ -1066,6 +1066,17 @@ L1-A — Persistência/ingestão read-only (`financial_transactions`):
      IMPLEMENTADA / HOMOLOGADA (bootstrap DEV: 77 baixas ACTIVE)
      Bootstrap/incremental após AR/AP; GET `/parcelas/{id}/baixa` apenas.
      Tombstone automático DESLIGADO. KPI recebido/pago por período: NÃO.
+CC1 — Centros de custo + alocação + filtro Home:
+     HOMOLOGADA (CC1.1 incorporada)
+     Sync `cost_centers` + `installment_cost_center_allocations`;
+     `GET /dashboard/cost-centers`; query `costCenter` nos GETs de dashboard;
+     filtro no header + URL (`?month=&costCenter=`); Meta F2 permanece consolidada
+     (company-level; ignora filtro de centro).
+     CC1.1 HOMOLOGADA: Conta Azul pode devolver rateio EVENT-scoped em parcelamentos;
+     `EVENT_SCOPED_SINGLE_CENTER` → amount = total da parcela;
+     multi-centro EVENT-scoped = MULTI_CENTER_UNRESOLVED (protegido; não proporcional);
+     NO_ALLOCATION legítimo; Todos pode ser > Σ centros.
+     CC1.2 performance N+1: PRÓXIMA FASE / NÃO IMPLEMENTADA.
 L1-B — Semântica oficial do caixa + read model mensal:
      BLOCKED_BY_CASH_SEMANTICS (20/08/2026)
      Doc oficial ValorComposicaoDTO da baixa: 5 campos (valor_bruto required +

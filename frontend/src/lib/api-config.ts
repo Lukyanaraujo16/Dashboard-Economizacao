@@ -153,65 +153,85 @@ export function adminTenantUserResetPasswordPath(tenantId: string, userId: strin
 /** Prefixo same-origin da Dashboard financeira do cliente (10A/10B). */
 export const DASHBOARD_API_PREFIX = '/dashboard';
 
-export function dashboardOverviewPath(): string {
-  return `${DASHBOARD_API_PREFIX}/overview`;
-}
+export type DashboardQueryOptions = {
+  readonly monthKey?: string | null;
+  readonly costCenterId?: string | null;
+};
 
-export function dashboardUpcomingPath(days: 7 | 15 | 30): string {
-  return `${DASHBOARD_API_PREFIX}/upcoming?days=${days}`;
-}
-
-export function dashboardCashFlowForecastPath(): string {
-  return `${DASHBOARD_API_PREFIX}/cash-flow-forecast`;
-}
-
-export function dashboardExpenseCompositionPath(): string {
-  return `${DASHBOARD_API_PREFIX}/expense-composition`;
-}
-
-export function dashboardReceivableCompositionPath(): string {
-  return `${DASHBOARD_API_PREFIX}/receivable-composition`;
-}
-
-export function dashboardMonthlyRevenuePath(monthKey?: string | null): string {
-  const base = `${DASHBOARD_API_PREFIX}/monthly-revenue`;
-  if (monthKey === undefined || monthKey === null || monthKey.trim() === '') {
-    return base;
+function dashboardQueryString(options?: DashboardQueryOptions): string {
+  const params = new URLSearchParams();
+  const monthKey = options?.monthKey?.trim();
+  if (monthKey) {
+    params.set('month', monthKey);
   }
-  const params = new URLSearchParams({ month: monthKey.trim() });
-  return `${base}?${params.toString()}`;
-}
-
-export function dashboardMonthlyExpensesPath(monthKey?: string | null): string {
-  const base = `${DASHBOARD_API_PREFIX}/monthly-expenses`;
-  if (monthKey === undefined || monthKey === null || monthKey.trim() === '') {
-    return base;
+  const costCenterId = options?.costCenterId?.trim();
+  if (costCenterId) {
+    params.set('costCenter', costCenterId);
   }
-  const params = new URLSearchParams({ month: monthKey.trim() });
-  return `${base}?${params.toString()}`;
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
 }
 
-export function dashboardExecutiveInsightsPath(monthKey?: string | null): string {
-  const base = `${DASHBOARD_API_PREFIX}/executive-insights`;
-  if (monthKey === undefined || monthKey === null || monthKey.trim() === '') {
-    return base;
+export function dashboardCostCentersPath(): string {
+  return `${DASHBOARD_API_PREFIX}/cost-centers`;
+}
+
+export function dashboardOverviewPath(costCenterId?: string | null): string {
+  return `${DASHBOARD_API_PREFIX}/overview${dashboardQueryString({ costCenterId })}`;
+}
+
+export function dashboardUpcomingPath(
+  days: 7 | 15 | 30,
+  costCenterId?: string | null,
+): string {
+  const params = new URLSearchParams({ days: String(days) });
+  const trimmed = costCenterId?.trim();
+  if (trimmed) {
+    params.set('costCenter', trimmed);
   }
-  const params = new URLSearchParams({ month: monthKey.trim() });
-  return `${base}?${params.toString()}`;
+  return `${DASHBOARD_API_PREFIX}/upcoming?${params.toString()}`;
 }
 
-/** Meta mensal de faturamento (F2) — leitura por competência e gravação via PUT. */
+export function dashboardCashFlowForecastPath(costCenterId?: string | null): string {
+  return `${DASHBOARD_API_PREFIX}/cash-flow-forecast${dashboardQueryString({ costCenterId })}`;
+}
+
+export function dashboardExpenseCompositionPath(costCenterId?: string | null): string {
+  return `${DASHBOARD_API_PREFIX}/expense-composition${dashboardQueryString({ costCenterId })}`;
+}
+
+export function dashboardReceivableCompositionPath(costCenterId?: string | null): string {
+  return `${DASHBOARD_API_PREFIX}/receivable-composition${dashboardQueryString({ costCenterId })}`;
+}
+
+export function dashboardMonthlyRevenuePath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/monthly-revenue${dashboardQueryString({ monthKey, costCenterId })}`;
+}
+
+export function dashboardMonthlyExpensesPath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/monthly-expenses${dashboardQueryString({ monthKey, costCenterId })}`;
+}
+
+export function dashboardExecutiveInsightsPath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/executive-insights${dashboardQueryString({ monthKey, costCenterId })}`;
+}
+
+/** Meta mensal de faturamento (F2) — sempre consolidada; sem `costCenter`. */
 export function dashboardRevenueGoalPath(monthKey?: string | null): string {
-  const base = `${DASHBOARD_API_PREFIX}/revenue-goal`;
-  if (monthKey === undefined || monthKey === null || monthKey.trim() === '') {
-    return base;
-  }
-  const params = new URLSearchParams({ month: monthKey.trim() });
-  return `${base}?${params.toString()}`;
+  return `${DASHBOARD_API_PREFIX}/revenue-goal${dashboardQueryString({ monthKey })}`;
 }
 
-export function dashboardMonthEndCashPressurePath(): string {
-  return `${DASHBOARD_API_PREFIX}/month-end-cash-pressure`;
+export function dashboardMonthEndCashPressurePath(costCenterId?: string | null): string {
+  return `${DASHBOARD_API_PREFIX}/month-end-cash-pressure${dashboardQueryString({ costCenterId })}`;
 }
 
 /** Prefixo same-origin do branding da sessão autenticada. */

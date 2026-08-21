@@ -5,6 +5,8 @@ import { UnauthenticatedError } from '../../../shared/errors/application-error.j
 import { createAnalyticsService } from '../../analytics/services/analytics.service.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
+import { createCostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
+import { createCostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import { createFinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import { createPayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
@@ -13,6 +15,7 @@ import { createTenantRepository } from '../../tenant/repositories/tenant.reposit
 import { createRevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
 import { createDashboardOverviewFacade } from '../services/dashboard-overview.facade.js';
 import { assertNoTenantIdQuery } from './assert-no-tenant-id-query.js';
+import { parseDashboardCostCenterQuery } from './parse-dashboard-cost-center-query.js';
 import { parseDashboardMonth } from './parse-dashboard-month.js';
 import { parseDashboardRevenueGoalBody } from './parse-dashboard-revenue-goal-body.js';
 import { parseDashboardUpcomingDays } from './parse-dashboard-upcoming-days.js';
@@ -22,15 +25,32 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
   const users = createUserRepository(prisma);
   const tenants = createTenantRepository(prisma);
   const requireAuthentication = createRequireAuthentication({ users, tenants });
+  const costCenters = createCostCenterReadRepository(prisma);
   const dashboard = createDashboardOverviewFacade({
     analytics: createAnalyticsService({
       receivables: createReceivableReadRepository(prisma),
       payables: createPayableReadRepository(prisma),
       categories: createFinancialCategoryReadRepository(prisma),
+      costCenterAllocations: createCostCenterAllocationReadRepository(prisma),
     }),
     integrations: createContaAzulIntegrationRepository(prisma),
     revenueGoals: createRevenueGoalRepository(prisma),
+    costCenters,
   });
+
+  app.get(
+    '/dashboard/cost-centers',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const body = await dashboard.listCostCenters(auth);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
 
   app.get('/dashboard/overview', { preHandler: requireAuthentication }, async (request, reply) => {
     const auth = request.auth;
@@ -38,7 +58,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       throw new UnauthenticatedError();
     }
     assertNoTenantIdQuery(request.query);
-    const body = await dashboard.getOverview(auth);
+    const costCenterId = parseDashboardCostCenterQuery(request.query);
+    const body = await dashboard.getOverview(auth, costCenterId);
     return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
   });
 
@@ -49,7 +70,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
     }
     assertNoTenantIdQuery(request.query);
     const nDays = parseDashboardUpcomingDays(request.query);
-    const body = await dashboard.getUpcoming(auth, nDays);
+    const costCenterId = parseDashboardCostCenterQuery(request.query);
+    const body = await dashboard.getUpcoming(auth, nDays, costCenterId);
     return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
   });
 
@@ -62,7 +84,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      const body = await dashboard.getCashFlowForecast(auth);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getCashFlowForecast(auth, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -76,7 +99,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      const body = await dashboard.getExpenseComposition(auth);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getExpenseComposition(auth, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -90,7 +114,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      const body = await dashboard.getReceivableComposition(auth);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getReceivableComposition(auth, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -105,7 +130,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       }
       assertNoTenantIdQuery(request.query);
       const monthKey = parseDashboardMonth(request.query);
-      const body = await dashboard.getMonthlyRevenue(auth, monthKey);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getMonthlyRevenue(auth, monthKey, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -120,7 +146,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       }
       assertNoTenantIdQuery(request.query);
       const monthKey = parseDashboardMonth(request.query);
-      const body = await dashboard.getMonthlyExpenses(auth, monthKey);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getMonthlyExpenses(auth, monthKey, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -134,7 +161,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      const body = await dashboard.getMonthEndCashPressure(auth);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getMonthEndCashPressure(auth, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -148,6 +176,7 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
+      // Meta é sempre company-level — query costCenter (se presente) é ignorada.
       const monthKey = parseDashboardMonth(request.query);
       const body = await dashboard.getRevenueGoal(auth, monthKey);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
@@ -179,7 +208,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       }
       assertNoTenantIdQuery(request.query);
       const monthKey = parseDashboardMonth(request.query);
-      const body = await dashboard.getMonthlyExecutiveInsights(auth, monthKey);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getMonthlyExecutiveInsights(auth, monthKey, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

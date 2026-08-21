@@ -74,6 +74,56 @@ describe('dashboard monthly revenue service', () => {
     );
   });
 
+  it('envia costCenter= junto com month=', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(body),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const center = '11111111-1111-4111-8111-111111111111';
+    await getDashboardMonthlyRevenue('2026-07', center);
+    expect(fetchMock).toHaveBeenCalledWith(
+      dashboardMonthlyRevenuePath('2026-07', center),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(dashboardMonthlyRevenuePath('2026-07', center)).toContain('costCenter=');
+  });
+
+  it('aceita cash split null com costCenterCashSplit false', async () => {
+    const filtered = {
+      ...body,
+      costCenterCashSplit: false,
+      receivables: {
+        ...body.receivables,
+        received: null,
+        outstanding: null,
+        overdue: null,
+        items: [
+          {
+            ...body.receivables.items[0],
+            received: null,
+            outstanding: null,
+          },
+        ],
+        daily: [
+          { date: '2026-08-01', amount: '4000', received: null, outstanding: null },
+        ],
+      },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(filtered),
+      }),
+    );
+    const result = await getDashboardMonthlyRevenue(null, '11111111-1111-4111-8111-111111111111');
+    expect(result.costCenterCashSplit).toBe(false);
+    expect(result.receivables.received).toBeNull();
+  });
+
   it('rejeita received numérico', async () => {
     vi.stubGlobal(
       'fetch',

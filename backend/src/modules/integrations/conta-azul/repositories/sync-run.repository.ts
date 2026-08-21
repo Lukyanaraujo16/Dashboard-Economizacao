@@ -45,36 +45,43 @@ export type ContaAzulSyncRunRepository = {
   }): Promise<void>;
 };
 
+function nonNegativeInt(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    return null;
+  }
+  return value;
+}
+
 function mapCounts(value: Prisma.JsonValue | null): ContaAzulSyncCounts | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
   const record = value as Record<string, unknown>;
-  const categories = record.categories;
-  const financialAccounts = record.financialAccounts;
-  const parties = record.parties;
-  const receivables = record.receivables;
-  const payables = record.payables;
+  const categories = nonNegativeInt(record.categories);
+  const financialAccounts = nonNegativeInt(record.financialAccounts);
+  const parties = nonNegativeInt(record.parties);
+  const receivables = nonNegativeInt(record.receivables);
+  const payables = nonNegativeInt(record.payables);
   if (
-    typeof categories !== 'number' ||
-    !Number.isInteger(categories) ||
-    categories < 0 ||
-    typeof financialAccounts !== 'number' ||
-    !Number.isInteger(financialAccounts) ||
-    financialAccounts < 0 ||
-    typeof parties !== 'number' ||
-    !Number.isInteger(parties) ||
-    parties < 0 ||
-    typeof receivables !== 'number' ||
-    !Number.isInteger(receivables) ||
-    receivables < 0 ||
-    typeof payables !== 'number' ||
-    !Number.isInteger(payables) ||
-    payables < 0
+    categories === null ||
+    financialAccounts === null ||
+    parties === null ||
+    receivables === null ||
+    payables === null
   ) {
     return null;
   }
-  return { categories, financialAccounts, parties, receivables, payables };
+  const costCenters = nonNegativeInt(record.costCenters) ?? 0;
+  const costCenterAllocations = nonNegativeInt(record.costCenterAllocations) ?? 0;
+  return {
+    categories,
+    financialAccounts,
+    parties,
+    receivables,
+    payables,
+    costCenters,
+    costCenterAllocations,
+  };
 }
 
 function mapRun(row: {

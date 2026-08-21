@@ -11,6 +11,7 @@ describe('dashboard monthly expense serializer', () => {
       monthKey: '2026-08',
       from: new Date('2026-08-01T00:00:00.000Z'),
       to: new Date('2026-08-31T00:00:00.000Z'),
+      costCenterCashSplit: true,
       total: new Prisma.Decimal('600'),
       received: new Prisma.Decimal('600'),
       outstanding: new Prisma.Decimal('0'),

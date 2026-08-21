@@ -4,8 +4,10 @@ export type DashboardMonthlyRevenueItem = {
   readonly kind: DashboardMonthlyRevenueKind;
   readonly name: string;
   readonly amount: string;
-  readonly received: string;
-  readonly outstanding: string;
+  /** null com filtro por centro (cash split indisponível). */
+  readonly received: string | null;
+  /** null com filtro por centro (cash split indisponível). */
+  readonly outstanding: string | null;
   readonly percentage: string;
 };
 
@@ -13,12 +15,13 @@ export type DashboardMonthlyRevenueItem = {
  * Ponto diário por competência: `date` = competenceDate do título.
  * `amount` = Σ total do dia; `received`/`outstanding` são snapshots atuais dos
  * títulos daquela competência — não movimento de caixa daquele dia.
+ * Com filtro por centro, received/outstanding podem ser null.
  */
 export type DashboardCompetenceDailyPoint = {
   readonly date: string;
   readonly amount: string;
-  readonly received: string;
-  readonly outstanding: string;
+  readonly received: string | null;
+  readonly outstanding: string | null;
 };
 
 export type DashboardMonthlyRevenueResponse = {
@@ -26,11 +29,16 @@ export type DashboardMonthlyRevenueResponse = {
   readonly monthKey: string;
   readonly from: string;
   readonly to: string;
+  /**
+   * false = filtro por centro (cash split null).
+   * Ausente/`true` = consolidado (comportamento histórico).
+   */
+  readonly costCenterCashSplit?: boolean;
   readonly receivables: {
     readonly total: string;
-    readonly received: string;
-    readonly outstanding: string;
-    readonly overdue: string;
+    readonly received: string | null;
+    readonly outstanding: string | null;
+    readonly overdue: string | null;
     readonly classified: string;
     readonly uncategorized: string;
     readonly imprecise: string;

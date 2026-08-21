@@ -24,6 +24,8 @@ export type GetFinancialStockSnapshotInput = {
   readonly tenantId: string;
   readonly now?: Date;
   readonly integrationId?: string;
+  /** Filtro opcional por CostCenter.id do tenant. */
+  readonly costCenterId?: string;
 };
 
 export type GetMonthlyCompetenceRevenueInput = GetFinancialStockSnapshotInput & {
@@ -88,8 +90,10 @@ export type OpenReceivablesCategoryCompositionResult = OpenPayablesCategoryCompo
 export type MonthlyCompetenceDailyPoint = {
   readonly date: Date;
   readonly amount: Prisma.Decimal;
-  readonly received: Prisma.Decimal;
-  readonly outstanding: Prisma.Decimal;
+  /** null quando filtrado por centro (sem split pago/em aberto seguro). */
+  readonly received: Prisma.Decimal | null;
+  /** null quando filtrado por centro (sem split pago/em aberto seguro). */
+  readonly outstanding: Prisma.Decimal | null;
 };
 
 export type MonthlyCompetenceRevenueResult = {
@@ -98,10 +102,15 @@ export type MonthlyCompetenceRevenueResult = {
   readonly monthKey: string;
   readonly from: Date;
   readonly to: Date;
+  /**
+   * false = filtro por centro: totais via allocation.amount;
+   * received/outstanding/overdue null (PARCIAL).
+   */
+  readonly costCenterCashSplit: boolean;
   readonly total: Prisma.Decimal;
-  readonly received: Prisma.Decimal;
-  readonly outstanding: Prisma.Decimal;
-  readonly overdue: Prisma.Decimal;
+  readonly received: Prisma.Decimal | null;
+  readonly outstanding: Prisma.Decimal | null;
+  readonly overdue: Prisma.Decimal | null;
   readonly classified: Prisma.Decimal;
   readonly uncategorized: Prisma.Decimal;
   readonly imprecise: Prisma.Decimal;
@@ -110,11 +119,11 @@ export type MonthlyCompetenceRevenueResult = {
     readonly kind: 'category' | 'other' | 'uncategorized' | 'imprecise';
     readonly name: string;
     readonly amount: Prisma.Decimal;
-    readonly received: Prisma.Decimal;
-    readonly outstanding: Prisma.Decimal;
+    readonly received: Prisma.Decimal | null;
+    readonly outstanding: Prisma.Decimal | null;
     readonly percentage: Prisma.Decimal;
   }[];
-  /** Dia = competenceDate; valor = Σ total. Não é caixa. */
+  /** Dia = competenceDate; valor = Σ total (ou Σ allocation.amount). Não é caixa. */
   readonly daily: readonly MonthlyCompetenceDailyPoint[];
 };
 

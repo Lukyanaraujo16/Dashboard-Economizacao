@@ -24,6 +24,8 @@ export type ContaAzulSyncCounts = {
   readonly parties: number;
   readonly receivables: number;
   readonly payables: number;
+  readonly costCenters: number;
+  readonly costCenterAllocations: number;
 };
 
 export type ContaAzulSyncRun = {

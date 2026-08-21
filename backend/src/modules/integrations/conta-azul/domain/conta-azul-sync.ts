@@ -65,6 +65,8 @@ export type ContaAzulSyncCounts = {
   readonly parties: number;
   readonly receivables: number;
   readonly payables: number;
+  readonly costCenters: number;
+  readonly costCenterAllocations: number;
 };
 
 export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
@@ -73,6 +75,8 @@ export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
   parties: 0,
   receivables: 0,
   payables: 0,
+  costCenters: 0,
+  costCenterAllocations: 0,
 };
 
 export type ContaAzulSyncTrigger = 'MANUAL' | 'SCHEDULED';

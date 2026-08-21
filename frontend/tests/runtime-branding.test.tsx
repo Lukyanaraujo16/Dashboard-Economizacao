@@ -40,6 +40,7 @@ vi.mock('next/navigation', () => ({
     push: vi.fn(),
   }),
   usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('next/link', () => ({
@@ -351,10 +352,7 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
     renderRuntime({ user: tenantUser, brandingAction, logoutAction });
 
     expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: /(bom dia|boa tarde|boa noite)/i,
-      }),
+      await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' }),
     ).toBeTruthy();
     await waitFor(() => {
       expect(screen.getByTestId('brand-name').textContent).toBe('null');

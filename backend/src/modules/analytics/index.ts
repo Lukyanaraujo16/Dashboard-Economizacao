@@ -10,6 +10,12 @@ export {
 export { buildDailyCompetenceTotals, accumulateDailyCompetence } from './domain/daily-competence-series.js';
 export type { DailyCompetencePoint } from './domain/daily-competence-series.js';
 export { calculateMonthlyCompetenceRevenue } from './domain/monthly-competence-revenue.js';
+export {
+  buildDailyCompetenceAllocationTotals,
+  calculateMonthlyCompetenceFromAllocations,
+  toAllocationExposureInstallments,
+  toAllocationMonthlySources,
+} from './domain/cost-center-allocation-math.js';
 export { buildMonthlyExecutiveInsights } from './domain/monthly-executive-insights.js';
 export type {
   MonthlyExecutiveInsight,

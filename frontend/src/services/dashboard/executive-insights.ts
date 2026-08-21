@@ -81,11 +81,12 @@ function toFailure(response: Response, body: unknown): DashboardExecutiveInsight
 
 export async function getDashboardExecutiveInsights(
   monthKey?: string | null,
+  costCenterId?: string | null,
 ): Promise<DashboardExecutiveInsightsResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardExecutiveInsightsPath(monthKey), {
+    response = await fetch(dashboardExecutiveInsightsPath(monthKey, costCenterId), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

@@ -18,6 +18,11 @@ export const CONTA_AZUL_RECEIVABLES_SEARCH_URL = `${CONTA_AZUL_API_BASE_URL}/v1/
 
 export const CONTA_AZUL_PAYABLES_SEARCH_URL = `${CONTA_AZUL_API_BASE_URL}/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar`;
 
+
+export const CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL = `${CONTA_AZUL_API_BASE_URL}/v1/financeiro/eventos-financeiros/parcelas`;
+
+export const CONTA_AZUL_COST_CENTERS_URL = `${CONTA_AZUL_API_BASE_URL}/v1/centro-de-custo`;
+
 export const CONTA_AZUL_IDENTITY_RETRY_BACKOFF_MS = 250;
 
 export const CONTA_AZUL_SCOPE = 'openid profile aws.cognito.signin.user.admin';

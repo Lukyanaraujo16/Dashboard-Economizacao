@@ -19,6 +19,7 @@ import {
   putDashboardRevenueGoal,
 } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
+import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
 import { ThemeProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
@@ -66,6 +67,10 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
   putDashboardRevenueGoal: vi.fn(),
 }));
 
+vi.mock('../src/services/dashboard/cost-centers', () => ({
+  getDashboardCostCenters: vi.fn(),
+}));
+
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
@@ -74,6 +79,7 @@ const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const putRevenueGoal = vi.mocked(putDashboardRevenueGoal);
+const getCostCenters = vi.mocked(getDashboardCostCenters);
 
 const unconfiguredGoal: RevenueGoalSnapshot = {
   monthKey: '2026-08',
@@ -282,6 +288,16 @@ beforeEach(() => {
   getInsights.mockResolvedValue(insights);
   getRevenueGoal.mockResolvedValue(unconfiguredGoal);
   putRevenueGoal.mockResolvedValue(configuredGoal);
+  getCostCenters.mockResolvedValue({
+    items: [
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: 'Operações',
+        code: 'OP',
+        active: true,
+      },
+    ],
+  });
 });
 
 afterEach(() => {
@@ -560,6 +576,8 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(cluster).toBeTruthy();
     const scope = within(cluster as HTMLElement);
     expect(scope.getByLabelText('Visão mensal por competência')).toBeTruthy();
+    expect(scope.getByLabelText('Centro de custo')).toBeTruthy();
+    expect(scope.getByRole('button', { name: 'Centro de custo: Todos' })).toBeTruthy();
     expect(scope.getByText('Última atualização')).toBeTruthy();
     const time = (cluster as HTMLElement).querySelector('time');
     expect(time?.getAttribute('datetime')).toBe('2026-08-10T09:00:00.000Z');
@@ -581,9 +599,9 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(
       scope.getByText('Comparação entre competências; a variação não representa movimento de caixa.'),
     ).toBeTruthy();
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07');
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07');
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', null);
   });
 
   it('movimentação diária da competência declara que não é caixa', async () => {
@@ -616,10 +634,10 @@ describe('Dashboard V2.3 fidelidade', () => {
     renderDashboard();
 
     await waitFor(() => {
-      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07');
-      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-06');
+      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null);
+      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-06', null);
     });
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-06');
+    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-06', null);
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getForecast).not.toHaveBeenCalled();
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();

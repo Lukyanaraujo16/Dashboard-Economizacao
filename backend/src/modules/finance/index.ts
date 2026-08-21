@@ -16,3 +16,13 @@ export { createPayableReadRepository } from './repositories/payable-read.reposit
 export type { PayableReadRepository } from './repositories/payable-read.repository.js';
 export { createReceivableReadRepository } from './repositories/receivable-read.repository.js';
 export type { ReceivableReadRepository } from './repositories/receivable-read.repository.js';
+export { createCostCenterReadRepository } from './repositories/cost-center-read.repository.js';
+export type {
+  CostCenterReadRecord,
+  CostCenterReadRepository,
+} from './repositories/cost-center-read.repository.js';
+export { createCostCenterAllocationReadRepository } from './repositories/cost-center-allocation-read.repository.js';
+export type {
+  CostCenterAllocationInstallment,
+  CostCenterAllocationReadRepository,
+} from './repositories/cost-center-allocation-read.repository.js';

@@ -592,7 +592,40 @@ Campos conceituais:
 
 ⸻
 
-7.7.1 revenue_goals
+7.7.1 cost_centers (CC1)
+
+Cadastro de centros de custo sincronizado da Conta Azul.
+
+Campos físicos:
+
+* id; tenant_id; integration_id; external_id;
+* code opcional; name; active;
+* synced_at; created_at / updated_at.
+
+Unique: (integration_id, external_id).
+
+⸻
+
+7.7.2 installment_cost_center_allocations (CC1 / CC1.1)
+
+Alocação monetária parcela ↔ centro (valor oficial do rateio Conta Azul
+**no escopo da parcela**). Em parcelamentos EVENT-scoped com 1 centro,
+`amount = total da parcela` (não o valor cru do evento). Multi-centro
+EVENT-scoped permanece unresolved nesta versão.
+
+Campos físicos:
+
+* id; tenant_id; cost_center_id;
+* receivable_id XOR payable_id;
+* amount (Decimal 19,4);
+* synced_at; created_at / updated_at.
+
+`amount` é a fonte oficial do filtro por centro — nunca duplicar o título
+inteiro nem ratear igualmente.
+
+⸻
+
+7.7.3 revenue_goals
 
 Meta mensal de faturamento gerencial por empresa (F2 — HOMOLOGADA). Entidade
 de produto: não depende da Conta Azul e não é alimentada por sincronização.

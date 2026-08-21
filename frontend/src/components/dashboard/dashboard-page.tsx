@@ -15,6 +15,13 @@ import {
   resolveSelectedDashboardMonthKey,
   shiftDashboardMonthKey,
 } from '../../lib/dashboard-month';
+import {
+  buildDashboardCostCenterSearchParams,
+  isValidDashboardCostCenterId,
+  resolveSelectedDashboardCostCenterId,
+} from '../../lib/dashboard-cost-center';
+import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
+import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
 import { getDashboardMonthlyExpenses } from '../../services/dashboard/monthly-expenses';
 import {
   DashboardMonthlyExpenseRequestError,
@@ -74,6 +81,7 @@ import {
   type MonthlyContextKpiView,
 } from './dashboard-monthly-kpis-view';
 import { isMonthlyRevenueEmpty } from './dashboard-monthly-revenue-view';
+import { DashboardCostCenterSelector } from './dashboard-cost-center-selector';
 import { DashboardMonthSelector } from './dashboard-month-selector';
 import { executiveInsightRows } from './dashboard-executive-insights-view';
 import { formatMonthKeyPtBr } from './dashboard-forecast-view';
@@ -320,9 +328,17 @@ function compactMonthLabel(monthKey: string): string {
 }
 
 /** Participação da parte no total, formatada como legenda da microvisualização. */
-function shareLabel(part: string, total: string): string | undefined {
+function shareLabel(part: string | null, total: string): string | undefined {
+  if (part === null) {
+    return undefined;
+  }
   const share = competenceSharePercent(part, total);
   return share === null ? undefined : `${formatDelinquencyRate(share)} do total da competência`;
+}
+
+/** Decimal-string ou "—" quando o cash split não está disponível. */
+function moneyOrDash(value: string | null | undefined): string {
+  return value === null || value === undefined ? '—' : formatMoneyBrl(value);
 }
 
 /** Total da competência em rótulo curto — cabe no furo do anel sem quebrar. */
@@ -412,13 +428,15 @@ export function DashboardPage() {
   const [insightsView, setInsightsView] = useState<InsightsView>({ kind: 'idle' });
   const [previousMonthView, setPreviousMonthView] = useState<PreviousMonthView>({ kind: 'idle' });
   const [revenueGoalView, setRevenueGoalView] = useState<RevenueGoalView>({ kind: 'idle' });
+  const [costCenters, setCostCenters] = useState<readonly DashboardCostCenterItem[]>([]);
+  const [costCentersLoading, setCostCentersLoading] = useState(false);
   const [goalEditOpen, setGoalEditOpen] = useState(false);
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaveError, setGoalSaveError] = useState<string | null>(null);
   const [expandKind, setExpandKind] = useState<ExpandKind | null>(null);
 
   const loadOverview = useCallback(
-    async (signal: AbortSignal) => {
+    async (signal: AbortSignal, costCenterId: string | null) => {
       if (shouldSkipOverviewFetch(user, support)) {
         setView({ kind: 'forbidden' });
         setMonthEndView({ kind: 'idle' });
@@ -428,6 +446,7 @@ export function DashboardPage() {
         setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
+        setCostCenters([]);
         return;
       }
       if (!hasOperationalDashboardTenant(user, support)) {
@@ -439,13 +458,14 @@ export function DashboardPage() {
         setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
+        setCostCenters([]);
         return;
       }
 
 
       setView({ kind: 'loading' });
       try {
-        const data = await getDashboardOverview();
+        const data = await getDashboardOverview(costCenterId);
         if (signal.aborted) {
           return;
         }
@@ -493,10 +513,30 @@ export function DashboardPage() {
     [support, user],
   );
 
-  const loadMonthEnd = useCallback(async (signal: AbortSignal) => {
+  const loadCostCenters = useCallback(async (signal: AbortSignal) => {
+    setCostCentersLoading(true);
+    try {
+      const data = await getDashboardCostCenters();
+      if (signal.aborted) {
+        return;
+      }
+      setCostCenters(data.items);
+    } catch {
+      if (signal.aborted) {
+        return;
+      }
+      setCostCenters([]);
+    } finally {
+      if (!signal.aborted) {
+        setCostCentersLoading(false);
+      }
+    }
+  }, []);
+
+  const loadMonthEnd = useCallback(async (signal: AbortSignal, costCenterId: string | null) => {
     setMonthEndView({ kind: 'loading' });
     try {
-      const data = await getDashboardMonthEndCashPressure();
+      const data = await getDashboardMonthEndCashPressure(costCenterId);
       if (signal.aborted) {
         return;
       }
@@ -513,10 +553,10 @@ export function DashboardPage() {
     }
   }, []);
 
-  const loadForecast = useCallback(async (signal: AbortSignal) => {
+  const loadForecast = useCallback(async (signal: AbortSignal, costCenterId: string | null) => {
     setForecastView({ kind: 'loading' });
     try {
-      const data = await getDashboardCashFlowForecast();
+      const data = await getDashboardCashFlowForecast(costCenterId);
       if (signal.aborted) {
         return;
       }
@@ -534,11 +574,17 @@ export function DashboardPage() {
   }, []);
 
   const loadMonthlyExpenses = useCallback(
-    async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      costCenterId: string | null,
+    ) => {
       setMonthlyExpenseView({ kind: 'loading' });
       try {
         const data = await getDashboardMonthlyExpenses(
           monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
         );
         if (signal.aborted) {
           return;
@@ -563,10 +609,18 @@ export function DashboardPage() {
   );
 
   const loadMonthlyRevenue = useCallback(
-    async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      costCenterId: string | null,
+    ) => {
       setMonthlyRevenueView({ kind: 'loading' });
       try {
-        const data = await getDashboardMonthlyRevenue(monthKey === todayMonthKey ? null : monthKey);
+        const data = await getDashboardMonthlyRevenue(
+          monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
+        );
         if (signal.aborted) {
           return;
         }
@@ -590,11 +644,17 @@ export function DashboardPage() {
   );
 
   const loadInsights = useCallback(
-    async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      costCenterId: string | null,
+    ) => {
       setInsightsView({ kind: 'loading' });
       try {
         const data = await getDashboardExecutiveInsights(
           monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
         );
         if (signal.aborted) {
           return;
@@ -620,13 +680,18 @@ export function DashboardPage() {
 
   /** Competência anterior em paralelo — receitas e despesas do mesmo mês. */
   const loadPreviousMonth = useCallback(
-    async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      costCenterId: string | null,
+    ) => {
       setPreviousMonthView({ kind: 'loading' });
       const param = monthKey === todayMonthKey ? null : monthKey;
       try {
         const [revenue, expense] = await Promise.all([
-          getDashboardMonthlyRevenue(param),
-          getDashboardMonthlyExpenses(param),
+          getDashboardMonthlyRevenue(param, costCenterId),
+          getDashboardMonthlyExpenses(param, costCenterId),
         ]);
         if (signal.aborted) {
           return;
@@ -670,9 +735,9 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadOverview(controller.signal);
+    void loadCostCenters(controller.signal);
     return () => controller.abort();
-  }, [loadOverview, status]);
+  }, [loadCostCenters, status]);
 
   const todayMonthKey =
     view.kind === 'ready' ? view.data.today.slice(0, 7) : currentDashboardMonthKey();
@@ -682,9 +747,30 @@ export function DashboardPage() {
     [searchParams, todayMonthKey],
   );
 
+  const selectedCostCenterId = useMemo(
+    () => resolveSelectedDashboardCostCenterId(searchParams),
+    [searchParams],
+  );
+
+  const selectedCostCenterName = useMemo(() => {
+    if (selectedCostCenterId === null) {
+      return null;
+    }
+    return costCenters.find((item) => item.id === selectedCostCenterId)?.name ?? null;
+  }, [costCenters, selectedCostCenterId]);
+
   const previousMonthKey = shiftDashboardMonthKey(selectedMonthKey, -1);
   const selectedMonthPhase = dashboardMonthPhase(selectedMonthKey, todayMonthKey);
   const cashWindowsApply = selectedMonthPhase === 'current';
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      return;
+    }
+    const controller = new AbortController();
+    void loadOverview(controller.signal, selectedCostCenterId);
+    return () => controller.abort();
+  }, [loadOverview, selectedCostCenterId, status]);
 
   useEffect(() => {
     if (view.kind !== 'ready' || !cashWindowsApply) {
@@ -692,9 +778,9 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadMonthEnd(controller.signal);
+    void loadMonthEnd(controller.signal, selectedCostCenterId);
     return () => controller.abort();
-  }, [cashWindowsApply, loadMonthEnd, view.kind]);
+  }, [cashWindowsApply, loadMonthEnd, selectedCostCenterId, view.kind]);
 
   useEffect(() => {
     if (view.kind !== 'ready' || !cashWindowsApply) {
@@ -702,9 +788,9 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadForecast(controller.signal);
+    void loadForecast(controller.signal, selectedCostCenterId);
     return () => controller.abort();
-  }, [cashWindowsApply, loadForecast, view.kind]);
+  }, [cashWindowsApply, loadForecast, selectedCostCenterId, view.kind]);
 
   useEffect(() => {
     if (view.kind !== 'ready') {
@@ -712,19 +798,36 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadInsights(controller.signal, selectedMonthKey, todayMonthKey);
+    void loadInsights(controller.signal, selectedMonthKey, todayMonthKey, selectedCostCenterId);
     return () => controller.abort();
-  }, [loadInsights, selectedMonthKey, todayMonthKey, view.kind]);
+  }, [loadInsights, selectedCostCenterId, selectedMonthKey, todayMonthKey, view.kind]);
 
   useEffect(() => {
     if (view.kind !== 'ready') {
       return;
     }
     const controller = new AbortController();
-    void loadMonthlyRevenue(controller.signal, selectedMonthKey, todayMonthKey);
-    void loadMonthlyExpenses(controller.signal, selectedMonthKey, todayMonthKey);
+    void loadMonthlyRevenue(
+      controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
+    void loadMonthlyExpenses(
+      controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
     return () => controller.abort();
-  }, [loadMonthlyExpenses, loadMonthlyRevenue, selectedMonthKey, todayMonthKey, view.kind]);
+  }, [
+    loadMonthlyExpenses,
+    loadMonthlyRevenue,
+    selectedCostCenterId,
+    selectedMonthKey,
+    todayMonthKey,
+    view.kind,
+  ]);
 
   useEffect(() => {
     if (view.kind !== 'ready') {
@@ -742,15 +845,35 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadPreviousMonth(controller.signal, previousMonthKey, todayMonthKey);
+    void loadPreviousMonth(
+      controller.signal,
+      previousMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
     return () => controller.abort();
-  }, [loadPreviousMonth, previousMonthKey, todayMonthKey, view.kind]);
+  }, [loadPreviousMonth, previousMonthKey, selectedCostCenterId, todayMonthKey, view.kind]);
 
   useEffect(() => {
     const rawMonth = searchParams.get('month');
+    const rawCostCenter = searchParams.get('costCenter');
+    let nextParams: URLSearchParams | null = null;
     if (rawMonth !== null && rawMonth.trim() !== '' && !isValidDashboardMonthKey(rawMonth)) {
-      const next = buildDashboardMonthSearchParams(searchParams, todayMonthKey, todayMonthKey);
-      const qs = next.toString();
+      nextParams = buildDashboardMonthSearchParams(
+        nextParams ?? searchParams,
+        todayMonthKey,
+        todayMonthKey,
+      );
+    }
+    if (
+      rawCostCenter !== null &&
+      rawCostCenter.trim() !== '' &&
+      !isValidDashboardCostCenterId(rawCostCenter)
+    ) {
+      nextParams = buildDashboardCostCenterSearchParams(nextParams ?? searchParams, null);
+    }
+    if (nextParams) {
+      const qs = nextParams.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname);
     }
   }, [pathname, router, searchParams, todayMonthKey]);
@@ -764,26 +887,55 @@ export function DashboardPage() {
     [pathname, router, searchParams, todayMonthKey],
   );
 
+  const selectCostCenter = useCallback(
+    (costCenterId: string | null) => {
+      const next = buildDashboardCostCenterSearchParams(searchParams, costCenterId);
+      const qs = next.toString();
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
+
   const retryOverview = () => {
-    void loadOverview(new AbortController().signal);
+    void loadOverview(new AbortController().signal, selectedCostCenterId);
   };
   const retryMonthEnd = () => {
-    void loadMonthEnd(new AbortController().signal);
+    void loadMonthEnd(new AbortController().signal, selectedCostCenterId);
   };
   const retryForecast = () => {
-    void loadForecast(new AbortController().signal);
+    void loadForecast(new AbortController().signal, selectedCostCenterId);
   };
   const retryRevenue = () => {
-    void loadMonthlyRevenue(new AbortController().signal, selectedMonthKey, todayMonthKey);
+    void loadMonthlyRevenue(
+      new AbortController().signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
   };
   const retryExpenses = () => {
-    void loadMonthlyExpenses(new AbortController().signal, selectedMonthKey, todayMonthKey);
+    void loadMonthlyExpenses(
+      new AbortController().signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
   };
   const retryInsights = () => {
-    void loadInsights(new AbortController().signal, selectedMonthKey, todayMonthKey);
+    void loadInsights(
+      new AbortController().signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
   };
   const retryPreviousMonth = () => {
-    void loadPreviousMonth(new AbortController().signal, previousMonthKey, todayMonthKey);
+    void loadPreviousMonth(
+      new AbortController().signal,
+      previousMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
   };
   const retryRevenueGoal = () => {
     void loadRevenueGoal(new AbortController().signal, selectedMonthKey, todayMonthKey);
@@ -821,6 +973,11 @@ export function DashboardPage() {
   const gate = widgetGate(view);
   const monthLabel = formatMonthKeyPtBr(selectedMonthKey);
   const previousMonthLabel = formatMonthKeyPtBr(previousMonthKey);
+  const pageSubtitle =
+    selectedCostCenterName !== null
+      ? `Visão executiva · ${selectedCostCenterName}`
+      : 'Visão executiva · Competência selecionada';
+  const costCenterFilterActive = selectedCostCenterId !== null;
 
   const revenueData =
     monthlyRevenueView.kind === 'ready' || monthlyRevenueView.kind === 'empty'
@@ -899,23 +1056,42 @@ export function DashboardPage() {
   const delinquencySlot = revenueSlot(gate, monthlyRevenueView, toMonthlyDelinquencyKpi);
 
   const receivedShareLabel =
-    revenueData && receivedSlot.state === 'ready'
+    revenueData && receivedSlot.state === 'ready' && revenueData.receivables.received !== null
       ? shareLabel(revenueData.receivables.received, revenueData.receivables.total)
       : undefined;
   const receivableShareLabel =
-    revenueData && receivableSlot.state === 'ready'
+    revenueData &&
+    receivableSlot.state === 'ready' &&
+    revenueData.receivables.outstanding !== null
       ? shareLabel(revenueData.receivables.outstanding, revenueData.receivables.total)
       : undefined;
 
+  const revenueHasCashSplit =
+    revenueData !== null &&
+    revenueData.costCenterCashSplit !== false &&
+    revenueData.receivables.received !== null &&
+    revenueData.receivables.outstanding !== null;
+  const expenseHasCashSplit =
+    expenseData !== null &&
+    expenseData.costCenterCashSplit !== false &&
+    expenseData.payables.paid !== null &&
+    expenseData.payables.outstanding !== null;
+
   /** Séries de snapshot por dia de competência — leitura de estado, não de caixa. */
-  const receivedDaily = useMemo(
-    () => (revenueData ? receivedSeries(revenueData.receivables.daily) : undefined),
-    [revenueData],
-  );
-  const receivableDaily = useMemo(
-    () => (revenueData ? outstandingSeries(revenueData.receivables.daily) : undefined),
-    [revenueData],
-  );
+  const receivedDaily = useMemo(() => {
+    if (!revenueData || !revenueHasCashSplit) {
+      return undefined;
+    }
+    const series = receivedSeries(revenueData.receivables.daily);
+    return series.length > 0 ? series : undefined;
+  }, [revenueData, revenueHasCashSplit]);
+  const receivableDaily = useMemo(() => {
+    if (!revenueData || !revenueHasCashSplit) {
+      return undefined;
+    }
+    const series = outstandingSeries(revenueData.receivables.daily);
+    return series.length > 0 ? series : undefined;
+  }, [revenueData, revenueHasCashSplit]);
   const resultDaily = useMemo(
     () =>
       revenueData && expenseData
@@ -1037,7 +1213,7 @@ export function DashboardPage() {
       <div className={styles.pageHeader}>
         <div className={styles.pageHeaderCopy}>
           <h1 className={styles.pageTitle}>Dashboard financeiro</h1>
-          <p className={styles.pageSubtitle}>Visão executiva · Competência selecionada</p>
+          <p className={styles.pageSubtitle}>{pageSubtitle}</p>
         </div>
         <div className={styles.controlsCluster} data-v2-section="competencia">
           <DashboardMonthSelector
@@ -1045,6 +1221,13 @@ export function DashboardPage() {
             todayMonthKey={todayMonthKey}
             onSelect={selectMonth}
             disabled={view.kind !== 'ready'}
+          />
+          <DashboardCostCenterSelector
+            items={costCenters}
+            selectedId={selectedCostCenterId}
+            onSelect={selectCostCenter}
+            disabled={view.kind !== 'ready'}
+            loading={costCentersLoading}
           />
           {freshness ? (
             <p className={styles.freshnessPill}>
@@ -1095,16 +1278,16 @@ export function DashboardPage() {
             emptyMessage={billingSlot.emptyMessage}
             sparklinePoints={revenueData?.receivables.daily}
             footer={
-              revenueData && billingSlot.state === 'ready' ? (
+              revenueData && billingSlot.state === 'ready' && revenueHasCashSplit ? (
                 <KpiFooter
                   items={[
                     {
                       label: 'Recebido',
-                      value: formatMoneyBrl(revenueData.receivables.received),
+                      value: moneyOrDash(revenueData.receivables.received),
                     },
                     {
                       label: 'A receber',
-                      value: formatMoneyBrl(revenueData.receivables.outstanding),
+                      value: moneyOrDash(revenueData.receivables.outstanding),
                     },
                   ]}
                 />
@@ -1150,13 +1333,13 @@ export function DashboardPage() {
             emptyMessage={expensesSlot.emptyMessage}
             sparklinePoints={expenseData?.payables.daily}
             footer={
-              expenseData && expensesSlot.state === 'ready' ? (
+              expenseData && expensesSlot.state === 'ready' && expenseHasCashSplit ? (
                 <KpiFooter
                   items={[
-                    { label: 'Pago', value: formatMoneyBrl(expenseData.payables.paid) },
+                    { label: 'Pago', value: moneyOrDash(expenseData.payables.paid) },
                     {
                       label: 'A pagar',
-                      value: formatMoneyBrl(expenseData.payables.outstanding),
+                      value: moneyOrDash(expenseData.payables.outstanding),
                     },
                   ]}
                 />
@@ -1369,6 +1552,9 @@ export function DashboardPage() {
               snapshot={revenueGoalData}
               onEdit={openGoalEditor}
             />
+            {costCenterFilterActive ? (
+              <p className={styles.goalConsolidatedNote}>Meta consolidada da empresa</p>
+            ) : null}
           </WidgetBody>
         </WidgetShell>
 
@@ -1537,13 +1723,13 @@ export function DashboardPage() {
               <div className={styles.statsItem}>
                 <dt className={styles.statsLabel}>Já recebido</dt>
                 <dd className={styles.statsValue}>
-                  {formatMoneyBrl(revenueData.receivables.received)}
+                  {moneyOrDash(revenueData.receivables.received)}
                 </dd>
               </div>
               <div className={styles.statsItem}>
                 <dt className={styles.statsLabel}>Em aberto</dt>
                 <dd className={styles.statsValue}>
-                  {formatMoneyBrl(revenueData.receivables.outstanding)}
+                  {moneyOrDash(revenueData.receivables.outstanding)}
                 </dd>
               </div>
               {billingDays ? (

@@ -17,6 +17,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isNullableDecimal(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
 function isItem(value: unknown): value is DashboardMonthlyExpenseItem {
   return (
     isRecord(value) &&
@@ -26,8 +30,8 @@ function isItem(value: unknown): value is DashboardMonthlyExpenseItem {
       value.kind === 'imprecise') &&
     typeof value.name === 'string' &&
     typeof value.amount === 'string' &&
-    typeof value.paid === 'string' &&
-    typeof value.outstanding === 'string' &&
+    isNullableDecimal(value.paid) &&
+    isNullableDecimal(value.outstanding) &&
     typeof value.percentage === 'string'
   );
 }
@@ -37,8 +41,8 @@ function isDailyPoint(value: unknown): boolean {
     isRecord(value) &&
     typeof value.date === 'string' &&
     typeof value.amount === 'string' &&
-    typeof value.received === 'string' &&
-    typeof value.outstanding === 'string'
+    isNullableDecimal(value.received) &&
+    isNullableDecimal(value.outstanding)
   );
 }
 
@@ -57,10 +61,11 @@ function isMonthlyExpense(value: unknown): value is DashboardMonthlyExpenseRespo
     typeof value.monthKey === 'string' &&
     typeof value.from === 'string' &&
     typeof value.to === 'string' &&
+    (value.costCenterCashSplit === undefined || typeof value.costCenterCashSplit === 'boolean') &&
     typeof payables.total === 'string' &&
-    typeof payables.paid === 'string' &&
-    typeof payables.outstanding === 'string' &&
-    typeof payables.overdue === 'string' &&
+    isNullableDecimal(payables.paid) &&
+    isNullableDecimal(payables.outstanding) &&
+    isNullableDecimal(payables.overdue) &&
     typeof payables.classified === 'string' &&
     typeof payables.uncategorized === 'string' &&
     typeof payables.imprecise === 'string' &&
@@ -112,11 +117,12 @@ function toFailure(response: Response, body: unknown): DashboardMonthlyExpenseRe
 
 export async function getDashboardMonthlyExpenses(
   monthKey?: string | null,
+  costCenterId?: string | null,
 ): Promise<DashboardMonthlyExpenseResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardMonthlyExpensesPath(monthKey), {
+    response = await fetch(dashboardMonthlyExpensesPath(monthKey, costCenterId), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

@@ -28,11 +28,11 @@ export function MonthlyExpensePanel({ data, phase }: MonthlyExpensePanelProps) {
         </div>
         <div>
           <dt>Já pago</dt>
-          <dd>{formatMoneyBrl(payables.paid)}</dd>
+          <dd>{payables.paid === null ? '—' : formatMoneyBrl(payables.paid)}</dd>
         </div>
         <div>
           <dt>A pagar</dt>
-          <dd>{formatMoneyBrl(payables.outstanding)}</dd>
+          <dd>{payables.outstanding === null ? '—' : formatMoneyBrl(payables.outstanding)}</dd>
         </div>
       </dl>
       {slices.length > 0 ? (

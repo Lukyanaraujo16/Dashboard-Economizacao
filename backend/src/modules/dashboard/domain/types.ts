@@ -105,18 +105,20 @@ export type DashboardMonthlyRevenueCompositionItem = {
   readonly kind: DashboardExpenseCompositionKind;
   readonly name: string;
   readonly amount: string;
-  readonly received: string;
-  readonly outstanding: string;
+  /** null com `costCenterCashSplit: false` (PARCIAL). */
+  readonly received: string | null;
+  /** null com `costCenterCashSplit: false` (PARCIAL). */
+  readonly outstanding: string | null;
   readonly percentage: string;
 };
 
 export type DashboardCompetenceDailyPoint = {
   readonly date: string;
   readonly amount: string;
-  /** Σ paid snapshot dos títulos com competenceDate neste dia. Não é caixa do dia. */
-  readonly received: string;
-  /** Σ unpaid snapshot dos títulos com competenceDate neste dia. */
-  readonly outstanding: string;
+  /** Σ paid snapshot; null com filtro de centro. */
+  readonly received: string | null;
+  /** Σ unpaid snapshot; null com filtro de centro. */
+  readonly outstanding: string | null;
 };
 
 export type DashboardMonthlyRevenueResponse = {
@@ -124,17 +126,22 @@ export type DashboardMonthlyRevenueResponse = {
   readonly monthKey: string;
   readonly from: string;
   readonly to: string;
+  /**
+   * false = filtro por centro (totais via allocation.amount; cash split null).
+   * Ausente/`true` = consolidado (comportamento histórico).
+   */
+  readonly costCenterCashSplit?: boolean;
   readonly receivables: {
     readonly total: string;
-    readonly received: string;
-    readonly outstanding: string;
-    readonly overdue: string;
+    readonly received: string | null;
+    readonly outstanding: string | null;
+    readonly overdue: string | null;
     readonly classified: string;
     readonly uncategorized: string;
     readonly imprecise: string;
     readonly coverageRate: string | null;
     readonly items: readonly DashboardMonthlyRevenueCompositionItem[];
-    /** Dia = competenceDate; Σ total. Não é caixa. */
+    /** Dia = competenceDate; Σ total (ou allocation). Não é caixa. */
     readonly daily: readonly DashboardCompetenceDailyPoint[];
   };
 };
@@ -143,8 +150,10 @@ export type DashboardMonthlyExpenseCompositionItem = {
   readonly kind: DashboardExpenseCompositionKind;
   readonly name: string;
   readonly amount: string;
-  readonly paid: string;
-  readonly outstanding: string;
+  /** null com `costCenterCashSplit: false` (PARCIAL). */
+  readonly paid: string | null;
+  /** null com `costCenterCashSplit: false` (PARCIAL). */
+  readonly outstanding: string | null;
   readonly percentage: string;
 };
 
@@ -153,19 +162,31 @@ export type DashboardMonthlyExpenseResponse = {
   readonly monthKey: string;
   readonly from: string;
   readonly to: string;
+  readonly costCenterCashSplit?: boolean;
   readonly payables: {
     readonly total: string;
-    readonly paid: string;
-    readonly outstanding: string;
-    readonly overdue: string;
+    readonly paid: string | null;
+    readonly outstanding: string | null;
+    readonly overdue: string | null;
     readonly classified: string;
     readonly uncategorized: string;
     readonly imprecise: string;
     readonly coverageRate: string | null;
     readonly items: readonly DashboardMonthlyExpenseCompositionItem[];
-    /** Dia = competenceDate; Σ total. Não é caixa. */
+    /** Dia = competenceDate; Σ total (ou allocation). Não é caixa. */
     readonly daily: readonly DashboardCompetenceDailyPoint[];
   };
+};
+
+export type DashboardCostCenterItem = {
+  readonly id: string;
+  readonly name: string;
+  readonly code: string | null;
+  readonly active: boolean;
+};
+
+export type DashboardCostCentersResponse = {
+  readonly items: readonly DashboardCostCenterItem[];
 };
 
 export type DashboardExecutiveInsightId =

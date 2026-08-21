@@ -1,9 +1,11 @@
 import {
   CONTA_AZUL_CATEGORIES_URL,
   CONTA_AZUL_CONNECTED_COMPANY_URL,
+  CONTA_AZUL_COST_CENTERS_URL,
   CONTA_AZUL_FINANCIAL_ACCOUNTS_URL,
   CONTA_AZUL_HTTP_TIMEOUT_MS,
   CONTA_AZUL_IDENTITY_RETRY_BACKOFF_MS,
+  CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL,
   CONTA_AZUL_PAYABLES_SEARCH_URL,
   CONTA_AZUL_PEOPLE_URL,
   CONTA_AZUL_RECEIVABLES_SEARCH_URL,
@@ -55,13 +57,19 @@ export type ContaAzulInstallmentSearchQuery = ContaAzulPageQuery & {
   readonly dataAlteracaoAte?: string;
 };
 
+export type ContaAzulCostCentersQuery = ContaAzulPageQuery & {
+  readonly filtroRapido?: 'TODOS' | 'ATIVO' | 'INATIVO';
+};
+
 export type ContaAzulApiClient = {
   getConnectedCompany(accessToken: string): Promise<unknown>;
   getCategories(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
   getFinancialAccounts(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
   getPeople(accessToken: string, query: ContaAzulPeopleQuery): Promise<unknown>;
+  getCostCenters(accessToken: string, query: ContaAzulCostCentersQuery): Promise<unknown>;
   searchReceivables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
   searchPayables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
+  getInstallmentDetail(accessToken: string, installmentExternalId: string): Promise<unknown>;
 };
 
 export type ContaAzulApiClientConfig = {
@@ -238,6 +246,17 @@ export function createContaAzulApiClient(
       );
     },
 
+    getCostCenters(accessToken, query) {
+      return getJson(
+        withQuery(CONTA_AZUL_COST_CENTERS_URL, {
+          pagina: query.pagina,
+          tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
+          filtro_rapido: query.filtroRapido ?? 'TODOS',
+        }),
+        accessToken,
+      );
+    },
+
     searchReceivables(accessToken, query) {
       return getJson(
         withQuery(CONTA_AZUL_RECEIVABLES_SEARCH_URL, {
@@ -262,6 +281,13 @@ export function createContaAzulApiClient(
           data_alteracao_de: query.dataAlteracaoDe,
           data_alteracao_ate: query.dataAlteracaoAte,
         }),
+        accessToken,
+      );
+    },
+
+    getInstallmentDetail(accessToken, installmentExternalId) {
+      return getJson(
+        `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/${encodeURIComponent(installmentExternalId)}`,
         accessToken,
       );
     },

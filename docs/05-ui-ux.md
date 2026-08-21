@@ -372,6 +372,9 @@ Semântica financeira da V2/P2 preservada.
 Chrome:
 * cabeçalho compacto: “Dashboard financeiro” + “Visão executiva · Competência selecionada”;
 * seletor mensal compacto `< AGO 2026 >` (+ Hoje / popover de 12 meses);
+* filtro **Centro de custo** no header (CC1): “Todos” ou um centro; estado na URL
+  `?costCenter=<uuid>` (preserva `month`); ausente = consolidado;
+* com filtro ativo, nota no widget de Meta: “Meta consolidada da empresa”;
 * freshness “Última atualização” ao lado; sem saudação/hero/régua anual de meses.
 
 Widgets (títulos DENTRO dos cards — WidgetShell):

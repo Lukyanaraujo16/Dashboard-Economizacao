@@ -84,11 +84,13 @@ function toFailure(response: Response, body: unknown): DashboardOverviewRequestE
   );
 }
 
-export async function getDashboardOverview(): Promise<DashboardOverviewResponse> {
+export async function getDashboardOverview(
+  costCenterId?: string | null,
+): Promise<DashboardOverviewResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardOverviewPath(), {
+    response = await fetch(dashboardOverviewPath(costCenterId), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

@@ -42,6 +42,7 @@ import type { ContaAzulSyncRunRepository } from '../repositories/sync-run.reposi
 import type { TenantRepository } from '../../../tenant/repositories/tenant.repository.js';
 import type { ContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
 import type { ContaAzulRateLimiter } from './conta-azul-rate-limiter.js';
+import type { ContaAzulCostCenterSyncService } from './conta-azul-cost-center-sync.service.js';
 
 export class ContaAzulSyncExecutionError extends Error {
   readonly code: ContaAzulSyncErrorCode;
@@ -163,6 +164,7 @@ export function createContaAzulManualSyncEngine(deps: {
   readonly clock?: () => Date;
   readonly timeoutMs?: number;
   readonly heartbeatMinIntervalMs?: number;
+  readonly costCenterSync?: ContaAzulCostCenterSyncService;
 }): ContaAzulManualSyncEngine {
   const now = deps.clock ?? (() => new Date());
   const timeoutMs = deps.timeoutMs ?? CONTA_AZUL_SYNC_JOB_TIMEOUT_MS;
@@ -225,6 +227,8 @@ export function createContaAzulManualSyncEngine(deps: {
         parties: 0,
         receivables: 0,
         payables: 0,
+        costCenters: 0,
+        costCenterAllocations: 0,
       };
 
       try {
@@ -463,6 +467,22 @@ export function createContaAzulManualSyncEngine(deps: {
           processed.parties = await peopleWindow(null);
           processed.receivables = await installmentWindows('receivables', null);
           processed.payables = await installmentWindows('payables', null);
+        }
+
+        if (deps.costCenterSync) {
+          processed.costCenters = await deps.costCenterSync.syncCatalog({
+            scope: scopeOf(),
+            requestWithAuth,
+            gatedGet,
+            heartbeat,
+          });
+          const allocationResult = await deps.costCenterSync.syncAllocationsForInstallments({
+            scope: scopeOf(),
+            requestWithAuth,
+            gatedGet,
+            heartbeat,
+          });
+          processed.costCenterAllocations = allocationResult.allocations;
         }
 
         const tenantAgain = await deps.tenants.findById(input.tenantId);

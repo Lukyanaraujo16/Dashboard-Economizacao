@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { createContaAzulApiClient } from '../src/modules/integrations/conta-azul/connector/conta-azul-api-client.js';
 import {
   CONTA_AZUL_CATEGORIES_URL,
+  CONTA_AZUL_COST_CENTERS_URL,
   CONTA_AZUL_FINANCIAL_ACCOUNTS_URL,
+  CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL,
   CONTA_AZUL_PAYABLES_SEARCH_URL,
   CONTA_AZUL_PEOPLE_URL,
   CONTA_AZUL_RECEIVABLES_SEARCH_URL,
@@ -133,5 +135,26 @@ describe('Cliente HTTP financeiro Conta Azul', () => {
       itens: [],
     });
     expect(server).toHaveBeenCalledTimes(2);
+  });
+});
+
+  it('lista centros de custo com filtro_rapido=TODOS e tamanho 100', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ itens: [], itens_totais: 0 }));
+    const client = createContaAzulApiClient({ fetchImpl });
+    await client.getCostCenters('token', { pagina: 1 });
+    const url = String(fetchImpl.mock.calls[0]![0]);
+    expect(url.startsWith(`${CONTA_AZUL_COST_CENTERS_URL}?`)).toBe(true);
+    expect(url).toContain('pagina=1');
+    expect(url).toContain('tamanho_pagina=100');
+    expect(url).toContain('filtro_rapido=TODOS');
+  });
+
+  it('GET detalhe da parcela via base parcelas/{id}', async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => jsonResponse({}));
+    const client = createContaAzulApiClient({ fetchImpl });
+    await client.getInstallmentDetail('token', 'parcela-uuid');
+    expect(String(fetchImpl.mock.calls[0]![0])).toBe(
+      `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/parcela-uuid`,
+    );
   });
 });

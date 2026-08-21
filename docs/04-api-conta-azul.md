@@ -505,6 +505,13 @@ O detalhamento de parcela pode fornecer:
 * centro de custo;
 * valor associado ao centro de custo.
 
+Nota CC1.1 (homologado Clinica Life): em determinados parcelamentos,
+`evento.rateio[].rateio_centro_custo[].valor` é **EVENT-scoped** (mesmo valor
+em todas as parcelas irmãs do evento). O sync local normaliza
+`EVENT_SCOPED_SINGLE_CENTER` para `allocation.amount = total da parcela`.
+Multi-centro EVENT-scoped permanece unresolved (não ratear proporcionalmente
+sem evidência). Não dividir automaticamente por quantidade de parcelas.
+
 Isso possibilita construir análises como:
 
 Receitas por categoria

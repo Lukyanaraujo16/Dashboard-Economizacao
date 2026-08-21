@@ -22,6 +22,7 @@ function revenue(input: {
     monthKey: '2026-08',
     from: new Date('2026-08-01T00:00:00.000Z'),
     to: new Date('2026-08-31T00:00:00.000Z'),
+    costCenterCashSplit: true,
     total,
     received: ZERO,
     outstanding: total,
@@ -40,6 +41,7 @@ function revenue(input: {
         ? new Prisma.Decimal(item.amount).div(classified).times(100)
         : ZERO,
     })),
+    daily: [],
   };
 }
 
@@ -64,8 +66,9 @@ function expense(input: {
     monthKey: '2026-08',
     from: new Date('2026-08-01T00:00:00.000Z'),
     to: new Date('2026-08-31T00:00:00.000Z'),
+    costCenterCashSplit: true,
     total,
-    paid: ZERO,
+    received: ZERO,
     outstanding: total,
     overdue: ZERO,
     classified,
@@ -76,12 +79,13 @@ function expense(input: {
       kind: item.kind,
       name: item.name,
       amount: new Prisma.Decimal(item.amount),
-      paid: ZERO,
+      received: ZERO,
       outstanding: new Prisma.Decimal(item.amount),
       percentage: total.greaterThan(ZERO)
         ? new Prisma.Decimal(item.amount).div(total).times(100)
         : ZERO,
     })),
+    daily: [],
   };
 }
 

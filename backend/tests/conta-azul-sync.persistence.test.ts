@@ -65,6 +65,7 @@ function pageClient(options?: { readonly failReceivablesOnPage?: number }): Cont
       totalItems: 1,
       items: [{ id: 'p-1', nome: 'Maria', ativo: true, perfis: ['CLIENTE'] }],
     }),
+    getCostCenters: async () => ({ itens_totais: 0, itens: [] }),
     searchReceivables: async (_token, query) => {
       if (options?.failReceivablesOnPage === query.pagina) {
         throw new ContaAzulApiError('unavailable', 'falha', { httpStatus: 500 });
@@ -109,6 +110,7 @@ function pageClient(options?: { readonly failReceivablesOnPage?: number }): Cont
         ],
       };
     },
+    getInstallmentDetail: async () => ({ id: 'r-1', evento: { rateio: [] } }),
   };
 }
 

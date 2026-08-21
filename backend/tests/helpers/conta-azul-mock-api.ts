@@ -72,6 +72,13 @@ export function createMockContaAzulApiClient(
         items: [{ id: 'p-1', nome: 'Maria', ativo: true, perfis: ['CLIENTE'] }],
       };
     },
+    getCostCenters: async () => {
+      options.onCall?.('costCenters');
+      return {
+        itens_totais: 0,
+        itens: [],
+      };
+    },
     searchReceivables: async (_token, query) => {
       options.onCall?.('receivables');
       if (options.failReceivablesOnPage === query.pagina) {
@@ -138,6 +145,10 @@ export function createMockContaAzulApiClient(
           },
         ],
       };
+    },
+    getInstallmentDetail: async () => {
+      options.onCall?.('installmentDetail');
+      return { id: 'r-1', evento: { rateio: [] } };
     },
   };
 }

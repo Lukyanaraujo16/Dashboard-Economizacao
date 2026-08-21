@@ -37,6 +37,15 @@ export function toMonthlyReceivableKpi(
       emptyMessage: competenceMeta(phase, 'Sem receitas previstas', 'Sem saldo na competência'),
     };
   }
+  if (data.receivables.outstanding === null) {
+    return {
+      id: 'receivables-month',
+      title: 'A receber',
+      state: 'ready',
+      value: '—',
+      meta: 'Indisponível no filtro por centro de custo',
+    };
+  }
   return {
     id: 'receivables-month',
     title: 'A receber',
@@ -56,6 +65,15 @@ export function toMonthlyReceivedKpi(
       state: 'empty',
       meta: 'Sem títulos na competência',
       emptyMessage: 'Sem títulos na competência',
+    };
+  }
+  if (data.receivables.received === null) {
+    return {
+      id: 'received-month',
+      title: 'Já recebido',
+      state: 'ready',
+      value: '—',
+      meta: 'Indisponível no filtro por centro de custo',
     };
   }
   return {
@@ -78,6 +96,15 @@ export function toMonthlyPayableKpi(
       state: 'empty',
       meta: competenceMeta(phase, 'Sem despesas previstas', 'Sem saldo na competência'),
       emptyMessage: competenceMeta(phase, 'Sem despesas previstas', 'Sem saldo na competência'),
+    };
+  }
+  if (data.payables.outstanding === null) {
+    return {
+      id: 'payables-month',
+      title: 'A pagar',
+      state: 'ready',
+      value: '—',
+      meta: 'Indisponível no filtro por centro de custo',
     };
   }
   return {
@@ -114,6 +141,7 @@ export function toMonthlyExpenseTotalKpi(
 /**
  * Resultado gerencial = total de receitas − total de despesas, ambos por competência.
  * Diferença de competência; não é caixa nem saldo bancário.
+ * Só calcula quando ambos os totais estão disponíveis.
  */
 export function toManagerialResultKpi(
   revenue: DashboardMonthlyRevenueResponse,
@@ -126,6 +154,18 @@ export function toManagerialResultKpi(
       state: 'empty',
       meta: 'Sem receitas ou despesas na competência',
       emptyMessage: 'Sem receitas ou despesas na competência',
+    };
+  }
+  if (
+    typeof revenue.receivables.total !== 'string' ||
+    typeof expense.payables.total !== 'string'
+  ) {
+    return {
+      id: 'managerial-result-month',
+      title: 'Resultado gerencial',
+      state: 'empty',
+      meta: 'Totais indisponíveis para o resultado',
+      emptyMessage: 'Totais indisponíveis para o resultado',
     };
   }
   return {
@@ -152,6 +192,15 @@ export function toMonthlyOverdueKpi(
       emptyMessage: 'Sem títulos na competência',
     };
   }
+  if (data.receivables.overdue === null) {
+    return {
+      id: 'receivables-overdue-month',
+      title: 'Recebíveis vencidos',
+      state: 'ready',
+      value: '—',
+      meta: 'Indisponível no filtro por centro de custo',
+    };
+  }
   return {
     id: 'receivables-overdue-month',
     title: 'Recebíveis vencidos',
@@ -174,6 +223,15 @@ export function toMonthlyDelinquencyKpi(
       state: 'empty',
       meta: 'Sem títulos na competência',
       emptyMessage: 'Sem títulos na competência',
+    };
+  }
+  if (data.receivables.outstanding === null || data.receivables.overdue === null) {
+    return {
+      id: 'delinquency-month',
+      title: 'Inadimplência',
+      state: 'empty',
+      meta: 'Indisponível no filtro por centro de custo',
+      emptyMessage: 'Indisponível no filtro por centro de custo',
     };
   }
   if (isDecimalZero(data.receivables.outstanding)) {

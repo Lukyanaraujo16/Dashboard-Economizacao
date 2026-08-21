@@ -40,6 +40,9 @@ deste documento prevalece. Fases executadas até o momento:
   - L1-B — Semântica oficial do caixa + read model mensal: BLOCKED_BY_CASH_SEMANTICS
   - Dashboard Executiva V1 / E3 — Leitura executiva (insights determinísticos): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO
   - F2 — Meta de faturamento (persistência/API/CRUD): HOMOLOGADA (widget funcional na Home; F2.0.1 status temporal)
+  - CC1 — Centros de custo + alocação + filtro Home: HOMOLOGADA (catálogo + allocations + filtro Home; CC1.1 normalização EVENT-scoped 1 centro incorporada; Meta F2 permanece company-level)
+  - CC1.1 — Normalização rateio EVENT-scoped: HOMOLOGADA / incorporada à baseline CC1
+  - CC1.2 — Performance N+1 de detalhes de parcela: PRÓXIMA FASE / NÃO IMPLEMENTADA
 Próxima fase: Fase 11 (filtros e comparações) — NÃO INICIADA.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).

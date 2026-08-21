@@ -17,6 +17,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isNullableDecimal(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
 function isItem(value: unknown): value is DashboardMonthlyRevenueItem {
   return (
     isRecord(value) &&
@@ -26,8 +30,8 @@ function isItem(value: unknown): value is DashboardMonthlyRevenueItem {
       value.kind === 'imprecise') &&
     typeof value.name === 'string' &&
     typeof value.amount === 'string' &&
-    typeof value.received === 'string' &&
-    typeof value.outstanding === 'string' &&
+    isNullableDecimal(value.received) &&
+    isNullableDecimal(value.outstanding) &&
     typeof value.percentage === 'string'
   );
 }
@@ -37,8 +41,8 @@ function isDailyPoint(value: unknown): boolean {
     isRecord(value) &&
     typeof value.date === 'string' &&
     typeof value.amount === 'string' &&
-    typeof value.received === 'string' &&
-    typeof value.outstanding === 'string'
+    isNullableDecimal(value.received) &&
+    isNullableDecimal(value.outstanding)
   );
 }
 
@@ -57,10 +61,11 @@ function isMonthlyRevenue(value: unknown): value is DashboardMonthlyRevenueRespo
     typeof value.monthKey === 'string' &&
     typeof value.from === 'string' &&
     typeof value.to === 'string' &&
+    (value.costCenterCashSplit === undefined || typeof value.costCenterCashSplit === 'boolean') &&
     typeof receivables.total === 'string' &&
-    typeof receivables.received === 'string' &&
-    typeof receivables.outstanding === 'string' &&
-    typeof receivables.overdue === 'string' &&
+    isNullableDecimal(receivables.received) &&
+    isNullableDecimal(receivables.outstanding) &&
+    isNullableDecimal(receivables.overdue) &&
     typeof receivables.classified === 'string' &&
     typeof receivables.uncategorized === 'string' &&
     typeof receivables.imprecise === 'string' &&
@@ -112,11 +117,12 @@ function toFailure(response: Response, body: unknown): DashboardMonthlyRevenueRe
 
 export async function getDashboardMonthlyRevenue(
   monthKey?: string | null,
+  costCenterId?: string | null,
 ): Promise<DashboardMonthlyRevenueResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardMonthlyRevenuePath(monthKey), {
+    response = await fetch(dashboardMonthlyRevenuePath(monthKey, costCenterId), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

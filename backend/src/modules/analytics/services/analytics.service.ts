@@ -1,3 +1,4 @@
+import type { CostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
 import type { FinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import type { PayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
 import type { ReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
@@ -12,6 +13,12 @@ import {
   civilMonthBounds,
   civilMonthBoundsFromKey,
 } from '../domain/civil-calendar.js';
+import {
+  buildDailyCompetenceAllocationTotals,
+  calculateMonthlyCompetenceFromAllocations,
+  toAllocationExposureInstallments,
+  toAllocationMonthlySources,
+} from '../domain/cost-center-allocation-math.js';
 import { buildMonthlyExecutiveInsights } from '../domain/monthly-executive-insights.js';
 import { buildDailyCompetenceTotals } from '../domain/daily-competence-series.js';
 import { buildMonthEndCashPressureResult } from '../domain/month-end-cash-pressure.js';
@@ -75,12 +82,34 @@ export type AnalyticsServiceDependencies = {
   readonly receivables: ReceivableReadRepository;
   readonly payables: PayableReadRepository;
   readonly categories: FinancialCategoryReadRepository;
+  readonly costCenterAllocations?: CostCenterAllocationReadRepository;
 };
 
 export function createAnalyticsService(deps: AnalyticsServiceDependencies): AnalyticsService {
   return {
     async getFinancialStockSnapshot(input) {
-      const { tenantId, today, scope } = resolveScope(input);
+      const { tenantId, today, scope, costCenterId } = resolveScope(input);
+      if (costCenterId !== undefined) {
+        const allocations = requireAllocations(deps);
+        const [receivableRows, payableRows] = await Promise.all([
+          allocations.findActiveReceivableAllocations({ ...scope, costCenterId }),
+          allocations.findActivePayableAllocations({ ...scope, costCenterId }),
+        ]);
+        const receivables = calculateInstallmentStockSnapshot(
+          toAllocationExposureInstallments(receivableRows),
+          today,
+        );
+        return {
+          tenantId,
+          today,
+          receivables,
+          payables: calculateInstallmentStockSnapshot(
+            toAllocationExposureInstallments(payableRows),
+            today,
+          ),
+          receivableDelinquency: calculateReceivableDelinquency(receivables),
+        };
+      }
       const [receivableRows, payableRows] = await Promise.all([
         deps.receivables.findActiveByTenant(scope),
         deps.payables.findActiveByTenant(scope),
@@ -128,8 +157,49 @@ export function createAnalyticsService(deps: AnalyticsServiceDependencies): Anal
     },
 
     async getMonthEndCashPressure(input) {
-      const { tenantId, today, scope } = resolveScope(input);
+      const { tenantId, today, scope, costCenterId } = resolveScope(input);
       const { to, monthKey } = civilMonthBounds(today);
+      if (costCenterId !== undefined) {
+        const allocations = requireAllocations(deps);
+        const [receivableRows, payableRows] = await Promise.all([
+          allocations.findActiveReceivableAllocationsByDueDate({
+            ...scope,
+            costCenterId,
+            from: today,
+            to,
+          }),
+          allocations.findActivePayableAllocationsByDueDate({
+            ...scope,
+            costCenterId,
+            from: today,
+            to,
+          }),
+        ]);
+        const receivables = toAllocationExposureInstallments(receivableRows)
+          .filter((row) => row.unpaid.greaterThan(0))
+          .map((row) => ({
+            id: row.id,
+            dueDate: row.dueDate,
+            unpaid: row.unpaid,
+            status: row.status,
+          }));
+        const payables = toAllocationExposureInstallments(payableRows)
+          .filter((row) => row.unpaid.greaterThan(0))
+          .map((row) => ({
+            id: row.id,
+            dueDate: row.dueDate,
+            unpaid: row.unpaid,
+            status: row.status,
+          }));
+        return buildMonthEndCashPressureResult({
+          tenantId,
+          today,
+          monthKey,
+          from: today,
+          to,
+          summary: summarizeUpcomingWindow(receivables, payables),
+        });
+      }
       const [receivables, payables] = await Promise.all([
         loadDueDateWindow(deps.receivables.findActiveByDueDateRange, scope, today, to),
         loadDueDateWindow(deps.payables.findActiveByDueDateRange, scope, today, to),
@@ -145,11 +215,11 @@ export function createAnalyticsService(deps: AnalyticsServiceDependencies): Anal
     },
 
     async getUpcomingReceivables(input) {
-      return loadUpcoming(deps.receivables.findActiveByDueDateRange, input);
+      return loadUpcoming(deps, 'receivable', input);
     },
 
     async getUpcomingPayables(input) {
-      return loadUpcoming(deps.payables.findActiveByDueDateRange, input);
+      return loadUpcoming(deps, 'payable', input);
     },
 
     async getCashFlowForecast(input) {
@@ -165,15 +235,33 @@ function resolveScope(input: GetFinancialStockSnapshotInput) {
     tenantId: input.tenantId,
     today: civilTodayInSaoPaulo(now),
     scope: { tenantId: input.tenantId, integrationId: input.integrationId },
+    costCenterId: input.costCenterId,
   };
+}
+
+function requireAllocations(
+  deps: AnalyticsServiceDependencies,
+): CostCenterAllocationReadRepository {
+  if (deps.costCenterAllocations === undefined) {
+    throw new Error('Repositório de alocações de centro de custo não configurado.');
+  }
+  return deps.costCenterAllocations;
 }
 
 async function loadOpenPayablesCategoryComposition(
   deps: AnalyticsServiceDependencies,
   input: GetFinancialStockSnapshotInput,
 ): Promise<OpenPayablesCategoryCompositionResult> {
-  const { tenantId, today, scope } = resolveScope(input);
-  const payables = await deps.payables.findActiveByTenant(scope);
+  const { tenantId, today, scope, costCenterId } = resolveScope(input);
+  const payables =
+    costCenterId === undefined
+      ? await deps.payables.findActiveByTenant(scope)
+      : toAllocationExposureInstallments(
+          await requireAllocations(deps).findActivePayableAllocations({
+            ...scope,
+            costCenterId,
+          }),
+        );
   const externalIds = collectPayableCategoryExternalIds(payables);
   const categories = await deps.categories.findByTenantAndExternalIds({
     ...scope,
@@ -202,8 +290,16 @@ async function loadOpenReceivablesCategoryComposition(
   deps: AnalyticsServiceDependencies,
   input: GetFinancialStockSnapshotInput,
 ): Promise<OpenReceivablesCategoryCompositionResult> {
-  const { tenantId, today, scope } = resolveScope(input);
-  const receivables = await deps.receivables.findActiveByTenant(scope);
+  const { tenantId, today, scope, costCenterId } = resolveScope(input);
+  const receivables =
+    costCenterId === undefined
+      ? await deps.receivables.findActiveByTenant(scope)
+      : toAllocationExposureInstallments(
+          await requireAllocations(deps).findActiveReceivableAllocations({
+            ...scope,
+            costCenterId,
+          }),
+        );
   const externalIds = collectPayableCategoryExternalIds(receivables);
   const categories = await deps.categories.findByTenantAndExternalIds({
     ...scope,
@@ -232,11 +328,48 @@ async function loadMonthlyCompetenceRevenue(
   deps: AnalyticsServiceDependencies,
   input: GetMonthlyCompetenceRevenueInput,
 ): Promise<MonthlyCompetenceRevenueResult> {
-  const { tenantId, today, scope } = resolveScope(input);
+  const { tenantId, today, scope, costCenterId } = resolveScope(input);
   const { from, to, monthKey } =
     input.monthKey === undefined
       ? civilMonthBounds(today)
       : civilMonthBoundsFromKey(input.monthKey);
+
+  if (costCenterId !== undefined) {
+    const allocationRows = await requireAllocations(deps).findReceivableAllocationsForCompetence({
+      ...scope,
+      costCenterId,
+      from,
+      to,
+    });
+    const sources = toAllocationMonthlySources(allocationRows);
+    const externalIds = collectMonthlyRevenueCategoryExternalIds(
+      sources.map((row) => ({ categoryExternalIds: row.categoryExternalIds })),
+    );
+    const categories = await deps.categories.findByTenantAndExternalIds({
+      ...scope,
+      externalIds,
+    });
+    const calculated = calculateMonthlyCompetenceFromAllocations(sources, categories, 'REVENUE');
+    return {
+      tenantId,
+      today,
+      monthKey,
+      from,
+      to,
+      costCenterCashSplit: false,
+      total: calculated.total,
+      received: calculated.received,
+      outstanding: calculated.outstanding,
+      overdue: calculated.overdue,
+      classified: calculated.classified,
+      uncategorized: calculated.uncategorized,
+      imprecise: calculated.imprecise,
+      coverageRate: calculated.coverageRate,
+      items: calculated.items,
+      daily: buildDailyCompetenceAllocationTotals(sources, from, to),
+    };
+  }
+
   const receivables = await deps.receivables.findMonthlyCompetenceRevenue({
     ...scope,
     from,
@@ -254,6 +387,7 @@ async function loadMonthlyCompetenceRevenue(
     monthKey,
     from,
     to,
+    costCenterCashSplit: true,
     total: calculated.total,
     received: calculated.received,
     outstanding: calculated.outstanding,
@@ -278,11 +412,48 @@ async function loadMonthlyCompetenceExpenses(
   deps: AnalyticsServiceDependencies,
   input: GetMonthlyCompetenceRevenueInput,
 ): Promise<MonthlyCompetenceExpenseResult> {
-  const { tenantId, today, scope } = resolveScope(input);
+  const { tenantId, today, scope, costCenterId } = resolveScope(input);
   const { from, to, monthKey } =
     input.monthKey === undefined
       ? civilMonthBounds(today)
       : civilMonthBoundsFromKey(input.monthKey);
+
+  if (costCenterId !== undefined) {
+    const allocationRows = await requireAllocations(deps).findPayableAllocationsForCompetence({
+      ...scope,
+      costCenterId,
+      from,
+      to,
+    });
+    const sources = toAllocationMonthlySources(allocationRows);
+    const externalIds = collectMonthlyRevenueCategoryExternalIds(
+      sources.map((row) => ({ categoryExternalIds: row.categoryExternalIds })),
+    );
+    const categories = await deps.categories.findByTenantAndExternalIds({
+      ...scope,
+      externalIds,
+    });
+    const calculated = calculateMonthlyCompetenceFromAllocations(sources, categories, 'EXPENSE');
+    return {
+      tenantId,
+      today,
+      monthKey,
+      from,
+      to,
+      costCenterCashSplit: false,
+      total: calculated.total,
+      received: calculated.received,
+      outstanding: calculated.outstanding,
+      overdue: calculated.overdue,
+      classified: calculated.classified,
+      uncategorized: calculated.uncategorized,
+      imprecise: calculated.imprecise,
+      coverageRate: calculated.coverageRate,
+      items: calculated.items,
+      daily: buildDailyCompetenceAllocationTotals(sources, from, to),
+    };
+  }
+
   const payables = await deps.payables.findMonthlyCompetenceExpenses({
     ...scope,
     from,
@@ -306,6 +477,7 @@ async function loadMonthlyCompetenceExpenses(
     monthKey,
     from,
     to,
+    costCenterCashSplit: true,
     total: calculated.total,
     received: calculated.received,
     outstanding: calculated.outstanding,
@@ -330,9 +502,26 @@ async function loadCashFlowForecast(
   deps: AnalyticsServiceDependencies,
   input: GetFinancialStockSnapshotInput,
 ): Promise<CashFlowForecast> {
-  const { tenantId, today, scope } = resolveScope(input);
+  const { tenantId, today, scope, costCenterId } = resolveScope(input);
   const from = today;
   const to = addCivilDays(today, CASH_FLOW_FORECAST_HORIZON_DAYS);
+  if (costCenterId !== undefined) {
+    const allocations = requireAllocations(deps);
+    const [receivableRows, payableRows] = await Promise.all([
+      allocations.findActiveReceivableAllocationsByDueDate({ ...scope, costCenterId, from, to }),
+      allocations.findActivePayableAllocationsByDueDate({ ...scope, costCenterId, from, to }),
+    ]);
+    return {
+      tenantId,
+      today,
+      ...calculateCashFlowForecast(
+        toAllocationExposureInstallments(receivableRows),
+        toAllocationExposureInstallments(payableRows),
+        from,
+        to,
+      ),
+    };
+  }
   const [receivables, payables] = await Promise.all([
     deps.receivables.findActiveByDueDateRange({ ...scope, from, to }),
     deps.payables.findActiveByDueDateRange({ ...scope, from, to }),
@@ -355,14 +544,51 @@ async function loadDueDateWindow(
 }
 
 async function loadUpcoming(
-  findActiveByDueDateRange: ReceivableReadRepository['findActiveByDueDateRange'],
+  deps: AnalyticsServiceDependencies,
+  side: 'receivable' | 'payable',
   input: GetUpcomingInstallmentsInput,
 ): Promise<UpcomingInstallments> {
   assertNDays(input.nDays);
-  const { tenantId, today, scope } = resolveScope(input);
+  const { tenantId, today, scope, costCenterId } = resolveScope(input);
   const from = today;
   const to = addCivilDays(today, input.nDays);
-  const records = await findActiveByDueDateRange({ ...scope, from, to });
+  if (costCenterId !== undefined) {
+    const allocations = requireAllocations(deps);
+    const rows =
+      side === 'receivable'
+        ? await allocations.findActiveReceivableAllocationsByDueDate({
+            ...scope,
+            costCenterId,
+            from,
+            to,
+          })
+        : await allocations.findActivePayableAllocationsByDueDate({
+            ...scope,
+            costCenterId,
+            from,
+            to,
+          });
+    const exposure = toAllocationExposureInstallments(rows);
+    return {
+      tenantId,
+      today,
+      nDays: input.nDays,
+      from,
+      to,
+      items: exposure
+        .filter((row) => row.unpaid.greaterThan(0))
+        .map((row) => ({
+          id: row.id,
+          dueDate: row.dueDate,
+          unpaid: row.unpaid,
+          status: row.status,
+        })),
+    };
+  }
+  const records =
+    side === 'receivable'
+      ? await deps.receivables.findActiveByDueDateRange({ ...scope, from, to })
+      : await deps.payables.findActiveByDueDateRange({ ...scope, from, to });
   return {
     tenantId,
     today,

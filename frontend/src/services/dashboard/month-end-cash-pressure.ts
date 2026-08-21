@@ -70,11 +70,13 @@ function toFailure(response: Response, body: unknown): DashboardMonthEndCashPres
   );
 }
 
-export async function getDashboardMonthEndCashPressure(): Promise<DashboardMonthEndCashPressureResponse> {
+export async function getDashboardMonthEndCashPressure(
+  costCenterId?: string | null,
+): Promise<DashboardMonthEndCashPressureResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardMonthEndCashPressurePath(), {
+    response = await fetch(dashboardMonthEndCashPressurePath(costCenterId), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

@@ -28,11 +28,13 @@ export function MonthlyRevenuePanel({ data, phase }: MonthlyRevenuePanelProps) {
         </div>
         <div>
           <dt>Já recebido</dt>
-          <dd>{formatMoneyBrl(receivables.received)}</dd>
+          <dd>{receivables.received === null ? '—' : formatMoneyBrl(receivables.received)}</dd>
         </div>
         <div>
           <dt>A receber</dt>
-          <dd>{formatMoneyBrl(receivables.outstanding)}</dd>
+          <dd>
+            {receivables.outstanding === null ? '—' : formatMoneyBrl(receivables.outstanding)}
+          </dd>
         </div>
       </dl>
       {slices.length > 0 ? (

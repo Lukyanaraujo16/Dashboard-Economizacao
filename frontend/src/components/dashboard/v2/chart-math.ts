@@ -13,10 +13,11 @@ export type DailyPoint = {
  * Ponto diário com os snapshots do backend.
  * `received`/`outstanding` são o estado atual dos títulos com competência
  * naquele dia — nunca o movimento de caixa do dia.
+ * Com filtro por centro podem ser null.
  */
 export type CompetenceDailyPoint = DailyPoint & {
-  readonly received: string;
-  readonly outstanding: string;
+  readonly received: string | null;
+  readonly outstanding: string | null;
 };
 
 export type SvgPoint = {
@@ -113,18 +114,23 @@ export function subtractDecimalStrings(minuend: string, subtrahend: string): str
  * Série de `received` do snapshot como pontos diários.
  * O valor é o quanto já foi liquidado dos títulos com competência no dia,
  * não o que entrou em caixa naquele dia.
+ * Pontos com received null são omitidos.
  */
 export function receivedSeries(
   points: readonly CompetenceDailyPoint[],
 ): readonly DailyPoint[] {
-  return points.map((point) => ({ date: point.date, amount: point.received }));
+  return points.flatMap((point) =>
+    point.received === null ? [] : [{ date: point.date, amount: point.received }],
+  );
 }
 
 /** Série de `outstanding` do snapshot como pontos diários (saldo atual, não caixa). */
 export function outstandingSeries(
   points: readonly CompetenceDailyPoint[],
 ): readonly DailyPoint[] {
-  return points.map((point) => ({ date: point.date, amount: point.outstanding }));
+  return points.flatMap((point) =>
+    point.outstanding === null ? [] : [{ date: point.date, amount: point.outstanding }],
+  );
 }
 
 /**

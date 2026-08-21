@@ -44,6 +44,15 @@ describe('dashboard-month', () => {
     expect(keep.get('month')).toBe('2026-07');
   });
 
+  it('buildDashboardMonthSearchParams preserva costCenter', () => {
+    const params = new URLSearchParams(
+      'costCenter=11111111-1111-4111-8111-111111111111&month=2026-07',
+    );
+    const next = buildDashboardMonthSearchParams(params, '2026-06', '2026-08');
+    expect(next.get('month')).toBe('2026-06');
+    expect(next.get('costCenter')).toBe('11111111-1111-4111-8111-111111111111');
+  });
+
   it('compareMonthKeys ordena cronologicamente', () => {
     expect(compareMonthKeys('2026-07', '2026-08')).toBeLessThan(0);
     expect(currentDashboardMonthKey(new Date('2026-08-19T15:00:00Z'))).toMatch(/^\d{4}-\d{2}$/);

@@ -93,10 +93,12 @@
   line-height: 1.45;
 }
 
-.forbidden {
-  margin: var(--space-3) 0 0;
-  color: var(--color-text-secondary);
-  max-width: 36rem;
+.goalConsolidatedNote {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 550;
+  letter-spacing: 0.01em;
 }
 
 .kpiSection {

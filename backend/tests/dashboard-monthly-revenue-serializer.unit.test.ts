@@ -11,6 +11,7 @@ describe('dashboard monthly revenue serializer', () => {
       monthKey: '2026-08',
       from: new Date('2026-08-01T00:00:00.000Z'),
       to: new Date('2026-08-31T00:00:00.000Z'),
+      costCenterCashSplit: true,
       total: new Prisma.Decimal('10000'),
       received: new Prisma.Decimal('4000'),
       outstanding: new Prisma.Decimal('6000'),
@@ -45,6 +46,7 @@ describe('dashboard monthly revenue serializer', () => {
       ],
     });
     expect(dto.monthKey).toBe('2026-08');
+    expect(dto.costCenterCashSplit).toBeUndefined();
     expect(dto.receivables.total).toBe('10000');
     expect(typeof dto.receivables.received).toBe('string');
     expect(dto.receivables.items[0]?.received).toBe('4000');

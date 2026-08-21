@@ -516,3 +516,36 @@ D — Depende de regra futura:
 * as-of / coorte histórica (D2)
 
 ⸻
+
+⸻
+19. Centros de custo (CC1 / CC1.1)
+
+Filtro por centro de custo usa o valor oficial do rateio Conta Azul **já normalizado
+para o escopo da parcela**:
+
+* fonte: `installment_cost_center_allocations.amount` (`allocation.amount`);
+* nunca duplicar o título inteiro em cada centro;
+* nunca ratear igualmente quando o rateio valorado existir;
+* **nunca** atribuir `center.valor` cru do EVENTO a cada parcela de uma série
+  (CC1.1): em parcelamentos, `GET /parcelas/{id}` pode devolver rateio
+  **EVENT-scoped** idêntico nas irmãs;
+* regra homologada `EVENT_SCOPED_SINGLE_CENTER`: se Σ rateio > total da parcela
+  e há exatamente 1 centro → `allocation.amount = total_parcela`
+  (não dividir por quantidade de parcelas);
+* multi-centro EVENT-scoped (`Σ > total` e N>1): `MULTI_CENTER_UNRESOLVED` —
+  **não** normalizar proporcionalmente nesta versão (capacidade futura);
+* PARTIAL (Σ < total): preservar upstream; não completar artificialmente;
+* NO_ALLOCATION: upstream sem centro — **não** é erro; não fabricar allocation;
+* semântica oficial:
+  - **Todos** = universo financeiro da empresa (títulos);
+  - **Centro** = somente valor explicitamente atribuído;
+  - portanto **Σ centros pode ser < Todos** quando houver NO_ALLOCATION;
+* paid/unpaid **por centro** NÃO está disponível (PARCIAL) — com filtro ativo,
+  “Já recebido” / “A receber” (e simétricos) não inventam split de caixa;
+* meta de faturamento permanece **consolidada da empresa** (ignora filtro).
+
+CC1 / CC1.1: HOMOLOGADAS. Controle 2026-08 (0 OVER; Jac+Lar=Todos);
+histórico 2026-05 / 2025-06 corrigido via backfill local.
+CC1.2 performance N+1: PRÓXIMA FASE / NÃO IMPLEMENTADA.
+
+⸻

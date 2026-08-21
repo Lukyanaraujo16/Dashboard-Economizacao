@@ -51,6 +51,8 @@ model Tenant {
   parties             Party[]
   receivables         Receivable[]
   payables            Payable[]
+  costCenters         CostCenter[]
+  installmentCostCenterAllocations InstallmentCostCenterAllocation[]
   revenueGoals        RevenueGoal[]
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
@@ -200,6 +202,7 @@ model Integration {
   parties               Party[]
   receivables           Receivable[]
   payables              Payable[]
+  costCenters           CostCenter[]
   syncRuns              SyncRun[]
   syncCursors           IntegrationSyncCursor[]
 
@@ -382,6 +385,7 @@ model Receivable {
   tenant             Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   integration        Integration                 @relation(fields: [integrationId], references: [id], onDelete: Restrict)
   party              Party?                      @relation("ReceivableParty", fields: [partyId], references: [id], onDelete: SetNull)
+  costCenterAllocations InstallmentCostCenterAllocation[]
 
   @@unique([integrationId, externalId], map: "uq_receivables_integration_external_id")
   @@index([tenantId], map: "idx_receivables_tenant_id")
@@ -390,7 +394,7 @@ model Receivable {
   @@map("receivables")
 }
 
-/// Parcela a pagar. Sem tombstone. Sem cadastro de centro de custo.
+/// Parcela a pagar. Sem tombstone.
 model Payable {
   id                 String                      @id @default(uuid()) @db.Uuid
   tenantId           String                      @map("tenant_id") @db.Uuid
@@ -415,6 +419,7 @@ model Payable {
   tenant             Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   integration        Integration                 @relation(fields: [integrationId], references: [id], onDelete: Restrict)
   party              Party?                      @relation("PayableParty", fields: [partyId], references: [id], onDelete: SetNull)
+  costCenterAllocations InstallmentCostCenterAllocation[]
 
   @@unique([integrationId, externalId], map: "uq_payables_integration_external_id")
   @@index([tenantId], map: "idx_payables_tenant_id")
@@ -423,6 +428,50 @@ model Payable {
   @@map("payables")
 }
 
+
+/// Catálogo de centros de custo Conta Azul (CC1).
+model CostCenter {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  integrationId String   @map("integration_id") @db.Uuid
+  externalId    String   @map("external_id")
+  code          String?
+  name          String
+  active        Boolean  @default(true)
+  syncedAt      DateTime @map("synced_at") @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant        Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  allocations   InstallmentCostCenterAllocation[]
+
+  @@unique([integrationId, externalId], map: "uq_cost_centers_integration_external_id")
+  @@index([tenantId, active], map: "idx_cost_centers_tenant_active")
+  @@index([tenantId, name], map: "idx_cost_centers_tenant_name")
+  @@map("cost_centers")
+}
+
+/// Alocação monetária parcela↔centro (valor oficial do rateio Conta Azul).
+model InstallmentCostCenterAllocation {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  costCenterId String   @map("cost_center_id") @db.Uuid
+  receivableId String?  @map("receivable_id") @db.Uuid
+  payableId    String?  @map("payable_id") @db.Uuid
+  amount       Decimal  @db.Decimal(19, 4)
+  syncedAt     DateTime @map("synced_at") @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  costCenter   CostCenter @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  receivable   Receivable? @relation(fields: [receivableId], references: [id], onDelete: Cascade)
+  payable      Payable? @relation(fields: [payableId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, costCenterId], map: "idx_icca_tenant_cost_center")
+  @@index([receivableId], map: "idx_icca_receivable")
+  @@index([payableId], map: "idx_icca_payable")
+  @@map("installment_cost_center_allocations")
+}
 
 /// Meta mensal de faturamento gerencial por tenant (F2).
 /// `actual` NÃO é persistido — calculado via monthly-revenue / competência.

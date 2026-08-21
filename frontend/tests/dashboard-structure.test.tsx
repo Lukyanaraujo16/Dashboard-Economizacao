@@ -40,6 +40,7 @@ import {
 } from '../src/services/dashboard/executive-insights.types';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
+import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
 import { ThemeProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
@@ -87,6 +88,10 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
   putDashboardRevenueGoal: vi.fn(),
 }));
 
+vi.mock('../src/services/dashboard/cost-centers', () => ({
+  getDashboardCostCenters: vi.fn(),
+}));
+
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
@@ -94,6 +99,7 @@ const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
+const getCostCenters = vi.mocked(getDashboardCostCenters);
 
 const emptyRevenueGoal: RevenueGoalSnapshot = {
   monthKey: '2026-08',
@@ -309,6 +315,22 @@ beforeEach(() => {
   getMonthlyRevenue.mockResolvedValue(emptyMonthlyRevenue);
   getInsights.mockResolvedValue(emptyInsights);
   getRevenueGoal.mockResolvedValue(emptyRevenueGoal);
+  getCostCenters.mockResolvedValue({
+    items: [
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: 'Operações',
+        code: 'OP',
+        active: true,
+      },
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        name: 'Administrativo',
+        code: null,
+        active: false,
+      },
+    ],
+  });
 });
 
 afterEach(() => {
@@ -372,6 +394,8 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-financial-section="receitas-categoria"]')).toBeTruthy();
 
     expect(screen.getByText('Última atualização')).toBeTruthy();
+    expect(document.querySelector('[data-cost-center-selector="true"]')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Centro de custo: Todos' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Próximos vencimentos' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Recebíveis vencidos' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Qualidade dos recebíveis' })).toBeNull();
@@ -384,12 +408,42 @@ describe('Dashboard V2 structure', () => {
 
     expect(getMonthEnd).toHaveBeenCalledTimes(1);
     expect(getForecast).toHaveBeenCalledTimes(1);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith(null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null);
-    expect(getInsights).toHaveBeenCalledWith(null);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null);
+    expect(getInsights).toHaveBeenCalledWith(null, null);
+    expect(getOverview).toHaveBeenCalledWith(null);
     // Comparativo mensal também busca a competência anterior.
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07');
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07');
+    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null);
+  });
+
+  it('exibe nota de meta consolidada quando centro de custo está selecionado', async () => {
+    dashboardSearchParams = new URLSearchParams(
+      'costCenter=11111111-1111-4111-8111-111111111111',
+    );
+    getOverview.mockResolvedValue(syncedOverview);
+    getRevenueGoal.mockResolvedValue({
+      ...emptyRevenueGoal,
+      target: '10000',
+      actual: '4000',
+      achievementRate: '40',
+      remaining: '6000',
+      exceeded: '0',
+      status: 'IN_PROGRESS',
+    });
+    renderDashboard();
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
+    });
+    expect(await screen.findByText('Visão executiva · Operações')).toBeTruthy();
+    expect(await screen.findByText('Meta consolidada da empresa')).toBeTruthy();
+    expect(getOverview).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(
+      null,
+      '11111111-1111-4111-8111-111111111111',
+    );
+    expect(getRevenueGoal).toHaveBeenCalledWith(null);
   });
 
   it('sem competência os KPIs ficam vazios com copy honesta', async () => {
@@ -501,9 +555,9 @@ describe('Dashboard V2 structure', () => {
       expect(sectionScope(id).queryByText(/Integração desconectada/)).toBeNull();
     }
     expect(getMonthEnd).toHaveBeenCalledTimes(1);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith(null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null);
-    expect(getInsights).toHaveBeenCalledWith(null);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null);
+    expect(getInsights).toHaveBeenCalledWith(null, null);
   });
 
   it('ERROR de integração não é fetch error e não mostra código cru', async () => {
@@ -653,13 +707,13 @@ describe('Dashboard V2 structure', () => {
     renderDashboard();
 
     await waitFor(() => {
-      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07');
+      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null);
     });
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getForecast).not.toHaveBeenCalled();
-    expect(getInsights).toHaveBeenCalledWith('2026-07');
+    expect(getInsights).toHaveBeenCalledWith('2026-07', null);
     expect(screen.getByRole('heading', { name: 'Leitura executiva' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Receitas × Despesas' })).toBeTruthy();
   });
@@ -933,7 +987,7 @@ describe('Dashboard V2 structure', () => {
 
     expect(await screen.findByLabelText('Visão mensal por competência')).toBeTruthy();
     await waitFor(() => {
-      expect(getMonthlyRevenue).toHaveBeenCalledWith(null);
+      expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null);
     });
     expect(getOverview).toHaveBeenCalledTimes(1);
     expect(getMonthEnd).toHaveBeenCalledTimes(1);
@@ -942,7 +996,7 @@ describe('Dashboard V2 structure', () => {
     expect(getMonthlyExpenses).toHaveBeenCalledTimes(2);
     expect(getMonthlyRevenue).toHaveBeenCalledTimes(2);
     expect(getInsights).toHaveBeenCalledTimes(1);
-    expect(getInsights).toHaveBeenCalledWith(null);
+    expect(getInsights).toHaveBeenCalledWith(null, null);
   });
 
   it('EmptyState e EmptyPanel renderizam descrição', () => {
