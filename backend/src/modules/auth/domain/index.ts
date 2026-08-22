@@ -1,4 +1,4 @@
-export { normalizeEmail } from './email.js';
+export { isValidEmail, normalizeEmail } from './email.js';
 export {
   AUTH_LOCKOUT_DURATION_MINUTES,
   AUTH_MAX_FAILED_LOGIN_ATTEMPTS,

@@ -1,0 +1,42 @@
+# Placeholder __SERVER_NAME__  (domínio ou IPv4)
+# Placeholder __LISTEN_PORT__  (80)
+
+server {
+    listen __LISTEN_PORT__ default_server;
+    listen [::]:__LISTEN_PORT__ default_server;
+    server_name __SERVER_NAME__;
+
+    client_max_body_size 4m;
+
+    location ^~ /auth/ {
+        include __ETC_DIR__/proxy-backend.conf;
+    }
+
+    location ^~ /admin/ {
+        include __ETC_DIR__/proxy-backend.conf;
+    }
+
+    location ^~ /files/ {
+        include __ETC_DIR__/proxy-backend.conf;
+    }
+
+    location ^~ /branding/ {
+        include __ETC_DIR__/proxy-backend.conf;
+    }
+
+    location ^~ /dashboard/ {
+        include __ETC_DIR__/proxy-backend.conf;
+    }
+
+    location ^~ /integrations/ {
+        include __ETC_DIR__/proxy-backend.conf;
+    }
+
+    location ^~ /health {
+        include __ETC_DIR__/proxy-backend.conf;
+    }
+
+    location / {
+        include __ETC_DIR__/proxy-frontend.conf;
+    }
+}

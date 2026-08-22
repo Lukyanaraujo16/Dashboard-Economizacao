@@ -14,7 +14,8 @@
     "prisma:generate": "prisma generate --schema ../prisma/schema.prisma",
     "prisma:validate": "prisma validate --schema ../prisma/schema.prisma",
     "prisma:migrate:dev": "prisma migrate dev --schema ../prisma/schema.prisma",
-    "prisma:migrate:deploy": "prisma migrate deploy --schema ../prisma/schema.prisma"
+    "prisma:migrate:deploy": "prisma migrate deploy --schema ../prisma/schema.prisma",
+    "bootstrap:super-admin": "node dist/ops/bootstrap-super-admin.js"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

@@ -16,6 +16,7 @@ export type { PasswordHasher } from './crypto/password-hasher.js';
 export { createLoginService } from './services/login.service.js';
 export type { LoginInput, LoginService } from './services/login.service.js';
 export { createAdminAdministratorsService } from './services/admin-administrators.service.js';
+export { createBootstrapSuperAdminService } from './services/bootstrap-super-admin.service.js';
 export { createAdminTenantUsersService } from './services/admin-tenant-users.service.js';
 export { createRequireAuthentication } from './http/require-authentication.js';
 export type { RequireAuthenticationDependencies } from './http/require-authentication.js';

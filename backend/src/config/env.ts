@@ -14,6 +14,7 @@ export interface ContaAzulEnvironment {
 }
 
 export interface Environment {
+  allowInsecureHttpSession: boolean;
   authSecret: string;
   appUrl: string;
   contaAzul: ContaAzulEnvironment | null;
@@ -172,6 +173,43 @@ function parseContaAzul(
   return { clientId, clientSecret, redirectUri };
 }
 
+function parseBooleanFlag(value: string | undefined): boolean {
+  const raw = value?.trim().toLowerCase() ?? '';
+  return raw === 'true' || raw === '1' || raw === 'yes';
+}
+
+/**
+ * Cookie Secure em production quebra login em HTTP puro (piloto por IP).
+ * A flag só vale em production + APP_URL http://. HTTPS ignora/recusa.
+ * Fora de production o cookie já não é Secure — a flag não altera nada.
+ */
+export function resolveAllowInsecureHttpSession(input: {
+  readonly flag: string | undefined;
+  readonly nodeEnv: NodeEnvironment;
+  readonly appUrl: string;
+}): boolean {
+  if (!parseBooleanFlag(input.flag)) {
+    return false;
+  }
+
+  if (input.nodeEnv !== 'production') {
+    return false;
+  }
+
+  let protocol: string;
+  try {
+    protocol = new URL(input.appUrl).protocol;
+  } catch {
+    return false;
+  }
+
+  if (protocol === 'https:') {
+    return false;
+  }
+
+  return protocol === 'http:';
+}
+
 function parseEncryptionKey(value: string | undefined, nodeEnv: NodeEnvironment): Buffer | null {
   const raw = value?.trim() ?? '';
   if (!raw) {
@@ -188,9 +226,15 @@ function parseEncryptionKey(value: string | undefined, nodeEnv: NodeEnvironment)
 
 export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Environment {
   const nodeEnv = parseNodeEnvironment(source.NODE_ENV);
+  const appUrl = parseAppUrl(source.APP_URL, nodeEnv);
   return {
+    allowInsecureHttpSession: resolveAllowInsecureHttpSession({
+      flag: source.ALLOW_INSECURE_HTTP_SESSION,
+      nodeEnv,
+      appUrl,
+    }),
     authSecret: parseAuthSecret(source.AUTH_SECRET),
-    appUrl: parseAppUrl(source.APP_URL, nodeEnv),
+    appUrl,
     contaAzul: parseContaAzul(source, nodeEnv),
     databaseUrl: source.DATABASE_URL,
     host: source.HOST ?? '127.0.0.1',

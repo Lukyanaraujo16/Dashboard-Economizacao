@@ -765,7 +765,10 @@ Itens resolvidos por ADRs posteriores (mantidos aqui apenas como histórico de r
 * estrutura do monorepo — ADR-033 e ADR-034;
 * gerenciador de pacotes — ADR-038 (pnpm);
 * Next.js App Router — ADR-039;
-* versão mínima de Node.js — ADR-040 (Node.js 24 LTS).
+* versão mínima de Node.js — ADR-040 (Node.js 24 LTS);
+* runtime híbrido do piloto — ADR-051;
+* modo HTTP temporário explícito — ADR-052;
+* bootstrap do primeiro SUPER_ADMIN — ADR-053.
 
 Esses itens deverão ser definidos antes da fase correspondente.
 
@@ -1173,4 +1176,83 @@ Registrar:
 - patches e minors dentro da linha 24 poderão ser adotados sem nova ADR, desde que compatíveis com `engines`.
 
 ---
+
+# ADR-051 — Runtime híbrido do Ambiente Piloto Felipe
+
+## Status
+
+Aprovada (piloto; não substitui a Fase 19 completa)
+
+## Contexto
+
+A ADR-003 prevê Docker Compose de toda a aplicação. O repositório só empacota PostgreSQL e Redis. Não há Dockerfiles de Next/API/worker. O piloto Felipe precisa subir agora, numa VPS única.
+
+## Decisão
+
+No Ambiente Piloto Felipe:
+
+- PostgreSQL e Redis continuam no `compose.yaml` atual, bind `127.0.0.1`, volumes persistentes, `restart: unless-stopped`;
+- API, worker e Next.js rodam via systemd no host (usuário `dashboard`);
+- Nginx no host, same-origin, TLS Let’s Encrypt quando houver domínio;
+- ponto de entrada operacional: `install.sh` (wizard idempotente).
+
+Dockerfiles da aplicação e Compose completo permanecem na Fase 19 / evolução da ADR-003, sem bloquear o piloto.
+
+---
+
+# ADR-052 — ALLOW_INSECURE_HTTP_SESSION (modo IP temporário)
+
+## Status
+
+Aprovada
+
+## Contexto
+
+`NODE_ENV=production` define cookie de sessão `Secure`. HTTP puro + cookie Secure impede o login. A ADR-014 permite acesso inicial por IP/HTTP. O código não acompanhava essa ADR.
+
+## Decisão
+
+Não usar `NODE_ENV=development` no piloto.
+
+Flag explícita `ALLOW_INSECURE_HTTP_SESSION`:
+
+- default ausente/false (seguro);
+- só produz efeito em `production` com `APP_URL` `http://`;
+- `APP_URL` `https://` ignora/recusa a flag (cookie continua Secure);
+- warning no boot da API;
+- o instalador desativa a flag ao emitir SSL.
+
+---
+
+# ADR-053 — Bootstrap do primeiro SUPER_ADMIN
+
+## Status
+
+Aprovada (corrigida em PILOT-INFRA-1.1)
+
+## Contexto
+
+`POST /admin/administrators` cria `ADMIN` e exige sessão ADMIN/SUPER_ADMIN. Não há seed Prisma. Banco vazio impede o primeiro login. `SUPER_ADMIN` só surge por fluxo técnico/ops (`docs/15` §5.7, `docs/16`).
+
+A primeira conta da instalação é o operador técnico da plataforma, não o administrador operacional do produto.
+
+## Decisão
+
+Comando oficial:
+
+`pnpm --filter @dashboard-economizacao/backend bootstrap:super-admin`
+
+- cria somente um `SUPER_ADMIN` ACTIVE, `tenantId = null`, com hasher Argon2id oficial;
+- senha via stdin, sem eco; recusa `--password` em argv (não deve ir para o histórico do shell);
+- não lê senha de arquivo, de `install.sh` nem de variável de ambiente;
+- recusa senha fora da política (10–128) e e-mail inválido;
+- normaliza nome/e-mail pelos mecanismos oficiais de auth;
+- idempotente **somente** se já existir `SUPER_ADMIN`;
+- a existência de `ADMIN` sem `SUPER_ADMIN` **não** bloqueia o bootstrap;
+- não cria `ADMIN`, tenant, empresa nem conta default/hardcoded.
+
+Não há alias `bootstrap:admin`: esse nome representaria conceitualmente o `SUPER_ADMIN` e foi removido.
+
+O `install.sh` conduz esse comando na primeira instalação (“Configuração do Super Administrador da Plataforma”). O `ADMIN` operacional (Felipe, no piloto) permanece para fluxo posterior da plataforma.
+
 

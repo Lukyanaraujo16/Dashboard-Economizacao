@@ -1,17 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 
+import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
-import { SESSION_COOKIE_NAME } from '../config/session-config.js';
+import { SESSION_COOKIE_NAME, isSessionCookieSecure } from '../config/session-config.js';
 import { createSupportSessionRepository } from '../repositories/support-session.repository.js';
 
 function clearSessionCookie(reply: {
   clearCookie: (name: string, options: Record<string, unknown>) => unknown;
 }): void {
+  const environment = loadEnvironment();
   reply.clearCookie(SESSION_COOKIE_NAME, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSessionCookieSecure(environment),
   });
 }
 

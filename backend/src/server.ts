@@ -1,17 +1,8 @@
-import { existsSync } from 'node:fs';
-import { loadEnvFile } from 'node:process';
-import { resolve } from 'node:path';
-
 import { buildApp } from './app/build-app.js';
 import { loadEnvironment } from './config/env.js';
+import { loadRootEnvFile } from './config/load-env-file.js';
 
-const rootEnvPath = resolve(process.cwd(), '../.env');
-const localEnvPath = resolve(process.cwd(), '.env');
-if (existsSync(rootEnvPath)) {
-  loadEnvFile(rootEnvPath);
-} else if (existsSync(localEnvPath)) {
-  loadEnvFile(localEnvPath);
-}
+loadRootEnvFile();
 
 const environment = loadEnvironment();
 const app = await buildApp();

@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { loadEnvironment } from '../config/env.js';
+import { resolveTrustProxy } from '../config/trust-proxy.js';
 import { registerErrorHandlers } from '../http/errors/register-error-handlers.js';
 import { sanitizeLoggedRequestUrl } from '../http/sanitize-logged-request-url.js';
 import { registerAuthFoundation } from '../modules/auth/index.js';
@@ -27,7 +28,9 @@ const redactedLogPaths = [
 
 export async function buildApp(): Promise<FastifyInstance> {
   const environment = loadEnvironment();
+  const trustProxy = resolveTrustProxy(environment.host);
   const app = Fastify({
+    trustProxy: trustProxy === false ? false : [...trustProxy],
     logger:
       environment.nodeEnv === 'test'
         ? false
@@ -56,6 +59,12 @@ export async function buildApp(): Promise<FastifyInstance> {
             },
           },
   });
+
+  if (environment.allowInsecureHttpSession) {
+    app.log.warn(
+      'allow_insecure_http_session_enabled: cookie de sessão sem Secure. Use apenas no modo IP temporário HTTP. Configure HTTPS e desative ALLOW_INSECURE_HTTP_SESSION.',
+    );
+  }
 
   registerErrorHandlers(app);
   await registerAuthFoundation(app, environment);

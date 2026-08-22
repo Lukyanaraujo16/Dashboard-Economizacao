@@ -1,12 +1,11 @@
 import { ValidationError } from '../../../shared/errors/application-error.js';
+import { isValidEmail } from '../domain/email.js';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../domain/password-policy.js';
 
 export type LoginRequestBody = {
   email: string;
   password: string;
 };
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Validação de entrada HTTP sem biblioteca adicional (stack ainda avalia validador).
@@ -26,7 +25,7 @@ export function parseLoginRequestBody(body: unknown): LoginRequestBody {
     details.push({ field: 'email', issue: 'required_string' });
   } else if (record.email.trim().length === 0) {
     details.push({ field: 'email', issue: 'required' });
-  } else if (!EMAIL_PATTERN.test(record.email.trim())) {
+  } else if (!isValidEmail(record.email)) {
     details.push({ field: 'email', issue: 'invalid_format' });
   }
 

@@ -1,0 +1,22 @@
+[Unit]
+Description=Dashboard Economização API (Fastify)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__APP_HOME__/backend
+EnvironmentFile=__APP_ENV_FILE__
+Environment=NODE_ENV=production
+ExecStart=__NODE_BIN__ dist/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

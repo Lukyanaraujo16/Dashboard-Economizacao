@@ -73,9 +73,9 @@ Nenhuma biblioteca relevante poderá ser adicionada ao projeto sem atualização
 | Nginx | Proxy reverso, HTTP/HTTPS e roteamento | Obrigatório | ADR-013 |
 | HTTPS | TLS obrigatório em produção | Obrigatório | ADR-014 |
 | Let’s Encrypt (ou equivalente compatível) | Certificados e renovação | Aprovado | ADR-015 |
-| Redis | Cache, locks, sessões e backend futuro do BullMQ | Obrigatório | ADR-009; não é fonte definitiva de dados financeiros; sessão a partir da 1.1B; BullMQ permanece Futuro (Épico 5) |
-| Storage com abstração | Logos, relatórios, arquivos de conhecimento | Em avaliação | ADR-029 (local vs S3-compatível pendente) |
-| install.sh / update.sh / backup.sh / restore.sh | Operação automatizada | Aprovado | ADR-016 a ADR-024 |
+| Redis | Cache, locks, sessões e backend do BullMQ | Obrigatório | ADR-009; sessão e BullMQ ativas no código; piloto: Redis Compose |
+| Storage local (`STORAGE_PATH`) | Logos e favicons no MVP | Aprovado no piloto | ADR-029 segue pendente para S3; piloto usa filesystem |
+| install.sh (wizard) | Instalação guiada do piloto | Aprovado no piloto | ADR-016 a ADR-024; `docs/19-ambiente-piloto.md`; Fase 19 completa pendente |
 | Deploy modular em 1 VPS | Escala inicial do MVP | Obrigatório | ADR-026, ADR-027 |
 | Distro Linux final da VPS | SO concreto de produção | Em avaliação | ADR-002; pendente em `docs/08` §3 |
 | Plataforma SaaS de observabilidade | Coleta/alertas externos | Em avaliação | Contrato em `docs/09.12`; plataforma não escolhida |
@@ -133,11 +133,11 @@ Nenhuma biblioteca relevante poderá ser adicionada ao projeto sem atualização
 
 | Tecnologia | Finalidade | Status | Observações |
 |---|---|---|---|
-| VPS Linux + Docker Compose | Runtime de produção do MVP | Obrigatório | ADR-001, ADR-003, ADR-004 |
-| Nginx + HTTPS | Entrada pública segura | Obrigatório | ADR-013, ADR-014 |
+| VPS Linux + híbrido piloto | Runtime do Ambiente Piloto Felipe | Aprovado no piloto | ADR-051: Postgres/Redis Compose; Next/API/worker systemd; Nginx host. Compose completo da aplicação permanece Fase 19 |
+| Nginx + HTTPS | Entrada pública segura | Obrigatório | ADR-013, ADR-014; IP temporário só com ADR-052 |
 | PostgreSQL em volume persistente | Dados de negócio | Obrigatório | ADR-007, ADR-025 |
-| Redis | Filas/cache/locks/sessão | Obrigatório | ADR-009; sessão ativa; BullMQ Futuro |
-| Scripts install/update/backup/restore | Operação | Aprovado | ADR-016 a ADR-024 |
+| Redis | Filas/cache/locks/sessão | Obrigatório | ADR-009; sessão e BullMQ ativas |
+| install.sh wizard | Operação do piloto | Aprovado no piloto | ADR-016; backup/restore ainda não implementados |
 | Backend como autoridade | Autorização, tenant e regras | Obrigatório | ADR-031; `docs/09.8`, `docs/09.9` |
 | Política de backup e retenção | Continuidade e compliance operacional | Em avaliação | Pendente em `docs/08` §3 |
 

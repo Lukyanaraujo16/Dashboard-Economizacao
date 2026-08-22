@@ -962,6 +962,8 @@ Critérios de aceite
 * logs acessíveis;
 * aplicação possui health checks quando aplicável.
 
+O **Ambiente Piloto Felipe** (`docs/19-ambiente-piloto.md`, PILOT-INFRA-1) é um recorte operacional desta fase: instalador híbrido numa VPS. Não marca a Fase 19 como concluída nem homologa produção.
+
 ⸻
 
 24. Pós-MVP — Mobile e PWA

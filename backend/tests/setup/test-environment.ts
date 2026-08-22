@@ -21,3 +21,4 @@ delete process.env.CONTA_AZUL_CLIENT_ID;
 delete process.env.CONTA_AZUL_CLIENT_SECRET;
 delete process.env.CONTA_AZUL_REDIRECT_URI;
 delete process.env.INTEGRATION_ENCRYPTION_KEY;
+delete process.env.ALLOW_INSECURE_HTTP_SESSION;

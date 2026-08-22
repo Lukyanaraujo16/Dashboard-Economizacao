@@ -192,6 +192,8 @@ Não implementar transação nesta tarefa documental.
 
 `ADMIN` nunca cria `SUPER_ADMIN`. `SUPER_ADMIN` só surge por fluxo técnico controlado (seed / ops / processo seguro futuro). Sem endpoint nesta consolidação.
 
+Comando oficial de ops do piloto: `pnpm --filter @dashboard-economizacao/backend bootstrap:super-admin` (ADR-053). Cria o primeiro `SUPER_ADMIN` ACTIVE sem tenant. Não cria `ADMIN`.
+
 ---
 
 ## 6. SUPER_ADMIN oculto da gestão normal (obrigatório na 1.4)

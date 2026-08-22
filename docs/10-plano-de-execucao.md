@@ -1286,6 +1286,37 @@ Nunca utilizar outros status.
 
 ===========================================================
 
+# PILOT-INFRA-1 — Instalador do Ambiente Piloto Felipe
+
+Status: Em implementação (não homologado em VPS)
+
+Objetivo: wizard `install.sh` para uma VPS única. Não é a Fase 19 completa.
+
+Entregue neste repositório:
+
+* `install.sh` (raiz) e `infrastructure/scripts/install.sh`
+* systemd + Nginx templates
+* `ALLOW_INSECURE_HTTP_SESSION` (ADR-052)
+* `trustProxy` loopback
+* `bootstrap:super-admin` (ADR-053; PILOT-INFRA-1.1 — cria SUPER_ADMIN, não ADMIN)
+* `docs/19-ambiente-piloto.md`
+
+Fora desta fase: backup/restore validados, Dockerfiles da aplicação, WIP ledger.
+
+SHA de referência do piloto inicial: `fc7f13ab1314123b34844f70be3fc7fb14d014b3`
+
+===========================================================
+
+# PILOT-INFRA-1.1 — Bootstrap SUPER_ADMIN e VPS real
+
+Status: Em implementação (não homologado em VPS)
+
+Corrige o bootstrap da PILOT-INFRA-1: a primeira conta da instalação é `SUPER_ADMIN`, não `ADMIN`. Comando oficial: `bootstrap:super-admin` (ADR-053). O `ADMIN` operacional não é criado nesta etapa.
+
+A VPS real já contratada está registrada em `docs/19-ambiente-piloto.md` (Cloud VPS Plus 6, Ubuntu 24.04 LTS x86_64, 6 vCPU / 12 GB / 300 GB NVMe). O `install.sh` continua detectando hardware em runtime.
+
+===========================================================
+
 # DIRETRIZ FINAL
 ===========================================================
 
