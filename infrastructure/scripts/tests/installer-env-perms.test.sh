@@ -69,7 +69,7 @@ assert_ok "proibido chmod 644 em app.env" '! grep -qE "chmod[[:space:]]+0?644" "
 assert_ok "proibido chmod 777" '! grep -qE "chmod[[:space:]]+777" "$INSTALLER" "$LIB"'
 assert_ok "C keep_secrets nas chaves persistidas" 'grep -qF '"'"'de_env_upsert "$APP_ENV_FILE" "AUTH_SECRET"'"'"' "$INSTALLER" && grep -qF '"'"'de_env_upsert "$APP_ENV_FILE" "CONTA_AZUL_CLIENT_SECRET"'"'"' "$INSTALLER"'
 assert_ok "C reexecução preserva Conta Azul já presente" 'grep -q "já constam em app.env e serão preservadas" "$INSTALLER"'
-assert_ok "F Prisma/build como SERVICE_USER" 'grep -A30 "^build_application()" "$INSTALLER" | grep -q de_run_as_user'
+assert_ok "F Prisma/build como SERVICE_USER" 'grep -A30 "^build_application()" "$INSTALLER" | grep -q run_as_app'
 assert_ok "F env via DE_APP_ENV (sem secret em argv)" 'grep -q "DE_APP_ENV=" "$INSTALLER" && grep -q '"'"'. "$DE_APP_ENV"'"'"' "$INSTALLER"'
 assert_ok "F não ecoa DATABASE_URL" '! grep -qE "echo.*DATABASE_URL|printf.*DATABASE_URL" "$INSTALLER"'
 assert_ok "G compose_app usa --env-file" 'grep -A4 "^compose_app()" "$INSTALLER" | grep -q -- "--env-file"'

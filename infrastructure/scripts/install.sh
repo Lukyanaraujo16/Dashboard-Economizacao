@@ -26,7 +26,9 @@ SERVICE_GROUP="dashboard"
 init_paths() {
   APP_HOME="${DE_ROOT_PREFIX}/opt/dashboard-economizacao"
   ETC_DIR="${DE_ROOT_PREFIX}/etc/dashboard-economizacao"
-  STORAGE_DIR="${DE_ROOT_PREFIX}/var/lib/dashboard-economizacao/storage"
+  VAR_LIB_DIR="${DE_ROOT_PREFIX}/var/lib/dashboard-economizacao"
+  SERVICE_HOME="${VAR_LIB_DIR}/home"
+  STORAGE_DIR="${VAR_LIB_DIR}/storage"
   BACKUP_DIR="${DE_ROOT_PREFIX}/var/backups/dashboard-economizacao"
   NGINX_AVAILABLE="${DE_ROOT_PREFIX}/etc/nginx/sites-available/dashboard-economizacao"
   NGINX_ENABLED="${DE_ROOT_PREFIX}/etc/nginx/sites-enabled/dashboard-economizacao"
@@ -216,9 +218,10 @@ secure_runtime_env_files() {
 }
 
 ensure_dirs() {
-  mkdir -p "$(dirname "$APP_HOME")" "$ETC_DIR" "$STORAGE_DIR" "$BACKUP_DIR" \
+  mkdir -p "$(dirname "$APP_HOME")" "$ETC_DIR" "$BACKUP_DIR" \
     "$(dirname "$NGINX_AVAILABLE")" "$(dirname "$NGINX_ENABLED")" "$SYSTEMD_DIR"
-  chmod 0750 "$ETC_DIR" "$STORAGE_DIR" "$BACKUP_DIR" 2>/dev/null || true
+  de_ensure_runtime_layout "$VAR_LIB_DIR" "$SERVICE_HOME" "$STORAGE_DIR"
+  chmod 0750 "$ETC_DIR" "$BACKUP_DIR" 2>/dev/null || true
 }
 
 install_system_packages() {
@@ -243,35 +246,57 @@ install_system_packages() {
     apt-get install -y nodejs
   fi
   if ! de_cmd_exists pnpm; then
-    corepack enable
-    corepack prepare pnpm@11.21.0 --activate
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack enable
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack prepare pnpm@11.21.0 --activate
   fi
 }
 
 ensure_service_user() {
-  if [[ "$DE_DRY_RUN" == "1" || "${DE_ALLOW_NONROOT:-0}" == "1" ]]; then
+  if [[ "$DE_DRY_RUN" == "1" ]]; then
+    return
+  fi
+  ensure_dirs
+  if [[ "${DE_ALLOW_NONROOT:-0}" == "1" ]]; then
     return
   fi
   if ! id "$SERVICE_USER" >/dev/null 2>&1; then
-    useradd --system --home "$APP_HOME" --shell /usr/sbin/nologin "$SERVICE_USER"
+    useradd --system --home "$SERVICE_HOME" --shell /usr/sbin/nologin "$SERVICE_USER"
+  else
+    local current_home=""
+    current_home="$(getent passwd "$SERVICE_USER" | cut -d: -f6 || true)"
+    if de_home_needs_update "$current_home" "$SERVICE_HOME"; then
+      de_log "Atualizando HOME de ${SERVICE_USER}: ${current_home} → ${SERVICE_HOME}"
+      usermod -d "$SERVICE_HOME" "$SERVICE_USER"
+    fi
   fi
-  mkdir -p "$STORAGE_DIR"
-  de_chown_tree "${SERVICE_USER}:${SERVICE_GROUP}" "$STORAGE_DIR"
+  de_ensure_runtime_layout "$VAR_LIB_DIR" "$SERVICE_HOME" "$STORAGE_DIR" \
+    "$SERVICE_USER" "$SERVICE_GROUP"
   chown root:"$SERVICE_GROUP" "$ETC_DIR"
   chmod 0750 "$ETC_DIR"
   secure_runtime_env_files
 }
 
+# Executa como dashboard com HOME operacional (fora do Git). Não herda HOME de root.
+run_as_app() {
+  de_run_as_user "$SERVICE_USER" env \
+    HOME="$SERVICE_HOME" \
+    PATH="${PATH:-/usr/bin:/bin}" \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    DE_APP_HOME="$APP_HOME" \
+    "$@"
+}
+
 # Git do repositório operacional sempre como o usuário da aplicação (não root).
 git_as_app() {
-  de_git_in_repo "$SERVICE_USER" "$APP_HOME" "$@"
+  DE_SERVICE_HOME="$SERVICE_HOME" de_git_in_repo "$SERVICE_USER" "$APP_HOME" "$@"
 }
 
 prepare_app_home() {
-  mkdir -p "$(dirname "$APP_HOME")"
+  mkdir -p "$(dirname "$APP_HOME")" "$SERVICE_HOME"
   if [[ ! -d "$APP_HOME" ]]; then
     mkdir -p "$APP_HOME"
   fi
+  de_ensure_runtime_layout "$VAR_LIB_DIR" "$SERVICE_HOME" "$STORAGE_DIR"
   de_chown_tree "${SERVICE_USER}:${SERVICE_GROUP}" "$APP_HOME"
 }
 
@@ -299,8 +324,7 @@ sync_application_code() {
       de_err "Diretório ${APP_HOME} existe e não é um clone Git. Abortando para não destruir dados."
       exit 1
     fi
-    de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
-      git clone "$remote" "$APP_HOME"
+    run_as_app git clone "$remote" "$APP_HOME"
     de_chown_tree "${SERVICE_USER}:${SERVICE_GROUP}" "$APP_HOME"
   else
     repair_app_home_ownership
@@ -400,6 +424,7 @@ render_systemd_units() {
     "__SERVICE_USER__=${SERVICE_USER}"
     "__SERVICE_GROUP__=${SERVICE_GROUP}"
     "__APP_HOME__=${APP_HOME}"
+    "__SERVICE_HOME__=${SERVICE_HOME}"
     "__APP_ENV_FILE__=${APP_ENV_FILE}"
     "__WEB_ENV_FILE__=${WEB_ENV_FILE}"
     "__NODE_BIN__=${node_bin}"
@@ -441,20 +466,25 @@ build_application() {
     de_log "[dry-run] pnpm install --frozen-lockfile && prisma generate && migrate deploy && build (como ${SERVICE_USER})"
     return
   fi
-  de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
-    bash --noprofile --norc -c 'set -euo pipefail; cd "$HOME" && pnpm install --frozen-lockfile'
-  de_run_as_user "$SERVICE_USER" \
-    env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" DE_APP_ENV="$APP_ENV_FILE" \
-    bash --noprofile --norc -c 'set -euo pipefail
+  de_ensure_runtime_layout "$VAR_LIB_DIR" "$SERVICE_HOME" "$STORAGE_DIR" \
+    "$SERVICE_USER" "$SERVICE_GROUP"
+  run_as_app bash --noprofile --norc -c 'set -euo pipefail
+if command -v corepack >/dev/null 2>&1; then
+  corepack prepare pnpm@11.21.0 --activate >/dev/null || true
+fi
+cd "$DE_APP_HOME"
+pnpm install --frozen-lockfile'
+  run_as_app env DE_APP_ENV="$APP_ENV_FILE" bash --noprofile --norc -c 'set -euo pipefail
 set -a
 . "$DE_APP_ENV"
 set +a
-cd "$HOME/backend"
+cd "$DE_APP_HOME/backend"
 pnpm prisma:generate
 pnpm prisma:migrate:deploy
 pnpm build'
-  de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
-    bash --noprofile --norc -c 'set -euo pipefail; cd "$HOME/frontend" && pnpm build'
+  run_as_app bash --noprofile --norc -c 'set -euo pipefail
+cd "$DE_APP_HOME/frontend"
+pnpm build'
 }
 
 enable_services() {
@@ -520,8 +550,9 @@ bootstrap_super_admin() {
     pass2=""
     return 1
   fi
-  if printf '%s\n' "$pass" | sudo -u "$SERVICE_USER" env DASHBOARD_ENV_FILE="$APP_ENV_FILE" \
-    bash -lc "cd '${APP_HOME}/backend' && node dist/ops/bootstrap-super-admin.js --name $(printf '%q' "$name") --email $(printf '%q' "$email")"; then
+  if printf '%s\n' "$pass" | sudo -u "$SERVICE_USER" env HOME="$SERVICE_HOME" \
+    DASHBOARD_ENV_FILE="$APP_ENV_FILE" COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    bash --noprofile --norc -c "cd \"${APP_HOME}/backend\" && node dist/ops/bootstrap-super-admin.js --name $(printf '%q' "$name") --email $(printf '%q' "$email")"; then
     de_write_state "$STATE_FILE" "super_admin" "configurado"
     de_log "SUPER_ADMIN: configurado"
   else
@@ -718,6 +749,7 @@ action_restart() {
 }
 
 action_repair() {
+  ensure_service_user
   secure_runtime_env_files
   render_systemd_units
   local server_name
@@ -741,6 +773,7 @@ action_update() {
   sha="$(prompt "SHA/tag/branch de destino" "$(de_read_state "$STATE_FILE" "sha")")"
   local remote
   remote="$(de_read_state "$STATE_FILE" "remote" || git_as_app remote get-url origin)"
+  ensure_service_user
   secure_runtime_env_files
   sync_application_code "$sha" "$remote"
   build_application

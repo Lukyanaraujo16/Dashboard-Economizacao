@@ -203,7 +203,38 @@ de_git_in_repo() {
   local user="$1"
   local repo="$2"
   shift 2
-  de_run_as_user "$user" env HOME="$repo" PATH="${PATH:-/usr/bin:/bin}" git -C "$repo" "$@"
+  local home="${DE_SERVICE_HOME:-$repo}"
+  de_run_as_user "$user" env HOME="$home" PATH="${PATH:-/usr/bin:/bin}" git -C "$repo" "$@"
+}
+
+# Campo HOME de uma linha passwd (ex.: dashboard:x:999:987::/opt/...:/usr/sbin/nologin).
+de_passwd_home_from_line() {
+  local line="$1"
+  printf '%s\n' "${line}" | cut -d: -f6
+}
+
+de_home_needs_update() {
+  local current="$1"
+  local desired="$2"
+  [[ -n "$desired" && "$current" != "$desired" ]]
+}
+
+# Layout canônico: var_lib root 0755; home e storage do app 0750.
+# Não chown do diretório-raiz var_lib.
+de_ensure_runtime_layout() {
+  local var_lib="$1"
+  local home="$2"
+  local storage="$3"
+  local owner="${4:-}"
+  local group="${5:-}"
+
+  mkdir -p "$var_lib" "$home" "$storage"
+  chmod 0755 "$var_lib"
+  chmod 0750 "$home" "$storage"
+  if [[ -z "$owner" || "${DE_ALLOW_NONROOT:-0}" == "1" ]] || ! de_is_root; then
+    return 0
+  fi
+  chown -R "${owner}:${group}" "$home" "$storage"
 }
 
 # Ownership do working tree Git. No-op fora de root (testes locais).

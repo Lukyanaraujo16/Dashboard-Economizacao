@@ -52,6 +52,8 @@ Loopback interno. Portas 3000, 3001, 5432 e 6379 não são públicas.
 | `/etc/dashboard-economizacao/app.env` | segredos da API/worker |
 | `/etc/dashboard-economizacao/web.env` | apenas `NODE_ENV` e `API_URL` (Next) |
 | `/etc/dashboard-economizacao/install-state` | SHA, modo de acesso, SSL |
+| `/var/lib/dashboard-economizacao` | raiz operacional (`root:root` `0755`; não é HOME) |
+| `/var/lib/dashboard-economizacao/home` | HOME do usuário `dashboard` (cache pnpm/Corepack/Next) |
 | `/var/lib/dashboard-economizacao/storage` | logos/favicons (`STORAGE_PATH`) |
 | `/var/backups/dashboard-economizacao` | reservado; backup ainda não automatizado |
 
@@ -78,7 +80,7 @@ Idempotente: não executa `docker compose down -v`, não sobrescreve `AUTH_SECRE
 
 Clone Git interrompido (sem env) **não** conta como instalação concluída: o wizard repara ownership de `/opt/dashboard-economizacao` para `dashboard:dashboard` e continua. Não apaga o diretório se o conteúdo não for um clone Git reconhecido.
 
-O clone/fetch/checkout e o build Node (incluindo `prisma generate` / `migrate deploy`) rodam como o usuário `dashboard`. `/opt` permanece root.
+O clone/fetch/checkout e o build Node (incluindo `prisma generate` / `migrate deploy`) rodam como o usuário `dashboard`, com `HOME=/var/lib/dashboard-economizacao/home`. `/opt` permanece o clone Git (não é HOME). `/opt` permanece root no parent; o working tree é `dashboard:dashboard`.
 
 Permissões canônicas de runtime (determinísticas; não dependem de umask):
 
@@ -87,8 +89,17 @@ Permissões canônicas de runtime (determinísticas; não dependem de umask):
 | `/etc/dashboard-economizacao` | root | dashboard | `0750` |
 | `/etc/dashboard-economizacao/app.env` | root | dashboard | `0640` |
 | `/etc/dashboard-economizacao/web.env` | root | dashboard | `0640` |
+| `/var/lib/dashboard-economizacao` | root | root | `0755` |
+| `/var/lib/dashboard-economizacao/home` | dashboard | dashboard | `0750` |
+| `/var/lib/dashboard-economizacao/storage` | dashboard | dashboard | `0750` |
+
+O usuário `dashboard` (shell `/usr/sbin/nologin`) tem HOME operacional em `/var/lib/dashboard-economizacao/home`. Reexecução com HOME antigo em `/opt/dashboard-economizacao` faz `usermod -d` **sem** `-m` (não move o repo). Cache XDG padrão fica em `$HOME/.config`, `$HOME/.cache` e `$HOME/.local/share` — nunca no Git.
 
 `0640` + grupo `dashboard` permite que API/worker/web/Prisma leiam o env. Owner permanece `root`. Segredos não são world-readable (`644`/`777` são proibidos). Reexecução corrige owner/group/mode de `app.env` sem regenerar valores.
+
+Unidades systemd (`api`/`worker`/`web`) definem `Environment=HOME=/var/lib/dashboard-economizacao/home`. Segredos continuam só em `EnvironmentFile`.
+
+Corepack usa `COREPACK_ENABLE_DOWNLOAD_PROMPT=0` e `pnpm@11.21.0` (sem prompt interativo).
 
 Docker Compose (`up`/`ps`) usa `--env-file` de `app.env` explicitamente. Containers Postgres/Redis já existentes são reutilizados (`up -d` idempotente); volumes não são destruídos.
 

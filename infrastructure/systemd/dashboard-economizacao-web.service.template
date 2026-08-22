@@ -9,6 +9,7 @@ User=__SERVICE_USER__
 Group=__SERVICE_GROUP__
 WorkingDirectory=__APP_HOME__/frontend
 EnvironmentFile=__WEB_ENV_FILE__
+Environment=HOME=__SERVICE_HOME__
 Environment=NODE_ENV=production
 ExecStart=__NODE_BIN__ node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
 Restart=on-failure

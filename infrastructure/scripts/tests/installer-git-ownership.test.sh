@@ -66,6 +66,7 @@ export DE_ROOT_PREFIX="${TMP}/prefix"
 # shellcheck disable=SC1091
 . "$INSTALLER"
 init_paths
+ensure_dirs
 mkdir -p "$(dirname "$APP_HOME")" "$ETC_DIR"
 chmod 0750 "$ETC_DIR"
 printf 'AUTH_SECRET=placeholder\n' >"$APP_ENV_FILE"
@@ -94,6 +95,8 @@ assert_eq "$(de_file_owner "${APP_HOME}/.git")" "$OWNER" "E. .git permanece do u
 ETC_MODE="$(stat -f '%OLp' "$APP_ENV_FILE" 2>/dev/null || stat -c '%a' "$APP_ENV_FILE")"
 assert_eq "$ETC_MODE" "640" "F. app.env permanece 0640"
 assert_ok "F. ETC_DIR não está dentro de APP_HOME" '[[ "$ETC_DIR" != "$APP_HOME"* ]]'
+assert_ok "HOME operacional não é o clone Git" '[[ "$SERVICE_HOME" != "$APP_HOME" ]]'
+assert_ok "clone não cria .config/.local/.cache no repo" '[[ ! -e "$APP_HOME/.config" && ! -e "$APP_HOME/.local" && ! -e "$APP_HOME/.cache" ]]'
 
 de_run_as_user "$OWNER" true
 assert_ok "de_run_as_user executa com DE_ALLOW_NONROOT" 'true'

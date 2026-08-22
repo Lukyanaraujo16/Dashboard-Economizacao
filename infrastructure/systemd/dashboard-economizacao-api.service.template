@@ -10,6 +10,7 @@ User=__SERVICE_USER__
 Group=__SERVICE_GROUP__
 WorkingDirectory=__APP_HOME__/backend
 EnvironmentFile=__APP_ENV_FILE__
+Environment=HOME=__SERVICE_HOME__
 Environment=NODE_ENV=production
 ExecStart=__NODE_BIN__ dist/server.js
 Restart=on-failure
