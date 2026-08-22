@@ -84,7 +84,8 @@ chmod +x "${ROOT}/install.sh" "${ROOT}/infrastructure/scripts/install.sh" \
   "${ROOT}/infrastructure/scripts/tests/installer-lib.test.sh" \
   "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh" \
   "${ROOT}/infrastructure/scripts/tests/installer-env-perms.test.sh" \
-  "${ROOT}/infrastructure/scripts/tests/installer-runtime-home.test.sh"
+  "${ROOT}/infrastructure/scripts/tests/installer-runtime-home.test.sh" \
+  "${ROOT}/infrastructure/scripts/tests/installer-nginx-default.test.sh"
 
 if [[ "$fail" -ne 0 ]]; then
   printf 'Testes da lib do instalador: FALHA\n' >&2
@@ -98,6 +99,7 @@ bash -n "${ROOT}/infrastructure/scripts/tests/installer-lib.test.sh"
 bash -n "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh"
 bash -n "${ROOT}/infrastructure/scripts/tests/installer-env-perms.test.sh"
 bash -n "${ROOT}/infrastructure/scripts/tests/installer-runtime-home.test.sh"
+bash -n "${ROOT}/infrastructure/scripts/tests/installer-nginx-default.test.sh"
 
 if command -v shellcheck >/dev/null 2>&1; then
   shellcheck -x "${ROOT}/infrastructure/scripts/lib/install-lib.sh"
@@ -107,6 +109,7 @@ if command -v shellcheck >/dev/null 2>&1; then
   shellcheck -x "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh"
   shellcheck -x "${ROOT}/infrastructure/scripts/tests/installer-env-perms.test.sh"
   shellcheck -x "${ROOT}/infrastructure/scripts/tests/installer-runtime-home.test.sh"
+  shellcheck -x "${ROOT}/infrastructure/scripts/tests/installer-nginx-default.test.sh"
 fi
 
 DE_ALLOW_NONROOT=1 DE_DRY_RUN=1 "${ROOT}/infrastructure/scripts/install.sh" --detect-only >/dev/null
@@ -115,5 +118,6 @@ printf '6\n' | DE_ALLOW_NONROOT=1 DE_DRY_RUN=1 "${ROOT}/infrastructure/scripts/i
 bash "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh"
 bash "${ROOT}/infrastructure/scripts/tests/installer-env-perms.test.sh"
 bash "${ROOT}/infrastructure/scripts/tests/installer-runtime-home.test.sh"
+bash "${ROOT}/infrastructure/scripts/tests/installer-nginx-default.test.sh"
 
 printf 'Testes da lib do instalador: OK\n'

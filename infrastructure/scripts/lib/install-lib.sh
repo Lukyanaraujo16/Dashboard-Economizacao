@@ -306,3 +306,34 @@ de_write_state() {
   local value="$3"
   de_env_upsert "$file" "$key" "$value" 0
 }
+
+# Remove o site default da distro em sites-enabled. Nunca apaga sites-available.
+de_disable_distro_nginx_default() {
+  local enabled="$1"
+  local available="$2"
+  if [[ -e "$enabled" || -L "$enabled" ]]; then
+    rm -f "$enabled"
+  fi
+}
+
+# Reload só é permitido quando nginx -t retornou 0. if explícito — não use A && B || C.
+de_nginx_may_reload_after_test() {
+  local test_exit="$1"
+  [[ "$test_exit" -eq 0 ]]
+}
+
+# Público é a app (Next), não a página Welcome da distro.
+de_public_web_is_app() {
+  local headers="$1"
+  local body="$2"
+  if printf '%s' "$body" | grep -q 'Welcome to nginx'; then
+    return 1
+  fi
+  if printf '%s' "$headers" | grep -qiE '^x-powered-by:[[:space:]]*Next\.js'; then
+    return 0
+  fi
+  if printf '%s' "$body" | grep -q '__NEXT_DATA__'; then
+    return 0
+  fi
+  return 1
+}

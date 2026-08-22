@@ -32,6 +32,8 @@ init_paths() {
   BACKUP_DIR="${DE_ROOT_PREFIX}/var/backups/dashboard-economizacao"
   NGINX_AVAILABLE="${DE_ROOT_PREFIX}/etc/nginx/sites-available/dashboard-economizacao"
   NGINX_ENABLED="${DE_ROOT_PREFIX}/etc/nginx/sites-enabled/dashboard-economizacao"
+  NGINX_DISTRO_DEFAULT_ENABLED="${DE_ROOT_PREFIX}/etc/nginx/sites-enabled/default"
+  NGINX_DISTRO_DEFAULT_AVAILABLE="${DE_ROOT_PREFIX}/etc/nginx/sites-available/default"
   SYSTEMD_DIR="${DE_ROOT_PREFIX}/etc/systemd/system"
   APP_ENV_FILE="${ETC_DIR}/app.env"
   WEB_ENV_FILE="${ETC_DIR}/web.env"
@@ -413,8 +415,29 @@ render_nginx_http() {
     "__SERVER_NAME__=${server_name}" \
     "__LISTEN_PORT__=80" \
     "__ETC_DIR__=${ETC_DIR}"
-  mkdir -p "$(dirname "$NGINX_ENABLED")"
+  mkdir -p "$(dirname "$NGINX_ENABLED")" "$(dirname "$NGINX_DISTRO_DEFAULT_ENABLED")"
+  de_disable_distro_nginx_default "$NGINX_DISTRO_DEFAULT_ENABLED" "$NGINX_DISTRO_DEFAULT_AVAILABLE"
   ln -sfn "$NGINX_AVAILABLE" "$NGINX_ENABLED"
+}
+
+# nginx -t deve passar antes de qualquer reload. Falha não é mascarada.
+apply_nginx_config() {
+  if [[ "$DE_DRY_RUN" == "1" ]]; then
+    de_log "[dry-run] nginx -t; se passar, systemctl reload nginx"
+    return 0
+  fi
+  de_disable_distro_nginx_default "$NGINX_DISTRO_DEFAULT_ENABLED" "$NGINX_DISTRO_DEFAULT_AVAILABLE"
+  local test_rc=0
+  if nginx -t; then
+    test_rc=0
+  else
+    test_rc=1
+  fi
+  if ! de_nginx_may_reload_after_test "$test_rc"; then
+    de_err "nginx -t falhou. Reload não será executado (configuração inválida)."
+    return 1
+  fi
+  systemctl reload nginx
 }
 
 render_systemd_units() {
@@ -534,6 +557,10 @@ bootstrap_super_admin() {
     de_log "SUPER_ADMIN: configurado"
     return
   fi
+  if [[ "$(de_read_state "$STATE_FILE" "super_admin" || true)" == "configurado" ]]; then
+    de_log "SUPER_ADMIN já configurado; conta existente preservada."
+    return 0
+  fi
   if ! confirm "Configurar o Super Administrador agora?"; then
     de_warn "Bootstrap de SUPER_ADMIN adiado. Execute depois: pnpm --filter @dashboard-economizacao/backend bootstrap:super-admin"
     de_write_state "$STATE_FILE" "super_admin" "pendente"
@@ -569,11 +596,29 @@ bootstrap_super_admin() {
 health_check() {
   local app_url
   app_url="$(de_read_state "$STATE_FILE" "app_url" || true)"
-  local ok_api="FALHA" ok_db="FALHA" ok_redis="FALHA" ok_web="FALHA" ok_worker="N/A" ok_ssl="N/A"
+  local ok_api="FALHA" ok_db="FALHA" ok_redis="FALHA" ok_web_int="FALHA" ok_web_pub="FALHA"
+  local ok_nginx="FALHA" ok_worker="N/A" ok_ssl="N/A"
+  local hc_rc=0
   if curl -fsS --max-time 5 http://127.0.0.1:3001/health >/dev/null; then ok_api="OK"; fi
   if curl -fsS --max-time 5 http://127.0.0.1:3001/health/db >/dev/null; then ok_db="OK"; fi
   if curl -fsS --max-time 5 http://127.0.0.1:3001/health/redis >/dev/null; then ok_redis="OK"; fi
-  if curl -fsS --max-time 5 http://127.0.0.1:3000/login >/dev/null; then ok_web="OK"; fi
+  if curl -fsS --max-time 5 http://127.0.0.1:3000/login >/dev/null; then ok_web_int="OK"; fi
+  if [[ "$DE_DRY_RUN" != "1" ]] && nginx -t >/dev/null 2>&1; then
+    ok_nginx="OK"
+  elif [[ "$DE_DRY_RUN" == "1" ]]; then
+    ok_nginx="dry-run"
+  fi
+  if [[ -n "$app_url" && "$DE_DRY_RUN" != "1" ]]; then
+    local hdr body
+    hdr="$(mktemp)"
+    body="$(mktemp)"
+    if curl -sS --max-time 8 -D "$hdr" -o "$body" "${app_url}/login"; then
+      if de_public_web_is_app "$(cat "$hdr")" "$(cat "$body")"; then
+        ok_web_pub="OK"
+      fi
+    fi
+    rm -f "$hdr" "$body"
+  fi
   if [[ "$DE_DRY_RUN" != "1" ]] && systemctl is-active --quiet dashboard-economizacao-worker.service 2>/dev/null; then
     ok_worker="OK"
   elif [[ "$DE_DRY_RUN" == "1" ]]; then
@@ -581,29 +626,39 @@ health_check() {
     ok_api="dry-run"
     ok_db="dry-run"
     ok_redis="dry-run"
-    ok_web="dry-run"
+    ok_web_int="dry-run"
+    ok_web_pub="dry-run"
+    ok_nginx="dry-run"
   fi
-  if [[ "${app_url}" == https://* ]]; then
-    if curl -fsS --max-time 8 "${app_url}/login" >/dev/null; then ok_ssl="OK"; else ok_ssl="FALHA"; fi
+  if [[ "${app_url}" == https://* && "$DE_DRY_RUN" != "1" ]]; then
+    if [[ "$ok_web_pub" == "OK" ]]; then ok_ssl="OK"; else ok_ssl="FALHA"; fi
   fi
   de_log ""
   de_log "INSTALAÇÃO — STATUS"
-  de_log "URL:     ${app_url:-não definida}"
-  de_log "API:     ${ok_api}"
-  de_log "DATABASE:${ok_db}"
-  de_log "REDIS:   ${ok_redis}"
-  de_log "WORKER:  ${ok_worker}"
-  de_log "SCHEDULER: mesmo processo do worker"
-  de_log "WEB:     ${ok_web}"
-  de_log "SSL:     ${ok_ssl}"
-  de_log "BACKUP:  não configurado (backup.sh ainda não implementado)"
+  de_log "URL:          ${app_url:-não definida}"
+  de_log "API:          ${ok_api}"
+  de_log "DATABASE:     ${ok_db}"
+  de_log "REDIS:        ${ok_redis}"
+  de_log "WORKER:       ${ok_worker}"
+  de_log "SCHEDULER:    mesmo processo do worker"
+  de_log "NGINX_CONFIG: ${ok_nginx}"
+  de_log "WEB_INTERNAL: ${ok_web_int}"
+  de_log "WEB_PUBLIC:   ${ok_web_pub}"
+  de_log "SSL:          ${ok_ssl}"
+  de_log "BACKUP:       não configurado (backup.sh ainda não implementado)"
   local super_admin_state
   super_admin_state="$(de_read_state "$STATE_FILE" "super_admin" || true)"
   if [[ -z "$super_admin_state" ]]; then
     super_admin_state="pendente"
   fi
-  de_log "SUPER_ADMIN: ${super_admin_state}"
+  de_log "SUPER_ADMIN:  ${super_admin_state}"
   de_log ""
+  if [[ "$DE_DRY_RUN" != "1" ]]; then
+    if [[ "$ok_nginx" != "OK" || "$ok_web_pub" != "OK" ]]; then
+      hc_rc=1
+    fi
+  fi
+  return "$hc_rc"
 }
 
 configure_ssl() {
@@ -628,7 +683,9 @@ configure_ssl() {
     fi
     render_nginx_http "$domain"
     if [[ "$DE_DRY_RUN" != "1" ]]; then
-      nginx -t && systemctl reload nginx
+      if ! apply_nginx_config; then
+        return 1
+      fi
     fi
     return 0
   fi
@@ -636,7 +693,9 @@ configure_ssl() {
   if [[ "$DE_DRY_RUN" == "1" ]]; then
     de_log "[dry-run] certbot --nginx -d ${domain}"
   else
-    nginx -t && systemctl reload nginx
+    if ! apply_nginx_config; then
+      return 1
+    fi
     certbot --nginx -d "$domain" --non-interactive --agree-tos -m "$email" --redirect
   fi
   local app_url="https://${domain}"
@@ -722,13 +781,20 @@ action_new_install() {
   start_postgres_redis
   build_application
   enable_services
+  if ! apply_nginx_config; then
+    health_check || true
+    return 1
+  fi
   configure_firewall
   if [[ "$access_mode" == "https" ]]; then
     configure_ssl || de_warn "SSL não concluído. Use o menu para emitir o certificado depois."
   fi
   bootstrap_super_admin || true
+  if ! health_check; then
+    de_err "Health Nginx/WEB_PUBLIC falhou. Instalação não marcada como concluída."
+    return 1
+  fi
   de_write_state "$STATE_FILE" "installed" "true"
-  health_check
 }
 
 action_verify() {
@@ -744,7 +810,7 @@ action_restart() {
   fi
   systemctl restart dashboard-economizacao-api.service dashboard-economizacao-web.service || true
   systemctl try-restart dashboard-economizacao-worker.service || true
-  systemctl reload nginx || true
+  apply_nginx_config
   health_check
 }
 
@@ -756,10 +822,15 @@ action_repair() {
   server_name="$(de_read_state "$STATE_FILE" "domain" || de_read_state "$STATE_FILE" "app_url" | sed -E 's#https?://##' || true)"
   if [[ -n "$server_name" ]]; then
     render_nginx_http "$server_name"
+  else
+    de_disable_distro_nginx_default "$NGINX_DISTRO_DEFAULT_ENABLED" "$NGINX_DISTRO_DEFAULT_AVAILABLE"
   fi
   if [[ "$DE_DRY_RUN" != "1" ]]; then
     systemctl daemon-reload
-    nginx -t && systemctl reload nginx || true
+    if ! apply_nginx_config; then
+      health_check || true
+      return 1
+    fi
   fi
   action_restart
 }
@@ -803,6 +874,7 @@ print_maintenance_menu() {
   de_log "  [5] Reiniciar serviços"
   de_log "  [6] Mostrar status"
   de_log "  [7] Sair"
+  de_log "  [8] Reparar serviços"
 }
 
 usage() {
@@ -841,6 +913,7 @@ main() {
       4) action_update ;;
       5) action_restart ;;
       7) exit 0 ;;
+      8) action_repair ;;
       *) de_err "Opção inválida"; exit 1 ;;
     esac
   else

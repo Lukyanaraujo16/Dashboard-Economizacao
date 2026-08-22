@@ -105,6 +105,8 @@ Docker Compose (`up`/`ps`) usa `--env-file` de `app.env` explicitamente. Contain
 
 Não se usa `git config safe.directory`.
 
+Nesta VPS o Dashboard assume a porta 80/443. O instalador **desabilita o symlink** `/etc/nginx/sites-enabled/default` (não apaga `/etc/nginx/sites-available/default`). Só recarrega o Nginx depois de `nginx -t` passar. O status separa `WEB_INTERNAL` (Next em `127.0.0.1:3000`) de `WEB_PUBLIC` (`APP_URL` via Nginx). Falha de `nginx -t` ou página “Welcome to nginx” **não** conclui a instalação como sucesso.
+
 O instalador clona o **remote Git no SHA informado**. Não copia working tree local (evita WIP ledger).
 
 SHA de referência do piloto inicial (não é versão eterna):
