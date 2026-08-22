@@ -33,7 +33,7 @@ assert_ok "update chama sync_application_code" 'grep -A20 "^action_update()" "$I
 assert_ok "não usa safe.directory" '! grep -q "safe.directory" "$INSTALLER" "${ROOT}/infrastructure/scripts/lib/install-lib.sh"'
 assert_ok "não usa chmod 777" '! grep -qE "chmod[[:space:]]+777" "$INSTALLER" "${ROOT}/infrastructure/scripts/lib/install-lib.sh"'
 assert_ok "etc permanece root:group" 'grep -qF '"'"'chown root:"$SERVICE_GROUP" "$ETC_DIR"'"'"' "$INSTALLER"'
-assert_ok "app.env permanece 0640" 'grep -qF '"'"'chmod 0640 "$APP_ENV_FILE"'"'"' "$INSTALLER"'
+assert_ok "app.env usa permissão canônica 0640 via helper" 'grep -q "de_apply_secret_file_perms" "$INSTALLER" && grep -q "^secure_runtime_env_files()" "$INSTALLER"'
 assert_ok "Client Secret com aviso de entrada oculta" 'grep -q "entrada oculta; ao colar nada será exibido" "$INSTALLER"'
 assert_ok "dry-run declara usuário dashboard" 'grep -qF '"'"'git clone/checkout como ${SERVICE_USER}'"'"' "$INSTALLER"'
 

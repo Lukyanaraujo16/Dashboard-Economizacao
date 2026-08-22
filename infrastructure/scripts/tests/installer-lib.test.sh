@@ -74,12 +74,16 @@ assert_ok "senha segue via stdin" 'grep -Eq "printf .+pass" "$INSTALLER"'
 assert_ok "instalador não hardcoda 6 vCPU / 12 GB / 300 GB" '! grep -Eq "6 vCPU|12 GB RAM|300 GB" "$INSTALLER"'
 assert_ok "não usa safe.directory" '! grep -q "safe.directory" "$INSTALLER"'
 assert_ok "não usa chmod 777" '! grep -qE "chmod[[:space:]]+777" "$INSTALLER"'
+assert_ok "não usa chmod 644 em env" '! grep -qE "chmod[[:space:]]+0?644" "$INSTALLER"'
 assert_ok "git operacional via git_as_app" 'grep -q "^git_as_app()" "$INSTALLER"'
 assert_ok "clone como usuário da aplicação" 'grep -qF '"'"'de_run_as_user "$SERVICE_USER"'"'"' "$INSTALLER"'
 assert_ok "update lê origin como git_as_app" 'grep -q "git_as_app remote get-url origin" "$INSTALLER"'
 assert_ok "Client Secret avisa entrada oculta" 'grep -q "entrada oculta; ao colar nada será exibido" "$INSTALLER"'
 
-chmod +x "${ROOT}/install.sh" "${ROOT}/infrastructure/scripts/install.sh" "${ROOT}/infrastructure/scripts/tests/installer-lib.test.sh" "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh"
+chmod +x "${ROOT}/install.sh" "${ROOT}/infrastructure/scripts/install.sh" \
+  "${ROOT}/infrastructure/scripts/tests/installer-lib.test.sh" \
+  "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh" \
+  "${ROOT}/infrastructure/scripts/tests/installer-env-perms.test.sh"
 
 if [[ "$fail" -ne 0 ]]; then
   printf 'Testes da lib do instalador: FALHA\n' >&2
@@ -91,16 +95,21 @@ bash -n "${ROOT}/infrastructure/scripts/install.sh"
 bash -n "${ROOT}/infrastructure/scripts/lib/install-lib.sh"
 bash -n "${ROOT}/infrastructure/scripts/tests/installer-lib.test.sh"
 bash -n "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh"
+bash -n "${ROOT}/infrastructure/scripts/tests/installer-env-perms.test.sh"
 
 if command -v shellcheck >/dev/null 2>&1; then
   shellcheck -x "${ROOT}/infrastructure/scripts/lib/install-lib.sh"
   shellcheck -x "${ROOT}/infrastructure/scripts/install.sh"
   shellcheck -x "${ROOT}/install.sh"
+  shellcheck -x "${ROOT}/infrastructure/scripts/tests/installer-lib.test.sh"
+  shellcheck -x "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh"
+  shellcheck -x "${ROOT}/infrastructure/scripts/tests/installer-env-perms.test.sh"
 fi
 
 DE_ALLOW_NONROOT=1 DE_DRY_RUN=1 "${ROOT}/infrastructure/scripts/install.sh" --detect-only >/dev/null
 printf '6\n' | DE_ALLOW_NONROOT=1 DE_DRY_RUN=1 "${ROOT}/infrastructure/scripts/install.sh" >/dev/null
 
 bash "${ROOT}/infrastructure/scripts/tests/installer-git-ownership.test.sh"
+bash "${ROOT}/infrastructure/scripts/tests/installer-env-perms.test.sh"
 
 printf 'Testes da lib do instalador: OK\n'

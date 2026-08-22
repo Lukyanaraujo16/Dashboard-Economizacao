@@ -78,9 +78,9 @@ de_env_upsert() {
 
   mkdir -p "$(dirname "$file")"
   touch "$file"
-  chmod 0640 "$file" 2>/dev/null || true
 
   if [[ "$keep_secrets" == "1" ]] && de_env_has_nonempty "$file" "$key"; then
+    chmod 0640 "$file" 2>/dev/null || true
     return 0
   fi
 
@@ -97,6 +97,7 @@ de_env_upsert() {
     printf '%s=%s\n' "$key" "$value" >>"$tmp"
   fi
   mv "$tmp" "$file"
+  chmod 0640 "$file" 2>/dev/null || true
 }
 
 de_render_template() {
@@ -198,6 +199,13 @@ de_run_as_user() {
   return 1
 }
 
+de_git_in_repo() {
+  local user="$1"
+  local repo="$2"
+  shift 2
+  de_run_as_user "$user" env HOME="$repo" PATH="${PATH:-/usr/bin:/bin}" git -C "$repo" "$@"
+}
+
 # Ownership do working tree Git. No-op fora de root (testes locais).
 de_chown_tree() {
   local spec="$1"
@@ -209,11 +217,49 @@ de_chown_tree() {
   chown -R "$spec" "$path"
 }
 
-de_git_in_repo() {
-  local user="$1"
-  local repo="$2"
-  shift 2
-  de_run_as_user "$user" env HOME="$repo" PATH="${PATH:-/usr/bin:/bin}" git -C "$repo" "$@"
+de_file_mode() {
+  local path="$1"
+  if stat -c '%a' "$path" >/dev/null 2>&1; then
+    stat -c '%a' "$path"
+    return
+  fi
+  stat -f '%OLp' "$path"
+}
+
+de_file_group() {
+  local path="$1"
+  if stat -c '%G' "$path" >/dev/null 2>&1; then
+    stat -c '%G' "$path"
+    return
+  fi
+  stat -f '%Sg' "$path"
+}
+
+# Permissão determinística de arquivo de segredo. Não usa umask. Não torna world-readable.
+de_apply_secret_file_perms() {
+  local file="$1"
+  local owner="${2:-root}"
+  local group="${3:-}"
+  local mode="${4:-640}"
+  [[ -e "$file" ]] || return 0
+  chmod "$mode" "$file"
+  if [[ "${DE_ALLOW_NONROOT:-0}" == "1" ]] || ! de_is_root; then
+    return 0
+  fi
+  if [[ -n "$group" ]]; then
+    chown "${owner}:${group}" "$file"
+  else
+    chown "$owner" "$file"
+  fi
+}
+
+# True se, após source do arquivo, a chave está preenchida. Não imprime o valor.
+de_env_key_set_after_source() {
+  local file="$1"
+  local key="$2"
+  [[ -f "$file" ]] || return 1
+  # $1=arquivo $2=nome da chave; ${!2} expande por nome. Sem echo do valor.
+  bash --noprofile --norc -c 'set -euo pipefail; set -a; . "$1"; set +a; [[ -n "${!2}" ]]' bash "$file" "$key"
 }
 
 de_read_state() {

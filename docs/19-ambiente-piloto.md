@@ -72,11 +72,27 @@ Primeira execução (sem instalação detectada):
 5. Reparar serviços  
 6. Sair  
 
-Reexecução: menu de manutenção quando `app.env` ou `install-state` já existem. Idempotente: não apaga volumes, não sobrescreve `AUTH_SECRET`, `INTEGRATION_ENCRYPTION_KEY` nem `POSTGRES_PASSWORD`.
+Reexecução: menu de manutenção **somente** quando `install-state` contém `installed=true`. Se `app.env` já existe mas a instalação parou antes do Prisma/systemd (estado parcial da VPS), o wizard permanece em “Nova instalação” e **retoma** sem apagar volumes, repo ou segredos.
 
-Clone Git interrompido (sem env) **não** conta como instalação concluída: o wizard permanece em “Nova instalação”, repara ownership de `/opt/dashboard-economizacao` para `dashboard:dashboard` e continua. Não apaga o diretório se o conteúdo não for um clone Git reconhecido.
+Idempotente: não executa `docker compose down -v`, não sobrescreve `AUTH_SECRET`, `INTEGRATION_ENCRYPTION_KEY`, `POSTGRES_PASSWORD` nem Client ID/Secret já persistidos. Credenciais Conta Azul só entram pelo wizard explícito.
 
-O clone/fetch/checkout e o build Node rodam como o usuário `dashboard`. `/opt` permanece root. `/etc/dashboard-economizacao` permanece `root:dashboard` modo `0750`; `app.env` `0640`. Não se usa `git config safe.directory`.
+Clone Git interrompido (sem env) **não** conta como instalação concluída: o wizard repara ownership de `/opt/dashboard-economizacao` para `dashboard:dashboard` e continua. Não apaga o diretório se o conteúdo não for um clone Git reconhecido.
+
+O clone/fetch/checkout e o build Node (incluindo `prisma generate` / `migrate deploy`) rodam como o usuário `dashboard`. `/opt` permanece root.
+
+Permissões canônicas de runtime (determinísticas; não dependem de umask):
+
+| Caminho | Owner | Group | Mode |
+|---|---|---|---|
+| `/etc/dashboard-economizacao` | root | dashboard | `0750` |
+| `/etc/dashboard-economizacao/app.env` | root | dashboard | `0640` |
+| `/etc/dashboard-economizacao/web.env` | root | dashboard | `0640` |
+
+`0640` + grupo `dashboard` permite que API/worker/web/Prisma leiam o env. Owner permanece `root`. Segredos não são world-readable (`644`/`777` são proibidos). Reexecução corrige owner/group/mode de `app.env` sem regenerar valores.
+
+Docker Compose (`up`/`ps`) usa `--env-file` de `app.env` explicitamente. Containers Postgres/Redis já existentes são reutilizados (`up -d` idempotente); volumes não são destruídos.
+
+Não se usa `git config safe.directory`.
 
 O instalador clona o **remote Git no SHA informado**. Não copia working tree local (evita WIP ledger).
 

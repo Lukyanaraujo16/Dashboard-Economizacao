@@ -177,17 +177,42 @@ run_detection() {
   if de_cmd_exists ufw; then
     DETECT_UFW="presente"
   fi
-  if [[ -f "$STATE_FILE" || -f "$APP_ENV_FILE" ]]; then
+  if is_complete_install; then
     DETECT_INSTALL="existente (${STATE_FILE})"
-  elif [[ -d "${APP_HOME}/.git" ]]; then
-    DETECT_INSTALL="parcial (clone em ${APP_HOME}; env ainda não criado)"
+  elif is_partial_install; then
+    DETECT_INSTALL="parcial (retomável; Prisma/serviços ainda não concluídos)"
   else
     DETECT_INSTALL="nenhuma"
   fi
 }
 
-is_installed() {
-  [[ -f "$STATE_FILE" || -f "$APP_ENV_FILE" ]]
+# Instalação concluída só quando o wizard gravou installed=true.
+# app.env existente (VPS parcial) NÃO abre o menu de manutenção.
+is_complete_install() {
+  [[ "$(de_read_state "$STATE_FILE" "installed" || true)" == "true" ]]
+}
+
+is_partial_install() {
+  if is_complete_install; then
+    return 1
+  fi
+  [[ -f "$APP_ENV_FILE" || -f "$STATE_FILE" || -d "${APP_HOME}/.git" ]]
+}
+
+# Política canônica: dir 0750 root:dashboard; app.env/web.env 0640 root:dashboard.
+# Repara owner/group/mode sem reescrever o conteúdo. Não usa umask.
+secure_runtime_env_files() {
+  mkdir -p "$ETC_DIR"
+  chmod 0750 "$ETC_DIR" 2>/dev/null || true
+  if [[ "${DE_ALLOW_NONROOT:-0}" != "1" ]] && de_is_root; then
+    chown "root:${SERVICE_GROUP}" "$ETC_DIR"
+  fi
+  if [[ -f "$APP_ENV_FILE" ]]; then
+    de_apply_secret_file_perms "$APP_ENV_FILE" root "$SERVICE_GROUP" 640
+  fi
+  if [[ -f "$WEB_ENV_FILE" ]]; then
+    de_apply_secret_file_perms "$WEB_ENV_FILE" root "$SERVICE_GROUP" 640
+  fi
 }
 
 ensure_dirs() {
@@ -234,6 +259,7 @@ ensure_service_user() {
   de_chown_tree "${SERVICE_USER}:${SERVICE_GROUP}" "$STORAGE_DIR"
   chown root:"$SERVICE_GROUP" "$ETC_DIR"
   chmod 0750 "$ETC_DIR"
+  secure_runtime_env_files
 }
 
 # Git do repositório operacional sempre como o usuário da aplicação (não root).
@@ -301,6 +327,7 @@ write_runtime_env() {
   local interval="$6"
 
   ensure_dirs
+  secure_runtime_env_files
   de_env_upsert "$APP_ENV_FILE" "NODE_ENV" "production" 0
   de_env_upsert "$APP_ENV_FILE" "HOST" "127.0.0.1" 0
   de_env_upsert "$APP_ENV_FILE" "PORT" "3001" 0
@@ -339,7 +366,7 @@ write_runtime_env() {
 
   de_env_upsert "$WEB_ENV_FILE" "NODE_ENV" "production" 0
   de_env_upsert "$WEB_ENV_FILE" "API_URL" "http://127.0.0.1:3001" 0
-  chmod 0640 "$APP_ENV_FILE" "$WEB_ENV_FILE" 2>/dev/null || true
+  secure_runtime_env_files
 
   de_write_state "$STATE_FILE" "access_mode" "$access_mode"
   de_write_state "$STATE_FILE" "app_url" "$app_url"
@@ -385,17 +412,22 @@ render_systemd_units() {
     "${SYSTEMD_DIR}/dashboard-economizacao-web.service" "${replacements[@]}"
 }
 
+# Compose sempre com --env-file do app.env. Não depende do env interativo do operador.
+compose_app() {
+  docker compose --project-directory "$APP_HOME" --env-file "$APP_ENV_FILE" \
+    -f "${APP_HOME}/compose.yaml" "$@"
+}
+
 start_postgres_redis() {
+  secure_runtime_env_files
   if [[ "$DE_DRY_RUN" == "1" ]]; then
     de_log "[dry-run] docker compose --env-file ${APP_ENV_FILE} up -d postgres redis"
     return
   fi
-  docker compose --project-directory "$APP_HOME" --env-file "$APP_ENV_FILE" \
-    -f "${APP_HOME}/compose.yaml" up -d postgres redis
+  compose_app up -d postgres redis
   local i
   for i in $(seq 1 30); do
-    if docker compose --project-directory "$APP_HOME" --env-file "$APP_ENV_FILE" \
-      -f "${APP_HOME}/compose.yaml" ps | grep -q healthy; then
+    if compose_app ps | grep -q healthy; then
       return 0
     fi
     sleep 2
@@ -404,16 +436,25 @@ start_postgres_redis() {
 }
 
 build_application() {
+  secure_runtime_env_files
   if [[ "$DE_DRY_RUN" == "1" ]]; then
     de_log "[dry-run] pnpm install --frozen-lockfile && prisma generate && migrate deploy && build (como ${SERVICE_USER})"
     return
   fi
   de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
-    bash -lc "cd $(printf '%q' "$APP_HOME") && pnpm install --frozen-lockfile"
+    bash --noprofile --norc -c 'set -euo pipefail; cd "$HOME" && pnpm install --frozen-lockfile'
+  de_run_as_user "$SERVICE_USER" \
+    env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" DE_APP_ENV="$APP_ENV_FILE" \
+    bash --noprofile --norc -c 'set -euo pipefail
+set -a
+. "$DE_APP_ENV"
+set +a
+cd "$HOME/backend"
+pnpm prisma:generate
+pnpm prisma:migrate:deploy
+pnpm build'
   de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
-    bash -lc "set -a; if [ -f $(printf '%q' "$APP_ENV_FILE") ]; then . $(printf '%q' "$APP_ENV_FILE"); fi; set +a; cd $(printf '%q' "$APP_HOME/backend") && pnpm prisma:generate && pnpm prisma:migrate:deploy && pnpm build"
-  de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
-    bash -lc "cd $(printf '%q' "$APP_HOME/frontend") && pnpm build"
+    bash --noprofile --norc -c 'set -euo pipefail; cd "$HOME/frontend" && pnpm build'
 }
 
 enable_services() {
@@ -571,6 +612,7 @@ configure_ssl() {
   de_env_upsert "$APP_ENV_FILE" "APP_URL" "$app_url" 0
   de_env_upsert "$APP_ENV_FILE" "CONTA_AZUL_REDIRECT_URI" "$(de_conta_azul_redirect_uri "$app_url")" 0
   de_env_upsert "$APP_ENV_FILE" "ALLOW_INSECURE_HTTP_SESSION" "false" 0
+  secure_runtime_env_files
   de_write_state "$STATE_FILE" "access_mode" "https"
   de_write_state "$STATE_FILE" "app_url" "$app_url"
   de_write_state "$STATE_FILE" "domain" "$domain"
@@ -629,7 +671,10 @@ action_new_install() {
   de_log "SHA homologado de referência (não é versão eterna): ${RECOMMENDED_SHA}"
   sha="$(prompt "SHA/tag/branch para instalar" "$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || printf '%s' "$RECOMMENDED_SHA")")"
   interval="$(prompt "Intervalo da sync automática (minutos)" "60")"
-  if confirm "Informar credenciais Conta Azul agora"; then
+  if de_env_has_nonempty "$APP_ENV_FILE" "CONTA_AZUL_CLIENT_ID" \
+    && de_env_has_nonempty "$APP_ENV_FILE" "CONTA_AZUL_CLIENT_SECRET"; then
+    de_log "Credenciais Conta Azul já constam em app.env e serão preservadas."
+  elif confirm "Informar credenciais Conta Azul agora"; then
     ca_id="$(prompt "CONTA_AZUL_CLIENT_ID" "")"
     ca_secret="$(prompt_secret "Client Secret (entrada oculta; ao colar nada será exibido)")"
   else
@@ -673,6 +718,7 @@ action_restart() {
 }
 
 action_repair() {
+  secure_runtime_env_files
   render_systemd_units
   local server_name
   server_name="$(de_read_state "$STATE_FILE" "domain" || de_read_state "$STATE_FILE" "app_url" | sed -E 's#https?://##' || true)"
@@ -695,13 +741,18 @@ action_update() {
   sha="$(prompt "SHA/tag/branch de destino" "$(de_read_state "$STATE_FILE" "sha")")"
   local remote
   remote="$(de_read_state "$STATE_FILE" "remote" || git_as_app remote get-url origin)"
+  secure_runtime_env_files
   sync_application_code "$sha" "$remote"
   build_application
   action_restart
 }
 
 print_first_menu() {
-  de_log "Nenhuma instalação detectada."
+  if is_partial_install; then
+    de_log "Instalação parcial detectada. A nova instalação retomará sem apagar volumes, repo ou segredos."
+  else
+    de_log "Nenhuma instalação detectada."
+  fi
   de_log "  [1] Nova instalação   (padrão)"
   de_log "  [2] Configurar domínio / SSL"
   de_log "  [3] Atualizar aplicação"
@@ -747,7 +798,7 @@ main() {
   if [[ "${1:-}" == "--detect-only" ]]; then
     exit 0
   fi
-  if is_installed; then
+  if is_complete_install; then
     print_maintenance_menu
     local choice
     choice="$(prompt "Opção" "1")"
