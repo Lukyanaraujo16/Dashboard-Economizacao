@@ -1,7 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import {
+  useCallback,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { UI_ICON_STROKE } from '../ui/icons';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
@@ -16,7 +23,20 @@ export type DashboardCostCenterSelectorProps = {
 };
 
 const TODOS_LABEL = 'Todos';
+const TODOS_KEY = '__todos__';
 
+type TabItem = {
+  readonly key: string;
+  readonly id: string | null;
+  readonly label: string;
+  readonly inactive?: boolean;
+};
+
+/**
+ * Tabs horizontais de centro de custo (CC1.3).
+ * 0 centros → não renderiza (pai deve ocultar).
+ * Overflow → setas + scroll; tab ativa trazida para viewport.
+ */
 export function DashboardCostCenterSelector({
   items,
   selectedId,
@@ -24,135 +44,190 @@ export function DashboardCostCenterSelector({
   disabled = false,
   loading = false,
 }: DashboardCostCenterSelectorProps) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const listId = useId();
-
-  const selected = selectedId === null ? null : items.find((item) => item.id === selectedId);
-  const triggerLabel = selected?.name ?? TODOS_LABEL;
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const isDisabled = disabled || loading;
 
-  useEffect(() => {
-    if (isDisabled) {
-      setOpen(false);
-    }
-  }, [isDisabled]);
+  const tabs: readonly TabItem[] = [
+    { key: TODOS_KEY, id: null, label: TODOS_LABEL },
+    ...items.map((item) => ({
+      key: item.id,
+      id: item.id,
+      label: item.name,
+      inactive: !item.active,
+    })),
+  ];
 
-  useEffect(() => {
-    if (!open) {
+  const selectedKey = selectedId === null ? TODOS_KEY : selectedId;
+
+  const refreshOverflow = useCallback(() => {
+    const el = scrollerRef.current;
+    if (!el) {
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
       return;
     }
-    const handlePointerDown = (event: MouseEvent) => {
-      if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
+    const max = el.scrollWidth - el.clientWidth;
+    setCanScrollLeft(el.scrollLeft > 1);
+    setCanScrollRight(max - el.scrollLeft > 1);
+  }, []);
 
-  const pick = useCallback(
-    (costCenterId: string | null) => {
-      onSelect(costCenterId);
-      setOpen(false);
-      triggerRef.current?.focus();
+  useLayoutEffect(() => {
+    refreshOverflow();
+    const el = scrollerRef.current;
+    if (!el) {
+      return;
+    }
+    const onScroll = () => refreshOverflow();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => refreshOverflow()) : null;
+    ro?.observe(el);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      ro?.disconnect();
+    };
+  }, [refreshOverflow, tabs.length]);
+
+  useLayoutEffect(() => {
+    const node = tabRefs.current.get(selectedKey);
+    const scroller = scrollerRef.current;
+    if (!node || !scroller) {
+      return;
+    }
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof node.scrollIntoView === 'function') {
+      node.scrollIntoView({
+        inline: 'nearest',
+        block: 'nearest',
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      });
+    }
+    refreshOverflow();
+  }, [selectedKey, refreshOverflow]);
+
+  const scrollByDir = useCallback((dir: -1 | 1) => {
+    const el = scrollerRef.current;
+    if (!el) {
+      return;
+    }
+    const reduceMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const delta = Math.max(120, Math.floor(el.clientWidth * 0.7)) * dir;
+    el.scrollBy({ left: delta, behavior: reduceMotion ? 'auto' : 'smooth' });
+  }, []);
+
+  const focusTab = useCallback((key: string) => {
+    tabRefs.current.get(key)?.focus();
+  }, []);
+
+  const onTabKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+      if (isDisabled) {
+        return;
+      }
+      let next = index;
+      if (event.key === 'ArrowRight') {
+        next = Math.min(tabs.length - 1, index + 1);
+      } else if (event.key === 'ArrowLeft') {
+        next = Math.max(0, index - 1);
+      } else if (event.key === 'Home') {
+        next = 0;
+      } else if (event.key === 'End') {
+        next = tabs.length - 1;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      const target = tabs[next];
+      if (!target) {
+        return;
+      }
+      focusTab(target.key);
+      onSelect(target.id);
     },
-    [onSelect],
+    [focusTab, isDisabled, onSelect, tabs],
   );
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  const showArrows = canScrollLeft || canScrollRight;
 
   return (
     <section
-      ref={rootRef}
       className={styles.root}
       aria-label="Centro de custo"
       data-cost-center-selector="true"
+      data-cost-center-tabs="true"
     >
-      {/* Mobile / compact: native select */}
-      <div className={styles.nativeWrap}>
-        <select
-          className={styles.nativeSelect}
-          aria-label="Filtrar por centro de custo"
-          disabled={isDisabled}
-          value={selectedId ?? ''}
-          onChange={(event) => {
-            const value = event.target.value;
-            pick(value === '' ? null : value);
-          }}
-        >
-          <option value="">{TODOS_LABEL}</option>
-          {items.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Desktop: custom dropdown aligned with month selector */}
-      <div className={styles.desktop}>
+      {showArrows ? (
         <button
-          ref={triggerRef}
           type="button"
-          className={styles.trigger}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          aria-controls={open ? listId : undefined}
-          aria-label={`Centro de custo: ${triggerLabel}`}
-          disabled={isDisabled}
-          onClick={() => setOpen((previous) => !previous)}
+          className={styles.arrow}
+          aria-label="Centros anteriores"
+          disabled={isDisabled || !canScrollLeft}
+          onClick={() => scrollByDir(-1)}
         >
-          <span className={styles.triggerLabel} aria-live="polite">
-            {triggerLabel}
-          </span>
-          <ChevronDown
-            className={styles.triggerCaret}
-            size={13}
-            strokeWidth={UI_ICON_STROKE}
-            aria-hidden="true"
-          />
+          <ChevronLeft size={14} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
         </button>
+      ) : null}
 
-        {open ? (
-          <ul id={listId} className={styles.popover} role="listbox" aria-label="Centros de custo">
-            <li role="presentation">
+      <div
+        ref={scrollerRef}
+        className={styles.scroller}
+        data-cost-center-tabs-scroller="true"
+      >
+        <div className={styles.tablist} role="tablist" aria-label="Centros de custo" id={listId}>
+          {tabs.map((tab, index) => {
+            const selected = tab.key === selectedKey;
+            return (
               <button
+                key={tab.key}
+                ref={(node) => {
+                  if (node) {
+                    tabRefs.current.set(tab.key, node);
+                  } else {
+                    tabRefs.current.delete(tab.key);
+                  }
+                }}
                 type="button"
-                className={styles.option}
-                role="option"
-                aria-selected={selectedId === null}
-                onClick={() => pick(null)}
+                role="tab"
+                id={`${listId}-${tab.key}`}
+                className={styles.tab}
+                aria-selected={selected}
+                tabIndex={selected ? 0 : -1}
+                title={tab.label}
+                disabled={isDisabled}
+                data-inactive={tab.inactive ? 'true' : undefined}
+                onClick={() => onSelect(tab.id)}
+                onKeyDown={(event) => onTabKeyDown(event, index)}
               >
-                {TODOS_LABEL}
+                <span className={styles.tabLabel}>{tab.label}</span>
               </button>
-            </li>
-            {items.map((item) => (
-              <li key={item.id} role="presentation">
-                <button
-                  type="button"
-                  className={styles.option}
-                  role="option"
-                  aria-selected={item.id === selectedId}
-                  data-inactive={item.active ? undefined : 'true'}
-                  onClick={() => pick(item.id)}
-                >
-                  {item.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+            );
+          })}
+        </div>
       </div>
+
+      {showArrows ? (
+        <button
+          type="button"
+          className={styles.arrow}
+          aria-label="Próximos centros"
+          disabled={isDisabled || !canScrollRight}
+          onClick={() => scrollByDir(1)}
+        >
+          <ChevronRight size={14} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
+        </button>
+      ) : null}
     </section>
   );
 }

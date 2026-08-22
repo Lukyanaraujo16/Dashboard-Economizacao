@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 import { isPlatformRole, useAuth } from '../../auth';
@@ -20,6 +20,10 @@ import {
   isValidDashboardCostCenterId,
   resolveSelectedDashboardCostCenterId,
 } from '../../lib/dashboard-cost-center';
+import {
+  createDashboardFilterCache,
+  dashboardFilterCacheKey,
+} from '../../lib/dashboard-filter-cache';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
 import { getDashboardMonthlyExpenses } from '../../services/dashboard/monthly-expenses';
@@ -214,6 +218,15 @@ type ExpandKind =
   | 'compare'
   | 'daily'
   | 'goal';
+
+/** Mantém dados anteriores / cache enquanto busca (troca de filtro CC1.3.1). */
+type SoftLoadOptions = {
+  readonly soft?: boolean;
+};
+
+function canKeepWidgetData(kind: string): boolean {
+  return kind === 'ready' || kind === 'empty';
+}
 
 function widgetGate(view: OverviewView): WidgetGate {
   if (view.kind === 'loading') {
@@ -435,8 +448,36 @@ export function DashboardPage() {
   const [goalSaveError, setGoalSaveError] = useState<string | null>(null);
   const [expandKind, setExpandKind] = useState<ExpandKind | null>(null);
 
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const monthEndViewRef = useRef(monthEndView);
+  monthEndViewRef.current = monthEndView;
+  const forecastViewRef = useRef(forecastView);
+  forecastViewRef.current = forecastView;
+  const monthlyExpenseViewRef = useRef(monthlyExpenseView);
+  monthlyExpenseViewRef.current = monthlyExpenseView;
+  const monthlyRevenueViewRef = useRef(monthlyRevenueView);
+  monthlyRevenueViewRef.current = monthlyRevenueView;
+  const insightsViewRef = useRef(insightsView);
+  insightsViewRef.current = insightsView;
+  const previousMonthViewRef = useRef(previousMonthView);
+  previousMonthViewRef.current = previousMonthView;
+
+  const overviewCacheRef = useRef(createDashboardFilterCache<DashboardOverviewResponse>());
+  const revenueCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyRevenueResponse>());
+  const expenseCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyExpenseResponse>());
+  const insightsCacheRef = useRef(createDashboardFilterCache<DashboardExecutiveInsightsResponse>());
+  const previousMonthCacheRef = useRef(
+    createDashboardFilterCache<{
+      readonly revenue: DashboardMonthlyRevenueResponse;
+      readonly expense: DashboardMonthlyExpenseResponse;
+    }>(),
+  );
+  const monthEndCacheRef = useRef(createDashboardFilterCache<DashboardMonthEndCashPressureResponse>());
+  const forecastCacheRef = useRef(createDashboardFilterCache<DashboardCashFlowForecastResponse>());
+
   const loadOverview = useCallback(
-    async (signal: AbortSignal, costCenterId: string | null) => {
+    async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
       if (shouldSkipOverviewFetch(user, support)) {
         setView({ kind: 'forbidden' });
         setMonthEndView({ kind: 'idle' });
@@ -463,7 +504,15 @@ export function DashboardPage() {
       }
 
 
-      setView({ kind: 'loading' });
+      const soft = options?.soft === true;
+      const cacheKey = costCenterId ?? '';
+      const cached = overviewCacheRef.current.get(cacheKey);
+      if (soft && cached && !isNeverSynced(cached)) {
+        setView({ kind: 'ready', data: cached });
+      } else if (!(soft && viewRef.current.kind === 'ready')) {
+        setView({ kind: 'loading' });
+      }
+
       try {
         const data = await getDashboardOverview(costCenterId);
         if (signal.aborted) {
@@ -477,9 +526,10 @@ export function DashboardPage() {
           setMonthlyRevenueView({ kind: 'idle' });
           setInsightsView({ kind: 'idle' });
           setPreviousMonthView({ kind: 'idle' });
-        setRevenueGoalView({ kind: 'idle' });
+          setRevenueGoalView({ kind: 'idle' });
           return;
         }
+        overviewCacheRef.current.set(cacheKey, data);
         setView({ kind: 'ready', data });
       } catch (error) {
         if (signal.aborted) {
@@ -493,13 +543,16 @@ export function DashboardPage() {
           setMonthlyRevenueView({ kind: 'idle' });
           setInsightsView({ kind: 'idle' });
           setPreviousMonthView({ kind: 'idle' });
-        setRevenueGoalView({ kind: 'idle' });
+          setRevenueGoalView({ kind: 'idle' });
           return;
         }
         const message =
           error instanceof DashboardOverviewRequestError
             ? error.message
             : 'Não foi possível carregar os indicadores da sua empresa.';
+        if (soft && viewRef.current.kind === 'ready') {
+          return;
+        }
         setView({ kind: 'error', message });
         setMonthEndView({ kind: 'idle' });
         setForecastView({ kind: 'idle' });
@@ -533,45 +586,73 @@ export function DashboardPage() {
     }
   }, []);
 
-  const loadMonthEnd = useCallback(async (signal: AbortSignal, costCenterId: string | null) => {
-    setMonthEndView({ kind: 'loading' });
-    try {
-      const data = await getDashboardMonthEndCashPressure(costCenterId);
-      if (signal.aborted) {
-        return;
+  const loadMonthEnd = useCallback(
+    async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
+      const soft = options?.soft === true;
+      const cacheKey = costCenterId ?? '';
+      const cached = monthEndCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setMonthEndView({ kind: 'ready', data: cached });
+      } else if (!(soft && monthEndViewRef.current.kind === 'ready')) {
+        setMonthEndView({ kind: 'loading' });
       }
-      setMonthEndView({ kind: 'ready', data });
-    } catch (error) {
-      if (signal.aborted) {
-        return;
+      try {
+        const data = await getDashboardMonthEndCashPressure(costCenterId);
+        if (signal.aborted) {
+          return;
+        }
+        monthEndCacheRef.current.set(cacheKey, data);
+        setMonthEndView({ kind: 'ready', data });
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        if (soft && monthEndViewRef.current.kind === 'ready') {
+          return;
+        }
+        const message =
+          error instanceof DashboardMonthEndCashPressureRequestError
+            ? error.message
+            : 'Não foi possível carregar a agenda até o fim do mês.';
+        setMonthEndView({ kind: 'error', message });
       }
-      const message =
-        error instanceof DashboardMonthEndCashPressureRequestError
-          ? error.message
-          : 'Não foi possível carregar a agenda até o fim do mês.';
-      setMonthEndView({ kind: 'error', message });
-    }
-  }, []);
+    },
+    [],
+  );
 
-  const loadForecast = useCallback(async (signal: AbortSignal, costCenterId: string | null) => {
-    setForecastView({ kind: 'loading' });
-    try {
-      const data = await getDashboardCashFlowForecast(costCenterId);
-      if (signal.aborted) {
-        return;
+  const loadForecast = useCallback(
+    async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
+      const soft = options?.soft === true;
+      const cacheKey = costCenterId ?? '';
+      const cached = forecastCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setForecastView({ kind: 'ready', data: cached });
+      } else if (!(soft && forecastViewRef.current.kind === 'ready')) {
+        setForecastView({ kind: 'loading' });
       }
-      setForecastView({ kind: 'ready', data });
-    } catch (error) {
-      if (signal.aborted) {
-        return;
+      try {
+        const data = await getDashboardCashFlowForecast(costCenterId);
+        if (signal.aborted) {
+          return;
+        }
+        forecastCacheRef.current.set(cacheKey, data);
+        setForecastView({ kind: 'ready', data });
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        if (soft && forecastViewRef.current.kind === 'ready') {
+          return;
+        }
+        const message =
+          error instanceof DashboardForecastRequestError
+            ? error.message
+            : 'Não foi possível carregar o fluxo previsto.';
+        setForecastView({ kind: 'error', message });
       }
-      const message =
-        error instanceof DashboardForecastRequestError
-          ? error.message
-          : 'Não foi possível carregar o fluxo previsto.';
-      setForecastView({ kind: 'error', message });
-    }
-  }, []);
+    },
+    [],
+  );
 
   const loadMonthlyExpenses = useCallback(
     async (
@@ -579,8 +660,20 @@ export function DashboardPage() {
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
+      options?: SoftLoadOptions,
     ) => {
-      setMonthlyExpenseView({ kind: 'loading' });
+      const soft = options?.soft === true;
+      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId);
+      const cached = expenseCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setMonthlyExpenseView(
+          isMonthlyExpenseEmpty(cached)
+            ? { kind: 'empty', data: cached }
+            : { kind: 'ready', data: cached },
+        );
+      } else if (!(soft && canKeepWidgetData(monthlyExpenseViewRef.current.kind))) {
+        setMonthlyExpenseView({ kind: 'loading' });
+      }
       try {
         const data = await getDashboardMonthlyExpenses(
           monthKey === todayMonthKey ? null : monthKey,
@@ -589,6 +682,7 @@ export function DashboardPage() {
         if (signal.aborted) {
           return;
         }
+        expenseCacheRef.current.set(cacheKey, data);
         if (isMonthlyExpenseEmpty(data)) {
           setMonthlyExpenseView({ kind: 'empty', data });
           return;
@@ -596,6 +690,9 @@ export function DashboardPage() {
         setMonthlyExpenseView({ kind: 'ready', data });
       } catch (error) {
         if (signal.aborted) {
+          return;
+        }
+        if (soft && canKeepWidgetData(monthlyExpenseViewRef.current.kind)) {
           return;
         }
         const message =
@@ -614,8 +711,20 @@ export function DashboardPage() {
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
+      options?: SoftLoadOptions,
     ) => {
-      setMonthlyRevenueView({ kind: 'loading' });
+      const soft = options?.soft === true;
+      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId);
+      const cached = revenueCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setMonthlyRevenueView(
+          isMonthlyRevenueEmpty(cached)
+            ? { kind: 'empty', data: cached }
+            : { kind: 'ready', data: cached },
+        );
+      } else if (!(soft && canKeepWidgetData(monthlyRevenueViewRef.current.kind))) {
+        setMonthlyRevenueView({ kind: 'loading' });
+      }
       try {
         const data = await getDashboardMonthlyRevenue(
           monthKey === todayMonthKey ? null : monthKey,
@@ -624,6 +733,7 @@ export function DashboardPage() {
         if (signal.aborted) {
           return;
         }
+        revenueCacheRef.current.set(cacheKey, data);
         if (isMonthlyRevenueEmpty(data)) {
           setMonthlyRevenueView({ kind: 'empty', data });
           return;
@@ -631,6 +741,9 @@ export function DashboardPage() {
         setMonthlyRevenueView({ kind: 'ready', data });
       } catch (error) {
         if (signal.aborted) {
+          return;
+        }
+        if (soft && canKeepWidgetData(monthlyRevenueViewRef.current.kind)) {
           return;
         }
         const message =
@@ -649,8 +762,20 @@ export function DashboardPage() {
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
+      options?: SoftLoadOptions,
     ) => {
-      setInsightsView({ kind: 'loading' });
+      const soft = options?.soft === true;
+      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId);
+      const cached = insightsCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setInsightsView(
+          cached.insights.length === 0
+            ? { kind: 'empty', data: cached }
+            : { kind: 'ready', data: cached },
+        );
+      } else if (!(soft && canKeepWidgetData(insightsViewRef.current.kind))) {
+        setInsightsView({ kind: 'loading' });
+      }
       try {
         const data = await getDashboardExecutiveInsights(
           monthKey === todayMonthKey ? null : monthKey,
@@ -659,6 +784,7 @@ export function DashboardPage() {
         if (signal.aborted) {
           return;
         }
+        insightsCacheRef.current.set(cacheKey, data);
         if (data.insights.length === 0) {
           setInsightsView({ kind: 'empty', data });
           return;
@@ -666,6 +792,9 @@ export function DashboardPage() {
         setInsightsView({ kind: 'ready', data });
       } catch (error) {
         if (signal.aborted) {
+          return;
+        }
+        if (soft && canKeepWidgetData(insightsViewRef.current.kind)) {
           return;
         }
         const message =
@@ -685,8 +814,16 @@ export function DashboardPage() {
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
+      options?: SoftLoadOptions,
     ) => {
-      setPreviousMonthView({ kind: 'loading' });
+      const soft = options?.soft === true;
+      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId);
+      const cached = previousMonthCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setPreviousMonthView({ kind: 'ready', revenue: cached.revenue, expense: cached.expense });
+      } else if (!(soft && previousMonthViewRef.current.kind === 'ready')) {
+        setPreviousMonthView({ kind: 'loading' });
+      }
       const param = monthKey === todayMonthKey ? null : monthKey;
       try {
         const [revenue, expense] = await Promise.all([
@@ -696,9 +833,13 @@ export function DashboardPage() {
         if (signal.aborted) {
           return;
         }
+        previousMonthCacheRef.current.set(cacheKey, { revenue, expense });
         setPreviousMonthView({ kind: 'ready', revenue, expense });
       } catch {
         if (signal.aborted) {
+          return;
+        }
+        if (soft && previousMonthViewRef.current.kind === 'ready') {
           return;
         }
         setPreviousMonthView({ kind: 'error', message: PREVIOUS_MONTH_ERROR });
@@ -768,7 +909,8 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadOverview(controller.signal, selectedCostCenterId);
+    const soft = viewRef.current.kind === 'ready';
+    void loadOverview(controller.signal, selectedCostCenterId, { soft });
     return () => controller.abort();
   }, [loadOverview, selectedCostCenterId, status]);
 
@@ -778,7 +920,8 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadMonthEnd(controller.signal, selectedCostCenterId);
+    const soft = monthEndViewRef.current.kind === 'ready';
+    void loadMonthEnd(controller.signal, selectedCostCenterId, { soft });
     return () => controller.abort();
   }, [cashWindowsApply, loadMonthEnd, selectedCostCenterId, view.kind]);
 
@@ -788,7 +931,8 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadForecast(controller.signal, selectedCostCenterId);
+    const soft = forecastViewRef.current.kind === 'ready';
+    void loadForecast(controller.signal, selectedCostCenterId, { soft });
     return () => controller.abort();
   }, [cashWindowsApply, loadForecast, selectedCostCenterId, view.kind]);
 
@@ -798,7 +942,10 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadInsights(controller.signal, selectedMonthKey, todayMonthKey, selectedCostCenterId);
+    const soft = canKeepWidgetData(insightsViewRef.current.kind);
+    void loadInsights(controller.signal, selectedMonthKey, todayMonthKey, selectedCostCenterId, {
+      soft,
+    });
     return () => controller.abort();
   }, [loadInsights, selectedCostCenterId, selectedMonthKey, todayMonthKey, view.kind]);
 
@@ -807,17 +954,21 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
+    const softRevenue = canKeepWidgetData(monthlyRevenueViewRef.current.kind);
+    const softExpense = canKeepWidgetData(monthlyExpenseViewRef.current.kind);
     void loadMonthlyRevenue(
       controller.signal,
       selectedMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      { soft: softRevenue },
     );
     void loadMonthlyExpenses(
       controller.signal,
       selectedMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      { soft: softExpense },
     );
     return () => controller.abort();
   }, [
@@ -845,11 +996,13 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
+    const soft = previousMonthViewRef.current.kind === 'ready';
     void loadPreviousMonth(
       controller.signal,
       previousMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      { soft },
     );
     return () => controller.abort();
   }, [loadPreviousMonth, previousMonthKey, selectedCostCenterId, todayMonthKey, view.kind]);
@@ -1209,7 +1362,12 @@ export function DashboardPage() {
   const billingDays = revenueData ? summarizeActiveDays(revenueData.receivables.daily) : null;
 
   return (
-    <div className={styles.root} data-dashboard-page="true" data-overview-state={view.kind}>
+    <div
+      className={styles.root}
+      data-dashboard-page="true"
+      data-overview-state={view.kind}
+      data-filter-stable={view.kind === 'ready' ? 'true' : undefined}
+    >
       <div className={styles.pageHeader}>
         <div className={styles.pageHeaderCopy}>
           <h1 className={styles.pageTitle}>Dashboard financeiro</h1>
@@ -1222,13 +1380,15 @@ export function DashboardPage() {
             onSelect={selectMonth}
             disabled={view.kind !== 'ready'}
           />
-          <DashboardCostCenterSelector
-            items={costCenters}
-            selectedId={selectedCostCenterId}
-            onSelect={selectCostCenter}
-            disabled={view.kind !== 'ready'}
-            loading={costCentersLoading}
-          />
+          {costCenters.length > 0 ? (
+            <DashboardCostCenterSelector
+              items={costCenters}
+              selectedId={selectedCostCenterId}
+              onSelect={selectCostCenter}
+              disabled={view.kind !== 'ready'}
+              loading={costCentersLoading}
+            />
+          ) : null}
           {freshness ? (
             <p className={styles.freshnessPill}>
               <RefreshCw

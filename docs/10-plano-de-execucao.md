@@ -1085,6 +1085,16 @@ CC1.2 — Performance / resiliência do enrichment de centros:
      counters no SyncRun; HTTP sequencial (~8 req/s / 125ms); timeout 30 min;
      checkpoint semântico por registro; concorrência 1; eventId NÃO persistido;
      ZERO alteração visual Home V2.3.1; homologação visual NÃO APLICÁVEL nesta fase.
+CC1.3 — Cash split por centro + seletor em tabs:
+     HOMOLOGADA VISUALMENTE
+     Auditoria: Conta Azul NÃO associa baixa↔centro; rateio só no evento/parcela.
+     Split híbrido EXACT (sem ledger, sem proporção inventada):
+       1 centro (allocation≈total) → received=paid / outstanding=unpaid;
+       multi + título 100% quitado → received=allocation.amount;
+       multi + paid≈0 → outstanding=allocation.amount;
+       multi parcial → UNAVAILABLE (KPI null se qualquer linha do mês for);
+     Seletor Home: tabs (Todos|centros), overflow horizontal + setas;
+     0 centros → oculto; 1+ → Todos + centros; Meta company-level.
 L1-B — Semântica oficial do caixa + read model mensal:
      BLOCKED_BY_CASH_SEMANTICS (20/08/2026)
      Doc oficial ValorComposicaoDTO da baixa: 5 campos (valor_bruto required +

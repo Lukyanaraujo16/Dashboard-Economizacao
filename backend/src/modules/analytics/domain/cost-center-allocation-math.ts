@@ -5,6 +5,10 @@ import type {
 } from '../../finance/domain/types.js';
 import { addCivilDays } from './civil-calendar.js';
 import {
+  aggregateCostCenterCashSplits,
+  deriveInstallmentCostCenterCashSplit,
+} from './cost-center-cash-split.js';
+import {
   DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
   IMPRECISE_PAYABLE_BUCKET_NAME,
   OTHER_PAYABLE_CATEGORIES_BUCKET_NAME,
@@ -21,6 +25,10 @@ export type CostCenterAllocationMonthlySource = {
   readonly amount: Prisma.Decimal;
   readonly competenceDate: Date | null;
   readonly categoryExternalIds: readonly string[];
+  readonly installmentTotal: Prisma.Decimal;
+  readonly paid: Prisma.Decimal;
+  readonly unpaid: Prisma.Decimal;
+  readonly dueDate: Date;
 };
 
 type CategoryLookup = Pick<FinancialCategoryReadRecord, 'externalId' | 'name' | 'type'>;
@@ -40,19 +48,21 @@ export type CostCenterAllocationMonthlyCompositionItem = AmountBucket & {
 
 /**
  * Competência filtrada por centro: Σ allocation.amount.
- * received/outstanding/overdue ficam null (PARCIAL — sem split pago/em aberto seguro).
- * Categorias: D8 sobre categoryExternalIds da parcela (1 = nomeada; 0 = sem; 2+ = imprecisa).
+ * Cash split (received/outstanding/overdue) só quando DERIVABLE em todas as linhas
+ * (1 centro 100%, multi quitado ou multi zerado). Parcial multi → null.
  */
 export function calculateMonthlyCompetenceFromAllocations(
   rows: readonly CostCenterAllocationMonthlySource[],
   categories: readonly CategoryLookup[],
   expectedType: CompositionCategoryType = 'REVENUE',
   maxNamedCategories: number = DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
+  today: Date = new Date(),
 ): {
   readonly total: Prisma.Decimal;
-  readonly received: null;
-  readonly outstanding: null;
-  readonly overdue: null;
+  readonly received: Prisma.Decimal | null;
+  readonly outstanding: Prisma.Decimal | null;
+  readonly overdue: Prisma.Decimal | null;
+  readonly costCenterCashSplit: boolean;
   readonly classified: Prisma.Decimal;
   readonly uncategorized: Prisma.Decimal;
   readonly imprecise: Prisma.Decimal;
@@ -64,9 +74,20 @@ export function calculateMonthlyCompetenceFromAllocations(
   let uncategorized = ZERO;
   let imprecise = ZERO;
   let total = ZERO;
+  const cashRows: ReturnType<typeof deriveInstallmentCostCenterCashSplit>[] = [];
 
   for (const row of rows) {
     total = total.plus(row.amount);
+    cashRows.push(
+      deriveInstallmentCostCenterCashSplit({
+        allocationAmount: row.amount,
+        installmentTotal: row.installmentTotal,
+        paid: row.paid,
+        unpaid: row.unpaid,
+        dueDate: row.dueDate,
+        today,
+      }),
+    );
     const ids = uniqueCategoryIds(row.categoryExternalIds);
     if (ids.length === 0) {
       uncategorized = uncategorized.plus(row.amount);
@@ -89,6 +110,8 @@ export function calculateMonthlyCompetenceFromAllocations(
       amount: (current?.amount ?? ZERO).plus(row.amount),
     });
   }
+
+  const cash = aggregateCostCenterCashSplits(cashRows);
 
   const classifiedAmount = [...named.values()].reduce(
     (sum, bucket) => sum.plus(bucket.amount),
@@ -140,9 +163,10 @@ export function calculateMonthlyCompetenceFromAllocations(
 
   return {
     total,
-    received: null,
-    outstanding: null,
-    overdue: null,
+    received: cash.received,
+    outstanding: cash.outstanding,
+    overdue: cash.overdue,
+    costCenterCashSplit: cash.costCenterCashSplit,
     classified: classifiedAmount,
     uncategorized,
     imprecise,
@@ -153,15 +177,37 @@ export function calculateMonthlyCompetenceFromAllocations(
 
 /**
  * Série diária por competenceDate com Σ allocation.amount.
- * received/outstanding null (sem split de caixa por centro).
+ * received/outstanding: mesma semântica EXACT/UNAVAILABLE da CC1.3
+ * (snapshot do título no dia de competência — não é caixa do dia).
+ * Se qualquer título do mês for UNAVAILABLE, received/outstanding ficam null
+ * em todos os pontos (coerente com o KPI mensal).
  */
 export function buildDailyCompetenceAllocationTotals(
   rows: readonly CostCenterAllocationMonthlySource[],
   from: Date,
   to: Date,
+  today: Date = new Date(),
 ): readonly MonthlyCompetenceDailyPoint[] {
-  const byDay = new Map<number, Prisma.Decimal>();
-  for (const row of rows) {
+  type DayBucket = {
+    amount: Prisma.Decimal;
+    received: Prisma.Decimal;
+    outstanding: Prisma.Decimal;
+  };
+  const byDay = new Map<number, DayBucket>();
+  const cashSplits = rows.map((row) =>
+    deriveInstallmentCostCenterCashSplit({
+      allocationAmount: row.amount,
+      installmentTotal: row.installmentTotal,
+      paid: row.paid,
+      unpaid: row.unpaid,
+      dueDate: row.dueDate,
+      today,
+    }),
+  );
+  const cashAvailable = cashSplits.every((split) => split.kind === 'EXACT');
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]!;
     const competence = row.competenceDate;
     if (competence === null) {
       continue;
@@ -170,17 +216,34 @@ export function buildDailyCompetenceAllocationTotals(
     if (time < from.getTime() || time > to.getTime()) {
       continue;
     }
-    byDay.set(time, (byDay.get(time) ?? ZERO).plus(row.amount));
+    const current = byDay.get(time) ?? {
+      amount: ZERO,
+      received: ZERO,
+      outstanding: ZERO,
+    };
+    const split = cashSplits[index]!;
+    byDay.set(time, {
+      amount: current.amount.plus(row.amount),
+      received:
+        cashAvailable && split.kind === 'EXACT'
+          ? current.received.plus(split.received)
+          : current.received,
+      outstanding:
+        cashAvailable && split.kind === 'EXACT'
+          ? current.outstanding.plus(split.outstanding)
+          : current.outstanding,
+    });
   }
 
   const points: MonthlyCompetenceDailyPoint[] = [];
   let cursor = from;
   while (cursor.getTime() <= to.getTime()) {
+    const bucket = byDay.get(cursor.getTime());
     points.push({
       date: cursor,
-      amount: byDay.get(cursor.getTime()) ?? ZERO,
-      received: null,
-      outstanding: null,
+      amount: bucket?.amount ?? ZERO,
+      received: cashAvailable ? (bucket?.received ?? ZERO) : null,
+      outstanding: cashAvailable ? (bucket?.outstanding ?? ZERO) : null,
     });
     cursor = addCivilDays(cursor, 1);
   }
@@ -192,7 +255,7 @@ export function toAllocationMonthlySources(
     readonly amount: Prisma.Decimal;
     readonly installment: Pick<
       FinancialInstallmentReadRecord,
-      'competenceDate' | 'categoryExternalIds'
+      'competenceDate' | 'categoryExternalIds' | 'total' | 'paid' | 'unpaid' | 'dueDate'
     >;
   }[],
 ): readonly CostCenterAllocationMonthlySource[] {
@@ -200,6 +263,10 @@ export function toAllocationMonthlySources(
     amount: row.amount,
     competenceDate: row.installment.competenceDate,
     categoryExternalIds: row.installment.categoryExternalIds,
+    installmentTotal: row.installment.total,
+    paid: row.installment.paid,
+    unpaid: row.installment.unpaid,
+    dueDate: row.installment.dueDate,
   }));
 }
 

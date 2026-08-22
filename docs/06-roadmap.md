@@ -43,6 +43,9 @@ deste documento prevalece. Fases executadas até o momento:
   - CC1 — Centros de custo + alocação + filtro Home: HOMOLOGADA (catálogo + allocations + filtro Home; CC1.1 normalização EVENT-scoped 1 centro incorporada; Meta F2 permanece company-level)
   - CC1.1 — Normalização rateio EVENT-scoped: HOMOLOGADA / incorporada à baseline CC1
   - CC1.2 — Performance N+1 de detalhes de parcela: HOMOLOGADA TECNICAMENTE (estado por parcela + shouldFetch; segundo dry-run 0 GETs; sem alteração visual; homologação visual NÃO APLICÁVEL)
+  - CC1.3 — Cash split por centro (híbrido EXACT) + seletor em tabs: HOMOLOGADA VISUALMENTE
+  - CC1.3.1 — Fluidez na troca de centro (soft refresh / sem loading global): HOMOLOGADA VISUALMENTE
+  - CC1.3.2 — Séries temporais (sparkline) cash por centro: HOMOLOGADA VISUALMENTE
 Próxima fase: Fase 11 (filtros e comparações) — NÃO INICIADA.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).

@@ -369,13 +369,28 @@ describe('GET /dashboard/monthly-revenue?costCenter=', () => {
         items: Array<{ amount: string; received: string | null }>;
       };
     };
-    expect(filteredBody.costCenterCashSplit).toBe(false);
+    expect(filteredBody.costCenterCashSplit).toBeUndefined();
     expect(filteredBody.receivables.total).toBe('4000');
-    expect(filteredBody.receivables.received).toBeNull();
-    expect(filteredBody.receivables.outstanding).toBeNull();
-    expect(filteredBody.receivables.overdue).toBeNull();
+    // Multi + paid≈0 → EXACT (outstanding = allocation); CC1.3 híbrido.
+    expect(filteredBody.receivables.received).toBe('0');
+    expect(filteredBody.receivables.outstanding).toBe('4000');
+    expect(filteredBody.receivables.overdue).toBe('0');
     expect(filteredBody.receivables.items[0]?.amount).toBe('4000');
     expect(filteredBody.receivables.items[0]?.received).toBeNull();
+    // CC1.3.2 — série diária com cash EXACT (não null).
+    const filteredDaily = (
+      filteredBody.receivables as {
+        daily?: Array<{ received: string | null; outstanding: string | null; amount: string }>;
+      }
+    ).daily;
+    expect(filteredDaily?.length).toBeGreaterThan(0);
+    expect(filteredDaily?.every((point) => point.received !== null && point.outstanding !== null)).toBe(
+      true,
+    );
+    const sumReceived = filteredDaily!.reduce((acc, point) => acc + Number(point.received), 0);
+    const sumOutstanding = filteredDaily!.reduce((acc, point) => acc + Number(point.outstanding), 0);
+    expect(sumReceived).toBe(0);
+    expect(sumOutstanding).toBe(4000);
 
     const unknown = await app.inject({
       method: 'GET',

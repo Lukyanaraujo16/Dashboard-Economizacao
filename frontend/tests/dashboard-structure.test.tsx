@@ -395,7 +395,8 @@ describe('Dashboard V2 structure', () => {
 
     expect(screen.getByText('Última atualização')).toBeTruthy();
     expect(document.querySelector('[data-cost-center-selector="true"]')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Centro de custo: Todos' })).toBeTruthy();
+    expect(screen.getByRole('tablist', { name: 'Centros de custo' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Todos' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Próximos vencimentos' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Recebíveis vencidos' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Qualidade dos recebíveis' })).toBeNull();

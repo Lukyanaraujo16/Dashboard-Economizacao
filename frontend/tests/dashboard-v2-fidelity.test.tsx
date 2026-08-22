@@ -577,7 +577,8 @@ describe('Dashboard V2.3 fidelidade', () => {
     const scope = within(cluster as HTMLElement);
     expect(scope.getByLabelText('Visão mensal por competência')).toBeTruthy();
     expect(scope.getByLabelText('Centro de custo')).toBeTruthy();
-    expect(scope.getByRole('button', { name: 'Centro de custo: Todos' })).toBeTruthy();
+    expect(scope.getByRole('tablist', { name: 'Centros de custo' })).toBeTruthy();
+    expect(scope.getByRole('tab', { name: 'Todos' })).toBeTruthy();
     expect(scope.getByText('Última atualização')).toBeTruthy();
     const time = (cluster as HTMLElement).querySelector('time');
     expect(time?.getAttribute('datetime')).toBe('2026-08-10T09:00:00.000Z');

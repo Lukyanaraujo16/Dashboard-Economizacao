@@ -349,14 +349,20 @@ async function loadMonthlyCompetenceRevenue(
       ...scope,
       externalIds,
     });
-    const calculated = calculateMonthlyCompetenceFromAllocations(sources, categories, 'REVENUE');
+    const calculated = calculateMonthlyCompetenceFromAllocations(
+      sources,
+      categories,
+      'REVENUE',
+      undefined,
+      today,
+    );
     return {
       tenantId,
       today,
       monthKey,
       from,
       to,
-      costCenterCashSplit: false,
+      costCenterCashSplit: calculated.costCenterCashSplit,
       total: calculated.total,
       received: calculated.received,
       outstanding: calculated.outstanding,
@@ -366,7 +372,7 @@ async function loadMonthlyCompetenceRevenue(
       imprecise: calculated.imprecise,
       coverageRate: calculated.coverageRate,
       items: calculated.items,
-      daily: buildDailyCompetenceAllocationTotals(sources, from, to),
+      daily: buildDailyCompetenceAllocationTotals(sources, from, to, today),
     };
   }
 
@@ -433,14 +439,20 @@ async function loadMonthlyCompetenceExpenses(
       ...scope,
       externalIds,
     });
-    const calculated = calculateMonthlyCompetenceFromAllocations(sources, categories, 'EXPENSE');
+    const calculated = calculateMonthlyCompetenceFromAllocations(
+      sources,
+      categories,
+      'EXPENSE',
+      undefined,
+      today,
+    );
     return {
       tenantId,
       today,
       monthKey,
       from,
       to,
-      costCenterCashSplit: false,
+      costCenterCashSplit: calculated.costCenterCashSplit,
       total: calculated.total,
       received: calculated.received,
       outstanding: calculated.outstanding,
@@ -450,7 +462,7 @@ async function loadMonthlyCompetenceExpenses(
       imprecise: calculated.imprecise,
       coverageRate: calculated.coverageRate,
       items: calculated.items,
-      daily: buildDailyCompetenceAllocationTotals(sources, from, to),
+      daily: buildDailyCompetenceAllocationTotals(sources, from, to, today),
     };
   }
 

@@ -540,14 +540,24 @@ para o escopo da parcela**:
   - **Todos** = universo financeiro da empresa (títulos);
   - **Centro** = somente valor explicitamente atribuído;
   - portanto **Σ centros pode ser < Todos** quando houver NO_ALLOCATION;
-* paid/unpaid **por centro** NÃO está disponível (PARCIAL) — com filtro ativo,
-  “Já recebido” / “A receber” (e simétricos) não inventam split de caixa;
+* paid/unpaid **por centro** só quando DERIVABLE sem rateio na baixa (CC1.3):
+  - 1 centro com allocation ≈ total → received=paid, outstanding=unpaid;
+  - multi-centro e título 100% quitado → received=allocation.amount;
+  - multi-centro e paid≈0 → outstanding=allocation.amount;
+  - multi-centro parcialmente liquidado → UNAVAILABLE (não proporcionalizar);
+* se qualquer título do mês for UNAVAILABLE, o cash split do KPI fica null;
 * meta de faturamento permanece **consolidada da empresa** (ignora filtro).
+* seletor Home: tabs horizontais (Todos | centros), overflow com setas; 0 centros → oculto.
 
 CC1 / CC1.1: HOMOLOGADAS. Controle 2026-08 (0 OVER; Jac+Lar=Todos);
 histórico 2026-05 / 2025-06 corrigido via backfill local.
 CC1.2: HOMOLOGADA TECNICAMENTE — enrichment incremental por estado da parcela
 (UNKNOWN vs NO_ALLOCATION confirmado); segundo dry-run Clinica Life → 0 GETs;
 sem redesign visual; homologação visual NÃO APLICÁVEL nesta fase.
+CC1.3: HOMOLOGADA VISUALMENTE — cash split híbrido (1 centro / multi quitado ou zerado = EXACT;
+multi parcial = UNAVAILABLE; sem proporção inventada; sem ledger). Seletor
+Home em tabs horizontais com overflow; Meta permanece company-level.
+CC1.3.2: HOMOLOGADA VISUALMENTE — série diária por competência (received/outstanding) no filtro por
+centro usa a mesma regra EXACT/UNAVAILABLE; sem fabricar sparkline.
 
 ⸻
