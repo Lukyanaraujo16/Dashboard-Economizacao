@@ -72,7 +72,11 @@ Primeira execução (sem instalação detectada):
 5. Reparar serviços  
 6. Sair  
 
-Reexecução: menu de manutenção. Idempotente: não apaga volumes, não sobrescreve `AUTH_SECRET`, `INTEGRATION_ENCRYPTION_KEY` nem `POSTGRES_PASSWORD`.
+Reexecução: menu de manutenção quando `app.env` ou `install-state` já existem. Idempotente: não apaga volumes, não sobrescreve `AUTH_SECRET`, `INTEGRATION_ENCRYPTION_KEY` nem `POSTGRES_PASSWORD`.
+
+Clone Git interrompido (sem env) **não** conta como instalação concluída: o wizard permanece em “Nova instalação”, repara ownership de `/opt/dashboard-economizacao` para `dashboard:dashboard` e continua. Não apaga o diretório se o conteúdo não for um clone Git reconhecido.
+
+O clone/fetch/checkout e o build Node rodam como o usuário `dashboard`. `/opt` permanece root. `/etc/dashboard-economizacao` permanece `root:dashboard` modo `0750`; `app.env` `0640`. Não se usa `git config safe.directory`.
 
 O instalador clona o **remote Git no SHA informado**. Não copia working tree local (evita WIP ledger).
 

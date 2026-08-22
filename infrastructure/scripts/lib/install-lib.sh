@@ -165,6 +165,57 @@ de_cmd_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+de_file_owner() {
+  local path="$1"
+  if stat -c '%U' "$path" >/dev/null 2>&1; then
+    stat -c '%U' "$path"
+    return
+  fi
+  stat -f '%Su' "$path"
+}
+
+de_is_root() {
+  [[ "$(id -u 2>/dev/null || printf 1)" -eq 0 ]]
+}
+
+# Executa o comando como o usuário da aplicação. Sem root / DE_ALLOW_NONROOT: executa no processo atual.
+de_run_as_user() {
+  local user="$1"
+  shift
+  if [[ "${DE_ALLOW_NONROOT:-0}" == "1" ]] || ! de_is_root; then
+    "$@"
+    return
+  fi
+  if de_cmd_exists runuser; then
+    runuser -u "$user" -- "$@"
+    return
+  fi
+  if de_cmd_exists sudo; then
+    sudo -u "$user" -- "$@"
+    return
+  fi
+  de_err "Não há runuser/sudo para executar como ${user}."
+  return 1
+}
+
+# Ownership do working tree Git. No-op fora de root (testes locais).
+de_chown_tree() {
+  local spec="$1"
+  local path="$2"
+  [[ -e "$path" ]] || return 0
+  if [[ "${DE_ALLOW_NONROOT:-0}" == "1" ]] || ! de_is_root; then
+    return 0
+  fi
+  chown -R "$spec" "$path"
+}
+
+de_git_in_repo() {
+  local user="$1"
+  local repo="$2"
+  shift 2
+  de_run_as_user "$user" env HOME="$repo" PATH="${PATH:-/usr/bin:/bin}" git -C "$repo" "$@"
+}
+
 de_read_state() {
   local file="$1"
   local key="$2"

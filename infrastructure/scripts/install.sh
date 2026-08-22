@@ -179,6 +179,8 @@ run_detection() {
   fi
   if [[ -f "$STATE_FILE" || -f "$APP_ENV_FILE" ]]; then
     DETECT_INSTALL="existente (${STATE_FILE})"
+  elif [[ -d "${APP_HOME}/.git" ]]; then
+    DETECT_INSTALL="parcial (clone em ${APP_HOME}; env ainda não criado)"
   else
     DETECT_INSTALL="nenhuma"
   fi
@@ -189,7 +191,7 @@ is_installed() {
 }
 
 ensure_dirs() {
-  mkdir -p "$APP_HOME" "$ETC_DIR" "$STORAGE_DIR" "$BACKUP_DIR" \
+  mkdir -p "$(dirname "$APP_HOME")" "$ETC_DIR" "$STORAGE_DIR" "$BACKUP_DIR" \
     "$(dirname "$NGINX_AVAILABLE")" "$(dirname "$NGINX_ENABLED")" "$SYSTEMD_DIR"
   chmod 0750 "$ETC_DIR" "$STORAGE_DIR" "$BACKUP_DIR" 2>/dev/null || true
 }
@@ -228,30 +230,65 @@ ensure_service_user() {
   if ! id "$SERVICE_USER" >/dev/null 2>&1; then
     useradd --system --home "$APP_HOME" --shell /usr/sbin/nologin "$SERVICE_USER"
   fi
-  chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "$APP_HOME" "$STORAGE_DIR"
+  mkdir -p "$STORAGE_DIR"
+  de_chown_tree "${SERVICE_USER}:${SERVICE_GROUP}" "$STORAGE_DIR"
   chown root:"$SERVICE_GROUP" "$ETC_DIR"
   chmod 0750 "$ETC_DIR"
+}
+
+# Git do repositório operacional sempre como o usuário da aplicação (não root).
+git_as_app() {
+  de_git_in_repo "$SERVICE_USER" "$APP_HOME" "$@"
+}
+
+prepare_app_home() {
+  mkdir -p "$(dirname "$APP_HOME")"
+  if [[ ! -d "$APP_HOME" ]]; then
+    mkdir -p "$APP_HOME"
+  fi
+  de_chown_tree "${SERVICE_USER}:${SERVICE_GROUP}" "$APP_HOME"
+}
+
+# Clone interrompido: raiz dashboard + conteúdo root. Repara só o working tree Git.
+# Não apaga o diretório. Não toca /etc (segredos).
+repair_app_home_ownership() {
+  [[ -d "$APP_HOME" ]] || return 0
+  de_log "Ajustando ownership de ${APP_HOME} para ${SERVICE_USER}:${SERVICE_GROUP}"
+  de_chown_tree "${SERVICE_USER}:${SERVICE_GROUP}" "$APP_HOME"
 }
 
 sync_application_code() {
   local sha="$1"
   local remote="$2"
   if [[ "$DE_DRY_RUN" == "1" ]]; then
-    de_log "[dry-run] git clone/checkout ${remote} @ ${sha} → ${APP_HOME}"
+    de_log "[dry-run] git clone/checkout como ${SERVICE_USER}: ${remote} @ ${sha} → ${APP_HOME}"
     de_write_state "$STATE_FILE" "sha" "$sha"
     return
   fi
+
+  prepare_app_home
+
   if [[ ! -d "${APP_HOME}/.git" ]]; then
-    mkdir -p "$(dirname "$APP_HOME")"
     if [[ -d "${APP_HOME}" && -n "$(ls -A "$APP_HOME" 2>/dev/null || true)" ]]; then
       de_err "Diretório ${APP_HOME} existe e não é um clone Git. Abortando para não destruir dados."
       exit 1
     fi
-    git clone "$remote" "$APP_HOME"
+    de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
+      git clone "$remote" "$APP_HOME"
+    de_chown_tree "${SERVICE_USER}:${SERVICE_GROUP}" "$APP_HOME"
+  else
+    repair_app_home_ownership
+    local origin_url=""
+    origin_url="$(git_as_app remote get-url origin 2>/dev/null || true)"
+    if [[ -n "$origin_url" && "$origin_url" != "$remote" ]]; then
+      de_err "Remote origin em ${APP_HOME} é ${origin_url}, diferente do informado (${remote}). Abortando."
+      exit 1
+    fi
   fi
-  git -C "$APP_HOME" fetch --all --tags
-  git -C "$APP_HOME" checkout --detach "$sha"
-  de_write_state "$STATE_FILE" "sha" "$(git -C "$APP_HOME" rev-parse HEAD)"
+
+  git_as_app fetch --all --tags
+  git_as_app checkout --detach "$sha"
+  de_write_state "$STATE_FILE" "sha" "$(git_as_app rev-parse HEAD)"
   de_write_state "$STATE_FILE" "remote" "$remote"
 }
 
@@ -368,12 +405,15 @@ start_postgres_redis() {
 
 build_application() {
   if [[ "$DE_DRY_RUN" == "1" ]]; then
-    de_log "[dry-run] pnpm install --frozen-lockfile && prisma generate && migrate deploy && build"
+    de_log "[dry-run] pnpm install --frozen-lockfile && prisma generate && migrate deploy && build (como ${SERVICE_USER})"
     return
   fi
-  (cd "$APP_HOME" && pnpm install --frozen-lockfile)
-  (cd "$APP_HOME/backend" && pnpm prisma:generate && pnpm prisma:migrate:deploy && pnpm build)
-  (cd "$APP_HOME/frontend" && pnpm build)
+  de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
+    bash -lc "cd $(printf '%q' "$APP_HOME") && pnpm install --frozen-lockfile"
+  de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
+    bash -lc "set -a; if [ -f $(printf '%q' "$APP_ENV_FILE") ]; then . $(printf '%q' "$APP_ENV_FILE"); fi; set +a; cd $(printf '%q' "$APP_HOME/backend") && pnpm prisma:generate && pnpm prisma:migrate:deploy && pnpm build"
+  de_run_as_user "$SERVICE_USER" env HOME="$APP_HOME" PATH="${PATH:-/usr/bin:/bin}" \
+    bash -lc "cd $(printf '%q' "$APP_HOME/frontend") && pnpm build"
 }
 
 enable_services() {
@@ -591,7 +631,7 @@ action_new_install() {
   interval="$(prompt "Intervalo da sync automática (minutos)" "60")"
   if confirm "Informar credenciais Conta Azul agora"; then
     ca_id="$(prompt "CONTA_AZUL_CLIENT_ID" "")"
-    ca_secret="$(prompt_secret "CONTA_AZUL_CLIENT_SECRET")"
+    ca_secret="$(prompt_secret "Client Secret (entrada oculta; ao colar nada será exibido)")"
   else
     de_warn "Sem Conta Azul o worker de sync não inicia. A API/web sobem."
   fi
@@ -654,7 +694,7 @@ action_update() {
   local sha
   sha="$(prompt "SHA/tag/branch de destino" "$(de_read_state "$STATE_FILE" "sha")")"
   local remote
-  remote="$(de_read_state "$STATE_FILE" "remote" || git -C "$APP_HOME" remote get-url origin)"
+  remote="$(de_read_state "$STATE_FILE" "remote" || git_as_app remote get-url origin)"
   sync_application_code "$sha" "$remote"
   build_application
   action_restart
