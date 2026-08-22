@@ -1076,7 +1076,15 @@ CC1 — Centros de custo + alocação + filtro Home:
      `EVENT_SCOPED_SINGLE_CENTER` → amount = total da parcela;
      multi-centro EVENT-scoped = MULTI_CENTER_UNRESOLVED (protegido; não proporcional);
      NO_ALLOCATION legítimo; Todos pode ser > Σ centros.
-     CC1.2 performance N+1: PRÓXIMA FASE / NÃO IMPLEMENTADA.
+CC1.2 — Performance / resiliência do enrichment de centros:
+     HOMOLOGADA TECNICAMENTE
+     Estado por parcela (`cost_center_detail_status`: UNKNOWN | FETCHED |
+     NO_ALLOCATION | UNRESOLVED | ERROR) + `shouldFetchCostCenterDetail`;
+     segundo sync/dry-run com upstream estável → 0 GETs de detalhe;
+     UNKNOWN processados → NO_ALLOCATION/FETCHED; OVER permanece 0;
+     counters no SyncRun; HTTP sequencial (~8 req/s / 125ms); timeout 30 min;
+     checkpoint semântico por registro; concorrência 1; eventId NÃO persistido;
+     ZERO alteração visual Home V2.3.1; homologação visual NÃO APLICÁVEL nesta fase.
 L1-B — Semântica oficial do caixa + read model mensal:
      BLOCKED_BY_CASH_SEMANTICS (20/08/2026)
      Doc oficial ValorComposicaoDTO da baixa: 5 campos (valor_bruto required +

@@ -546,6 +546,8 @@ para o escopo da parcela**:
 
 CC1 / CC1.1: HOMOLOGADAS. Controle 2026-08 (0 OVER; Jac+Lar=Todos);
 histórico 2026-05 / 2025-06 corrigido via backfill local.
-CC1.2 performance N+1: PRÓXIMA FASE / NÃO IMPLEMENTADA.
+CC1.2: HOMOLOGADA TECNICAMENTE — enrichment incremental por estado da parcela
+(UNKNOWN vs NO_ALLOCATION confirmado); segundo dry-run Clinica Life → 0 GETs;
+sem redesign visual; homologação visual NÃO APLICÁVEL nesta fase.
 
 ⸻

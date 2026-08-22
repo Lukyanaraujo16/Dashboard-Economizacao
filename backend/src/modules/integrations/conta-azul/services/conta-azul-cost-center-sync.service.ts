@@ -1,6 +1,12 @@
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
 import { normalizeInstallmentCostCenterAllocations } from '../domain/conta-azul-cost-center-allocation-normalize.js';
 import {
+  COST_CENTER_DETAIL_RULE_VERSION,
+  detailStatusFromNormalizeKind,
+  emptyCostCenterEnrichmentCounters,
+  type CostCenterEnrichmentCounters,
+} from '../domain/conta-azul-cost-center-detail-fetch.js';
+import {
   mapCostCenterPage,
   mapInstallmentCostCenterAllocations,
   reconcileCostCenterAllocationAmounts,
@@ -27,7 +33,7 @@ export type ContaAzulCostCenterSyncService = {
     readonly requestWithAuth: <T>(work: (accessToken: string) => Promise<T>) => Promise<T>;
     readonly gatedGet: <T>(work: () => Promise<T>) => Promise<T>;
     readonly heartbeat: () => Promise<void>;
-  }): Promise<{ readonly allocations: number; readonly candidates: number; readonly parcelFailures: number }>;
+  }): Promise<CostCenterEnrichmentCounters>;
 };
 
 function isAbortingApiError(error: unknown): boolean {
@@ -80,6 +86,16 @@ function logMultiCenterUnresolved(input: {
   );
 }
 
+function logEnrichmentSummary(counters: CostCenterEnrichmentCounters, durationMs: number): void {
+  process.stdout.write(
+    `${JSON.stringify({
+      event: 'conta_azul_cost_center_enrichment',
+      ...counters,
+      durationMs,
+    })}\n`,
+  );
+}
+
 export function createContaAzulCostCenterSyncService(deps: {
   readonly costCenters: ContaAzulCostCenterRepository;
   readonly apiClient: ContaAzulApiClient;
@@ -113,17 +129,25 @@ export function createContaAzulCostCenterSyncService(deps: {
     },
 
     async syncAllocationsForInstallments(input) {
-      const installments =
-        input.installments ??
-        (await deps.costCenters.listInstallmentsNeedingAllocationSync({
+      const startedAt = Date.now();
+      const counters = emptyCostCenterEnrichmentCounters();
+
+      let installments: readonly CostCenterAllocationCandidate[];
+      if (input.installments) {
+        installments = input.installments;
+        counters.candidates = installments.length;
+      } else {
+        const listed = await deps.costCenters.listInstallmentsNeedingAllocationSync({
           tenantId: input.scope.tenantId,
           integrationId: input.scope.integrationId,
-        }));
-
-      let allocations = 0;
-      let parcelFailures = 0;
+        });
+        installments = listed.candidates;
+        counters.candidates = listed.totalInstallments;
+        counters.skippedFresh = listed.skippedFresh;
+      }
 
       for (const installment of installments) {
+        counters.requested += 1;
         try {
           const payload = await input.requestWithAuth((accessToken) =>
             input.gatedGet(() =>
@@ -183,7 +207,35 @@ export function createContaAzulCostCenterSyncService(deps: {
             );
           }
 
-          allocations += writes.length;
+          const detailStatus = detailStatusFromNormalizeKind(normalized.kind);
+          const detailState = {
+            status: detailStatus,
+            syncedAt: input.scope.syncedAt,
+            ruleVersion: COST_CENTER_DETAIL_RULE_VERSION,
+          };
+          if (installment.kind === 'RECEIVABLE') {
+            await deps.costCenters.markReceivableCostCenterDetailState(
+              input.scope.tenantId,
+              installment.localId,
+              detailState,
+            );
+          } else {
+            await deps.costCenters.markPayableCostCenterDetailState(
+              input.scope.tenantId,
+              installment.localId,
+              detailState,
+            );
+          }
+
+          counters.allocationsWritten += writes.length;
+          counters.success += 1;
+          if (normalized.kind === 'NO_ALLOCATION') {
+            counters.noAllocation += 1;
+          } else if (normalized.kind === 'PARTIAL') {
+            counters.partial += 1;
+          } else if (normalized.kind === 'MULTI_CENTER_UNRESOLVED') {
+            counters.unresolved += 1;
+          }
 
           const allocated = writes.reduce(
             (sum, row) => sum.plus(row.amount),
@@ -207,7 +259,25 @@ export function createContaAzulCostCenterSyncService(deps: {
             throw error;
           }
           if (error instanceof ContaAzulApiError || error instanceof ContaAzulMappingError) {
-            parcelFailures += 1;
+            counters.errors += 1;
+            const errorState = {
+              status: 'ERROR' as const,
+              syncedAt: input.scope.syncedAt,
+              ruleVersion: COST_CENTER_DETAIL_RULE_VERSION,
+            };
+            if (installment.kind === 'RECEIVABLE') {
+              await deps.costCenters.markReceivableCostCenterDetailState(
+                input.scope.tenantId,
+                installment.localId,
+                errorState,
+              );
+            } else {
+              await deps.costCenters.markPayableCostCenterDetailState(
+                input.scope.tenantId,
+                installment.localId,
+                errorState,
+              );
+            }
           } else {
             throw error;
           }
@@ -215,11 +285,8 @@ export function createContaAzulCostCenterSyncService(deps: {
         await input.heartbeat();
       }
 
-      return {
-        allocations,
-        candidates: installments.length,
-        parcelFailures,
-      };
+      logEnrichmentSummary(counters, Date.now() - startedAt);
+      return counters;
     },
   };
 }

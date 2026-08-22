@@ -271,6 +271,18 @@ enum FinancialInstallmentStatus {
   @@map("financial_installment_status")
 }
 
+/// Estado do enriquecimento de centro de custo por parcela (CC1.2).
+/// Distingue UNKNOWN (nunca tentou) de NO_ALLOCATION (confirmado sem rateio).
+enum CostCenterDetailStatus {
+  UNKNOWN
+  FETCHED
+  NO_ALLOCATION
+  UNRESOLVED
+  ERROR
+
+  @@map("cost_center_detail_status")
+}
+
 enum SyncRunTriggerType {
   MANUAL
   SCHEDULED
@@ -379,6 +391,10 @@ model Receivable {
   externalCustomerId String?                     @map("external_customer_id")
   partyId            String?                     @map("party_id") @db.Uuid
   categoryExternalIds String[]                   @map("category_external_ids")
+  /// CC1.2 — último resultado do GET /parcelas/{id} para rateio de centro.
+  costCenterDetailStatus CostCenterDetailStatus @default(UNKNOWN) @map("cost_center_detail_status")
+  costCenterDetailSyncedAt DateTime? @map("cost_center_detail_synced_at") @db.Timestamptz(3)
+  costCenterDetailRuleVersion Int @default(0) @map("cost_center_detail_rule_version")
   syncedAt           DateTime                    @map("synced_at") @db.Timestamptz(3)
   createdAt          DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -391,6 +407,7 @@ model Receivable {
   @@index([tenantId], map: "idx_receivables_tenant_id")
   @@index([tenantId, dueDate], map: "idx_receivables_tenant_due_date")
   @@index([tenantId, status], map: "idx_receivables_tenant_status")
+  @@index([tenantId, costCenterDetailStatus], map: "idx_receivables_tenant_cc_detail_status")
   @@map("receivables")
 }
 
@@ -413,6 +430,10 @@ model Payable {
   externalSupplierId String?                     @map("external_supplier_id")
   partyId            String?                     @map("party_id") @db.Uuid
   categoryExternalIds String[]                   @map("category_external_ids")
+  /// CC1.2 — último resultado do GET /parcelas/{id} para rateio de centro.
+  costCenterDetailStatus CostCenterDetailStatus @default(UNKNOWN) @map("cost_center_detail_status")
+  costCenterDetailSyncedAt DateTime? @map("cost_center_detail_synced_at") @db.Timestamptz(3)
+  costCenterDetailRuleVersion Int @default(0) @map("cost_center_detail_rule_version")
   syncedAt           DateTime                    @map("synced_at") @db.Timestamptz(3)
   createdAt          DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -425,6 +446,7 @@ model Payable {
   @@index([tenantId], map: "idx_payables_tenant_id")
   @@index([tenantId, dueDate], map: "idx_payables_tenant_due_date")
   @@index([tenantId, status], map: "idx_payables_tenant_status")
+  @@index([tenantId, costCenterDetailStatus], map: "idx_payables_tenant_cc_detail_status")
   @@map("payables")
 }
 

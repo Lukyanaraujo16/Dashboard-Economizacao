@@ -26,6 +26,14 @@ export type ContaAzulSyncCounts = {
   readonly payables: number;
   readonly costCenters: number;
   readonly costCenterAllocations: number;
+  readonly costCenterDetailCandidates?: number;
+  readonly costCenterDetailSkippedFresh?: number;
+  readonly costCenterDetailRequested?: number;
+  readonly costCenterDetailSuccess?: number;
+  readonly costCenterDetailNoAllocation?: number;
+  readonly costCenterDetailPartial?: number;
+  readonly costCenterDetailUnresolved?: number;
+  readonly costCenterDetailErrors?: number;
 };
 
 export type ContaAzulSyncRun = {

@@ -81,6 +81,14 @@ function mapCounts(value: Prisma.JsonValue | null): ContaAzulSyncCounts | null {
     payables,
     costCenters,
     costCenterAllocations,
+    costCenterDetailCandidates: nonNegativeInt(record.costCenterDetailCandidates) ?? 0,
+    costCenterDetailSkippedFresh: nonNegativeInt(record.costCenterDetailSkippedFresh) ?? 0,
+    costCenterDetailRequested: nonNegativeInt(record.costCenterDetailRequested) ?? 0,
+    costCenterDetailSuccess: nonNegativeInt(record.costCenterDetailSuccess) ?? 0,
+    costCenterDetailNoAllocation: nonNegativeInt(record.costCenterDetailNoAllocation) ?? 0,
+    costCenterDetailPartial: nonNegativeInt(record.costCenterDetailPartial) ?? 0,
+    costCenterDetailUnresolved: nonNegativeInt(record.costCenterDetailUnresolved) ?? 0,
+    costCenterDetailErrors: nonNegativeInt(record.costCenterDetailErrors) ?? 0,
   };
 }
 

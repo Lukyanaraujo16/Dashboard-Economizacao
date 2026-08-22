@@ -613,6 +613,16 @@ Alocação monetária parcela ↔ centro (valor oficial do rateio Conta Azul
 `amount = total da parcela` (não o valor cru do evento). Multi-centro
 EVENT-scoped permanece unresolved nesta versão.
 
+7.7.2b receivables/payables — enrichment CC1.2
+
+Campos por parcela (semântica de sync, não de analytics):
+
+* `cost_center_detail_status` — UNKNOWN | FETCHED | NO_ALLOCATION | UNRESOLVED | ERROR
+* `cost_center_detail_synced_at`
+* `cost_center_detail_rule_version`
+
+UNKNOWN ≠ NO_ALLOCATION. Segundo sync sem mudança upstream não re-GET.
+
 Campos físicos:
 
 * id; tenant_id; cost_center_id;

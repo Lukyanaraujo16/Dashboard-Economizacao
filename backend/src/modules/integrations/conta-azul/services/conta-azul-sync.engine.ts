@@ -229,6 +229,14 @@ export function createContaAzulManualSyncEngine(deps: {
         payables: 0,
         costCenters: 0,
         costCenterAllocations: 0,
+        costCenterDetailCandidates: 0,
+        costCenterDetailSkippedFresh: 0,
+        costCenterDetailRequested: 0,
+        costCenterDetailSuccess: 0,
+        costCenterDetailNoAllocation: 0,
+        costCenterDetailPartial: 0,
+        costCenterDetailUnresolved: 0,
+        costCenterDetailErrors: 0,
       };
 
       try {
@@ -482,7 +490,15 @@ export function createContaAzulManualSyncEngine(deps: {
             gatedGet,
             heartbeat,
           });
-          processed.costCenterAllocations = allocationResult.allocations;
+          processed.costCenterAllocations = allocationResult.allocationsWritten;
+          processed.costCenterDetailCandidates = allocationResult.candidates;
+          processed.costCenterDetailSkippedFresh = allocationResult.skippedFresh;
+          processed.costCenterDetailRequested = allocationResult.requested;
+          processed.costCenterDetailSuccess = allocationResult.success;
+          processed.costCenterDetailNoAllocation = allocationResult.noAllocation;
+          processed.costCenterDetailPartial = allocationResult.partial;
+          processed.costCenterDetailUnresolved = allocationResult.unresolved;
+          processed.costCenterDetailErrors = allocationResult.errors;
         }
 
         const tenantAgain = await deps.tenants.findById(input.tenantId);

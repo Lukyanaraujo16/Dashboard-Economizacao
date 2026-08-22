@@ -66,7 +66,19 @@ export type ContaAzulSyncCounts = {
   readonly receivables: number;
   readonly payables: number;
   readonly costCenters: number;
+  /** Linhas de allocation escritas nesta execução. */
   readonly costCenterAllocations: number;
+  /** CC1.2 — universo local de parcelas avaliadas. */
+  readonly costCenterDetailCandidates: number;
+  /** CC1.2 — parcelas puladas (já enriquecidas / frescas). */
+  readonly costCenterDetailSkippedFresh: number;
+  /** CC1.2 — GETs /parcelas/{id} efetuados. */
+  readonly costCenterDetailRequested: number;
+  readonly costCenterDetailSuccess: number;
+  readonly costCenterDetailNoAllocation: number;
+  readonly costCenterDetailPartial: number;
+  readonly costCenterDetailUnresolved: number;
+  readonly costCenterDetailErrors: number;
 };
 
 export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
@@ -77,6 +89,14 @@ export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
   payables: 0,
   costCenters: 0,
   costCenterAllocations: 0,
+  costCenterDetailCandidates: 0,
+  costCenterDetailSkippedFresh: 0,
+  costCenterDetailRequested: 0,
+  costCenterDetailSuccess: 0,
+  costCenterDetailNoAllocation: 0,
+  costCenterDetailPartial: 0,
+  costCenterDetailUnresolved: 0,
+  costCenterDetailErrors: 0,
 };
 
 export type ContaAzulSyncTrigger = 'MANUAL' | 'SCHEDULED';
