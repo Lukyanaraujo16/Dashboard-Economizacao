@@ -90,6 +90,28 @@ describe('dashboard monthly revenue service', () => {
     expect(dashboardMonthlyRevenuePath('2026-07', center)).toContain('costCenter=');
   });
 
+  it('envia situation e category junto com month e costCenter', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(body),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const center = '11111111-1111-4111-8111-111111111111';
+    const category = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    await getDashboardMonthlyRevenue('2026-07', center, 'settled', category);
+    expect(fetchMock).toHaveBeenCalledWith(
+      dashboardMonthlyRevenuePath('2026-07', center, 'settled', category),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(dashboardMonthlyRevenuePath('2026-07', center, 'settled', category)).toContain(
+      'situation=settled',
+    );
+    expect(dashboardMonthlyRevenuePath('2026-07', center, 'settled', category)).toContain(
+      `category=${category}`,
+    );
+  });
+
   it('aceita cash split null com costCenterCashSplit false', async () => {
     const filtered = {
       ...body,

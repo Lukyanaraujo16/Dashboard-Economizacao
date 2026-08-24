@@ -87,6 +87,25 @@ describe('dashboard 10C services', () => {
     expect(typeof result.buckets[0]?.net).toBe('string');
   });
 
+  it('forecast envia category e não inclui situation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(forecastBody),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const center = '11111111-1111-4111-8111-111111111111';
+    const category = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    await getDashboardCashFlowForecast(center, category);
+    expect(fetchMock).toHaveBeenCalledWith(dashboardCashFlowForecastPath(center, category), {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    });
+    expect(dashboardCashFlowForecastPath(center, category)).toContain(`category=${category}`);
+    expect(dashboardCashFlowForecastPath(center, category)).not.toContain('situation=');
+  });
+
   it('rejeita unpaid numérico', async () => {
     vi.stubGlobal(
       'fetch',

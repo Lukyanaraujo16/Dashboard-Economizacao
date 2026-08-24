@@ -72,11 +72,12 @@ function toFailure(response: Response, body: unknown): DashboardMonthEndCashPres
 
 export async function getDashboardMonthEndCashPressure(
   costCenterId?: string | null,
+  categoryId?: string | null,
 ): Promise<DashboardMonthEndCashPressureResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardMonthEndCashPressurePath(costCenterId), {
+    response = await fetch(dashboardMonthEndCashPressurePath(costCenterId, categoryId), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

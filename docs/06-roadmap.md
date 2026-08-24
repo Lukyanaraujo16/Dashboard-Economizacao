@@ -48,9 +48,11 @@ deste documento prevalece. Fases executadas até o momento:
   - CC1.3.2 — Séries temporais (sparkline) cash por centro: HOMOLOGADA VISUALMENTE
 Fase 11 (filtros e comparações): EM ANDAMENTO.
   F11-A — Congelamento de escopo: CONCLUÍDA (23/08/2026).
-  F11-B — Situação + categoria sobre o mês de competência: EM ANDAMENTO.
-    F11-B1 — Contrato / backend: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA.
-    F11-B2 — Frontend: NÃO INICIADA.
+  F11-B — Situação + categoria sobre o mês de competência: CONCLUÍDA
+          (recorte mensal aprovado).
+    F11-B1 — Contrato / backend: CONCLUÍDA.
+    F11-B2 — Frontend: HOMOLOGADA.
+    F11-B3 — Homologação F11-B2: CONCLUÍDA (24/08/2026).
   F11-C — Períodos rolantes e range personalizado: ADIADA / RECLASSIFICADA
           (não cancelada; não é regressão; destino preferencial: relatórios / Fase 12).
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
@@ -577,7 +579,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Fase 11: EM ANDAMENTO (F11-A CONCLUÍDA; F11-B PRÓXIMA; F11-C RECLASSIFICADA). 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: aguardando execução real. L1: NÃO INICIADA.
+Fase 11: EM ANDAMENTO (F11-A CONCLUÍDA; F11-B CONCLUÍDA no recorte mensal; F11-C RECLASSIFICADA). 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: aguardando execução real. L1: NÃO INICIADA.
 
 ⸻
 
@@ -602,9 +604,9 @@ prevista). A lista de próximos vencimentos permanece provisória na Home
 até a futura área Financeiro. E2 composição das despesas HOMOLOGADA.
 Receitas do mês por competência (M1) HOMOLOGADA (PAID permanece no mês;
 não é faturamento nem caixa). E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
-E4 ADIADA. Fase 11 EM ANDAMENTO (F11-A CONCLUÍDA; F11-B1 IMPLEMENTADA /
-AGUARDANDO HOMOLOGAÇÃO TÉCNICA; F11-B2 NÃO INICIADA; F11-C ADIADA /
-RECLASSIFICADA). Faturamento gerencial / meta F2: ver header.
+E4 ADIADA. Fase 11 EM ANDAMENTO (F11-A CONCLUÍDA; F11-B1 CONCLUÍDA;
+F11-B2 HOMOLOGADA; F11-B3 CONCLUÍDA; F11-B CONCLUÍDA no recorte mensal;
+F11-C ADIADA / RECLASSIFICADA). Faturamento gerencial / meta F2: ver header.
 Fixas×variáveis: NÃO INICIADAS.
 
 Contrato 10A (sem fórmulas; fórmulas em docs/11):
@@ -659,8 +661,9 @@ Critérios de aceite
 Status: EM ANDAMENTO (23/08/2026).
 
 F11-A — Congelamento de escopo: CONCLUÍDA.
-F11-B — Filtros mensais por situação e categoria: EM ANDAMENTO
-        (F11-B1 IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA; F11-B2 NÃO INICIADA).
+F11-B — Filtros mensais por situação e categoria: CONCLUÍDA
+        (F11-B1 CONCLUÍDA; F11-B2 HOMOLOGADA; F11-B3 CONCLUÍDA;
+        recorte mensal CONCLUÍDO).
 F11-C — Períodos rolantes e range personalizado: ADIADA / RECLASSIFICADA
         (não implementado na Home; não cancelado; não é regressão;
         destino preferencial: relatórios / Fase 12).
@@ -715,7 +718,7 @@ Já homologado — NÃO é item pendente desta fase:
 
 Recorte vigente
 
-F11-B1 (contrato / backend — IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA):
+F11-B1 (contrato / backend — CONCLUÍDA):
 
 * FILTER-003 — `situation=settled|open|overdue` (ausente = Todas; inválido = 400);
   `settled` = `status === PAID` (PARTIALLY_PAID fora);
@@ -730,7 +733,20 @@ F11-B1 (contrato / backend — IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA)
 * cash-flow-forecast / month-end-cash-pressure: category sim; situation parseada
   (400 se inválida) mas **não aplicada**.
 * revenue-goal: company-level; ignora costCenter, situation e category.
-* F11-B2 (frontend) ainda NÃO iniciada. F11-B completa: NÃO.
+F11-B2 (frontend — HOMOLOGADA):
+
+* URL `situation=settled|open|overdue` e `category=<uuid>`; ausente = Todas;
+  inválido é removido da URL (mesmo padrão de `costCenter`).
+* Header compacto: [Mês] [Situação] [Categoria]; centro de custo permanece
+  em linha própria (tabs). Categoria: combobox com busca, grupos Receita /
+  Despesa / Não classificadas.
+* Propagação: monthly-revenue, monthly-expenses, executive-insights e
+  comparação mês anterior enviam os 4 params. Forecast/pressão: category
+  sim, situation fora da query. Meta/overview/upcoming: sem fatia.
+* Cache distingue situation e category. Meta continua company-level, com
+  copy quando qualquer filtro de fatia está ativo.
+* F11-B3 (homologação funcional/visual) CONCLUÍDA (24/08/2026).
+  F11-B completa no recorte mensal: SIM. F11-C permanece reclassificada.
 
 F11-C (NÃO implementar na Home nesta fase):
 

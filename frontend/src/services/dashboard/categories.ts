@@ -1,6 +1,10 @@
-import { dashboardCashFlowForecastPath } from '../../lib/api-config';
-import type { DashboardCashFlowForecastResponse, DashboardForecastBucket } from './forecast.types';
-import { DashboardForecastRequestError } from './forecast.types';
+import { dashboardCategoriesPath } from '../../lib/api-config';
+import type { DashboardCategoryType } from '../../lib/dashboard-category';
+import type {
+  DashboardCategoryItem,
+  DashboardCategoriesResponse,
+} from './categories.types';
+import { DashboardCategoriesRequestError } from './categories.types';
 
 type ErrorEnvelope = {
   readonly error?: {
@@ -10,30 +14,29 @@ type ErrorEnvelope = {
   };
 };
 
+const CATEGORY_TYPES: readonly DashboardCategoryType[] = ['REVENUE', 'EXPENSE', 'UNKNOWN'];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isBucket(value: unknown): value is DashboardForecastBucket {
+function isCategoryType(value: unknown): value is DashboardCategoryType {
+  return typeof value === 'string' && (CATEGORY_TYPES as readonly string[]).includes(value);
+}
+
+function isCategoryItem(value: unknown): value is DashboardCategoryItem {
   return (
     isRecord(value) &&
-    typeof value.key === 'string' &&
-    typeof value.inflows === 'string' &&
-    typeof value.outflows === 'string' &&
-    typeof value.net === 'string'
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    isCategoryType(value.type)
   );
 }
 
-function isForecast(value: unknown): value is DashboardCashFlowForecastResponse {
-  return (
-    isRecord(value) &&
-    typeof value.today === 'string' &&
-    typeof value.from === 'string' &&
-    typeof value.to === 'string' &&
-    typeof value.horizonDays === 'number' &&
-    Array.isArray(value.buckets) &&
-    value.buckets.every(isBucket)
-  );
+export function isDashboardCategoriesResponse(
+  value: unknown,
+): value is DashboardCategoriesResponse {
+  return isRecord(value) && Array.isArray(value.items) && value.items.every(isCategoryItem);
 }
 
 async function readJsonBody(response: Response): Promise<unknown> {
@@ -48,13 +51,13 @@ async function readJsonBody(response: Response): Promise<unknown> {
   }
 }
 
-function toFailure(response: Response, body: unknown): DashboardForecastRequestError {
+function toFailure(response: Response, body: unknown): DashboardCategoriesRequestError {
   const envelope = isRecord(body) ? (body as ErrorEnvelope) : undefined;
   const code = envelope?.error?.code;
   const requestId = envelope?.error?.requestId;
 
   if (response.status === 401 || code === 'UNAUTHENTICATED') {
-    return new DashboardForecastRequestError(
+    return new DashboardCategoriesRequestError(
       'unauthenticated',
       'Sua sessão expirou. Faça login novamente.',
       { httpStatus: response.status, code, requestId },
@@ -62,36 +65,33 @@ function toFailure(response: Response, body: unknown): DashboardForecastRequestE
   }
 
   if (response.status === 403 || code === 'FORBIDDEN') {
-    return new DashboardForecastRequestError(
+    return new DashboardCategoriesRequestError(
       'forbidden',
       'Selecione uma empresa pelo modo suporte para visualizar esta Dashboard.',
       { httpStatus: response.status, code, requestId },
     );
   }
 
-  return new DashboardForecastRequestError(
+  return new DashboardCategoriesRequestError(
     'unavailable',
-    'Não foi possível carregar o fluxo previsto.',
+    'Não foi possível carregar as categorias.',
     { httpStatus: response.status, code, requestId },
   );
 }
 
-export async function getDashboardCashFlowForecast(
-  costCenterId?: string | null,
-  categoryId?: string | null,
-): Promise<DashboardCashFlowForecastResponse> {
+export async function getDashboardCategories(): Promise<DashboardCategoriesResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardCashFlowForecastPath(costCenterId, categoryId), {
+    response = await fetch(dashboardCategoriesPath(), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
     });
   } catch (cause) {
-    throw new DashboardForecastRequestError(
+    throw new DashboardCategoriesRequestError(
       'unavailable',
-      'Não foi possível carregar o fluxo previsto.',
+      'Não foi possível carregar as categorias.',
       { cause },
     );
   }
@@ -102,10 +102,10 @@ export async function getDashboardCashFlowForecast(
     throw toFailure(response, body);
   }
 
-  if (!isForecast(body)) {
-    throw new DashboardForecastRequestError(
+  if (!isDashboardCategoriesResponse(body)) {
+    throw new DashboardCategoriesRequestError(
       'invalid_response',
-      'Não foi possível carregar o fluxo previsto.',
+      'Não foi possível carregar as categorias.',
       { httpStatus: response.status },
     );
   }

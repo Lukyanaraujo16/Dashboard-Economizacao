@@ -20,8 +20,9 @@ MVP financeiro completo: NÃO.
 F11-A (23/08/2026): CONCLUÍDA — congelamento de escopo da Home.
 Home = competência mensal civil (`month=YYYY-MM`, `competenceDate`,
 `America/Sao_Paulo`). FILTER-001/005 (ranges) NÃO na Home (F11-C).
-F11-B1: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA (contrato backend).
-F11-B2: NÃO INICIADA. F11-B completa: NÃO.
+F11-B1: CONCLUÍDA (contrato backend).
+F11-B2: HOMOLOGADA. F11-B3: CONCLUÍDA (24/08/2026).
+F11-B completa (recorte mensal): SIM.
 F11-C: ADIADA / RECLASSIFICADA (relatórios / superfície futura).
 Ledger L1: FORA da Fase 11. Semântica de caixa: não reabrir aqui.
 Fase 11 total: EM ANDAMENTO.
@@ -651,7 +652,9 @@ universo do mês de competência já selecionado. Não mudam o eixo temporal.
 * Forecast e pressão: category sim; situation não aplicada (parser comum
   rejeita inválido com 400 e ignora valor válido).
 * Meta de faturamento: company-level; ignora os novos filtros.
-* F11-B2 (UI) ainda não iniciada.
+* F11-B2 (UI): HOMOLOGADA — Home envia
+  situation+category aos widgets mensais/insights/comparação; forecast e
+  pressão recebem category e não situation; meta permanece company-level.
 
 F11-C: hoje / ontem / 7d / 30d / 12 meses / ano / range personalizado
 NÃO entram na Home. Reclassificados (relatórios / Fase 12). Não é

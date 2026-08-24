@@ -372,9 +372,14 @@ Semântica financeira da V2/P2 preservada.
 Chrome:
 * cabeçalho compacto: “Dashboard financeiro” + “Visão executiva · Competência selecionada”;
 * seletor mensal compacto `< AGO 2026 >` (+ Hoje / popover de 12 meses);
-* filtro **Centro de custo** no header (CC1): “Todos” ou um centro; estado na URL
-  `?costCenter=<uuid>` (preserva `month`); ausente = consolidado;
-* com filtro ativo, nota no widget de Meta: “Meta consolidada da empresa”;
+* filtros compactos no header: **Mês**, **Situação**, **Categoria** (F11-B2);
+  centro de custo permanece em linha própria (tabs);
+  URL: `?month=YYYY-MM&costCenter=<uuid>&situation=settled|open|overdue&category=<uuid>`;
+  ausente = Todas / consolidado; inválido é removido (não grava default);
+* Situação: select Todas / Quitado / Em aberto / Vencido;
+  Categoria: combobox com busca, grupos Receita / Despesa / Não classificadas;
+* com qualquer filtro de fatia ativo (centro, situação ou categoria), nota no
+  widget de Meta: “Meta consolidada da empresa — não é afetada pelos filtros da Home.”;
 * freshness “Última atualização” ao lado; sem saudação/hero/régua anual de meses.
 
 Widgets (títulos DENTRO dos cards — WidgetShell):
@@ -559,10 +564,13 @@ Não é regressão. Não marcar esses presets como disponíveis na Home.
 Filtros oficiais da Home hoje:
 
 * mês — `month` (YYYY-MM; omitido = mês corrente);
-* centro de custo — `costCenter` (UUID; omitido = Todos).
+* centro de custo — `costCenter` (UUID; omitido = Todos);
+* situação — `situation` (`settled` | `open` | `overdue`; omitido = Todas);
+* categoria — `category` (UUID de `FinancialCategory.id`; omitido = Todas).
 
-Não usar `costCenterId`, `period` nem `comparison` na URL.
-Situação e categoria (F11-B) ainda não têm nome de query.
+Não usar `costCenterId`, `period`, `comparison`, `status`, `categoryId`
+nem CSV/array de categorias na URL.
+Filtros são cumulativos (AND). A URL é fonte de verdade.
 
 ⸻
 

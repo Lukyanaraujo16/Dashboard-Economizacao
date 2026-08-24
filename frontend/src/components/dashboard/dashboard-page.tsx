@@ -21,11 +21,26 @@ import {
   resolveSelectedDashboardCostCenterId,
 } from '../../lib/dashboard-cost-center';
 import {
+  buildDashboardSituationSearchParams,
+  dashboardSituationLabel,
+  isDashboardSituation,
+  resolveSelectedDashboardSituation,
+  type DashboardSituation,
+} from '../../lib/dashboard-situation';
+import {
+  buildDashboardCategorySearchParams,
+  isValidDashboardCategoryId,
+  resolveSelectedDashboardCategoryId,
+} from '../../lib/dashboard-category';
+import {
   createDashboardFilterCache,
+  dashboardCashWindowCacheKey,
   dashboardFilterCacheKey,
 } from '../../lib/dashboard-filter-cache';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
+import { getDashboardCategories } from '../../services/dashboard/categories';
+import type { DashboardCategoryItem } from '../../services/dashboard/categories.types';
 import { getDashboardMonthlyExpenses } from '../../services/dashboard/monthly-expenses';
 import {
   DashboardMonthlyExpenseRequestError,
@@ -87,6 +102,8 @@ import {
 import { isMonthlyRevenueEmpty } from './dashboard-monthly-revenue-view';
 import { DashboardCostCenterSelector } from './dashboard-cost-center-selector';
 import { DashboardMonthSelector } from './dashboard-month-selector';
+import { DashboardSituationSelector } from './dashboard-situation-selector';
+import { DashboardCategorySelector } from './dashboard-category-selector';
 import { executiveInsightRows } from './dashboard-executive-insights-view';
 import { formatMonthKeyPtBr } from './dashboard-forecast-view';
 import {
@@ -443,6 +460,9 @@ export function DashboardPage() {
   const [revenueGoalView, setRevenueGoalView] = useState<RevenueGoalView>({ kind: 'idle' });
   const [costCenters, setCostCenters] = useState<readonly DashboardCostCenterItem[]>([]);
   const [costCentersLoading, setCostCentersLoading] = useState(false);
+  const [categories, setCategories] = useState<readonly DashboardCategoryItem[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState(false);
   const [goalEditOpen, setGoalEditOpen] = useState(false);
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaveError, setGoalSaveError] = useState<string | null>(null);
@@ -586,10 +606,37 @@ export function DashboardPage() {
     }
   }, []);
 
+  const loadCategories = useCallback(async (signal: AbortSignal) => {
+    setCategoriesLoading(true);
+    setCategoriesError(false);
+    try {
+      const data = await getDashboardCategories();
+      if (signal.aborted) {
+        return;
+      }
+      setCategories(data.items);
+    } catch {
+      if (signal.aborted) {
+        return;
+      }
+      setCategories([]);
+      setCategoriesError(true);
+    } finally {
+      if (!signal.aborted) {
+        setCategoriesLoading(false);
+      }
+    }
+  }, []);
+
   const loadMonthEnd = useCallback(
-    async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
+    async (
+      signal: AbortSignal,
+      costCenterId: string | null,
+      categoryId: string | null,
+      options?: SoftLoadOptions,
+    ) => {
       const soft = options?.soft === true;
-      const cacheKey = costCenterId ?? '';
+      const cacheKey = dashboardCashWindowCacheKey(costCenterId, categoryId);
       const cached = monthEndCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setMonthEndView({ kind: 'ready', data: cached });
@@ -597,7 +644,7 @@ export function DashboardPage() {
         setMonthEndView({ kind: 'loading' });
       }
       try {
-        const data = await getDashboardMonthEndCashPressure(costCenterId);
+        const data = await getDashboardMonthEndCashPressure(costCenterId, categoryId);
         if (signal.aborted) {
           return;
         }
@@ -621,9 +668,14 @@ export function DashboardPage() {
   );
 
   const loadForecast = useCallback(
-    async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
+    async (
+      signal: AbortSignal,
+      costCenterId: string | null,
+      categoryId: string | null,
+      options?: SoftLoadOptions,
+    ) => {
       const soft = options?.soft === true;
-      const cacheKey = costCenterId ?? '';
+      const cacheKey = dashboardCashWindowCacheKey(costCenterId, categoryId);
       const cached = forecastCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setForecastView({ kind: 'ready', data: cached });
@@ -631,7 +683,7 @@ export function DashboardPage() {
         setForecastView({ kind: 'loading' });
       }
       try {
-        const data = await getDashboardCashFlowForecast(costCenterId);
+        const data = await getDashboardCashFlowForecast(costCenterId, categoryId);
         if (signal.aborted) {
           return;
         }
@@ -660,10 +712,12 @@ export function DashboardPage() {
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
+      situation: DashboardSituation | null,
+      categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
       const soft = options?.soft === true;
-      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId);
+      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId, situation, categoryId);
       const cached = expenseCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setMonthlyExpenseView(
@@ -678,6 +732,8 @@ export function DashboardPage() {
         const data = await getDashboardMonthlyExpenses(
           monthKey === todayMonthKey ? null : monthKey,
           costCenterId,
+          situation,
+          categoryId,
         );
         if (signal.aborted) {
           return;
@@ -711,10 +767,12 @@ export function DashboardPage() {
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
+      situation: DashboardSituation | null,
+      categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
       const soft = options?.soft === true;
-      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId);
+      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId, situation, categoryId);
       const cached = revenueCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setMonthlyRevenueView(
@@ -729,6 +787,8 @@ export function DashboardPage() {
         const data = await getDashboardMonthlyRevenue(
           monthKey === todayMonthKey ? null : monthKey,
           costCenterId,
+          situation,
+          categoryId,
         );
         if (signal.aborted) {
           return;
@@ -762,10 +822,12 @@ export function DashboardPage() {
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
+      situation: DashboardSituation | null,
+      categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
       const soft = options?.soft === true;
-      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId);
+      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId, situation, categoryId);
       const cached = insightsCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setInsightsView(
@@ -780,6 +842,8 @@ export function DashboardPage() {
         const data = await getDashboardExecutiveInsights(
           monthKey === todayMonthKey ? null : monthKey,
           costCenterId,
+          situation,
+          categoryId,
         );
         if (signal.aborted) {
           return;
@@ -807,17 +871,19 @@ export function DashboardPage() {
     [],
   );
 
-  /** Competência anterior em paralelo — receitas e despesas do mesmo mês. */
+  /** Competência anterior em paralelo — mesmos filtros da Home, mês civil anterior. */
   const loadPreviousMonth = useCallback(
     async (
       signal: AbortSignal,
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
+      situation: DashboardSituation | null,
+      categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
       const soft = options?.soft === true;
-      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId);
+      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId, situation, categoryId);
       const cached = previousMonthCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setPreviousMonthView({ kind: 'ready', revenue: cached.revenue, expense: cached.expense });
@@ -827,8 +893,8 @@ export function DashboardPage() {
       const param = monthKey === todayMonthKey ? null : monthKey;
       try {
         const [revenue, expense] = await Promise.all([
-          getDashboardMonthlyRevenue(param, costCenterId),
-          getDashboardMonthlyExpenses(param, costCenterId),
+          getDashboardMonthlyRevenue(param, costCenterId, situation, categoryId),
+          getDashboardMonthlyExpenses(param, costCenterId, situation, categoryId),
         ]);
         if (signal.aborted) {
           return;
@@ -877,8 +943,9 @@ export function DashboardPage() {
     }
     const controller = new AbortController();
     void loadCostCenters(controller.signal);
+    void loadCategories(controller.signal);
     return () => controller.abort();
-  }, [loadCostCenters, status]);
+  }, [loadCategories, loadCostCenters, status]);
 
   const todayMonthKey =
     view.kind === 'ready' ? view.data.today.slice(0, 7) : currentDashboardMonthKey();
@@ -893,12 +960,29 @@ export function DashboardPage() {
     [searchParams],
   );
 
+  const selectedSituation = useMemo(
+    () => resolveSelectedDashboardSituation(searchParams),
+    [searchParams],
+  );
+
+  const selectedCategoryId = useMemo(
+    () => resolveSelectedDashboardCategoryId(searchParams),
+    [searchParams],
+  );
+
   const selectedCostCenterName = useMemo(() => {
     if (selectedCostCenterId === null) {
       return null;
     }
     return costCenters.find((item) => item.id === selectedCostCenterId)?.name ?? null;
   }, [costCenters, selectedCostCenterId]);
+
+  const selectedCategoryName = useMemo(() => {
+    if (selectedCategoryId === null) {
+      return null;
+    }
+    return categories.find((item) => item.id === selectedCategoryId)?.name ?? null;
+  }, [categories, selectedCategoryId]);
 
   const previousMonthKey = shiftDashboardMonthKey(selectedMonthKey, -1);
   const selectedMonthPhase = dashboardMonthPhase(selectedMonthKey, todayMonthKey);
@@ -921,9 +1005,9 @@ export function DashboardPage() {
     }
     const controller = new AbortController();
     const soft = monthEndViewRef.current.kind === 'ready';
-    void loadMonthEnd(controller.signal, selectedCostCenterId, { soft });
+    void loadMonthEnd(controller.signal, selectedCostCenterId, selectedCategoryId, { soft });
     return () => controller.abort();
-  }, [cashWindowsApply, loadMonthEnd, selectedCostCenterId, view.kind]);
+  }, [cashWindowsApply, loadMonthEnd, selectedCategoryId, selectedCostCenterId, view.kind]);
 
   useEffect(() => {
     if (view.kind !== 'ready' || !cashWindowsApply) {
@@ -932,9 +1016,9 @@ export function DashboardPage() {
     }
     const controller = new AbortController();
     const soft = forecastViewRef.current.kind === 'ready';
-    void loadForecast(controller.signal, selectedCostCenterId, { soft });
+    void loadForecast(controller.signal, selectedCostCenterId, selectedCategoryId, { soft });
     return () => controller.abort();
-  }, [cashWindowsApply, loadForecast, selectedCostCenterId, view.kind]);
+  }, [cashWindowsApply, loadForecast, selectedCategoryId, selectedCostCenterId, view.kind]);
 
   useEffect(() => {
     if (view.kind !== 'ready') {
@@ -943,11 +1027,25 @@ export function DashboardPage() {
     }
     const controller = new AbortController();
     const soft = canKeepWidgetData(insightsViewRef.current.kind);
-    void loadInsights(controller.signal, selectedMonthKey, todayMonthKey, selectedCostCenterId, {
-      soft,
-    });
+    void loadInsights(
+      controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+      selectedSituation,
+      selectedCategoryId,
+      { soft },
+    );
     return () => controller.abort();
-  }, [loadInsights, selectedCostCenterId, selectedMonthKey, todayMonthKey, view.kind]);
+  }, [
+    loadInsights,
+    selectedCategoryId,
+    selectedCostCenterId,
+    selectedMonthKey,
+    selectedSituation,
+    todayMonthKey,
+    view.kind,
+  ]);
 
   useEffect(() => {
     if (view.kind !== 'ready') {
@@ -961,6 +1059,8 @@ export function DashboardPage() {
       selectedMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      selectedSituation,
+      selectedCategoryId,
       { soft: softRevenue },
     );
     void loadMonthlyExpenses(
@@ -968,14 +1068,18 @@ export function DashboardPage() {
       selectedMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      selectedSituation,
+      selectedCategoryId,
       { soft: softExpense },
     );
     return () => controller.abort();
   }, [
     loadMonthlyExpenses,
     loadMonthlyRevenue,
+    selectedCategoryId,
     selectedCostCenterId,
     selectedMonthKey,
+    selectedSituation,
     todayMonthKey,
     view.kind,
   ]);
@@ -1002,14 +1106,26 @@ export function DashboardPage() {
       previousMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      selectedSituation,
+      selectedCategoryId,
       { soft },
     );
     return () => controller.abort();
-  }, [loadPreviousMonth, previousMonthKey, selectedCostCenterId, todayMonthKey, view.kind]);
+  }, [
+    loadPreviousMonth,
+    previousMonthKey,
+    selectedCategoryId,
+    selectedCostCenterId,
+    selectedSituation,
+    todayMonthKey,
+    view.kind,
+  ]);
 
   useEffect(() => {
     const rawMonth = searchParams.get('month');
     const rawCostCenter = searchParams.get('costCenter');
+    const rawSituation = searchParams.get('situation');
+    const rawCategory = searchParams.get('category');
     let nextParams: URLSearchParams | null = null;
     if (rawMonth !== null && rawMonth.trim() !== '' && !isValidDashboardMonthKey(rawMonth)) {
       nextParams = buildDashboardMonthSearchParams(
@@ -1024,6 +1140,20 @@ export function DashboardPage() {
       !isValidDashboardCostCenterId(rawCostCenter)
     ) {
       nextParams = buildDashboardCostCenterSearchParams(nextParams ?? searchParams, null);
+    }
+    if (
+      rawSituation !== null &&
+      rawSituation.trim() !== '' &&
+      !isDashboardSituation(rawSituation.trim())
+    ) {
+      nextParams = buildDashboardSituationSearchParams(nextParams ?? searchParams, null);
+    }
+    if (
+      rawCategory !== null &&
+      rawCategory.trim() !== '' &&
+      !isValidDashboardCategoryId(rawCategory)
+    ) {
+      nextParams = buildDashboardCategorySearchParams(nextParams ?? searchParams, null);
     }
     if (nextParams) {
       const qs = nextParams.toString();
@@ -1049,14 +1179,32 @@ export function DashboardPage() {
     [pathname, router, searchParams],
   );
 
+  const selectSituation = useCallback(
+    (situation: DashboardSituation | null) => {
+      const next = buildDashboardSituationSearchParams(searchParams, situation);
+      const qs = next.toString();
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
+
+  const selectCategory = useCallback(
+    (categoryId: string | null) => {
+      const next = buildDashboardCategorySearchParams(searchParams, categoryId);
+      const qs = next.toString();
+      router.push(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
+
   const retryOverview = () => {
     void loadOverview(new AbortController().signal, selectedCostCenterId);
   };
   const retryMonthEnd = () => {
-    void loadMonthEnd(new AbortController().signal, selectedCostCenterId);
+    void loadMonthEnd(new AbortController().signal, selectedCostCenterId, selectedCategoryId);
   };
   const retryForecast = () => {
-    void loadForecast(new AbortController().signal, selectedCostCenterId);
+    void loadForecast(new AbortController().signal, selectedCostCenterId, selectedCategoryId);
   };
   const retryRevenue = () => {
     void loadMonthlyRevenue(
@@ -1064,6 +1212,8 @@ export function DashboardPage() {
       selectedMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      selectedSituation,
+      selectedCategoryId,
     );
   };
   const retryExpenses = () => {
@@ -1072,6 +1222,8 @@ export function DashboardPage() {
       selectedMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      selectedSituation,
+      selectedCategoryId,
     );
   };
   const retryInsights = () => {
@@ -1080,6 +1232,8 @@ export function DashboardPage() {
       selectedMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      selectedSituation,
+      selectedCategoryId,
     );
   };
   const retryPreviousMonth = () => {
@@ -1088,8 +1242,11 @@ export function DashboardPage() {
       previousMonthKey,
       todayMonthKey,
       selectedCostCenterId,
+      selectedSituation,
+      selectedCategoryId,
     );
   };
+
   const retryRevenueGoal = () => {
     void loadRevenueGoal(new AbortController().signal, selectedMonthKey, todayMonthKey);
   };
@@ -1126,11 +1283,17 @@ export function DashboardPage() {
   const gate = widgetGate(view);
   const monthLabel = formatMonthKeyPtBr(selectedMonthKey);
   const previousMonthLabel = formatMonthKeyPtBr(previousMonthKey);
-  const pageSubtitle =
+  const pageSubtitle = [
     selectedCostCenterName !== null
       ? `Visão executiva · ${selectedCostCenterName}`
-      : 'Visão executiva · Competência selecionada';
-  const costCenterFilterActive = selectedCostCenterId !== null;
+      : 'Visão executiva · Competência selecionada',
+    selectedSituation !== null ? dashboardSituationLabel(selectedSituation) : null,
+    selectedCategoryName,
+  ]
+    .filter((part): part is string => part !== null && part !== '')
+    .join(' · ');
+  const sliceFilterActive =
+    selectedCostCenterId !== null || selectedSituation !== null || selectedCategoryId !== null;
 
   const revenueData =
     monthlyRevenueView.kind === 'ready' || monthlyRevenueView.kind === 'empty'
@@ -1367,6 +1530,8 @@ export function DashboardPage() {
       data-dashboard-page="true"
       data-overview-state={view.kind}
       data-filter-stable={view.kind === 'ready' ? 'true' : undefined}
+      data-situation={selectedSituation ?? 'all'}
+      data-category={selectedCategoryId ?? 'all'}
     >
       <div className={styles.pageHeader}>
         <div className={styles.pageHeaderCopy}>
@@ -1380,15 +1545,19 @@ export function DashboardPage() {
             onSelect={selectMonth}
             disabled={view.kind !== 'ready'}
           />
-          {costCenters.length > 0 ? (
-            <DashboardCostCenterSelector
-              items={costCenters}
-              selectedId={selectedCostCenterId}
-              onSelect={selectCostCenter}
-              disabled={view.kind !== 'ready'}
-              loading={costCentersLoading}
-            />
-          ) : null}
+          <DashboardSituationSelector
+            selected={selectedSituation}
+            onSelect={selectSituation}
+            disabled={view.kind !== 'ready'}
+          />
+          <DashboardCategorySelector
+            items={categories}
+            selectedId={selectedCategoryId}
+            onSelect={selectCategory}
+            disabled={view.kind !== 'ready'}
+            loading={categoriesLoading}
+            error={categoriesError}
+          />
           {freshness ? (
             <p className={styles.freshnessPill}>
               <RefreshCw
@@ -1405,6 +1574,17 @@ export function DashboardPage() {
           ) : null}
         </div>
       </div>
+      {costCenters.length > 0 ? (
+        <div className={styles.costCenterRow} data-cost-center-row="true">
+          <DashboardCostCenterSelector
+            items={costCenters}
+            selectedId={selectedCostCenterId}
+            onSelect={selectCostCenter}
+            disabled={view.kind !== 'ready'}
+            loading={costCentersLoading}
+          />
+        </div>
+      ) : null}
 
       {integrationStatus === 'DISCONNECTED' ? (
         <p className={styles.notice} role="status">
@@ -1712,8 +1892,10 @@ export function DashboardPage() {
               snapshot={revenueGoalData}
               onEdit={openGoalEditor}
             />
-            {costCenterFilterActive ? (
-              <p className={styles.goalConsolidatedNote}>Meta consolidada da empresa</p>
+            {sliceFilterActive ? (
+              <p className={styles.goalConsolidatedNote}>
+                Meta consolidada da empresa — não é afetada pelos filtros da Home.
+              </p>
             ) : null}
           </WidgetBody>
         </WidgetShell>

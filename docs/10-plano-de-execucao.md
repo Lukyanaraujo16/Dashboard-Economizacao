@@ -827,8 +827,9 @@ Não bloqueia:
 - Fase 9 — Motor Analítico
 - Fase 10 — Dashboard do Cliente
 
-Próxima fase executável: Fase 11 — F11-B2 (F11-B1 IMPLEMENTADA / AGUARDANDO
-HOMOLOGAÇÃO TÉCNICA; F11-A CONCLUÍDA; F11-C RECLASSIFICADA).
+Recorte mensal da Fase 11 (F11-A/B) CONCLUÍDO. F11-B2 HOMOLOGADA.
+F11-B3 CONCLUÍDA (24/08/2026). F11-C permanece ADIADA / RECLASSIFICADA
+(não é próxima da Home).
 Fase 11 total: EM ANDAMENTO.
 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE.
 E1 Pressão de caixa: HOMOLOGADA VISUALMENTE.
@@ -859,7 +860,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 11 EM ANDAMENTO (F11-A CONCLUÍDA; F11-B1 IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA; F11-B2 NÃO INICIADA; F11-C ADIADA / RECLASSIFICADA). 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
+Próxima fase: Fase 11 recorte mensal CONCLUÍDO (F11-A CONCLUÍDA; F11-B1 CONCLUÍDA; F11-B2 HOMOLOGADA; F11-B3 CONCLUÍDA; F11-C ADIADA / RECLASSIFICADA). 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -1106,9 +1107,10 @@ F11-A — Congelamento de escopo da Home: CONCLUÍDA (23/08/2026)
      Comparação oficial = mês × mês civil anterior (sem seletor de base).
      Meta F2 permanece company-level. Forecast/upcoming/pressão = P1.1
      (hoje + `dueDate`). Ledger L1 FORA da Fase 11.
-F11-B — Filtros por situação e categoria no mês: EM ANDAMENTO
-     F11-B1 contrato/backend: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA.
-     F11-B2 frontend: NÃO INICIADA.
+F11-B — Filtros por situação e categoria no mês: CONCLUÍDA (recorte mensal)
+     F11-B1 contrato/backend: CONCLUÍDA.
+     F11-B2 frontend: HOMOLOGADA.
+     F11-B3 homologação F11-B2: CONCLUÍDA (24/08/2026).
      `situation=settled|open|overdue` (D1 para overdue; sem query `status`).
      `category=<uuid>` de FinancialCategory.id (match D8 preciso; 404
      cross-tenant). GET /dashboard/categories alimenta o picker.

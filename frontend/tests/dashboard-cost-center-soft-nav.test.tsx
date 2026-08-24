@@ -24,6 +24,7 @@ import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-re
 import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
+import { getDashboardCategories } from '../src/services/dashboard/categories';
 import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
 import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
 import type { DashboardExecutiveInsightsResponse } from '../src/services/dashboard/executive-insights.types';
@@ -103,6 +104,7 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
   putDashboardRevenueGoal: vi.fn(),
 }));
 vi.mock('../src/services/dashboard/cost-centers', () => ({ getDashboardCostCenters: vi.fn() }));
+vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories: vi.fn() }));
 
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
@@ -112,6 +114,7 @@ const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
+const getCategories = vi.mocked(getDashboardCategories);
 
 const syncedOverview: DashboardOverviewResponse = {
   today: '2026-08-21',
@@ -225,8 +228,8 @@ function renderDashboard() {
 
 describe('dashboardFilterCache', () => {
   it('chave e get/set', () => {
-    expect(dashboardFilterCacheKey('2026-08', null)).toBe('2026-08|');
-    expect(dashboardFilterCacheKey('2026-08', CENTER_A)).toBe(`2026-08|${CENTER_A}`);
+    expect(dashboardFilterCacheKey('2026-08', null)).toBe('2026-08|||');
+    expect(dashboardFilterCacheKey('2026-08', CENTER_A)).toBe(`2026-08|${CENTER_A}||`);
     const cache = createDashboardFilterCache<string>();
     cache.set('k', 'v');
     expect(cache.get('k')).toBe('v');
@@ -250,6 +253,7 @@ describe('CC1.3.1 soft filter refresh', () => {
         { id: CENTER_B, name: 'Laranjeiras', code: null, active: true },
       ],
     });
+    getCategories.mockResolvedValue({ items: [] });
   });
 
   afterEach(() => {
@@ -367,5 +371,37 @@ describe('CC1.3.1 soft filter refresh', () => {
       expect(screen.getByRole('tab', { name: 'Todos' }).getAttribute('aria-selected')).toBe('true');
     });
     expect(document.querySelector('[data-overview-state="loading"]')).toBeNull();
+  });
+
+  it('troca de situação e categoria atualiza URL sem reload e propaga aos fetches', async () => {
+    const categoryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    getCategories.mockResolvedValue({
+      items: [{ id: categoryId, name: 'Serviços', type: 'REVENUE' }],
+    });
+    renderDashboard();
+    await waitFor(() => {
+      expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
+    });
+
+    fireEvent.change(screen.getByLabelText('Situação'), { target: { value: 'overdue' } });
+    await waitFor(() => {
+      expect(paramsStore.get('situation')).toBe('overdue');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Categoria:/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'Serviços' }));
+    await waitFor(() => {
+      expect(paramsStore.get('category')).toBe(categoryId);
+      expect(paramsStore.get('situation')).toBe('overdue');
+    });
+
+    await waitFor(() => {
+      expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, 'overdue', categoryId);
+      expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null, 'overdue', categoryId);
+      expect(getInsights).toHaveBeenCalledWith(null, null, 'overdue', categoryId);
+      expect(getForecast).toHaveBeenCalledWith(null, categoryId);
+      expect(getMonthEnd).toHaveBeenCalledWith(null, categoryId);
+    });
+    expect(getRevenueGoal.mock.calls.every((call) => call.length === 1)).toBe(true);
   });
 });

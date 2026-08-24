@@ -1,4 +1,5 @@
 import { dashboardExecutiveInsightsPath } from '../../lib/api-config';
+import type { DashboardSituation } from '../../lib/dashboard-situation';
 import type { DashboardExecutiveInsightsResponse } from './executive-insights.types';
 import { DashboardExecutiveInsightsRequestError } from './executive-insights.types';
 
@@ -82,15 +83,20 @@ function toFailure(response: Response, body: unknown): DashboardExecutiveInsight
 export async function getDashboardExecutiveInsights(
   monthKey?: string | null,
   costCenterId?: string | null,
+  situation?: DashboardSituation | null,
+  categoryId?: string | null,
 ): Promise<DashboardExecutiveInsightsResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardExecutiveInsightsPath(monthKey, costCenterId), {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    });
+    response = await fetch(
+      dashboardExecutiveInsightsPath(monthKey, costCenterId, situation, categoryId),
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      },
+    );
   } catch (cause) {
     throw new DashboardExecutiveInsightsRequestError(
       'unavailable',

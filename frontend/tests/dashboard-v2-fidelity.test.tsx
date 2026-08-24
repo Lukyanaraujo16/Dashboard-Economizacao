@@ -20,6 +20,7 @@ import {
 } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
+import { getDashboardCategories } from '../src/services/dashboard/categories';
 import { ThemeProvider } from '../src/theme';
 import {
   createAuthenticatedGetCurrentUser,
@@ -71,6 +72,10 @@ vi.mock('../src/services/dashboard/cost-centers', () => ({
   getDashboardCostCenters: vi.fn(),
 }));
 
+vi.mock('../src/services/dashboard/categories', () => ({
+  getDashboardCategories: vi.fn(),
+}));
+
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
@@ -80,6 +85,7 @@ const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const putRevenueGoal = vi.mocked(putDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
+const getCategories = vi.mocked(getDashboardCategories);
 
 const unconfiguredGoal: RevenueGoalSnapshot = {
   monthKey: '2026-08',
@@ -298,6 +304,7 @@ beforeEach(() => {
       },
     ],
   });
+  getCategories.mockResolvedValue({ items: [] });
 });
 
 afterEach(() => {
@@ -576,10 +583,12 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(cluster).toBeTruthy();
     const scope = within(cluster as HTMLElement);
     expect(scope.getByLabelText('Visão mensal por competência')).toBeTruthy();
-    expect(scope.getByLabelText('Centro de custo')).toBeTruthy();
-    expect(scope.getByRole('tablist', { name: 'Centros de custo' })).toBeTruthy();
-    expect(scope.getByRole('tab', { name: 'Todos' })).toBeTruthy();
+    expect(scope.getByLabelText('Situação')).toBeTruthy();
     expect(scope.getByText('Última atualização')).toBeTruthy();
+    expect(document.querySelector('[data-cost-center-row]')).toBeTruthy();
+    expect(screen.getByLabelText('Centro de custo')).toBeTruthy();
+    expect(screen.getByRole('tablist', { name: 'Centros de custo' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Todos' })).toBeTruthy();
     const time = (cluster as HTMLElement).querySelector('time');
     expect(time?.getAttribute('datetime')).toBe('2026-08-10T09:00:00.000Z');
   });
@@ -600,9 +609,9 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(
       scope.getByText('Comparação entre competências; a variação não representa movimento de caixa.'),
     ).toBeTruthy();
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null, null, null);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', null, null, null);
   });
 
   it('movimentação diária da competência declara que não é caixa', async () => {
@@ -635,10 +644,10 @@ describe('Dashboard V2.3 fidelidade', () => {
     renderDashboard();
 
     await waitFor(() => {
-      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null);
-      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-06', null);
+      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null, null, null);
+      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-06', null, null, null);
     });
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-06', null);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-06', null, null, null);
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getForecast).not.toHaveBeenCalled();
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();

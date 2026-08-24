@@ -5,6 +5,9 @@
  * (ex.: `/auth/login`). O Next.js faz rewrite para o Fastify via `API_URL`.
  */
 
+import type { DashboardHomeQuery } from './dashboard-home-query';
+import type { DashboardSituation } from './dashboard-situation';
+
 /** Prefixo same-origin das rotas de autenticação. */
 export const AUTH_API_PREFIX = '/auth';
 
@@ -153,10 +156,7 @@ export function adminTenantUserResetPasswordPath(tenantId: string, userId: strin
 /** Prefixo same-origin da Dashboard financeira do cliente (10A/10B). */
 export const DASHBOARD_API_PREFIX = '/dashboard';
 
-export type DashboardQueryOptions = {
-  readonly monthKey?: string | null;
-  readonly costCenterId?: string | null;
-};
+export type DashboardQueryOptions = DashboardHomeQuery;
 
 function dashboardQueryString(options?: DashboardQueryOptions): string {
   const params = new URLSearchParams();
@@ -168,12 +168,24 @@ function dashboardQueryString(options?: DashboardQueryOptions): string {
   if (costCenterId) {
     params.set('costCenter', costCenterId);
   }
+  const situation = options?.situation?.trim();
+  if (situation) {
+    params.set('situation', situation);
+  }
+  const categoryId = options?.categoryId?.trim();
+  if (categoryId) {
+    params.set('category', categoryId);
+  }
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
 
 export function dashboardCostCentersPath(): string {
   return `${DASHBOARD_API_PREFIX}/cost-centers`;
+}
+
+export function dashboardCategoriesPath(): string {
+  return `${DASHBOARD_API_PREFIX}/categories`;
 }
 
 export function dashboardOverviewPath(costCenterId?: string | null): string {
@@ -192,8 +204,14 @@ export function dashboardUpcomingPath(
   return `${DASHBOARD_API_PREFIX}/upcoming?${params.toString()}`;
 }
 
-export function dashboardCashFlowForecastPath(costCenterId?: string | null): string {
-  return `${DASHBOARD_API_PREFIX}/cash-flow-forecast${dashboardQueryString({ costCenterId })}`;
+export function dashboardCashFlowForecastPath(
+  costCenterId?: string | null,
+  categoryId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/cash-flow-forecast${dashboardQueryString({
+    costCenterId,
+    categoryId,
+  })}`;
 }
 
 export function dashboardExpenseCompositionPath(costCenterId?: string | null): string {
@@ -207,22 +225,43 @@ export function dashboardReceivableCompositionPath(costCenterId?: string | null)
 export function dashboardMonthlyRevenuePath(
   monthKey?: string | null,
   costCenterId?: string | null,
+  situation?: DashboardSituation | null,
+  categoryId?: string | null,
 ): string {
-  return `${DASHBOARD_API_PREFIX}/monthly-revenue${dashboardQueryString({ monthKey, costCenterId })}`;
+  return `${DASHBOARD_API_PREFIX}/monthly-revenue${dashboardQueryString({
+    monthKey,
+    costCenterId,
+    situation,
+    categoryId,
+  })}`;
 }
 
 export function dashboardMonthlyExpensesPath(
   monthKey?: string | null,
   costCenterId?: string | null,
+  situation?: DashboardSituation | null,
+  categoryId?: string | null,
 ): string {
-  return `${DASHBOARD_API_PREFIX}/monthly-expenses${dashboardQueryString({ monthKey, costCenterId })}`;
+  return `${DASHBOARD_API_PREFIX}/monthly-expenses${dashboardQueryString({
+    monthKey,
+    costCenterId,
+    situation,
+    categoryId,
+  })}`;
 }
 
 export function dashboardExecutiveInsightsPath(
   monthKey?: string | null,
   costCenterId?: string | null,
+  situation?: DashboardSituation | null,
+  categoryId?: string | null,
 ): string {
-  return `${DASHBOARD_API_PREFIX}/executive-insights${dashboardQueryString({ monthKey, costCenterId })}`;
+  return `${DASHBOARD_API_PREFIX}/executive-insights${dashboardQueryString({
+    monthKey,
+    costCenterId,
+    situation,
+    categoryId,
+  })}`;
 }
 
 /** Meta mensal de faturamento (F2) — sempre consolidada; sem `costCenter`. */
@@ -230,8 +269,14 @@ export function dashboardRevenueGoalPath(monthKey?: string | null): string {
   return `${DASHBOARD_API_PREFIX}/revenue-goal${dashboardQueryString({ monthKey })}`;
 }
 
-export function dashboardMonthEndCashPressurePath(costCenterId?: string | null): string {
-  return `${DASHBOARD_API_PREFIX}/month-end-cash-pressure${dashboardQueryString({ costCenterId })}`;
+export function dashboardMonthEndCashPressurePath(
+  costCenterId?: string | null,
+  categoryId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/month-end-cash-pressure${dashboardQueryString({
+    costCenterId,
+    categoryId,
+  })}`;
 }
 
 /** Prefixo same-origin do branding da sessão autenticada. */

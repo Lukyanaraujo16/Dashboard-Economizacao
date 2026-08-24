@@ -1,4 +1,5 @@
 import { dashboardMonthlyRevenuePath } from '../../lib/api-config';
+import type { DashboardSituation } from '../../lib/dashboard-situation';
 import type {
   DashboardMonthlyRevenueItem,
   DashboardMonthlyRevenueResponse,
@@ -118,15 +119,20 @@ function toFailure(response: Response, body: unknown): DashboardMonthlyRevenueRe
 export async function getDashboardMonthlyRevenue(
   monthKey?: string | null,
   costCenterId?: string | null,
+  situation?: DashboardSituation | null,
+  categoryId?: string | null,
 ): Promise<DashboardMonthlyRevenueResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardMonthlyRevenuePath(monthKey, costCenterId), {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    });
+    response = await fetch(
+      dashboardMonthlyRevenuePath(monthKey, costCenterId, situation, categoryId),
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      },
+    );
   } catch (cause) {
     throw new DashboardMonthlyRevenueRequestError(
       'unavailable',
