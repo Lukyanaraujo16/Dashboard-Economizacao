@@ -38,5 +38,12 @@ Thumbs.db
 .idea/
 .vscode/
 
-# File storage (local MVP) — apenas o diretório de dados na raiz
+# File storage (local MVP) — raiz e backend
 /storage/
+backend/storage/
+
+# UX screenshot dumps (histórico local; não versionar)
+frontend/.ux-*-screenshots/
+
+# Probes temporários
+backend/scripts/_tmp-*

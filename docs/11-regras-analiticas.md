@@ -355,6 +355,21 @@ Simétrico a §9, usando AP (Payable) e tipo EXPENSE.
   ZERO categorias → "Sem categoria"
   N categorias sem rateio → "Sem classificação precisa"
 
+A Dashboard (E2 estoque) apresenta a soma do unpaid em aberto por esses buckets.
+Não é despesa realizada. Semântica D8 inalterada.
+Essa fórmula **não** alimenta a Home após P1.1.
+
+A Home apresenta despesa mensal por competência (`GET /dashboard/monthly-expenses`):
+AP com competenceDate no mês civil selecionado, incluindo PAID; D8 sobre o
+total do mês. `paid` HTTP = Σ paid do snapshot, não caixa do mês.
+Título: “Despesas por categoria”. Não é estoque até 2028.
+
+A Home apresenta receita mensal por competência (`GET /dashboard/monthly-revenue`):
+AR com competenceDate no mês civil corrente, incluindo PAID; D8 sobre o
+total do mês. `received` = Σ paid do snapshot, não caixa do mês.
+F1-G: o card Faturamento Gerencial usa o mesmo `total` (§12).
+A composição de receitas do painel permanece mensal por competência.
+
 ⸻
 
 11. Receita × Despesa (D7)
@@ -377,14 +392,37 @@ rótulo neste item antes de implementar.
 
 12. Faturamento
 
-Status: ADIADO DO PRIMEIRO RECORTE. Aprovado em 19/08/2026.
+Status: FATURAMENTO GERENCIAL IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO (F1-G).
+Faturamento fiscal (NF-e/NFS-e): capacidade futura separada — NÃO IMPLEMENTADO.
 
-Razão: não existe definição oficial da fonte. As opções possíveis
-(vendas emitidas, AR originados, AR recebidos, NF) produzem valores
-diferentes e nenhuma equivale automaticamente a "faturamento".
+Definição homologada (F0-G + decisão de produto):
 
-Nenhum KPI chamado "faturamento" deve ser implementado sem definição
-funcional explícita neste item. Não buscar vendas/NF por garantia.
+  Faturamento Gerencial mensal =
+    Σ total dos AR com competenceDate no mês civil selecionado
+    status ∈ {OPEN, OVERDUE, PARTIALLY_PAID, PAID}
+    fora: RENEGOTIATED, LOST, UNKNOWN
+
+Fonte: `GET /dashboard/monthly-revenue?month=YYYY-MM` (M1).
+Card Home: valor = `receivables.total` do mesmo contrato.
+
+Semântica temporal (America/Sao_Paulo):
+  passado  → “Faturamento” · gerado na competência
+  atual    → “Faturamento” · gerado até agora
+  futuro   → “Faturamento previsto” se houver títulos;
+             empty (“—”) se não houver — nunca R$ 0,00 como realizado
+
+`received` / `outstanding` do monthly-revenue NÃO são caixa do mês.
+
+Estoque AP/AR do overview NÃO alimenta os cards principais da Home (P1.1).
+Permanece como capacidade reutilizável (carteira / drill-down futuro).
+
+P1.1 — Home month-scoped (20/08/2026):
+  A receber (Home) = monthly-revenue.outstanding
+  A pagar (Home) = monthly-expenses.outstanding
+  Recebíveis vencidos (Home) = monthly-revenue.overdue
+  Inadimplência (Home) = overdue ÷ outstanding da competência (empty se outstanding = 0)
+  Dimensão AP da Home = competenceDate (despesa do mês), não dueDate
+    (vencimentos do mês continuam na pressão/upcoming, só no mês atual).
 
 ⸻
 
@@ -440,10 +478,12 @@ GRUPO C — Exige novo dado / ampliação da integração:
   13. Fluxo de caixa realizado (exige endpoint de baixas)
   14. Saldo (exige endpoint de saldo)
 
-GRUPO D — Adiado:
+GRUPO D — Adiado / parcialmente desbloqueado:
 
-  15. Faturamento (sem definição de fonte)
-  16. Despesas fixas/variáveis (sem regra determinística)
+  15. Faturamento Gerencial — IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO (F1-G;
+      fonte = receita por competência / monthly-revenue). Faturamento fiscal
+      (NF-e/NFS-e) permanece futuro e separado.
+  16. Despesas fixas/variáveis (sem regra determinística) — FV1 NÃO INICIADO
   17. Receita × Despesa (D7 — nome genérico não sustentado)
 
 ⸻
@@ -491,7 +531,8 @@ utilizável (Grupo A):
   (Fase 10);
 * janela N de "próximos vencimentos" além da regra dueDate >= hoje
   (detalhe de apresentação; horizonte de 90 dias já define o fluxo);
-* definição futura de faturamento (§12) — sem fonte oficial;
+* Faturamento Gerencial (§12 / F1-G) — IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+  (fonte = monthly-revenue); faturamento fiscal futuro separado;
 * ledger / data efetiva de baixa (§8) — `paid` acumulado ≠ ledger;
 * saldo de conta (§13);
 * fixas/variáveis (§14);
@@ -508,8 +549,9 @@ utilizável (Grupo A):
 
 Não bloqueia Fase 10. Não apagar do MVP completo.
 
-A — Depende de decisão/fonte:
-* faturamento (§12)
+A — Faturamento:
+* Faturamento Gerencial (§12 / F1-G) — IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+* Faturamento fiscal (NF-e/NFS-e) — futuro separado (F0 preservado)
 
 B — Extensão analítica com dados parcialmente disponíveis:
 * receita por categoria (D8, §9)

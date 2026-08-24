@@ -552,23 +552,21 @@ O significado exato de cada saldo deverá ser validado antes da criação do ind
 
 28. Faturamento
 
-O Dashboard Economização deverá possuir indicador de faturamento.
+O Dashboard Economização possui indicador de **Faturamento Gerencial**
+(F1-G / docs/11 §12): Σ total dos AR por `competenceDate` do mês
+selecionado, via `GET /dashboard/monthly-revenue`.
 
-Entretanto, antes da implementação deverá ser definida formalmente a fonte utilizada.
+Não usa vendas, NF-e nem NFS-e neste card.
 
-Possíveis fontes deverão ser avaliadas conforme os dados reais disponibilizados pela API, tais como:
+Faturamento fiscal (NF-e/NFS-e) permanece capacidade futura separada
+(auditoria F0 preservada).
 
-* vendas;
-* receitas financeiras;
-* eventos financeiros relacionados a vendas.
-
-Não deverá existir cálculo de “faturamento” sem uma definição funcional explícita.
+Decisão histórica (19/08/2026): faturamento ADIADO do primeiro Dashboard
+até definição de fonte — supersedida em 20/08/2026 pela definição
+gerencial acima.
 
 ⸻
 
-
-Decisão aprovada (19/08/2026): faturamento ADIADO do primeiro Dashboard.
-Não buscar endpoint de vendas nem NF nesta rodada. Ponto de extensão: docs/11 §12.
 29. Contas a receber
 
 Indicador confirmado como tecnicamente compatível com o domínio disponível.
