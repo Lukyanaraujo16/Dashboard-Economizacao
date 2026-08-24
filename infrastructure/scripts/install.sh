@@ -594,44 +594,36 @@ bootstrap_super_admin() {
 }
 
 health_check() {
-  local app_url
+  local app_url expect_worker=0
   app_url="$(de_read_state "$STATE_FILE" "app_url" || true)"
   local ok_api="FALHA" ok_db="FALHA" ok_redis="FALHA" ok_web_int="FALHA" ok_web_pub="FALHA"
   local ok_nginx="FALHA" ok_worker="N/A" ok_ssl="N/A"
   local hc_rc=0
-  if curl -fsS --max-time 5 http://127.0.0.1:3001/health >/dev/null; then ok_api="OK"; fi
-  if curl -fsS --max-time 5 http://127.0.0.1:3001/health/db >/dev/null; then ok_db="OK"; fi
-  if curl -fsS --max-time 5 http://127.0.0.1:3001/health/redis >/dev/null; then ok_redis="OK"; fi
-  if curl -fsS --max-time 5 http://127.0.0.1:3000/login >/dev/null; then ok_web_int="OK"; fi
-  if [[ "$DE_DRY_RUN" != "1" ]] && nginx -t >/dev/null 2>&1; then
-    ok_nginx="OK"
-  elif [[ "$DE_DRY_RUN" == "1" ]]; then
-    ok_nginx="dry-run"
-  fi
-  if [[ -n "$app_url" && "$DE_DRY_RUN" != "1" ]]; then
-    local hdr body
-    hdr="$(mktemp)"
-    body="$(mktemp)"
-    if curl -sS --max-time 8 -D "$hdr" -o "$body" "${app_url}/login"; then
-      if de_public_web_is_app "$(cat "$hdr")" "$(cat "$body")"; then
-        ok_web_pub="OK"
-      fi
-    fi
-    rm -f "$hdr" "$body"
-  fi
-  if [[ "$DE_DRY_RUN" != "1" ]] && systemctl is-active --quiet dashboard-economizacao-worker.service 2>/dev/null; then
-    ok_worker="OK"
-  elif [[ "$DE_DRY_RUN" == "1" ]]; then
-    ok_worker="dry-run"
+  if [[ "$DE_DRY_RUN" == "1" ]]; then
     ok_api="dry-run"
     ok_db="dry-run"
     ok_redis="dry-run"
     ok_web_int="dry-run"
     ok_web_pub="dry-run"
     ok_nginx="dry-run"
+    ok_worker="dry-run"
+  else
+    de_log "Aguardando prontidão dos serviços..."
+    if de_env_has_nonempty "$APP_ENV_FILE" "CONTA_AZUL_CLIENT_ID"; then
+      expect_worker=1
+    fi
+    de_evaluate_readiness "${app_url:-}" "$expect_worker" || true
+    ok_api="$DE_RDY_API"
+    ok_db="$DE_RDY_DB"
+    ok_redis="$DE_RDY_REDIS"
+    ok_web_int="$DE_RDY_WEB_INT"
+    ok_web_pub="$DE_RDY_WEB_PUB"
+    ok_nginx="$DE_RDY_NGINX"
+    ok_worker="$DE_RDY_WORKER"
+    hc_rc="${DE_RDY_RC:-1}"
   fi
   if [[ "${app_url}" == https://* && "$DE_DRY_RUN" != "1" ]]; then
-    if [[ "$ok_web_pub" == "OK" ]]; then ok_ssl="OK"; else ok_ssl="FALHA"; fi
+    if de_status_is_ok "$ok_web_pub"; then ok_ssl="OK"; else ok_ssl="FALHA"; fi
   fi
   de_log ""
   de_log "INSTALAÇÃO — STATUS"
@@ -653,11 +645,6 @@ health_check() {
   fi
   de_log "SUPER_ADMIN:  ${super_admin_state}"
   de_log ""
-  if [[ "$DE_DRY_RUN" != "1" ]]; then
-    if [[ "$ok_nginx" != "OK" || "$ok_web_pub" != "OK" ]]; then
-      hc_rc=1
-    fi
-  fi
   return "$hc_rc"
 }
 
@@ -791,7 +778,7 @@ action_new_install() {
   fi
   bootstrap_super_admin || true
   if ! health_check; then
-    de_err "Health Nginx/WEB_PUBLIC falhou. Instalação não marcada como concluída."
+    de_err "Readiness incompleta. Instalação não marcada como concluída."
     return 1
   fi
   de_write_state "$STATE_FILE" "installed" "true"

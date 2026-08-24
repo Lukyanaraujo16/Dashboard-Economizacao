@@ -25,7 +25,7 @@ assert_ok "H. SSL/render desabilita default" 'grep -q de_disable_distro_nginx_de
 assert_ok "H. SSL não recria sites-enabled/default" '! grep -qE "ln .*sites-enabled/default" "$INSTALLER"'
 assert_ok "menu manutenção tem reparar" 'grep -q "\\[8\\] Reparar serviços" "$INSTALLER"'
 assert_ok "SUPER_ADMIN já configurado é preservado" 'grep -q "SUPER_ADMIN já configurado; conta existente preservada" "$INSTALLER"'
-assert_ok "installed=true só após health público" 'grep -q "Health Nginx/WEB_PUBLIC falhou. Instalação não marcada como concluída" "$INSTALLER"'
+assert_ok "installed=true só após readiness completa" 'grep -q "Readiness incompleta. Instalação não marcada como concluída" "$INSTALLER"'
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

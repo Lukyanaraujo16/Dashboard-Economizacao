@@ -107,6 +107,8 @@ Não se usa `git config safe.directory`.
 
 Nesta VPS o Dashboard assume a porta 80/443. O instalador **desabilita o symlink** `/etc/nginx/sites-enabled/default` (não apaga `/etc/nginx/sites-available/default`). Só recarrega o Nginx depois de `nginx -t` passar. O status separa `WEB_INTERNAL` (Next em `127.0.0.1:3000`) de `WEB_PUBLIC` (`APP_URL` via Nginx). Falha de `nginx -t` ou página “Welcome to nginx” **não** conclui a instalação como sucesso.
 
+Após start/restart, o instalador **espera** o serviço ficar realmente pronto (HTTP 200), em vez de consultar health no instante do `systemctl restart`. Intervalo 1s, timeout 30s. Se a unidade systemd entrar em `failed`, a espera encerra imediatamente. `DATABASE` e `REDIS` só são avaliados depois da API pronta. A mesma política vale para nova instalação, reparar serviços, atualizar e reiniciar. `installed=true` só é gravado quando API, DATABASE, REDIS, WEB_INTERNAL, NGINX_CONFIG e WEB_PUBLIC estão ready (worker ativo quando a Conta Azul está configurada). SUPER_ADMIN permanece independente.
+
 O instalador clona o **remote Git no SHA informado**. Não copia working tree local (evita WIP ledger).
 
 SHA de referência do piloto inicial (não é versão eterna):

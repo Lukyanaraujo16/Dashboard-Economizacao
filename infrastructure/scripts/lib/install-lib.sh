@@ -337,3 +337,245 @@ de_public_web_is_app() {
   fi
   return 1
 }
+
+# Readiness: PROCESS_RUNNING (systemctl is-active) ≠ SERVICE_READY (HTTP 200 real).
+de_readiness_timeout() {
+  printf '%s\n' "${DE_READINESS_TIMEOUT:-30}"
+}
+
+de_readiness_interval() {
+  printf '%s\n' "${DE_READINESS_INTERVAL:-1}"
+}
+
+de_readiness_http_max_time() {
+  printf '%s\n' "${DE_READINESS_HTTP_MAX_TIME:-5}"
+}
+
+de_now_epoch() {
+  date +%s
+}
+
+de_sleep() {
+  sleep "$1"
+}
+
+de_http_ok() {
+  local url="$1"
+  local max_time="${2:-$(de_readiness_http_max_time)}"
+  curl -fsS --max-time "$max_time" -o /dev/null "$url" >/dev/null 2>&1
+}
+
+de_http_public_ok() {
+  local url="$1"
+  local max_time="${2:-8}"
+  local hdr body code rc=1
+  hdr="$(mktemp)"
+  body="$(mktemp)"
+  code="$(curl -sS --max-time "$max_time" -D "$hdr" -o "$body" -w '%{http_code}' "$url" 2>/dev/null || printf '000')"
+  if [[ "$code" == "200" ]] && de_public_web_is_app "$(cat "$hdr")" "$(cat "$body")"; then
+    rc=0
+  fi
+  rm -f "$hdr" "$body"
+  return "$rc"
+}
+
+de_systemd_is_failed() {
+  local unit="${1:-}"
+  [[ -n "$unit" ]] || return 1
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl is-failed --quiet "$unit" 2>/dev/null
+}
+
+de_systemd_is_active() {
+  local unit="${1:-}"
+  [[ -n "$unit" ]] || return 1
+  command -v systemctl >/dev/null 2>&1 || return 1
+  systemctl is-active --quiet "$unit" 2>/dev/null
+}
+
+de_nginx_config_ok() {
+  nginx -t >/dev/null 2>&1
+}
+
+# Espera probe ter sucesso. unit vazio = sem checagem systemd.
+# Retorna 0=ready, 1=timeout, 2=systemd-failed.
+# Globais: DE_WAIT_ELAPSED, DE_WAIT_REASON (ok|timeout|systemd-failed).
+de_wait_until() {
+  local timeout="$1"
+  local interval="$2"
+  local unit="$3"
+  shift 3
+  local start now elapsed ticks max_ticks
+  if [[ -z "$timeout" || "$timeout" -lt 1 ]]; then
+    timeout=30
+  fi
+  if [[ -z "$interval" || "$interval" -lt 1 ]]; then
+    interval=1
+  fi
+  max_ticks=$((timeout / interval + 2))
+  if [[ "$max_ticks" -lt 2 ]]; then
+    max_ticks=2
+  fi
+  start="$(de_now_epoch)"
+  DE_WAIT_ELAPSED=0
+  DE_WAIT_REASON=""
+  ticks=0
+  while [[ "$ticks" -lt "$max_ticks" ]]; do
+    now="$(de_now_epoch)"
+    elapsed=$((now - start))
+    DE_WAIT_ELAPSED="$elapsed"
+    if [[ -n "$unit" ]] && de_systemd_is_failed "$unit"; then
+      DE_WAIT_REASON="systemd-failed"
+      return 2
+    fi
+    if "$@"; then
+      DE_WAIT_REASON="ok"
+      return 0
+    fi
+    if [[ "$elapsed" -ge "$timeout" ]]; then
+      DE_WAIT_REASON="timeout"
+      return 1
+    fi
+    de_sleep "$interval"
+    ticks=$((ticks + 1))
+  done
+  now="$(de_now_epoch)"
+  DE_WAIT_ELAPSED=$((now - start))
+  DE_WAIT_REASON="timeout"
+  return 1
+}
+
+de_wait_http() {
+  local _label="$1"
+  local url="$2"
+  local timeout="${3:-$(de_readiness_timeout)}"
+  local interval="${4:-$(de_readiness_interval)}"
+  local unit="${5:-}"
+  : "${_label}"
+  de_wait_until "$timeout" "$interval" "$unit" de_http_ok "$url"
+}
+
+de_wait_public_web() {
+  local _label="$1"
+  local url="$2"
+  local timeout="${3:-$(de_readiness_timeout)}"
+  local interval="${4:-$(de_readiness_interval)}"
+  local unit="${5:-}"
+  : "${_label}"
+  de_wait_until "$timeout" "$interval" "$unit" de_http_public_ok "$url"
+}
+
+de_wait_service() {
+  local _label="$1"
+  local unit="$2"
+  local timeout="${3:-$(de_readiness_timeout)}"
+  local interval="${4:-$(de_readiness_interval)}"
+  : "${_label}"
+  de_wait_until "$timeout" "$interval" "$unit" de_systemd_is_active "$unit"
+}
+
+de_format_ready_line() {
+  local wait_rc="$1"
+  local elapsed="${2:-0}"
+  if [[ "$wait_rc" -eq 0 ]]; then
+    if [[ "$elapsed" -gt 0 ]]; then
+      printf 'OK (%ss)' "$elapsed"
+    else
+      printf 'OK'
+    fi
+    return 0
+  fi
+  if [[ "$wait_rc" -eq 2 ]]; then
+    printf 'FALHA (systemd failed)'
+    return 0
+  fi
+  printf 'FALHA após %ss' "$elapsed"
+}
+
+de_status_is_ok() {
+  local status="$1"
+  [[ "$status" == OK* ]]
+}
+
+# Avalia readiness completa. Globais DE_RDY_* e DE_RDY_RC.
+de_evaluate_readiness() {
+  local app_url="${1:-}"
+  local expect_worker="${2:-0}"
+  local timeout interval wr
+  timeout="$(de_readiness_timeout)"
+  interval="$(de_readiness_interval)"
+  local api_url="${DE_RDY_API_URL:-http://127.0.0.1:3001/health}"
+  local db_url="${DE_RDY_DB_URL:-http://127.0.0.1:3001/health/db}"
+  local redis_url="${DE_RDY_REDIS_URL:-http://127.0.0.1:3001/health/redis}"
+  local web_int_url="${DE_RDY_WEB_INT_URL:-http://127.0.0.1:3000/login}"
+  local api_unit="${DE_RDY_API_UNIT:-dashboard-economizacao-api.service}"
+  local web_unit="${DE_RDY_WEB_UNIT:-dashboard-economizacao-web.service}"
+  local worker_unit="${DE_RDY_WORKER_UNIT:-dashboard-economizacao-worker.service}"
+  local nginx_unit="${DE_RDY_NGINX_UNIT:-nginx.service}"
+
+  DE_RDY_API="FALHA"
+  DE_RDY_DB="não avaliado"
+  DE_RDY_REDIS="não avaliado"
+  DE_RDY_WEB_INT="FALHA"
+  DE_RDY_WEB_PUB="FALHA"
+  DE_RDY_NGINX="FALHA"
+  DE_RDY_WORKER="N/A"
+  DE_RDY_RC=1
+
+  wr=0
+  de_wait_http "API" "$api_url" "$timeout" "$interval" "$api_unit" || wr=$?
+  DE_RDY_API="$(de_format_ready_line "$wr" "$DE_WAIT_ELAPSED")"
+
+  if de_status_is_ok "$DE_RDY_API"; then
+    wr=0
+    de_wait_http "DATABASE" "$db_url" "$timeout" "$interval" "$api_unit" || wr=$?
+    DE_RDY_DB="$(de_format_ready_line "$wr" "$DE_WAIT_ELAPSED")"
+
+    wr=0
+    de_wait_http "REDIS" "$redis_url" "$timeout" "$interval" "$api_unit" || wr=$?
+    DE_RDY_REDIS="$(de_format_ready_line "$wr" "$DE_WAIT_ELAPSED")"
+  fi
+
+  wr=0
+  de_wait_http "WEB_INTERNAL" "$web_int_url" "$timeout" "$interval" "$web_unit" || wr=$?
+  DE_RDY_WEB_INT="$(de_format_ready_line "$wr" "$DE_WAIT_ELAPSED")"
+
+  if de_nginx_config_ok; then
+    DE_RDY_NGINX="OK"
+  else
+    DE_RDY_NGINX="FALHA"
+  fi
+
+  if [[ -n "$app_url" ]]; then
+    local pub_url="${app_url%/}/login"
+    wr=0
+    de_wait_public_web "WEB_PUBLIC" "$pub_url" "$timeout" "$interval" "$nginx_unit" || wr=$?
+    DE_RDY_WEB_PUB="$(de_format_ready_line "$wr" "$DE_WAIT_ELAPSED")"
+  else
+    DE_RDY_WEB_PUB="FALHA"
+  fi
+
+  if [[ "$expect_worker" == "1" ]]; then
+    wr=0
+    de_wait_service "WORKER" "$worker_unit" "$timeout" "$interval" || wr=$?
+    DE_RDY_WORKER="$(de_format_ready_line "$wr" "$DE_WAIT_ELAPSED")"
+  else
+    if de_systemd_is_active "$worker_unit"; then
+      DE_RDY_WORKER="OK"
+    else
+      DE_RDY_WORKER="N/A"
+    fi
+  fi
+
+  DE_RDY_RC=0
+  de_status_is_ok "$DE_RDY_API" || DE_RDY_RC=1
+  de_status_is_ok "$DE_RDY_DB" || DE_RDY_RC=1
+  de_status_is_ok "$DE_RDY_REDIS" || DE_RDY_RC=1
+  de_status_is_ok "$DE_RDY_WEB_INT" || DE_RDY_RC=1
+  [[ "$DE_RDY_NGINX" == "OK" ]] || DE_RDY_RC=1
+  de_status_is_ok "$DE_RDY_WEB_PUB" || DE_RDY_RC=1
+  if [[ "$expect_worker" == "1" ]]; then
+    de_status_is_ok "$DE_RDY_WORKER" || DE_RDY_RC=1
+  fi
+  return "$DE_RDY_RC"
+}
