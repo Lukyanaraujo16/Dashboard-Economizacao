@@ -136,7 +136,6 @@ describe('Cliente HTTP financeiro Conta Azul', () => {
     });
     expect(server).toHaveBeenCalledTimes(2);
   });
-});
 
   it('lista centros de custo com filtro_rapido=TODOS e tamanho 100', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ itens: [], itens_totais: 0 }));
