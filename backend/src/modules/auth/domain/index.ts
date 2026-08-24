@@ -44,10 +44,11 @@ export type {
   CreateUserInput,
   ListUsersFilter,
   ListUsersResult,
+  PlatformRole,
   UpdateUserInput,
   UserCredentialRecord,
   UserRecord,
   UserRole,
   UserStatus,
 } from './types.js';
-export { USER_ROLES, USER_STATUSES } from './types.js';
+export { isPlatformRole, PLATFORM_ROLES, USER_ROLES, USER_STATUSES } from './types.js';

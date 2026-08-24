@@ -2,7 +2,7 @@ import type { Session } from 'fastify';
 
 import type { AuthenticationContext } from '../domain/authentication-context.js';
 import type { SessionSupportContext } from '../domain/support-mode.js';
-import { USER_ROLES, type UserRole } from '../domain/types.js';
+import { isPlatformRole, USER_ROLES, type UserRole } from '../domain/types.js';
 import { assertUserTenantRoleConsistency } from '../domain/user-invariants.js';
 
 function isNonEmptyString(value: unknown): value is string {
@@ -45,7 +45,7 @@ export function parseSessionAuthenticationContext(session: Session): Authenticat
   let support: SessionSupportContext = { active: false };
   if (session.supportMode === true) {
     if (
-      session.role !== 'SUPER_ADMIN' ||
+      !isPlatformRole(session.role) ||
       !isNonEmptyString(session.supportTenantId) ||
       !isNonEmptyString(session.supportStartedAt) ||
       !isNonEmptyString(session.supportSessionId)

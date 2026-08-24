@@ -510,7 +510,7 @@ describe('UI administrativa de Empresas (1.2D)', () => {
       expect(screen.getByRole('button', { name: 'Excluir permanentemente Alpha Co' })).toBeTruthy();
     });
 
-    it('mostra modo suporte apenas para SUPER_ADMIN e empresa ativa', async () => {
+    it('mostra modo suporte para SUPER_ADMIN e ADMIN em empresa ativa, não para USER', async () => {
       stubListFetch([companyA, companyB]);
       renderCompaniesPage('SUPER_ADMIN');
       await findCompanyInTable('Alpha Co');
@@ -519,11 +519,22 @@ describe('UI administrativa de Empresas (1.2D)', () => {
         screen.getAllByRole('button', { name: 'Acessar Alpha Co em modo suporte' }).length,
       ).toBeGreaterThan(0);
       expect(screen.queryByRole('button', { name: 'Acessar Beta Co em modo suporte' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Editar Alpha Co' })).toBeTruthy();
 
       cleanup();
       stubListFetch([companyA]);
       renderCompaniesPage('ADMIN');
       await findCompanyInTable('Alpha Co');
+      expect(
+        screen.getAllByRole('button', { name: 'Acessar Alpha Co em modo suporte' }).length,
+      ).toBeGreaterThan(0);
+      expect(screen.getByRole('button', { name: 'Editar Alpha Co' })).toBeTruthy();
+
+      cleanup();
+      stubListFetch([companyA]);
+      renderCompaniesPage('USER');
+      expect(await screen.findByRole('alert')).toBeTruthy();
+      expect(screen.getByText('Acesso não permitido')).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Acessar Alpha Co em modo suporte' })).toBeNull();
     });
 
@@ -578,6 +589,59 @@ describe('UI administrativa de Empresas (1.2D)', () => {
           }),
         );
         expect(getCurrentUserAction).toHaveBeenCalledTimes(1);
+        expect(replaceMock).toHaveBeenCalledWith('/');
+      });
+    });
+
+    it('ADMIN inicia o modo suporte no tenant clicado', async () => {
+      const admin = {
+        ...mockAuthenticatedUser,
+        role: 'ADMIN' as const,
+        tenantId: null,
+      };
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (String(url) === '/auth/support/enter') {
+          return Promise.resolve(
+            jsonResponse({
+              user: admin,
+              support: {
+                active: true,
+                tenantId: companyA.id,
+                tenantDisplayName: companyA.displayName,
+                startedAt: '2026-08-17T12:00:00.000Z',
+                supportSessionId: 'support-admin-1',
+              },
+            }),
+          );
+        }
+        return Promise.resolve(listResponse([companyA]));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const getCurrentUserAction = createAuthenticatedGetCurrentUser(admin);
+      renderWithAuth(
+        <ThemeProvider>
+          <AuthenticatedLayout>
+            <EmpresasLayout>
+              <CompaniesPage />
+            </EmpresasLayout>
+          </AuthenticatedLayout>
+        </ThemeProvider>,
+        { getCurrentUserAction, hydrateOnMount: true },
+      );
+
+      const table = await getCompanyTable();
+      fireEvent.click(
+        within(table).getByRole('button', { name: 'Acessar Alpha Co em modo suporte' }),
+      );
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/auth/support/enter',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ tenantId: companyA.id }),
+          }),
+        );
         expect(replaceMock).toHaveBeenCalledWith('/');
       });
     });

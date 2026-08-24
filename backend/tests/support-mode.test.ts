@@ -217,17 +217,108 @@ describe('modo suporte (fase 1.6)', () => {
     expect(idempotentExit.json().support).toEqual({ active: false });
   });
 
-  it.each([
-    ['ADMIN', 'support.admin@test.local'],
-    ['USER', 'support.user@test.local'],
-  ] as const)('%s recebe 403 ao tentar entrar', async (role, email) => {
-    await createActiveUser(email, role);
+  it('ADMIN entra no tenant selecionado, preserva identidade e sai', async () => {
+    const operator = await createActiveUser('support.admin@test.local', 'ADMIN');
     const tenant = await tenants.create({
-      name: `target-${role.toLowerCase()}`,
-      displayName: `Target ${role}`,
+      name: 'support-admin-target',
+      displayName: 'Empresa do Admin',
     });
     const app = await buildTestApp();
-    const cookie = await login(app, email);
+    const cookie = await login(app, operator.email);
+
+    const enter = await app.inject({
+      method: 'POST',
+      url: '/auth/support/enter',
+      headers: { cookie, 'user-agent': 'support-admin-agent' },
+      payload: { tenantId: tenant.id },
+    });
+    expect(enter.statusCode).toBe(200);
+    expect(enter.json()).toMatchObject({
+      user: { id: operator.id, role: 'ADMIN', tenantId: null },
+      support: {
+        active: true,
+        tenantId: tenant.id,
+        tenantDisplayName: 'Empresa do Admin',
+      },
+    });
+
+    const me = await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie } });
+    expect(me.statusCode).toBe(200);
+    expect(me.json()).toMatchObject({
+      user: { id: operator.id, role: 'ADMIN', tenantId: null },
+      support: { active: true, tenantId: tenant.id },
+    });
+
+    const exit = await app.inject({
+      method: 'POST',
+      url: '/auth/support/exit',
+      headers: { cookie },
+    });
+    expect(exit.statusCode).toBe(200);
+    expect(exit.json()).toMatchObject({
+      user: { id: operator.id, role: 'ADMIN', tenantId: null },
+      support: { active: false },
+    });
+  });
+
+  it('ADMIN isola o tenant selecionado e exige novo enter para trocar', async () => {
+    const operator = await createActiveUser('support.admin-iso@test.local', 'ADMIN');
+    const tenantA = await tenants.create({
+      name: 'support-iso-a',
+      displayName: 'Empresa A',
+    });
+    const tenantB = await tenants.create({
+      name: 'support-iso-b',
+      displayName: 'Empresa B',
+    });
+    const app = await buildTestApp();
+    const cookie = await login(app, operator.email);
+
+    const enterA = await app.inject({
+      method: 'POST',
+      url: '/auth/support/enter',
+      headers: { cookie },
+      payload: { tenantId: tenantA.id },
+    });
+    expect(enterA.statusCode).toBe(200);
+    expect(enterA.json().support.tenantId).toBe(tenantA.id);
+
+    const hijack = await app.inject({
+      method: 'POST',
+      url: '/auth/support/enter',
+      headers: { cookie },
+      payload: { tenantId: tenantB.id },
+    });
+    expect(hijack.statusCode).toBe(409);
+
+    const meA = await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie } });
+    expect(meA.json().support.tenantId).toBe(tenantA.id);
+    expect(meA.json().support.tenantId).not.toBe(tenantB.id);
+
+    await app.inject({ method: 'POST', url: '/auth/support/exit', headers: { cookie } });
+
+    const enterB = await app.inject({
+      method: 'POST',
+      url: '/auth/support/enter',
+      headers: { cookie },
+      payload: { tenantId: tenantB.id },
+    });
+    expect(enterB.statusCode).toBe(200);
+    expect(enterB.json().support.tenantId).toBe(tenantB.id);
+
+    const meB = await app.inject({ method: 'GET', url: '/auth/me', headers: { cookie } });
+    expect(meB.json().support.tenantId).toBe(tenantB.id);
+    expect(meB.json().support.tenantId).not.toBe(tenantA.id);
+  });
+
+  it('USER recebe 403 ao tentar entrar', async () => {
+    await createActiveUser('support.user@test.local', 'USER');
+    const tenant = await tenants.create({
+      name: 'target-user',
+      displayName: 'Target USER',
+    });
+    const app = await buildTestApp();
+    const cookie = await login(app, 'support.user@test.local');
 
     const response = await app.inject({
       method: 'POST',
@@ -237,6 +328,35 @@ describe('modo suporte (fase 1.6)', () => {
     });
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe('FORBIDDEN');
+    expect(await prisma.supportSession.count()).toBe(0);
+  });
+
+  it('sem sessão recebe 401 ao entrar', async () => {
+    const tenant = await tenants.create({
+      name: 'target-anon',
+      displayName: 'Target anon',
+    });
+    const app = await buildTestApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/support/enter',
+      payload: { tenantId: tenant.id },
+    });
+    expect(response.statusCode).toBe(401);
+    expect(await prisma.supportSession.count()).toBe(0);
+  });
+
+  it('tenant inexistente retorna 404', async () => {
+    await createActiveUser('support.missing@test.local', 'ADMIN');
+    const app = await buildTestApp();
+    const cookie = await login(app, 'support.missing@test.local');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/support/enter',
+      headers: { cookie },
+      payload: { tenantId: '11111111-1111-4111-8111-111111111111' },
+    });
+    expect(response.statusCode).toBe(404);
     expect(await prisma.supportSession.count()).toBe(0);
   });
 

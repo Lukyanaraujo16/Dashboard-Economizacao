@@ -112,7 +112,7 @@ Estado atual
 
 ✔ Design System / UI base: **congelado**
 
-✔ 1.6 — Modo Suporte concluída (SUPER_ADMIN-only, overlay de contexto, `support_sessions`)
+✔ 1.6 — Modo Suporte concluída (ADMIN + SUPER_ADMIN, overlay de contexto, `support_sessions`)
 
 ✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
 
@@ -592,11 +592,12 @@ não um audit log genérico. Índice único parcial garante no máximo uma
 sessão aberta por cookie Redis.
 
 Contrato:
-- `POST /auth/support/enter` e `POST /auth/support/exit` — somente SUPER_ADMIN
+- `POST /auth/support/enter` e `POST /auth/support/exit` — ADMIN e SUPER_ADMIN
 - `GET /auth/me` sempre inclui `support`
 - `GET /branding/current` resolve branding do tenant em suporte
 - `/admin/*` bloqueado enquanto `support.active`
-- ADMIN e USER recebem 403 no enter
+- USER recebe 403 no enter; sem sessão recebe 401
+- SUPER_ADMIN permanece o operador técnico de nível máximo; ADMIN é o administrador operacional
 - banner persistente com nome da empresa e saída sem F5
 - sidebar tenant-like; itens `platformOnly` ocultos durante suporte
 - `requireAuthentication` reconcilia Redis ↔ registro aberto no PostgreSQL

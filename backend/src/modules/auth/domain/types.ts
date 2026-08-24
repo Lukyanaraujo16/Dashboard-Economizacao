@@ -6,6 +6,14 @@ export const USER_ROLES = ['USER', 'ADMIN', 'SUPER_ADMIN'] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
 
+export const PLATFORM_ROLES = ['ADMIN', 'SUPER_ADMIN'] as const satisfies readonly UserRole[];
+
+export type PlatformRole = (typeof PLATFORM_ROLES)[number];
+
+export function isPlatformRole(role: UserRole): role is PlatformRole {
+  return (PLATFORM_ROLES as readonly UserRole[]).includes(role);
+}
+
 export const USER_STATUSES = ['PENDING', 'ACTIVE', 'BLOCKED', 'DISABLED'] as const;
 
 export type UserStatus = (typeof USER_STATUSES)[number];

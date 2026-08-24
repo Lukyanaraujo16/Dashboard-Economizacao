@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
-import { useAuth } from '../../auth';
+import { isPlatformRole, useAuth } from '../../auth';
 import {
   deleteCompany,
   disableCompany,
@@ -184,6 +184,7 @@ export function CompaniesPage() {
   }
 
   const isEmpty = listState === 'ready' && companies.length === 0;
+  const canUseSupport = Boolean(user && isPlatformRole(user.role) && !support.active);
 
   return (
     <div className={styles.companiesPage}>
@@ -376,11 +377,7 @@ export function CompaniesPage() {
                         company={company}
                         layout="desktop"
                         actionLoadingId={actionLoadingId}
-                        canEnterSupport={
-                          user?.role === 'SUPER_ADMIN' &&
-                          company.status === 'ACTIVE' &&
-                          !support.active
-                        }
+                        canEnterSupport={canUseSupport && company.status === 'ACTIVE'}
                         onEnterSupport={() => void handleEnterSupport(company)}
                         onDisable={() => {
                           setPendingDelete(null);
@@ -428,9 +425,7 @@ export function CompaniesPage() {
                   company={company}
                   layout="mobile"
                   actionLoadingId={actionLoadingId}
-                  canEnterSupport={
-                    user?.role === 'SUPER_ADMIN' && company.status === 'ACTIVE' && !support.active
-                  }
+                  canEnterSupport={canUseSupport && company.status === 'ACTIVE'}
                   onEnterSupport={() => void handleEnterSupport(company)}
                   onDisable={() => {
                     setPendingDelete(null);

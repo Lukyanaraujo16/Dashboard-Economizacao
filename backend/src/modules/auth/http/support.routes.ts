@@ -9,7 +9,7 @@ import { parseEnterSupportRequestBody } from '../schemas/support.schemas.js';
 import { createSupportModeService } from '../services/support-mode.service.js';
 import { toAuthMeResponse } from './public-authenticated-user.js';
 import { createRequireAuthentication } from './require-authentication.js';
-import { createRequireSuperAdmin } from './require-super-admin.js';
+import { createRequirePlatformOperator } from './require-platform-role.js';
 
 function readUserAgent(header: string | string[] | undefined): string | null {
   if (typeof header === 'string' && header.length > 0) {
@@ -25,8 +25,8 @@ export async function registerSupportRoutes(app: FastifyInstance): Promise<void>
   const supportSessions = createSupportSessionRepository(prisma);
   const supportMode = createSupportModeService({ tenants, supportSessions });
   const requireAuthentication = createRequireAuthentication({ users, tenants });
-  const requireSuperAdmin = createRequireSuperAdmin();
-  const guards = [requireAuthentication, requireSuperAdmin];
+  const requirePlatformOperator = createRequirePlatformOperator();
+  const guards = [requireAuthentication, requirePlatformOperator];
 
   app.post('/auth/support/enter', { preHandler: guards }, async (request, reply) => {
     const auth = request.auth;
