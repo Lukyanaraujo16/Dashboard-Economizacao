@@ -56,6 +56,10 @@ O MVP deverá permitir:
 * logs operacionais;
 * auditoria.
 
+Nota F11-A (23/08/2026): na Home, “período” vigente = competência mensal
+civil (`?month=YYYY-MM`). Ranges rolantes e personalizados permanecem
+no MVP como capacidade futura (F11-C / relatórios), não na Home.
+
 ⸻
 
 3. Fora do Escopo Inicial
@@ -762,6 +766,11 @@ Critérios de aceite
 
 5.8 FILTER — Filtros
 
+Nota de evolução (F11-A, 23/08/2026): o texto original dos FILTER-001
+a FILTER-005 permanece como requisito histórico do MVP. Não foi apagado.
+A Home homologada NÃO é dashboard de ranges livres. Decisão vigente:
+docs/06 §15, docs/11 (Home = competência mensal civil).
+
 FILTER-001 — Filtro global de período
 
 Requisito
@@ -786,6 +795,14 @@ Critérios de aceite
 * mudança de período atualiza os componentes compatíveis;
 * período ativo permanece visível para o usuário.
 
+Evolução posterior (F11-A): na Home, o filtro temporal vigente é o mês
+civil de competência (`?month=YYYY-MM`, timezone `America/Sao_Paulo`,
+agregação por `competenceDate`). Hoje, ontem, 7 dias, 30 dias, 12 meses,
+ano atual, ano anterior e range personalizado NÃO serão implementados
+na Home nesta Fase 11. Não estão cancelados: reclassificados para
+superfície futura (F11-C / relatórios / Fase 12). Não é regressão.
+Não marcar FILTER-001 como implementado na Home.
+
 ⸻
 
 FILTER-002 — Comparação entre períodos
@@ -799,6 +816,12 @@ Critérios de aceite
 * comparação utiliza períodos coerentes;
 * percentual positivo ou negativo é calculado deterministicamente;
 * ausência de base comparável é informada.
+
+Evolução posterior (F11-A): na Home, a comparação oficial é mês
+selecionado × mês civil anterior (automática; já homologada).
+Comparação livre, seletor de base e range vs range NÃO nesta fase
+(F11-C). F11-B apenas faz a comparação existente respeitar situação e
+categoria quando semanticamente aplicável.
 
 ⸻
 
@@ -816,6 +839,11 @@ Exemplos
 * recebido;
 * a receber.
 
+Evolução posterior (F11-A): permanece válido. Recorte da Fase 11 da Home
+= F11-B (filtro sobre o mês de competência já selecionado, preservando
+`month`, `costCenter`, tenant, comparação mês × anterior e meta
+company-level). Status: NÃO INICIADO.
+
 ⸻
 
 FILTER-004 — Filtro por categoria
@@ -823,6 +851,10 @@ FILTER-004 — Filtro por categoria
 Requisito
 
 Relatórios e visões compatíveis deverão permitir filtrar por categoria.
+
+Evolução posterior (F11-A): permanece válido. Recorte F11-B da Home
+(sobre o mês de competência). Composição por categoria já existente
+NÃO substitui este filtro global. Status: NÃO INICIADO.
 
 ⸻
 
@@ -836,6 +868,12 @@ Critérios de aceite
 
 * datas inválidas são rejeitadas;
 * intervalo é aplicado apenas ao tenant atual.
+
+Evolução posterior (F11-A): NÃO implementado na Home. Reclassificado
+(F11-C). Destino preferencial: relatórios / Fase 12, com eixo temporal
+definido por contexto. Não misturar `competenceDate`, `dueDate` e data
+de pagamento/baixa num filtro genérico da Home. Não é regressão.
+Não marcar FILTER-005 como implementado na Home.
 
 ⸻
 

@@ -5,6 +5,9 @@ import type { AnalyticsService } from '../../analytics/services/analytics.servic
 import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import type { ContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
 import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
+import type { FinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
+import type { DashboardCategoryFilter } from '../../analytics/domain/dashboard-home-filters.js';
+import type { DashboardSituation } from '../../analytics/domain/dashboard-home-filters.js';
 import { ForbiddenError, NotFoundError } from '../../../shared/errors/application-error.js';
 import { resolveOperationalTenantId } from '../domain/operational-tenant.js';
 import {
@@ -15,6 +18,7 @@ import {
 import type { RevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
 import type {
   DashboardCashFlowForecastResponse,
+  DashboardCategoriesResponse,
   DashboardCostCentersResponse,
   DashboardExecutiveInsightsResponse,
   DashboardExpenseCompositionResponse,
@@ -43,6 +47,7 @@ export const REVENUE_GOAL_HISTORY_MONTHS = 6;
 
 export type DashboardOverviewFacade = {
   listCostCenters(auth: AuthenticatedRequestContext): Promise<DashboardCostCentersResponse>;
+  listCategories(auth: AuthenticatedRequestContext): Promise<DashboardCategoriesResponse>;
   getOverview(
     auth: AuthenticatedRequestContext,
     costCenterId?: string | null,
@@ -55,6 +60,7 @@ export type DashboardOverviewFacade = {
   getCashFlowForecast(
     auth: AuthenticatedRequestContext,
     costCenterId?: string | null,
+    categoryId?: string | null,
   ): Promise<DashboardCashFlowForecastResponse>;
   getExpenseComposition(
     auth: AuthenticatedRequestContext,
@@ -68,20 +74,27 @@ export type DashboardOverviewFacade = {
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
     costCenterId?: string | null,
+    situation?: DashboardSituation | null,
+    categoryId?: string | null,
   ): Promise<DashboardMonthlyRevenueResponse>;
   getMonthlyExpenses(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
     costCenterId?: string | null,
+    situation?: DashboardSituation | null,
+    categoryId?: string | null,
   ): Promise<DashboardMonthlyExpenseResponse>;
   getMonthlyExecutiveInsights(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
     costCenterId?: string | null,
+    situation?: DashboardSituation | null,
+    categoryId?: string | null,
   ): Promise<DashboardExecutiveInsightsResponse>;
   getMonthEndCashPressure(
     auth: AuthenticatedRequestContext,
     costCenterId?: string | null,
+    categoryId?: string | null,
   ): Promise<DashboardMonthEndCashPressureResponse>;
   getRevenueGoal(
     auth: AuthenticatedRequestContext,
@@ -101,6 +114,7 @@ export type DashboardOverviewFacadeDependencies = {
   readonly integrations: ContaAzulIntegrationRepository;
   readonly revenueGoals: RevenueGoalRepository;
   readonly costCenters: CostCenterReadRepository;
+  readonly categories: FinancialCategoryReadRepository;
 };
 
 export function createDashboardOverviewFacade(
@@ -111,6 +125,18 @@ export function createDashboardOverviewFacade(
       const tenantId = requireOperationalTenantId(auth);
       const items = await deps.costCenters.listByTenant(tenantId);
       return { items };
+    },
+
+    async listCategories(auth) {
+      const tenantId = requireOperationalTenantId(auth);
+      const rows = await deps.categories.listByTenant(tenantId);
+      return {
+        items: rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          type: row.type,
+        })),
+      };
     },
 
     async getOverview(auth, costCenterId = null) {
@@ -137,12 +163,14 @@ export function createDashboardOverviewFacade(
       return toDashboardUpcomingResponse(nDays, receivables, payables);
     },
 
-    async getCashFlowForecast(auth, costCenterId = null) {
+    async getCashFlowForecast(auth, costCenterId = null, categoryId = null) {
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const forecast = await deps.analytics.getCashFlowForecast({
         tenantId,
         ...costCenterFilter(resolved),
+        ...categoryFilterSpread(categoryFilter),
       });
       return toDashboardCashFlowForecastResponse(forecast);
     },
@@ -167,52 +195,78 @@ export function createDashboardOverviewFacade(
       return toDashboardReceivableCompositionResponse(composition);
     },
 
-    async getMonthlyRevenue(auth, monthKey, costCenterId = null) {
+    async getMonthlyRevenue(
+      auth,
+      monthKey,
+      costCenterId = null,
+      situation = null,
+      categoryId = null,
+    ) {
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const revenue = await deps.analytics.getMonthlyCompetenceRevenue({
         tenantId,
         ...(monthKey === null ? {} : { monthKey }),
         ...costCenterFilter(resolved),
+        ...homeFilterSpread(situation, categoryFilter),
       });
       return toDashboardMonthlyRevenueResponse(revenue);
     },
 
-    async getMonthlyExpenses(auth, monthKey, costCenterId = null) {
+    async getMonthlyExpenses(
+      auth,
+      monthKey,
+      costCenterId = null,
+      situation = null,
+      categoryId = null,
+    ) {
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const expense = await deps.analytics.getMonthlyCompetenceExpenses({
         tenantId,
         ...(monthKey === null ? {} : { monthKey }),
         ...costCenterFilter(resolved),
+        ...homeFilterSpread(situation, categoryFilter),
       });
       return toDashboardMonthlyExpenseResponse(expense);
     },
 
-    async getMonthlyExecutiveInsights(auth, monthKey, costCenterId = null) {
+    async getMonthlyExecutiveInsights(
+      auth,
+      monthKey,
+      costCenterId = null,
+      situation = null,
+      categoryId = null,
+    ) {
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const insights = await deps.analytics.getMonthlyExecutiveInsights({
         tenantId,
         ...(monthKey === null ? {} : { monthKey }),
         ...costCenterFilter(resolved),
+        ...homeFilterSpread(situation, categoryFilter),
       });
       return toDashboardExecutiveInsightsResponse(insights);
     },
 
-    async getMonthEndCashPressure(auth, costCenterId = null) {
+    async getMonthEndCashPressure(auth, costCenterId = null, categoryId = null) {
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const pressure = await deps.analytics.getMonthEndCashPressure({
         tenantId,
         ...costCenterFilter(resolved),
+        ...categoryFilterSpread(categoryFilter),
       });
       return toDashboardMonthEndCashPressureResponse(pressure);
     },
 
     /**
-     * Meta permanece consolidada da empresa — `costCenter` na query é ignorado
-     * (actual/target sempre company-level).
+     * Meta permanece consolidada da empresa — `costCenter`, `situation` e
+     * `category` na query são ignorados (actual/target sempre company-level).
      */
     async getRevenueGoal(auth, monthKey, historyMonths = REVENUE_GOAL_HISTORY_MONTHS) {
       const tenantId = requireOperationalTenantId(auth);
@@ -280,6 +334,40 @@ async function loadRevenueGoal(
   });
 
   return toDashboardRevenueGoalResponse(selected, history);
+}
+
+async function resolveCategoryFilter(
+  deps: DashboardOverviewFacadeDependencies,
+  tenantId: string,
+  categoryId: string | null | undefined,
+): Promise<DashboardCategoryFilter | undefined> {
+  if (categoryId === null || categoryId === undefined) {
+    return undefined;
+  }
+  const found = await deps.categories.findByIdForTenant(tenantId, categoryId);
+  if (found === null) {
+    throw new NotFoundError('Categoria não encontrada.');
+  }
+  return { externalId: found.externalId, type: found.type };
+}
+
+function homeFilterSpread(
+  situation: DashboardSituation | null | undefined,
+  categoryFilter: DashboardCategoryFilter | undefined,
+): {
+  readonly situation?: DashboardSituation;
+  readonly categoryFilter?: DashboardCategoryFilter;
+} {
+  return {
+    ...(situation ? { situation } : {}),
+    ...categoryFilterSpread(categoryFilter),
+  };
+}
+
+function categoryFilterSpread(
+  categoryFilter: DashboardCategoryFilter | undefined,
+): { readonly categoryFilter: DashboardCategoryFilter } | Record<string, never> {
+  return categoryFilter === undefined ? {} : { categoryFilter };
 }
 
 async function resolveCostCenterId(

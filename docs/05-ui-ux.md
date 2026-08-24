@@ -549,6 +549,21 @@ Opções iniciais:
 * Ano anterior;
 * Personalizado.
 
+Evolução F11-A (23/08/2026): a lista acima permanece como requisito
+histórico. Na Home vigente o filtro temporal é o seletor de mês civil
+de competência (`?month=YYYY-MM`, `America/Sao_Paulo`). Hoje / ontem /
+7d / 30d / 12 meses / ano / personalizado NÃO serão implementados na
+Home nesta Fase 11 (F11-C; destino preferencial: relatórios / Fase 12).
+Não é regressão. Não marcar esses presets como disponíveis na Home.
+
+Filtros oficiais da Home hoje:
+
+* mês — `month` (YYYY-MM; omitido = mês corrente);
+* centro de custo — `costCenter` (UUID; omitido = Todos).
+
+Não usar `costCenterId`, `period` nem `comparison` na URL.
+Situação e categoria (F11-B) ainda não têm nome de query.
+
 ⸻
 
 16. Período Personalizado
@@ -557,6 +572,10 @@ Ao selecionar Personalizado, deverá ser possível escolher:
 
 * data inicial;
 * data final.
+
+Evolução F11-A: período personalizado (FILTER-005) NÃO entra na Home
+nesta fase. Reclassificado (F11-C / relatórios). Texto original
+preservado como requisito histórico.
 
 A interface deverá validar intervalos inválidos.
 
@@ -581,6 +600,11 @@ Exemplos:
 * vs. ano anterior.
 
 A comparação deverá estar claramente identificada para evitar interpretação incorreta.
+
+Evolução F11-A: na Home, a comparação oficial é mês selecionado × mês
+civil imediatamente anterior (automática). vs. mesmo período / vs. ano
+e seletor de base NÃO entram nesta fase (F11-C). F11-B só aplica
+situação/categoria sobre essa comparação quando couber.
 
 ⸻
 
@@ -1638,6 +1662,9 @@ UX-002 — Após login, branding do tenant é aplicado.
 UX-003 — Dashboard é a primeira tela do cliente.
 
 UX-004 — Período funciona como filtro global.
+
+Evolução F11-A: na Home, o período global vigente é o mês de competência
+(`?month=`). Ranges rolantes não são filtro da Home.
 
 UX-005 — Cards principais deverão mostrar contexto e comparação quando aplicável.
 

@@ -46,8 +46,14 @@ deste documento prevalece. Fases executadas até o momento:
   - CC1.3 — Cash split por centro (híbrido EXACT) + seletor em tabs: HOMOLOGADA VISUALMENTE
   - CC1.3.1 — Fluidez na troca de centro (soft refresh / sem loading global): HOMOLOGADA VISUALMENTE
   - CC1.3.2 — Séries temporais (sparkline) cash por centro: HOMOLOGADA VISUALMENTE
-Próxima fase: Fase 11 (filtros e comparações) — NÃO INICIADA.
-M1 (seletor mensal por competência + `?month=`): HOMOLOGADA.
+Fase 11 (filtros e comparações): EM ANDAMENTO.
+  F11-A — Congelamento de escopo: CONCLUÍDA (23/08/2026).
+  F11-B — Situação + categoria sobre o mês de competência: EM ANDAMENTO.
+    F11-B1 — Contrato / backend: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA.
+    F11-B2 — Frontend: NÃO INICIADA.
+  F11-C — Períodos rolantes e range personalizado: ADIADA / RECLASSIFICADA
+          (não cancelada; não é regressão; destino preferencial: relatórios / Fase 12).
+M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
 L1-A (financial_transactions): IMPLEMENTADA / HOMOLOGADA (bootstrap DEV).
 L1-B: BLOCKED_BY_CASH_SEMANTICS — valor oficial de caixa (bruto vs líquido) NÃO FECHADO;
@@ -571,7 +577,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Próxima fase: Fase 11 (NÃO INICIADA). 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: aguardando execução real. L1: NÃO INICIADA.
+Fase 11: EM ANDAMENTO (F11-A CONCLUÍDA; F11-B PRÓXIMA; F11-C RECLASSIFICADA). 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: aguardando execução real. L1: NÃO INICIADA.
 
 ⸻
 
@@ -596,8 +602,10 @@ prevista). A lista de próximos vencimentos permanece provisória na Home
 até a futura área Financeiro. E2 composição das despesas HOMOLOGADA.
 Receitas do mês por competência (M1) HOMOLOGADA (PAID permanece no mês;
 não é faturamento nem caixa). E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
-E4 ADIADA. Fase 11 NÃO INICIADA. Faturamento / meta / fixas×variáveis:
-somente auditoria — não implementados.
+E4 ADIADA. Fase 11 EM ANDAMENTO (F11-A CONCLUÍDA; F11-B1 IMPLEMENTADA /
+AGUARDANDO HOMOLOGAÇÃO TÉCNICA; F11-B2 NÃO INICIADA; F11-C ADIADA /
+RECLASSIFICADA). Faturamento gerencial / meta F2: ver header.
+Fixas×variáveis: NÃO INICIADAS.
 
 Contrato 10A (sem fórmulas; fórmulas em docs/11):
 GET /dashboard/overview — autenticado; tenant só da sessão/Support Mode.
@@ -648,28 +656,107 @@ Critérios de aceite
 
 15. Fase 11 — Filtros e Comparações
 
-Objetivo
+Status: EM ANDAMENTO (23/08/2026).
+
+F11-A — Congelamento de escopo: CONCLUÍDA.
+F11-B — Filtros mensais por situação e categoria: EM ANDAMENTO
+        (F11-B1 IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA; F11-B2 NÃO INICIADA).
+F11-C — Períodos rolantes e range personalizado: ADIADA / RECLASSIFICADA
+        (não implementado na Home; não cancelado; não é regressão;
+        destino preferencial: relatórios / Fase 12).
+
+Objetivo original (histórico)
 
 Permitir análise temporal aprofundada.
 
-Escopo
+Escopo original (PRD FILTER-001 a FILTER-005 — texto histórico preservado)
 
 * filtros globais;
-* períodos predefinidos;
+* períodos predefinidos (hoje, ontem, 7d, 30d, mês, 12 meses, ano, …);
 * período personalizado;
 * comparação;
 * categoria;
 * situação;
 * preservação de contexto.
 
+Decisão oficial F11-A (Home)
+
+A Home NÃO será convertida em dashboard genérica de ranges temporais.
+Não misturar, num único filtro global da Home: `competenceDate`,
+`dueDate` e data de pagamento/baixa.
+
+Eixo temporal oficial da Home:
+
+* competência mensal civil `YYYY-MM`;
+* timezone `America/Sao_Paulo`;
+* URL `?month=YYYY-MM` (ausente = mês civil corrente);
+* agregação financeira principal por `competenceDate`.
+
+Query params oficiais da Home (código vigente; não inventar nomes):
+
+* `month` — mês civil `YYYY-MM`;
+* `costCenter` — UUID do centro (ausente = Todos);
+* `situation` — `settled` | `open` | `overdue` (ausente = Todas);
+* `category` — UUID de `FinancialCategory.id` (ausente = Todas).
+
+Não são query params da Home: `period`, `comparison`, `costCenterId`, `status`
+(`costCenterId` é identificador interno; `status` não é o contrato da Home).
+
+Já homologado — NÃO é item pendente desta fase:
+
+* `?month=` — M1 / P1.1 / V2;
+* `?costCenter=` — CC1.x (centro de custo concluído; não reabrir);
+* comparação automática mês selecionado × mês civil anterior — V2.1 / V2.2;
+* meta de faturamento company-level — F2 (não filtrar por centro, categoria
+  nem situação);
+* forecast / upcoming / pressão de caixa — P1.1 (âncora hoje + `dueDate`;
+  não reinterpretar como competência mensal);
+* ledger L1-A / L1-B — FORA da Fase 11 (não usar `financial_transactions`).
+
+Recorte vigente
+
+F11-B1 (contrato / backend — IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA):
+
+* FILTER-003 — `situation=settled|open|overdue` (ausente = Todas; inválido = 400);
+  `settled` = `status === PAID` (PARTIALLY_PAID fora);
+  `open` = `OPEN | OVERDUE | PARTIALLY_PAID`;
+  `overdue` = D1 (`unpaid > 0`, status ativo, `dueDate < hoje civil SP`);
+  não é `status === OVERDUE`.
+* FILTER-004 — `category=<uuid>` de `FinancialCategory.id` (ausente = Todas;
+  UUID malformado = 400; inexistente / outro tenant = 404);
+  match preciso D8 (um único `categoryExternalIds`); sem rateio, sem rollup.
+* `GET /dashboard/categories` — catálogo `{ items: [{ id, name, type }] }` do tenant.
+* monthly-revenue / monthly-expenses / executive-insights: situation + category.
+* cash-flow-forecast / month-end-cash-pressure: category sim; situation parseada
+  (400 se inválida) mas **não aplicada**.
+* revenue-goal: company-level; ignora costCenter, situation e category.
+* F11-B2 (frontend) ainda NÃO iniciada. F11-B completa: NÃO.
+
+F11-C (NÃO implementar na Home nesta fase):
+
+* FILTER-001 no que trata de hoje, ontem, 7 dias, 30 dias, 12 meses,
+  ano atual e ano anterior;
+* FILTER-005 — intervalo inicial/final personalizado;
+* comparação livre, seletor de base, range vs range, período equivalente
+  customizado.
+
+FILTER-001 / FILTER-005 NÃO estão implementados na Home e NÃO devem ser
+marcados como implementados. Foram reclassificados para superfície futura
+(preferencialmente Fase 12 / relatórios), onde o eixo temporal poderá ser
+definido por contexto. Não é regressão.
+
 Requisitos relacionados
 
-* FILTER-001 a FILTER-005.
+* FILTER-003 e FILTER-004 — recorte F11-B (Home).
+* FILTER-002 — na Home vigente = mês × mês anterior (já entregue);
+  comparação livre = F11-C.
+* FILTER-001 / FILTER-005 — F11-C (reclassificados; não na Home).
 
-Critérios de aceite
+Critérios de aceite (recorte vigente da Home)
 
-* todos os widgets compatíveis respeitam período;
-* comparação é matematicamente consistente;
+* widgets de competência respeitam `month` (já homologado);
+* widgets today-anchored continuam P1.1;
+* comparação mês × anterior permanece matematicamente consistente (D9);
 * filtros não atravessam tenant;
 * URL ou estado de navegação não permite acesso indevido.
 
@@ -680,6 +767,12 @@ Critérios de aceite
 Objetivo
 
 Permitir exportação e impressão das informações.
+
+Nota F11-C: períodos rolantes (hoje/ontem/7d/30d/12 meses/ano) e range
+personalizado (FILTER-001 / FILTER-005) NÃO entram na Home. Destino
+preferencial desta superfície futura, com eixo temporal definido por
+contexto de relatório — não misturar competência, vencimento e caixa
+num filtro genérico único.
 
 Escopo
 
@@ -1145,7 +1238,8 @@ O MVP estará pronto quando:
 * dados financeiros estiverem normalizados;
 * KPIs principais estiverem implementados;
 * dashboard estiver funcional;
-* filtros e comparações estiverem funcionais;
+* filtros e comparações estiverem funcionais
+  (Home: competência mensal + F11-B situação/categoria; ranges = F11-C / relatórios);
 * relatórios estiverem funcionais;
 * Consultor reativo estiver funcional;
 * ao menos um conjunto inicial de insights proativos estiver funcional;

@@ -14,7 +14,17 @@ Implementação 9A (estoque AR/AP, timezone America/Sao_Paulo): CONCLUÍDA.
 9C (próximos vencimentos + fluxo previsto 90 dias): CONCLUÍDA.
 Grupo A (itens 1–9 do motor, §15): IMPLEMENTADO / CONCLUÍDO.
 Fase 9: CONCLUÍDA NO RECORTE DO PRIMEIRO DASHBOARD (Grupo A).
-MVP financeiro completo: NÃO. Próxima fase: Fase 10 (NÃO INICIADA).
+P1.1 (20/08/2026): a Home é month-scoped. selectedMonth é contexto global.
+Estoque AR/AP permanece no motor e nos endpoints; não alimenta os KPIs principais.
+MVP financeiro completo: NÃO.
+F11-A (23/08/2026): CONCLUÍDA — congelamento de escopo da Home.
+Home = competência mensal civil (`month=YYYY-MM`, `competenceDate`,
+`America/Sao_Paulo`). FILTER-001/005 (ranges) NÃO na Home (F11-C).
+F11-B1: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA (contrato backend).
+F11-B2: NÃO INICIADA. F11-B completa: NÃO.
+F11-C: ADIADA / RECLASSIFICADA (relatórios / superfície futura).
+Ledger L1: FORA da Fase 11. Semântica de caixa: não reabrir aqui.
+Fase 11 total: EM ANDAMENTO.
 
 ⸻
 
@@ -561,3 +571,53 @@ CC1.3.2: HOMOLOGADA VISUALMENTE — série diária por competência (received/ou
 centro usa a mesma regra EXACT/UNAVAILABLE; sem fabricar sparkline.
 
 ⸻
+⸻
+
+20. Home — congelamento temporal (F11-A)
+
+Decisão oficial 23/08/2026. Não reabre D1–D9 nem semântica de caixa.
+
+Home = competência mensal civil.
+
+* timezone: `America/Sao_Paulo`;
+* URL: `?month=YYYY-MM` (ausente = mês civil corrente);
+* agregação principal: `competenceDate`;
+* centro de custo: `?costCenter=<uuid>` (ausente = Todos); CC1.x homologado;
+* comparação oficial: mês selecionado × mês civil imediatamente anterior;
+* meta de faturamento: company-level — não filtrar por centro, categoria
+  nem situação;
+* forecast, upcoming e pressão de caixa: P1.1 (âncora hoje + `dueDate`);
+  não reinterpretar como competência mensal.
+
+Não misturar num filtro global único da Home:
+
+* `competenceDate`;
+* `dueDate`;
+* data de pagamento / baixa / settlement.
+
+F11-B1 (contrato backend, 23/08/2026): situação e categoria filtram o
+universo do mês de competência já selecionado. Não mudam o eixo temporal.
+
+* `situation=settled|open|overdue` (ausente = Todas). Não usar query `status`.
+  `settled` = PAID; `open` = OPEN/OVERDUE/PARTIALLY_PAID; `overdue` = D1
+  (unpaid > 0, status ativo, dueDate < hoje civil SP; dueDate == hoje não
+  é vencido). PARTIALLY_PAID não entra em settled.
+* `category=<uuid>` de FinancialCategory.id (ausente = Todas). Resolução
+  tenant → externalId; match preciso D8; sem rateio; sem rollup de pai;
+  sem sentinela “sem categoria”. REVENUE filtra AR e zera AP; EXPENSE o
+  inverso; UNKNOWN só match preciso D8 (vazio no AR/AP mensal).
+* Forecast e pressão: category sim; situation não aplicada (parser comum
+  rejeita inválido com 400 e ignora valor válido).
+* Meta de faturamento: company-level; ignora os novos filtros.
+* F11-B2 (UI) ainda não iniciada.
+
+F11-C: hoje / ontem / 7d / 30d / 12 meses / ano / range personalizado
+NÃO entram na Home. Reclassificados (relatórios / Fase 12). Não é
+regressão. Não estão implementados na Home.
+
+Ledger (`financial_transactions` / L1-A / L1-B): FORA da Fase 11.
+Não definir recebido/pago por período via ledger nesta fase.
+
+Query params oficiais da Home: `month`, `costCenter`, `situation`, `category`.
+`costCenterId` não é query param. `period`, `comparison` e `status` não
+existem no contrato da Home.

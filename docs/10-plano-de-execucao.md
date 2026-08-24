@@ -827,7 +827,9 @@ Não bloqueia:
 - Fase 9 — Motor Analítico
 - Fase 10 — Dashboard do Cliente
 
-Próxima fase executável: Fase 11 (NÃO INICIADA).
+Próxima fase executável: Fase 11 — F11-B2 (F11-B1 IMPLEMENTADA / AGUARDANDO
+HOMOLOGAÇÃO TÉCNICA; F11-A CONCLUÍDA; F11-C RECLASSIFICADA).
+Fase 11 total: EM ANDAMENTO.
 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE.
 E1 Pressão de caixa: HOMOLOGADA VISUALMENTE.
 E2 composição das despesas: HOMOLOGADA.
@@ -857,7 +859,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 11 (NÃO INICIADA). 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
+Próxima fase: Fase 11 EM ANDAMENTO (F11-A CONCLUÍDA; F11-B1 IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA; F11-B2 NÃO INICIADA; F11-C ADIADA / RECLASSIFICADA). 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -1095,6 +1097,27 @@ CC1.3 — Cash split por centro + seletor em tabs:
        multi parcial → UNAVAILABLE (KPI null se qualquer linha do mês for);
      Seletor Home: tabs (Todos|centros), overflow horizontal + setas;
      0 centros → oculto; 1+ → Todos + centros; Meta company-level.
+F11-A — Congelamento de escopo da Home: CONCLUÍDA (23/08/2026)
+     Home = competência mensal civil (`?month=YYYY-MM`, `competenceDate`,
+     `America/Sao_Paulo`). Query params oficiais: `month`, `costCenter`.
+     FILTER-001 (hoje/ontem/7d/30d/12 meses/ano) e FILTER-005 (range)
+     NÃO na Home — F11-C (reclassificados; não é regressão).
+     Centro de custo e `?month=` NÃO são pendências F11.
+     Comparação oficial = mês × mês civil anterior (sem seletor de base).
+     Meta F2 permanece company-level. Forecast/upcoming/pressão = P1.1
+     (hoje + `dueDate`). Ledger L1 FORA da Fase 11.
+F11-B — Filtros por situação e categoria no mês: EM ANDAMENTO
+     F11-B1 contrato/backend: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO TÉCNICA.
+     F11-B2 frontend: NÃO INICIADA.
+     `situation=settled|open|overdue` (D1 para overdue; sem query `status`).
+     `category=<uuid>` de FinancialCategory.id (match D8 preciso; 404
+     cross-tenant). GET /dashboard/categories alimenta o picker.
+     monthly-revenue/expenses/insights aceitam os dois; forecast/pressão
+     aceitam category e ignoram situation válida; meta permanece
+     company-level.
+F11-C — Períodos rolantes / range: ADIADA / RECLASSIFICADA
+     Destino preferencial: relatórios / Fase 12.
+Fase 11 total: EM ANDAMENTO.
 L1-B — Semântica oficial do caixa + read model mensal:
      BLOCKED_BY_CASH_SEMANTICS (20/08/2026)
      Doc oficial ValorComposicaoDTO da baixa: 5 campos (valor_bruto required +

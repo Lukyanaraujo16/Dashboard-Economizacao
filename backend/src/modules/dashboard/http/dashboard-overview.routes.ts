@@ -15,9 +15,11 @@ import { createTenantRepository } from '../../tenant/repositories/tenant.reposit
 import { createRevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
 import { createDashboardOverviewFacade } from '../services/dashboard-overview.facade.js';
 import { assertNoTenantIdQuery } from './assert-no-tenant-id-query.js';
+import { parseDashboardCategoryQuery } from './parse-dashboard-category-query.js';
 import { parseDashboardCostCenterQuery } from './parse-dashboard-cost-center-query.js';
 import { parseDashboardMonth } from './parse-dashboard-month.js';
 import { parseDashboardRevenueGoalBody } from './parse-dashboard-revenue-goal-body.js';
+import { parseDashboardSituationQuery } from './parse-dashboard-situation-query.js';
 import { parseDashboardUpcomingDays } from './parse-dashboard-upcoming-days.js';
 
 export async function registerDashboardOverviewRoutes(app: FastifyInstance): Promise<void> {
@@ -26,16 +28,18 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
   const tenants = createTenantRepository(prisma);
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const costCenters = createCostCenterReadRepository(prisma);
+  const categories = createFinancialCategoryReadRepository(prisma);
   const dashboard = createDashboardOverviewFacade({
     analytics: createAnalyticsService({
       receivables: createReceivableReadRepository(prisma),
       payables: createPayableReadRepository(prisma),
-      categories: createFinancialCategoryReadRepository(prisma),
+      categories,
       costCenterAllocations: createCostCenterAllocationReadRepository(prisma),
     }),
     integrations: createContaAzulIntegrationRepository(prisma),
     revenueGoals: createRevenueGoalRepository(prisma),
     costCenters,
+    categories,
   });
 
   app.get(
@@ -48,6 +52,20 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       }
       assertNoTenantIdQuery(request.query);
       const body = await dashboard.listCostCenters(auth);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
+    '/dashboard/categories',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const body = await dashboard.listCategories(auth);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -84,8 +102,10 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
+      parseDashboardSituationQuery(request.query);
       const costCenterId = parseDashboardCostCenterQuery(request.query);
-      const body = await dashboard.getCashFlowForecast(auth, costCenterId);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      const body = await dashboard.getCashFlowForecast(auth, costCenterId, categoryId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -131,7 +151,15 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       assertNoTenantIdQuery(request.query);
       const monthKey = parseDashboardMonth(request.query);
       const costCenterId = parseDashboardCostCenterQuery(request.query);
-      const body = await dashboard.getMonthlyRevenue(auth, monthKey, costCenterId);
+      const situation = parseDashboardSituationQuery(request.query);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      const body = await dashboard.getMonthlyRevenue(
+        auth,
+        monthKey,
+        costCenterId,
+        situation,
+        categoryId,
+      );
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -147,7 +175,15 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       assertNoTenantIdQuery(request.query);
       const monthKey = parseDashboardMonth(request.query);
       const costCenterId = parseDashboardCostCenterQuery(request.query);
-      const body = await dashboard.getMonthlyExpenses(auth, monthKey, costCenterId);
+      const situation = parseDashboardSituationQuery(request.query);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      const body = await dashboard.getMonthlyExpenses(
+        auth,
+        monthKey,
+        costCenterId,
+        situation,
+        categoryId,
+      );
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -161,8 +197,10 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
+      parseDashboardSituationQuery(request.query);
       const costCenterId = parseDashboardCostCenterQuery(request.query);
-      const body = await dashboard.getMonthEndCashPressure(auth, costCenterId);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      const body = await dashboard.getMonthEndCashPressure(auth, costCenterId, categoryId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -176,7 +214,7 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      // Meta é sempre company-level — query costCenter (se presente) é ignorada.
+      // Meta é sempre company-level — costCenter/situation/category, se presentes, são ignorados.
       const monthKey = parseDashboardMonth(request.query);
       const body = await dashboard.getRevenueGoal(auth, monthKey);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
@@ -209,7 +247,15 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       assertNoTenantIdQuery(request.query);
       const monthKey = parseDashboardMonth(request.query);
       const costCenterId = parseDashboardCostCenterQuery(request.query);
-      const body = await dashboard.getMonthlyExecutiveInsights(auth, monthKey, costCenterId);
+      const situation = parseDashboardSituationQuery(request.query);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      const body = await dashboard.getMonthlyExecutiveInsights(
+        auth,
+        monthKey,
+        costCenterId,
+        situation,
+        categoryId,
+      );
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

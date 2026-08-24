@@ -161,6 +161,27 @@ function installment(input: {
   };
 }
 
+type UpcomingIsolationPayload = {
+  readonly summary: { readonly receivable: string; readonly payable: string; readonly net: string };
+  readonly receivables: { readonly items: ReadonlyArray<{ readonly unpaid: string }> };
+  readonly payables: { readonly items: ReadonlyArray<{ readonly unpaid: string }> };
+};
+
+/** Isolamento por campos financeiros — não varrer JSON (UUIDs podem conter "333"). */
+function expectUpcomingWithoutForeignUnpaid(
+  body: UpcomingIsolationPayload,
+  foreignUnpaid: string,
+) {
+  const unpaidValues = [
+    ...body.receivables.items.map((item) => item.unpaid),
+    ...body.payables.items.map((item) => item.unpaid),
+    body.summary.receivable,
+    body.summary.payable,
+    body.summary.net,
+  ];
+  expect(unpaidValues).not.toContain(foreignUnpaid);
+}
+
 function expectNoPii(body: unknown) {
   const json = JSON.stringify(body);
   expect(json).not.toMatch(/access-token|refresh-token|Bearer|ciphertext/i);
@@ -283,7 +304,7 @@ describe('GET /dashboard/upcoming (fase 10C)', () => {
     expect(typeof body.summary.receivable).toBe('string');
     expect(typeof body.summary.payable).toBe('string');
     expect(typeof body.summary.net).toBe('string');
-    expect(JSON.stringify(body)).not.toContain('333');
+    expectUpcomingWithoutForeignUnpaid(body, '333');
 
     const hijack = await app.inject({
       method: 'GET',
@@ -291,7 +312,10 @@ describe('GET /dashboard/upcoming (fase 10C)', () => {
       headers: { cookie },
     });
     expect(hijack.statusCode).toBe(400);
-    expect(JSON.stringify(hijack.json())).not.toContain('333');
+    const hijackBody = hijack.json() as Record<string, unknown>;
+    expect(hijackBody).not.toHaveProperty('receivables');
+    expect(hijackBody).not.toHaveProperty('payables');
+    expect(hijackBody).not.toHaveProperty('summary');
   });
 
   it('Support Mode consulta só o tenant suportado', async () => {
@@ -338,7 +362,7 @@ describe('GET /dashboard/upcoming (fase 10C)', () => {
     });
     expect(ok.statusCode).toBe(200);
     expect(ok.json().receivables.items[0].unpaid).toBe('8');
-    expect(JSON.stringify(ok.json())).not.toContain('333');
+    expectUpcomingWithoutForeignUnpaid(ok.json(), '333');
   });
 
   it('DISCONNECTED com dados continua lendo upcoming', async () => {
@@ -508,7 +532,10 @@ describe('GET /dashboard/cash-flow-forecast (fase 10C)', () => {
     expect(first.inflows).toBe('10');
     expect(first.outflows).toBe('4');
     expect(first.net).toBe('6');
-    expect(JSON.stringify(body)).not.toContain('333');
+    const forecastAmounts = (
+      body.buckets as Array<{ inflows: string; outflows: string; net: string }>
+    ).flatMap((bucket) => [bucket.inflows, bucket.outflows, bucket.net]);
+    expect(forecastAmounts).not.toContain('333');
 
     const hijack = await app.inject({
       method: 'GET',

@@ -1,4 +1,8 @@
 import type { FinancialInstallmentStatus, Prisma } from '../../../generated/prisma/client.js';
+import type {
+  DashboardCategoryFilter,
+  DashboardSituation,
+} from './dashboard-home-filters.js';
 
 export type InstallmentStockSnapshot = {
   readonly open: Prisma.Decimal;
@@ -26,11 +30,15 @@ export type GetFinancialStockSnapshotInput = {
   readonly integrationId?: string;
   /** Filtro opcional por CostCenter.id do tenant. */
   readonly costCenterId?: string;
+  /** F11-B: categoria nomeada precisa (já resolvida no tenant). */
+  readonly categoryFilter?: DashboardCategoryFilter;
 };
 
 export type GetMonthlyCompetenceRevenueInput = GetFinancialStockSnapshotInput & {
   /** Mês civil de competência (`YYYY-MM`). Ausente = mês corrente. */
   readonly monthKey?: string;
+  /** F11-B: settled | open | overdue. Ausente = todas. */
+  readonly situation?: DashboardSituation;
 };
 
 export type GetUpcomingInstallmentsInput = GetFinancialStockSnapshotInput & {

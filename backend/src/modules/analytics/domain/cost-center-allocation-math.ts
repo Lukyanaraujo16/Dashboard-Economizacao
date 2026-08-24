@@ -29,6 +29,7 @@ export type CostCenterAllocationMonthlySource = {
   readonly paid: Prisma.Decimal;
   readonly unpaid: Prisma.Decimal;
   readonly dueDate: Date;
+  readonly status: FinancialInstallmentReadRecord['status'];
 };
 
 type CategoryLookup = Pick<FinancialCategoryReadRecord, 'externalId' | 'name' | 'type'>;
@@ -255,7 +256,7 @@ export function toAllocationMonthlySources(
     readonly amount: Prisma.Decimal;
     readonly installment: Pick<
       FinancialInstallmentReadRecord,
-      'competenceDate' | 'categoryExternalIds' | 'total' | 'paid' | 'unpaid' | 'dueDate'
+      'competenceDate' | 'categoryExternalIds' | 'total' | 'paid' | 'unpaid' | 'dueDate' | 'status'
     >;
   }[],
 ): readonly CostCenterAllocationMonthlySource[] {
@@ -267,6 +268,7 @@ export function toAllocationMonthlySources(
     paid: row.installment.paid,
     unpaid: row.installment.unpaid,
     dueDate: row.installment.dueDate,
+    status: row.installment.status,
   }));
 }
 

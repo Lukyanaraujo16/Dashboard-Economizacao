@@ -3,6 +3,7 @@ import type { FinancialCategoryReadRepository } from '../../finance/repositories
 import type { PayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
 import type { ReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { assertTenantId } from '../../finance/repositories/read-query.js';
+import { applyDashboardHomeFilters } from '../domain/dashboard-home-filters.js';
 import { civilTodayInSaoPaulo } from '../domain/analytical-timezone.js';
 import {
   CASH_FLOW_FORECAST_HORIZON_DAYS,
@@ -175,22 +176,26 @@ export function createAnalyticsService(deps: AnalyticsServiceDependencies): Anal
             to,
           }),
         ]);
-        const receivables = toAllocationExposureInstallments(receivableRows)
-          .filter((row) => row.unpaid.greaterThan(0))
-          .map((row) => ({
-            id: row.id,
-            dueDate: row.dueDate,
-            unpaid: row.unpaid,
-            status: row.status,
-          }));
-        const payables = toAllocationExposureInstallments(payableRows)
-          .filter((row) => row.unpaid.greaterThan(0))
-          .map((row) => ({
-            id: row.id,
-            dueDate: row.dueDate,
-            unpaid: row.unpaid,
-            status: row.status,
-          }));
+        const receivables = applyDashboardHomeFilters(
+          toAllocationExposureInstallments(receivableRows).filter((row) =>
+            row.unpaid.greaterThan(0),
+          ),
+          categoryOnlyDashboardFilters(input, 'REVENUE', today),
+        ).map((row) => ({
+          id: row.id,
+          dueDate: row.dueDate,
+          unpaid: row.unpaid,
+          status: row.status,
+        }));
+        const payables = applyDashboardHomeFilters(
+          toAllocationExposureInstallments(payableRows).filter((row) => row.unpaid.greaterThan(0)),
+          categoryOnlyDashboardFilters(input, 'EXPENSE', today),
+        ).map((row) => ({
+          id: row.id,
+          dueDate: row.dueDate,
+          unpaid: row.unpaid,
+          status: row.status,
+        }));
         return buildMonthEndCashPressureResult({
           tenantId,
           today,
@@ -200,9 +205,9 @@ export function createAnalyticsService(deps: AnalyticsServiceDependencies): Anal
           summary: summarizeUpcomingWindow(receivables, payables),
         });
       }
-      const [receivables, payables] = await Promise.all([
-        loadDueDateWindow(deps.receivables.findActiveByDueDateRange, scope, today, to),
-        loadDueDateWindow(deps.payables.findActiveByDueDateRange, scope, today, to),
+      const [receivableRecords, payableRecords] = await Promise.all([
+        deps.receivables.findActiveByDueDateRange({ ...scope, from: today, to }),
+        deps.payables.findActiveByDueDateRange({ ...scope, from: today, to }),
       ]);
       return buildMonthEndCashPressureResult({
         tenantId,
@@ -210,7 +215,20 @@ export function createAnalyticsService(deps: AnalyticsServiceDependencies): Anal
         monthKey,
         from: today,
         to,
-        summary: summarizeUpcomingWindow(receivables, payables),
+        summary: summarizeUpcomingWindow(
+          mapUpcomingInstallments(
+            applyDashboardHomeFilters(
+              receivableRecords,
+              categoryOnlyDashboardFilters(input, 'REVENUE', today),
+            ),
+          ),
+          mapUpcomingInstallments(
+            applyDashboardHomeFilters(
+              payableRecords,
+              categoryOnlyDashboardFilters(input, 'EXPENSE', today),
+            ),
+          ),
+        ),
       });
     },
 
@@ -341,7 +359,10 @@ async function loadMonthlyCompetenceRevenue(
       from,
       to,
     });
-    const sources = toAllocationMonthlySources(allocationRows);
+    const sources = applyDashboardHomeFilters(
+      toAllocationMonthlySources(allocationRows),
+      monthlyDashboardFilters(input, 'REVENUE', today),
+    );
     const externalIds = collectMonthlyRevenueCategoryExternalIds(
       sources.map((row) => ({ categoryExternalIds: row.categoryExternalIds })),
     );
@@ -376,11 +397,14 @@ async function loadMonthlyCompetenceRevenue(
     };
   }
 
-  const receivables = await deps.receivables.findMonthlyCompetenceRevenue({
-    ...scope,
-    from,
-    to,
-  });
+  const receivables = applyDashboardHomeFilters(
+    await deps.receivables.findMonthlyCompetenceRevenue({
+      ...scope,
+      from,
+      to,
+    }),
+    monthlyDashboardFilters(input, 'REVENUE', today),
+  );
   const externalIds = collectMonthlyRevenueCategoryExternalIds(receivables);
   const categories = await deps.categories.findByTenantAndExternalIds({
     ...scope,
@@ -431,7 +455,10 @@ async function loadMonthlyCompetenceExpenses(
       from,
       to,
     });
-    const sources = toAllocationMonthlySources(allocationRows);
+    const sources = applyDashboardHomeFilters(
+      toAllocationMonthlySources(allocationRows),
+      monthlyDashboardFilters(input, 'EXPENSE', today),
+    );
     const externalIds = collectMonthlyRevenueCategoryExternalIds(
       sources.map((row) => ({ categoryExternalIds: row.categoryExternalIds })),
     );
@@ -466,11 +493,14 @@ async function loadMonthlyCompetenceExpenses(
     };
   }
 
-  const payables = await deps.payables.findMonthlyCompetenceExpenses({
-    ...scope,
-    from,
-    to,
-  });
+  const payables = applyDashboardHomeFilters(
+    await deps.payables.findMonthlyCompetenceExpenses({
+      ...scope,
+      from,
+      to,
+    }),
+    monthlyDashboardFilters(input, 'EXPENSE', today),
+  );
   const externalIds = collectMonthlyRevenueCategoryExternalIds(payables);
   const categories = await deps.categories.findByTenantAndExternalIds({
     ...scope,
@@ -527,8 +557,14 @@ async function loadCashFlowForecast(
       tenantId,
       today,
       ...calculateCashFlowForecast(
-        toAllocationExposureInstallments(receivableRows),
-        toAllocationExposureInstallments(payableRows),
+        applyDashboardHomeFilters(
+          toAllocationExposureInstallments(receivableRows),
+          categoryOnlyDashboardFilters(input, 'REVENUE', today),
+        ),
+        applyDashboardHomeFilters(
+          toAllocationExposureInstallments(payableRows),
+          categoryOnlyDashboardFilters(input, 'EXPENSE', today),
+        ),
         from,
         to,
       ),
@@ -541,7 +577,12 @@ async function loadCashFlowForecast(
   return {
     tenantId,
     today,
-    ...calculateCashFlowForecast(receivables, payables, from, to),
+    ...calculateCashFlowForecast(
+      applyDashboardHomeFilters(receivables, categoryOnlyDashboardFilters(input, 'REVENUE', today)),
+      applyDashboardHomeFilters(payables, categoryOnlyDashboardFilters(input, 'EXPENSE', today)),
+      from,
+      to,
+    ),
   };
 }
 
@@ -608,5 +649,31 @@ async function loadUpcoming(
     from,
     to,
     items: mapUpcomingInstallments(records),
+  };
+}
+
+function monthlyDashboardFilters(
+  input: GetMonthlyCompetenceRevenueInput,
+  expectedType: 'REVENUE' | 'EXPENSE',
+  today: Date,
+) {
+  return {
+    situation: input.situation ?? null,
+    categoryFilter: input.categoryFilter ?? null,
+    expectedType,
+    today,
+  };
+}
+
+function categoryOnlyDashboardFilters(
+  input: GetFinancialStockSnapshotInput,
+  expectedType: 'REVENUE' | 'EXPENSE',
+  today: Date,
+) {
+  return {
+    situation: null,
+    categoryFilter: input.categoryFilter ?? null,
+    expectedType,
+    today,
   };
 }

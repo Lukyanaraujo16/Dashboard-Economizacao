@@ -1,6 +1,8 @@
 export { registerDashboardOverviewRoutes } from './http/dashboard-overview.routes.js';
 export type {
   DashboardCashFlowForecastResponse,
+  DashboardCategoriesResponse,
+  DashboardCategoryItem,
   DashboardCostCenterItem,
   DashboardCostCentersResponse,
   DashboardExecutiveInsightsResponse,

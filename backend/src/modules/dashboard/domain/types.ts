@@ -189,6 +189,16 @@ export type DashboardCostCentersResponse = {
   readonly items: readonly DashboardCostCenterItem[];
 };
 
+export type DashboardCategoryItem = {
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'REVENUE' | 'EXPENSE' | 'UNKNOWN';
+};
+
+export type DashboardCategoriesResponse = {
+  readonly items: readonly DashboardCategoryItem[];
+};
+
 export type DashboardExecutiveInsightId =
   | 'revenue-expense-total'
   | 'revenue-expense-balance'
