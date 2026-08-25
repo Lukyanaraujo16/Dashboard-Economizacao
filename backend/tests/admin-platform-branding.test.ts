@@ -137,12 +137,13 @@ async function buildTestApp() {
 
 function expectPublicDto(body: Record<string, unknown>) {
   expect(Object.keys(body).sort()).toEqual(
-    ['createdAt', 'dark', 'faviconUrl', 'light', 'logoUrl', 'name', 'updatedAt'].sort(),
+    ['createdAt', 'dark', 'faviconUrl', 'iconUrl', 'light', 'logoUrl', 'name', 'updatedAt'].sort(),
   );
   expect(body).not.toHaveProperty('singletonKey');
   expect(body).not.toHaveProperty('storageKey');
   expect(body).not.toHaveProperty('checksum');
   expect(body).not.toHaveProperty('logoFileId');
+  expect(body).not.toHaveProperty('iconFileId');
   expect(body).not.toHaveProperty('faviconFileId');
 }
 
@@ -209,6 +210,7 @@ describe('API administrativa /admin/platform/branding (1.5C)', () => {
       expect(response.json()).toEqual({
         name: null,
         logoUrl: null,
+        iconUrl: null,
         faviconUrl: null,
         light: null,
         dark: null,
@@ -309,7 +311,7 @@ describe('API administrativa /admin/platform/branding (1.5C)', () => {
     });
   });
 
-  describe('logo / favicon', () => {
+  describe('logo / icon / favicon', () => {
     it('upload logo cria PLATFORM_LOGO com tenantId null e serve via /files', async () => {
       await createPlatformUser({ email: 'plat-logo@api.test', role: 'ADMIN' });
       const app = await buildTestApp();
@@ -447,6 +449,81 @@ describe('API administrativa /admin/platform/branding (1.5C)', () => {
         headers: { cookie },
       });
       expect(del.statusCode).toBe(204);
+    });
+
+    it('upload ícone cria PLATFORM_ICON independente da logo; SVG rejeitado', async () => {
+      await createPlatformUser({ email: 'plat-icon@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'plat-icon@api.test');
+
+      const logo = await app.inject({
+        method: 'POST',
+        url: '/admin/platform/branding/logo',
+        headers: {
+          cookie,
+          'content-type': buildMultipartPayload({ body: PNG_1X1 }).contentType,
+        },
+        payload: buildMultipartPayload({ body: PNG_1X1 }).payload,
+      });
+      expect(logo.statusCode).toBe(200);
+
+      const upload = await app.inject({
+        method: 'POST',
+        url: '/admin/platform/branding/icon',
+        headers: {
+          cookie,
+          'content-type': buildMultipartPayload({
+            fieldName: 'icon',
+            filename: 'icon.png',
+            body: PNG_1X1,
+          }).contentType,
+        },
+        payload: buildMultipartPayload({
+          fieldName: 'icon',
+          filename: 'icon.png',
+          body: PNG_1X1,
+        }).payload,
+      });
+      expect(upload.statusCode).toBe(200);
+      expect(upload.json().iconUrl).toMatch(/^\/files\//);
+      expect(upload.json().logoUrl).toBe(logo.json().logoUrl);
+      expect(upload.json().iconUrl).not.toBe(upload.json().logoUrl);
+
+      const fileId = String(upload.json().iconUrl).replace('/files/', '');
+      const stored = await files.findById(fileId);
+      expect(stored?.fileType).toBe('PLATFORM_ICON');
+      expect(stored?.tenantId).toBeNull();
+      expect(stored?.storageKey.startsWith('platform/branding/icon/')).toBe(true);
+
+      const svg = await app.inject({
+        method: 'POST',
+        url: '/admin/platform/branding/icon',
+        headers: {
+          cookie,
+          'content-type': buildMultipartPayload({
+            fieldName: 'icon',
+            filename: 'x.svg',
+            mimeType: 'image/svg+xml',
+            body: SVG_FIXTURE,
+          }).contentType,
+        },
+        payload: buildMultipartPayload({
+          fieldName: 'icon',
+          filename: 'x.svg',
+          mimeType: 'image/svg+xml',
+          body: SVG_FIXTURE,
+        }).payload,
+      });
+      expect(svg.statusCode).toBe(422);
+
+      const del = await app.inject({
+        method: 'DELETE',
+        url: '/admin/platform/branding/icon',
+        headers: { cookie },
+      });
+      expect(del.statusCode).toBe(204);
+      expect((await platformBranding.get())?.iconFileId).toBeNull();
+      expect((await platformBranding.get())?.logoFileId).not.toBeNull();
     });
   });
 

@@ -5,7 +5,7 @@ import { mapStoredFileRecord } from './mappers.js';
 
 export type CreateTenantStoredFileInput = {
   readonly tenantId: string;
-  readonly fileType: 'TENANT_LOGO';
+  readonly fileType: 'TENANT_LOGO' | 'TENANT_ICON';
   readonly storageKey: string;
   readonly mimeType: string;
   readonly size: number;
@@ -14,7 +14,7 @@ export type CreateTenantStoredFileInput = {
 
 export type CreatePlatformStoredFileInput = {
   readonly tenantId?: null;
-  readonly fileType: 'PLATFORM_LOGO' | 'PLATFORM_FAVICON';
+  readonly fileType: 'PLATFORM_LOGO' | 'PLATFORM_ICON' | 'PLATFORM_FAVICON';
   readonly storageKey: string;
   readonly mimeType: string;
   readonly size: number;
@@ -34,11 +34,11 @@ function assertOwnershipConsistency(
   fileType: StoredFileType,
   tenantId: string | null | undefined,
 ): void {
-  if (fileType === 'TENANT_LOGO') {
+  if (fileType === 'TENANT_LOGO' || fileType === 'TENANT_ICON') {
     if (tenantId == null || tenantId.length === 0) {
       throw new BrandingDomainError(
         'BRANDING_FILE_OWNERSHIP_INVALID',
-        'Arquivo TENANT_LOGO exige tenantId.',
+        `Arquivo ${fileType} exige tenantId.`,
       );
     }
     return;
@@ -55,7 +55,8 @@ function assertOwnershipConsistency(
 export function createStoredFileRepository(prisma: PrismaClient): StoredFileRepository {
   return {
     async create(input) {
-      const tenantId = input.fileType === 'TENANT_LOGO' ? input.tenantId : null;
+      const tenantId =
+        input.fileType === 'TENANT_LOGO' || input.fileType === 'TENANT_ICON' ? input.tenantId : null;
       assertOwnershipConsistency(input.fileType, tenantId);
 
       const row = await prisma.storedFile.create({

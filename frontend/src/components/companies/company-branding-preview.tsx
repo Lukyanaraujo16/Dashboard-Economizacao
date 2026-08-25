@@ -16,6 +16,7 @@ import styles from './companies.module.css';
 type CompanyBrandingPreviewProps = {
   readonly companyName: string;
   readonly logoUrl: string | null;
+  readonly iconUrl: string | null;
   readonly colorScheme: ResolvedColorScheme;
   readonly light: BrandColorOverrides | null;
   readonly dark: BrandColorOverrides | null;
@@ -24,6 +25,7 @@ type CompanyBrandingPreviewProps = {
 export function CompanyBrandingPreview({
   companyName,
   logoUrl,
+  iconUrl,
   colorScheme,
   light,
   dark,
@@ -31,6 +33,7 @@ export function CompanyBrandingPreview({
   const branding: TenantBrandingInput = {
     name: companyName,
     logoUrl,
+    iconUrl,
     light: light ?? undefined,
     dark: dark ?? undefined,
   };
@@ -56,7 +59,7 @@ export function CompanyBrandingPreview({
 
       <header className={styles.appearancePreviewChrome}>
         <div className={styles.appearancePreviewBrand}>
-          <PlatformBrandMark size={40} logoUrl={theme.logoUrl} alt={companyName} />
+          <PlatformBrandMark size={40} variant="compact" logoUrl={theme.iconUrl} decorative />
           <div className={styles.appearancePreviewBrandText}>
             <Typography as="p" variant="label" className={styles.appearancePreviewName}>
               {companyName}

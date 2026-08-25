@@ -12,6 +12,7 @@ export { BrandingRequestError, ALLOWED_BRAND_COLOR_TOKENS } from './branding.typ
 export type PlatformBranding = {
   readonly name: string | null;
   readonly logoUrl: string | null;
+  readonly iconUrl: string | null;
   readonly faviconUrl: string | null;
   readonly light: BrandColorOverrides | null;
   readonly dark: BrandColorOverrides | null;

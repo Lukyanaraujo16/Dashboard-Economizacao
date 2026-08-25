@@ -66,12 +66,14 @@ model TenantBranding {
   id          String      @id @default(uuid()) @db.Uuid
   tenantId    String      @unique @map("tenant_id") @db.Uuid
   logoFileId  String?     @unique @map("logo_file_id") @db.Uuid
+  iconFileId  String?     @unique @map("icon_file_id") @db.Uuid
   lightColors Json?       @map("light_colors")
   darkColors  Json?       @map("dark_colors")
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
   tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   logoFile    StoredFile? @relation("TenantBrandingLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  iconFile    StoredFile? @relation("TenantBrandingIcon", fields: [iconFileId], references: [id], onDelete: SetNull)
 
   @@map("tenant_branding")
 }
@@ -85,10 +87,12 @@ model PlatformBranding {
   lightColors   Json?       @map("light_colors")
   darkColors    Json?       @map("dark_colors")
   logoFileId    String?     @unique @map("logo_file_id") @db.Uuid
+  iconFileId    String?     @unique @map("icon_file_id") @db.Uuid
   faviconFileId String?     @unique @map("favicon_file_id") @db.Uuid
   createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
   logoFile      StoredFile? @relation("PlatformBrandingLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  iconFile      StoredFile? @relation("PlatformBrandingIcon", fields: [iconFileId], references: [id], onDelete: SetNull)
   faviconFile   StoredFile? @relation("PlatformBrandingFavicon", fields: [faviconFileId], references: [id], onDelete: SetNull)
 
   @@unique([singletonKey], map: "uq_platform_branding_singleton")
@@ -97,14 +101,16 @@ model PlatformBranding {
 
 enum StoredFileType {
   TENANT_LOGO
+  TENANT_ICON
   PLATFORM_LOGO
+  PLATFORM_ICON
   PLATFORM_FAVICON
 
   @@map("stored_file_type")
 }
 
 /// Arquivos gerenciados pela plataforma (docs/03 §4.3). Metadados + storage_key; bytes ficam no FileStorage.
-/// tenantId null = asset global (PLATFORM_*); tenantId setado = asset do tenant (TENANT_LOGO).
+/// tenantId null = asset global (PLATFORM_*); tenantId setado = asset do tenant (TENANT_*).
 model StoredFile {
   id                      String            @id @default(uuid()) @db.Uuid
   tenantId                String?           @map("tenant_id") @db.Uuid
@@ -116,7 +122,9 @@ model StoredFile {
   createdAt               DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   tenant                  Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   brandingLogo            TenantBranding?   @relation("TenantBrandingLogo")
+  brandingIcon            TenantBranding?   @relation("TenantBrandingIcon")
   platformBrandingLogo    PlatformBranding? @relation("PlatformBrandingLogo")
+  platformBrandingIcon    PlatformBranding? @relation("PlatformBrandingIcon")
   platformBrandingFavicon PlatformBranding? @relation("PlatformBrandingFavicon")
 
   @@index([tenantId], map: "idx_files_tenant_id")

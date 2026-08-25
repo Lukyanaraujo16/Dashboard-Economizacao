@@ -1,4 +1,4 @@
-import { adminTenantBrandingLogoPath, adminTenantBrandingPath } from '../../lib/api-config';
+import { adminTenantBrandingIconPath, adminTenantBrandingLogoPath, adminTenantBrandingPath } from '../../lib/api-config';
 import type {
   BrandColorOverrides,
   BrandColorToken,
@@ -54,6 +54,7 @@ function isCompanyBranding(value: unknown): value is CompanyBranding {
   return (
     typeof value.tenantId === 'string' &&
     (value.logoUrl === null || typeof value.logoUrl === 'string') &&
+    (value.iconUrl === null || typeof value.iconUrl === 'string') &&
     isBrandColorOverrides(value.light) &&
     isBrandColorOverrides(value.dark) &&
     (value.createdAt === null || typeof value.createdAt === 'string') &&
@@ -299,6 +300,46 @@ export async function uploadLogo(companyId: string, file: File): Promise<Company
 
 export async function deleteLogo(companyId: string): Promise<void> {
   const response = await brandingFetch(adminTenantBrandingLogoPath(companyId), {
+    method: 'DELETE',
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toBrandingFailure(response, body);
+  }
+}
+
+export async function uploadIcon(companyId: string, file: File): Promise<CompanyBranding> {
+  const formData = new FormData();
+  formData.append('icon', file);
+
+  const response = await brandingFetch(adminTenantBrandingIconPath(companyId), {
+    method: 'POST',
+    body: formData,
+  });
+  const body = await readJsonBody(response);
+
+  if (!response.ok) {
+    throw toBrandingFailure(response, body);
+  }
+
+  if (!isCompanyBranding(body)) {
+    throw new BrandingRequestError(
+      'unavailable',
+      'Não foi possível conectar ao serviço. Tente novamente.',
+      { httpStatus: response.status },
+    );
+  }
+
+  return body;
+}
+
+export async function deleteIcon(companyId: string): Promise<void> {
+  const response = await brandingFetch(adminTenantBrandingIconPath(companyId), {
     method: 'DELETE',
   });
 

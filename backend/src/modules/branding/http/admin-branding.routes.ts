@@ -16,24 +16,27 @@ import { createAdminBrandingService } from '../services/admin-branding.service.j
 import { createStoredFileRepository } from '../repositories/stored-file.repository.js';
 import { createTenantBrandingRepository } from '../repositories/tenant-branding.repository.js';
 
-async function readLogoMultipart(request: {
-  file: () => Promise<
-    | {
-        fieldname: string;
-        mimetype: string;
-        toBuffer: () => Promise<Buffer>;
-      }
-    | undefined
-  >;
-}): Promise<{ body: Buffer; declaredMimeType: string }> {
+async function readNamedMultipart(
+  request: {
+    file: () => Promise<
+      | {
+          fieldname: string;
+          mimetype: string;
+          toBuffer: () => Promise<Buffer>;
+        }
+      | undefined
+    >;
+  },
+  fieldName: 'logo' | 'icon',
+): Promise<{ body: Buffer; declaredMimeType: string }> {
   const file = await request.file();
   if (!file) {
-    throw new ValidationError('Arquivo de logo ausente.', {
-      details: [{ field: 'logo', issue: 'required' }],
+    throw new ValidationError(`Arquivo de ${fieldName} ausente.`, {
+      details: [{ field: fieldName, issue: 'required' }],
     });
   }
 
-  if (file.fieldname !== 'logo') {
+  if (file.fieldname !== fieldName) {
     throw new ValidationError('Campo de upload inválido.', {
       details: [{ field: file.fieldname, issue: 'unknown_field' }],
     });
@@ -107,7 +110,7 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
     { preHandler: adminGuard },
     async (request, reply) => {
       const tenantId = parseTenantIdParam(request.params);
-      const { body, declaredMimeType } = await readLogoMultipart(request);
+      const { body, declaredMimeType } = await readNamedMultipart(request, 'logo');
       const response = await adminBranding.uploadLogo(tenantId, body, declaredMimeType);
 
       return reply.status(200).send(response);
@@ -120,6 +123,29 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
     async (request, reply) => {
       const tenantId = parseTenantIdParam(request.params);
       await adminBranding.deleteLogo(tenantId);
+
+      return reply.status(204).send();
+    },
+  );
+
+  app.post(
+    '/admin/tenants/:tenantId/branding/icon',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const tenantId = parseTenantIdParam(request.params);
+      const { body, declaredMimeType } = await readNamedMultipart(request, 'icon');
+      const response = await adminBranding.uploadIcon(tenantId, body, declaredMimeType);
+
+      return reply.status(200).send(response);
+    },
+  );
+
+  app.delete(
+    '/admin/tenants/:tenantId/branding/icon',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const tenantId = parseTenantIdParam(request.params);
+      await adminBranding.deleteIcon(tenantId);
 
       return reply.status(204).send();
     },

@@ -86,9 +86,11 @@ type LoginExperienceProps = {
   /** Nome da plataforma (GET /branding/platform); fallback Economização. */
   readonly brandName?: string;
   /**
-   * Logo da plataforma. Quando omitido/null, usa placeholder Accent.
+   * Logo principal. Quando omitido/null, usa placeholder Accent.
    */
   readonly brandLogoUrl?: string | null;
+  /** Ícone compacto do lockup institucional. Independente da logo principal. */
+  readonly brandIconUrl?: string | null;
   /** Cores/nome/logo para o ThemeProvider aninhado do login. */
   readonly branding?: TenantBrandingInput | null;
   /** Injeção para testes; default: serviço HTTP real. */
@@ -104,6 +106,7 @@ export function LoginExperience({
   showThemeControls = false,
   brandName,
   brandLogoUrl = null,
+  brandIconUrl = null,
   branding = null,
   loginAction = login,
 }: LoginExperienceProps) {
@@ -179,9 +182,10 @@ export function LoginExperience({
         ...branding,
         name: branding.name ?? resolvedBrandName,
         logoUrl: branding.logoUrl ?? brandLogoUrl,
+        iconUrl: branding.iconUrl ?? brandIconUrl,
       }
-    : brandLogoUrl || brandName
-      ? { name: resolvedBrandName, logoUrl: brandLogoUrl }
+    : brandLogoUrl || brandIconUrl || brandName
+      ? { name: resolvedBrandName, logoUrl: brandLogoUrl, iconUrl: brandIconUrl }
       : null;
 
   return (
@@ -222,10 +226,12 @@ export function LoginExperience({
             <div className={styles.brandInner}>
               <div className={styles.brandIntro}>
                 <div className={styles.brandLockup}>
-                  <div className={styles.logoRow}>
+                  <div className={styles.logoRow} data-testid="login-institutional-lockup">
                     <PlatformBrandMark
                       size={52}
-                      logoUrl={brandLogoUrl}
+                      variant="compact"
+                      logoUrl={brandIconUrl}
+                      decorative
                       className={styles.brandMark}
                     />
                     <div className={styles.brandText}>
@@ -283,9 +289,14 @@ export function LoginExperience({
             <Card variant="elevated" className={styles.authCard}>
               <Stack gap={6} className={styles.authStack}>
                 <Stack gap={3} className={styles.authHeader} align="center">
-                  <div className={styles.authLogoWrap}>
-                    <PlatformBrandMark size={36} logoUrl={brandLogoUrl} decorative />
-                    <span className={styles.authAccentPip} aria-hidden="true" />
+                  <div className={styles.authLogoWrap} data-testid="login-primary-logo">
+                    <PlatformBrandMark
+                      size={72}
+                      variant="logo"
+                      logoUrl={brandLogoUrl}
+                      decorative
+                      className={styles.authPrimaryLogo}
+                    />
                   </div>
                   <Stack gap={2} className={styles.authIntro} align="center">
                     <Typography as="h2" variant="heading" className={styles.authTitle}>

@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { adminTenantBrandingLogoPath, adminTenantBrandingPath } from '../src/lib/api-config';
+import { adminTenantBrandingIconPath, adminTenantBrandingLogoPath, adminTenantBrandingPath } from '../src/lib/api-config';
 import {
+  deleteIcon,
   deleteLogo,
   getBranding,
   replaceBrandingColors,
   resetBranding,
+  uploadIcon,
   uploadLogo,
   updateBranding,
 } from '../src/services/admin/branding';
@@ -14,6 +16,7 @@ import { BrandingRequestError } from '../src/services/admin/branding.types';
 const sampleBranding = {
   tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   logoUrl: null as string | null,
+  iconUrl: null as string | null,
   light: { primary: '#112233' } as Record<string, string> | null,
   dark: null as Record<string, string> | null,
   createdAt: '2026-08-14T10:00:00.000Z',
@@ -77,6 +80,38 @@ describe('admin branding service', () => {
 
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(url).toBe(adminTenantBrandingLogoPath(sampleBranding.tenantId));
+    expect(init?.method).toBe('DELETE');
+  });
+
+  it('uploadIcon envia FormData no campo icon', async () => {
+    const withIcon = { ...sampleBranding, iconUrl: '/files/icon-1' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify(withIcon), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+
+    const file = new File([new Uint8Array([1, 2, 3])], 'icon.png', { type: 'image/png' });
+    await uploadIcon(sampleBranding.tenantId, file);
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(url).toBe(adminTenantBrandingIconPath(sampleBranding.tenantId));
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBeInstanceOf(FormData);
+    expect((init?.body as FormData).get('icon')).toBeInstanceOf(File);
+  });
+
+  it('deleteIcon trata 204', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+
+    await expect(deleteIcon(sampleBranding.tenantId)).resolves.toBeUndefined();
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(url).toBe(adminTenantBrandingIconPath(sampleBranding.tenantId));
     expect(init?.method).toBe('DELETE');
   });
 

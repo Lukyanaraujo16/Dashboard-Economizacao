@@ -21,6 +21,7 @@ describe('Theme Engine / Branding Runtime', () => {
     expect(resolved.colors.primary).toBe(lightColorTokens.primary);
     expect(resolved.brandName).toBeNull();
     expect(resolved.logoUrl).toBeNull();
+    expect(resolved.iconUrl).toBeNull();
   });
 
   it('branding parcial completa com Theme Default', () => {
@@ -59,6 +60,7 @@ describe('Theme Engine / Branding Runtime', () => {
 
     expect(resolved.brandName).toBe('Completo');
     expect(resolved.logoUrl).toBe('https://cdn.example/logo.svg');
+    expect(resolved.iconUrl).toBeNull();
     expect(resolved.colors.primary).toBe('#010203');
     expect(resolved.colors.onPrimary).toBe('#FEFEFE');
     expect(resolved.colors.secondary).toBe('#040506');
@@ -133,5 +135,28 @@ describe('Theme Engine / Branding Runtime', () => {
     };
 
     expect(runThemeEngine(input)).toEqual(resolveTheme(input));
+  });
+
+  it('ícone compacto não herda a logo principal', () => {
+    const resolved = resolveTheme({
+      preference: 'light',
+      branding: {
+        name: 'Separado',
+        logoUrl: 'https://cdn.example/logo.png',
+        iconUrl: 'https://cdn.example/icon.png',
+      },
+    });
+
+    expect(resolved.logoUrl).toBe('https://cdn.example/logo.png');
+    expect(resolved.iconUrl).toBe('https://cdn.example/icon.png');
+
+    const logoOnly = resolveTheme({
+      preference: 'light',
+      branding: {
+        logoUrl: 'https://cdn.example/logo.png',
+      },
+    });
+    expect(logoOnly.logoUrl).toBe('https://cdn.example/logo.png');
+    expect(logoOnly.iconUrl).toBeNull();
   });
 });

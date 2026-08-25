@@ -1,8 +1,11 @@
 /**
  * Marca visual da plataforma / tenant.
  *
- * Placeholder institucional temporário (cifrão Accent) quando não há logoUrl
- * ou quando o asset falha ao carregar (ex.: 404).
+ * Dois papéis:
+ * - compact: ícone quadrado (sidebar, lockup institucional).
+ * - logo: logo principal com proporção livre (card de login).
+ *
+ * Sem asset ou falha de carga → placeholder Accent (cifrão).
  */
 
 'use client';
@@ -12,14 +15,17 @@ import { useEffect, useState } from 'react';
 import { cx } from '../components/ui/utils/cx';
 import styles from './platform-brand-mark.module.css';
 
+export type PlatformBrandMarkVariant = 'compact' | 'logo';
+
 export type PlatformBrandMarkProps = {
   readonly size?: number;
   readonly alt?: string;
-  /** Asset oficial; quando ausente ou falha, usa o placeholder Accent. */
+  /** Asset do papel visual atual (logo principal ou ícone compacto). */
   readonly logoUrl?: string | null;
   readonly className?: string;
   /** Decorative (ex.: no card de auth) — alt vazio. */
   readonly decorative?: boolean;
+  readonly variant?: PlatformBrandMarkVariant;
 };
 
 export function PlatformBrandMark({
@@ -28,6 +34,7 @@ export function PlatformBrandMark({
   logoUrl = null,
   className,
   decorative = false,
+  variant = 'compact',
 }: PlatformBrandMarkProps) {
   const [logoFailed, setLogoFailed] = useState(false);
 
@@ -42,6 +49,18 @@ export function PlatformBrandMark({
   }
 
   if (showAsset && logoUrl) {
+    if (variant === 'logo') {
+      return (
+        <img
+          src={logoUrl}
+          alt={decorative ? '' : alt}
+          className={cx(styles.logoAsset, className)}
+          data-brand-role="logo"
+          onError={handleLogoError}
+        />
+      );
+    }
+
     return (
       <img
         src={logoUrl}
@@ -49,6 +68,7 @@ export function PlatformBrandMark({
         width={size}
         height={size}
         className={cx(styles.asset, className)}
+        data-brand-role="compact"
         onError={handleLogoError}
       />
     );
@@ -56,18 +76,18 @@ export function PlatformBrandMark({
 
   return (
     <span
-      className={cx(styles.placeholder, className)}
-      style={{ width: size, height: size }}
+      className={cx(variant === 'logo' ? styles.logoPlaceholder : styles.placeholder, className)}
+      style={variant === 'logo' ? undefined : { width: size, height: size }}
       role={decorative ? undefined : 'img'}
       aria-hidden={decorative || undefined}
       aria-label={decorative ? undefined : alt}
       data-brand-placeholder="true"
+      data-variant={variant}
       title="Placeholder — será substituído pelo branding oficial"
     >
-      {/* Placeholder institucional temporário. Será substituído pelo branding oficial. */}
       <svg
-        width={Math.round(size * 0.46)}
-        height={Math.round(size * 0.46)}
+        width={Math.round(size * (variant === 'logo' ? 0.42 : 0.46))}
+        height={Math.round(size * (variant === 'logo' ? 0.42 : 0.46))}
         viewBox="0 0 24 24"
         fill="none"
         aria-hidden="true"

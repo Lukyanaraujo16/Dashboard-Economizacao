@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   deletePlatformFavicon,
+  deletePlatformIcon,
   deletePlatformLogo,
   getPlatformBranding,
   resetPlatformBranding,
@@ -9,6 +10,7 @@ import {
   savePlatformAppearanceChanges,
   updatePlatformBranding,
   uploadPlatformFavicon,
+  uploadPlatformIcon,
   uploadPlatformLogo,
 } from '../src/services/admin/platform-branding';
 import { BrandingRequestError } from '../src/services/admin/branding.types';
@@ -23,6 +25,7 @@ function jsonResponse(body: unknown, status = 200) {
 const emptyBranding = {
   name: null,
   logoUrl: null,
+  iconUrl: null,
   faviconUrl: null,
   light: null,
   dark: null,
@@ -33,6 +36,7 @@ const emptyBranding = {
 const branded = {
   name: 'Economização',
   logoUrl: '/files/logo-1',
+  iconUrl: '/files/icon-1',
   faviconUrl: '/files/fav-1',
   light: { primary: '#112233', onPrimary: '#FFFFFF' },
   dark: { primary: '#AABBCC', onPrimary: '#111111' },
@@ -165,6 +169,7 @@ describe('platform branding service', () => {
 
     await expect(resetPlatformBranding()).resolves.toBeUndefined();
     await expect(deletePlatformLogo()).resolves.toBeUndefined();
+    await expect(deletePlatformIcon()).resolves.toBeUndefined();
     await expect(deletePlatformFavicon()).resolves.toBeUndefined();
   });
 
@@ -241,5 +246,56 @@ describe('platform branding service', () => {
     expect(result.completed).toEqual(['logo']);
     expect(result.failedStep).toBe('fields');
     expect(result.branding.logoUrl).toBe('/files/logo-ok');
+  });
+
+  it('uploadPlatformIcon usa campo icon', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(branded)));
+    const file = new File([new Uint8Array([1, 2, 3])], 'icon.png', { type: 'image/png' });
+
+    await uploadPlatformIcon(file);
+
+    const init = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as RequestInit;
+    expect((init.body as FormData).get('icon')).toBeInstanceOf(File);
+    expect(fetch).toHaveBeenCalledWith(
+      '/admin/platform/branding/icon',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('savePlatformAppearanceChanges sobe logo, depois ícone, depois PATCH', async () => {
+    let state = { ...branded };
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      const path = String(url);
+      if (method === 'GET') {
+        return Promise.resolve(jsonResponse(state));
+      }
+      if (method === 'POST' && path.endsWith('/logo')) {
+        state = { ...state, logoUrl: '/files/logo-2' };
+        return Promise.resolve(jsonResponse(state));
+      }
+      if (method === 'POST' && path.endsWith('/icon')) {
+        state = { ...state, iconUrl: '/files/icon-2' };
+        return Promise.resolve(jsonResponse(state));
+      }
+      if (method === 'PATCH') {
+        return Promise.resolve(jsonResponse(state));
+      }
+      return Promise.resolve(jsonResponse(state));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await savePlatformAppearanceChanges({
+      name: 'Novo Nome',
+      logoFile: new File([new Uint8Array([1])], 'logo.png', { type: 'image/png' }),
+      iconFile: new File([new Uint8Array([1])], 'icon.png', { type: 'image/png' }),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.completed).toEqual(['logo', 'icon', 'fields']);
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.findIndex((url) => url.endsWith('/logo'))).toBeLessThan(
+      urls.findIndex((url) => url.endsWith('/icon')),
+    );
   });
 });

@@ -6,6 +6,7 @@ export type BrandColorOverrides = Partial<Record<BrandColorToken, string>>;
 export type CompanyBranding = {
   readonly tenantId: string;
   readonly logoUrl: string | null;
+  readonly iconUrl: string | null;
   readonly light: BrandColorOverrides | null;
   readonly dark: BrandColorOverrides | null;
   readonly createdAt: string | null;

@@ -37,6 +37,7 @@ export function resolveTheme(input: ResolveThemeInput): ResolvedTheme {
     colorScheme,
     preference: input.preference,
     logoUrl: branding?.logoUrl ?? null,
+    iconUrl: branding?.iconUrl ?? null,
     brandName: branding?.name ?? null,
     colors: applyColorOverrides(base.colors, schemeOverrides),
     spacing: base.spacing,

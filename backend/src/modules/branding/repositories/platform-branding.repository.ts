@@ -10,6 +10,7 @@ import { mapPlatformBrandingRecord, toPrismaJsonColorOverrides } from './mappers
 
 const brandingWithAssets = {
   logoFile: true,
+  iconFile: true,
   faviconFile: true,
 } as const;
 
@@ -25,8 +26,10 @@ export type PlatformBrandingRepository = {
   reset(): Promise<void>;
   /** Anexa referência a StoredFile PLATFORM_LOGO global (sem upload nesta fase). */
   attachLogo(fileId: string): Promise<PlatformBrandingRecord>;
+  attachIcon(fileId: string): Promise<PlatformBrandingRecord>;
   attachFavicon(fileId: string): Promise<PlatformBrandingRecord>;
   clearLogo(): Promise<PlatformBrandingRecord | null>;
+  clearIcon(): Promise<PlatformBrandingRecord | null>;
   clearFavicon(): Promise<PlatformBrandingRecord | null>;
 };
 
@@ -49,7 +52,7 @@ async function requireExistingPlatformBranding(
 async function assertPlatformAsset(
   prisma: PrismaClient,
   fileId: string,
-  expectedType: 'PLATFORM_LOGO' | 'PLATFORM_FAVICON',
+  expectedType: 'PLATFORM_LOGO' | 'PLATFORM_ICON' | 'PLATFORM_FAVICON',
 ): Promise<void> {
   const file = await prisma.storedFile.findUnique({
     where: { id: fileId },
@@ -61,12 +64,13 @@ async function assertPlatformAsset(
   }
 
   if (file.tenantId !== null || file.fileType !== expectedType) {
-    throw new BrandingDomainError(
-      'BRANDING_FILE_OWNERSHIP_INVALID',
+    const message =
       expectedType === 'PLATFORM_LOGO'
         ? 'Logo da plataforma deve referenciar um arquivo PLATFORM_LOGO global.'
-        : 'Favicon da plataforma deve referenciar um arquivo PLATFORM_FAVICON global.',
-    );
+        : expectedType === 'PLATFORM_ICON'
+          ? 'Ícone da plataforma deve referenciar um arquivo PLATFORM_ICON global.'
+          : 'Favicon da plataforma deve referenciar um arquivo PLATFORM_FAVICON global.';
+    throw new BrandingDomainError('BRANDING_FILE_OWNERSHIP_INVALID', message);
   }
 }
 
@@ -131,7 +135,7 @@ export function createPlatformBrandingRepository(prisma: PrismaClient): Platform
     async reset() {
       const existing = await prisma.platformBranding.findUnique({
         where: { singletonKey: PLATFORM_BRANDING_SINGLETON_KEY },
-        select: { id: true, logoFileId: true, faviconFileId: true },
+        select: { id: true, logoFileId: true, iconFileId: true, faviconFileId: true },
       });
 
       if (!existing) {
@@ -168,6 +172,18 @@ export function createPlatformBrandingRepository(prisma: PrismaClient): Platform
       return mapPlatformBrandingRecord(row);
     },
 
+    async attachIcon(fileId) {
+      await requireExistingPlatformBranding(prisma);
+      await assertPlatformAsset(prisma, fileId, 'PLATFORM_ICON');
+
+      const row = await prisma.platformBranding.update({
+        where: { singletonKey: PLATFORM_BRANDING_SINGLETON_KEY },
+        data: { iconFileId: fileId },
+        include: brandingWithAssets,
+      });
+      return mapPlatformBrandingRecord(row);
+    },
+
     async clearLogo() {
       const existing = await prisma.platformBranding.findUnique({
         where: { singletonKey: PLATFORM_BRANDING_SINGLETON_KEY },
@@ -197,6 +213,23 @@ export function createPlatformBrandingRepository(prisma: PrismaClient): Platform
       const row = await prisma.platformBranding.update({
         where: { singletonKey: PLATFORM_BRANDING_SINGLETON_KEY },
         data: { faviconFileId: null },
+        include: brandingWithAssets,
+      });
+      return mapPlatformBrandingRecord(row);
+    },
+
+    async clearIcon() {
+      const existing = await prisma.platformBranding.findUnique({
+        where: { singletonKey: PLATFORM_BRANDING_SINGLETON_KEY },
+        include: brandingWithAssets,
+      });
+      if (!existing) {
+        return null;
+      }
+
+      const row = await prisma.platformBranding.update({
+        where: { singletonKey: PLATFORM_BRANDING_SINGLETON_KEY },
+        data: { iconFileId: null },
         include: brandingWithAssets,
       });
       return mapPlatformBrandingRecord(row);

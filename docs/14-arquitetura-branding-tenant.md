@@ -256,7 +256,7 @@ Singleton por ambiente (como `docs/03` §4.1). Pode ser entregue na mesma fase 1
 |---|---|---|---|
 | Nome exibido | via `Tenant.displayName` (1.2) | override de marca distinto | — |
 | Logo principal | **sim** | — | — |
-| Mark / símbolo separado | — | **sim** (sidebar compacta, favicon source) | — |
+| Mark / símbolo separado | **sim** (PRE-IA-4C: `iconUrl` na sidebar e lockup compacto) | favicon source dedicado | — |
 | Favicon | — | **sim** | — |
 | `primary` | **sim** | — | — |
 | `onPrimary` | **sim** (auto-derivável) | — | — |
@@ -319,9 +319,9 @@ valor em tenant_branding.{scheme}_colors[token]
 
 | Asset | MVP | Uso runtime |
 |---|---|---|
-| Logo principal | **sim** | `ResolvedTheme.logoUrl` → `PlatformBrandMark` / futuro componente de shell |
-| Mark / símbolo | futuro | sidebar colapsada, mobile compacto |
-| Favicon | futuro | `<link rel="icon">` dinâmico pós-login |
+| Logo principal | **sim** | Card de login e áreas de destaque (`ResolvedTheme.logoUrl`) |
+| Mark / símbolo | **sim** (PRE-IA-4C) | Sidebar, lockup institucional, regiões compactas (`ResolvedTheme.iconUrl`) |
+| Favicon | **sim** | `<link rel="icon">` dinâmico; não substitui o ícone compacto |
 
 ### 9.2 Light / Dark
 
@@ -330,9 +330,9 @@ valor em tenant_branding.{scheme}_colors[token]
 
 ### 9.3 O que o código suporta hoje
 
-- apenas **uma** URL de logo (`logoUrl`);
-- componente único `PlatformBrandMark` aceita imagem raster/SVG via `<img src>`;
-- sem distinção mark vs logotype no tipo — **não criar** tipos extras no MVP.
+- `logoUrl` e `iconUrl` são papéis visuais distintos;
+- `PlatformBrandMark` tem variantes `logo` (proporção livre) e `compact` (1:1);
+- ausência de ícone usa placeholder; **não** reutiliza a logo principal.
 
 ---
 

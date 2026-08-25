@@ -18,6 +18,7 @@ import styles from './settings.module.css';
 type PlatformBrandingPreviewProps = {
   readonly platformName: string;
   readonly logoUrl: string | null;
+  readonly iconUrl: string | null;
   readonly colorScheme: ResolvedColorScheme;
   readonly light: BrandColorOverrides | null;
   readonly dark: BrandColorOverrides | null;
@@ -26,6 +27,7 @@ type PlatformBrandingPreviewProps = {
 export function PlatformBrandingPreview({
   platformName,
   logoUrl,
+  iconUrl,
   colorScheme,
   light,
   dark,
@@ -33,6 +35,7 @@ export function PlatformBrandingPreview({
   const branding: TenantBrandingInput = {
     name: platformName,
     logoUrl,
+    iconUrl,
     light: light ?? undefined,
     dark: dark ?? undefined,
   };
@@ -59,7 +62,7 @@ export function PlatformBrandingPreview({
       <header className={companyStyles.appearancePreviewChrome}>
         <div className={companyStyles.appearancePreviewBrand}>
           <div className={styles.previewMarkFrame} data-fit="contain" aria-hidden="true">
-            <PlatformBrandMark size={40} logoUrl={theme.logoUrl} decorative />
+            <PlatformBrandMark size={40} variant="compact" logoUrl={theme.iconUrl} decorative />
           </div>
           <div className={companyStyles.appearancePreviewBrandText}>
             <Typography as="p" variant="label" className={companyStyles.appearancePreviewName}>
@@ -126,7 +129,7 @@ export function PlatformBrandingPreview({
                 data-fit="contain"
                 aria-hidden="true"
               >
-                <PlatformBrandMark size={36} logoUrl={theme.logoUrl} decorative />
+                <PlatformBrandMark size={48} variant="logo" logoUrl={theme.logoUrl} decorative />
               </div>
               <Typography as="p" variant="label" className={companyStyles.appearancePreviewName}>
                 {platformName}

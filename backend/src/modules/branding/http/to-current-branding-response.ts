@@ -10,6 +10,7 @@ export type PublicCurrentBrandingResponse = {
   readonly tenantId: string | null;
   readonly name: string;
   readonly logoUrl: string | null;
+  readonly iconUrl: string | null;
   readonly faviconUrl: string | null;
   readonly light: BrandColorOverrides | null;
   readonly dark: BrandColorOverrides | null;
@@ -31,6 +32,7 @@ export function toPlatformCurrentBrandingResponse(
       tenantId: null,
       name: PLATFORM_BRAND_NAME,
       logoUrl: null,
+      iconUrl: null,
       faviconUrl: null,
       light: null,
       dark: null,
@@ -43,6 +45,7 @@ export function toPlatformCurrentBrandingResponse(
     tenantId: null,
     name: record.name,
     logoUrl: toPublicLogoUrl(record.logoFileId),
+    iconUrl: toPublicLogoUrl(record.iconFileId),
     faviconUrl: toPublicLogoUrl(record.faviconFileId),
     light: record.lightColors,
     dark: record.darkColors,
@@ -52,7 +55,8 @@ export function toPlatformCurrentBrandingResponse(
 
 /**
  * Tenant → Platform → Theme Default.
- * Nome permanece o displayName da empresa; logo/cores caem para a plataforma quando ausentes.
+ * Nome permanece o displayName da empresa.
+ * Logo e ícone caem para a plataforma quando ausentes (nunca cruzam papéis visuais).
  */
 export function toTenantCurrentBrandingResponse(input: {
   readonly tenantId: string;
@@ -61,6 +65,7 @@ export function toTenantCurrentBrandingResponse(input: {
   readonly platform: PublicCurrentBrandingResponse;
 }): PublicCurrentBrandingResponse {
   const tenantLogo = toPublicLogoUrl(input.record?.logoFileId);
+  const tenantIcon = toPublicLogoUrl(input.record?.iconFileId);
   const light = resolveLayeredOverrides(input.platform.light, input.record?.lightColors ?? null);
   const dark = resolveLayeredOverrides(input.platform.dark, input.record?.darkColors ?? null);
   const updatedAt = input.record?.updatedAt.toISOString() ?? input.platform.updatedAt ?? null;
@@ -70,6 +75,7 @@ export function toTenantCurrentBrandingResponse(input: {
     tenantId: input.tenantId,
     name: input.displayName,
     logoUrl: tenantLogo ?? input.platform.logoUrl,
+    iconUrl: tenantIcon ?? input.platform.iconUrl,
     faviconUrl: input.platform.faviconUrl,
     light,
     dark,

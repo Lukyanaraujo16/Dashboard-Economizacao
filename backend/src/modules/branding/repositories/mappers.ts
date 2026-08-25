@@ -12,12 +12,14 @@ import type {
   TenantBrandingRecord,
 } from '../domain/types.js';
 
-type TenantBrandingWithLogo = TenantBrandingRow & {
+type TenantBrandingWithAssets = TenantBrandingRow & {
   readonly logoFile?: StoredFileRow | null;
+  readonly iconFile?: StoredFileRow | null;
 };
 
 type PlatformBrandingWithAssets = PlatformBrandingRow & {
   readonly logoFile?: StoredFileRow | null;
+  readonly iconFile?: StoredFileRow | null;
   readonly faviconFile?: StoredFileRow | null;
 };
 
@@ -41,13 +43,16 @@ export function mapStoredFileRecord(row: StoredFileRow): StoredFileRecord {
   };
 }
 
-export function mapTenantBrandingRecord(row: TenantBrandingWithLogo): TenantBrandingRecord {
+export function mapTenantBrandingRecord(row: TenantBrandingWithAssets): TenantBrandingRecord {
   const logoFile = row.logoFile ? mapStoredFileRecord(row.logoFile) : null;
+  const iconFile = row.iconFile ? mapStoredFileRecord(row.iconFile) : null;
   return {
     id: row.id,
     tenantId: row.tenantId,
     logoFileId: row.logoFileId,
+    iconFileId: row.iconFileId,
     logoFile,
+    iconFile,
     lightColors: mapStoredColorOverrides(row.lightColors, 'lightColors'),
     darkColors: mapStoredColorOverrides(row.darkColors, 'darkColors'),
     createdAt: row.createdAt,
@@ -60,8 +65,10 @@ export function mapPlatformBrandingRecord(row: PlatformBrandingWithAssets): Plat
     id: row.id,
     name: row.name,
     logoFileId: row.logoFileId,
+    iconFileId: row.iconFileId,
     faviconFileId: row.faviconFileId,
     logoFile: row.logoFile ? mapStoredFileRecord(row.logoFile) : null,
+    iconFile: row.iconFile ? mapStoredFileRecord(row.iconFile) : null,
     faviconFile: row.faviconFile ? mapStoredFileRecord(row.faviconFile) : null,
     lightColors: mapStoredColorOverrides(row.lightColors, 'lightColors'),
     darkColors: mapStoredColorOverrides(row.darkColors, 'darkColors'),

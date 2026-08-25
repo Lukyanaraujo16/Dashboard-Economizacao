@@ -20,6 +20,7 @@ const platformBranding: CurrentBranding = {
   tenantId: null,
   name: 'Economização',
   logoUrl: null,
+  iconUrl: null,
   faviconUrl: null,
   light: null,
   dark: null,
@@ -435,5 +436,35 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' });
     expect(JSON.stringify(localStorage)).not.toMatch(/token|session|jwt|refresh|userId/i);
     expect(JSON.stringify(sessionStorage)).not.toMatch(/token|session|jwt|refresh|userId/i);
+  });
+
+  it('sidebar usa ícone compacto e não a logo principal', async () => {
+    const branded: CurrentBranding = {
+      ...platformBranding,
+      logoUrl: '/files/logo-wide',
+      iconUrl: '/files/icon-square',
+    };
+
+    renderWithAuth(
+      <RuntimeThemeProvider getCurrentBrandingAction={vi.fn().mockResolvedValue(branded)}>
+        <AuthenticatedLayout>
+          <AuthenticatedHomePage />
+        </AuthenticatedLayout>
+      </RuntimeThemeProvider>,
+      {
+        getCurrentUserAction: createAuthenticatedGetCurrentUser(),
+        hydrateOnMount: true,
+      },
+    );
+
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' });
+    await waitFor(() => {
+      expect(screen.getByTestId('app-sidebar-brand').querySelector('img')?.getAttribute('src')).toBe(
+        '/files/icon-square',
+      );
+    });
+    const brand = screen.getByTestId('app-sidebar-brand');
+    expect(brand.querySelector('img[src="/files/logo-wide"]')).toBeNull();
+    expect(brand.querySelector('img[src=""]')).toBeNull();
   });
 });

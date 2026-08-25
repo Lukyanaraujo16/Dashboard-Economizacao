@@ -41,14 +41,23 @@ export default function LoginPage() {
 
   const brandName = platformBranding?.name?.trim() || undefined;
   const brandLogoUrl = platformBranding?.logoUrl ?? null;
+  const brandIconUrl = platformBranding?.iconUrl ?? null;
   const branding: TenantBrandingInput | null = platformBranding
     ? {
         name: platformBranding.name,
         logoUrl: platformBranding.logoUrl,
+        iconUrl: platformBranding.iconUrl,
         ...(platformBranding.light ? { light: platformBranding.light } : {}),
         ...(platformBranding.dark ? { dark: platformBranding.dark } : {}),
       }
     : null;
 
-  return <LoginExperience brandName={brandName} brandLogoUrl={brandLogoUrl} branding={branding} />;
+  return (
+    <LoginExperience
+      brandName={brandName}
+      brandLogoUrl={brandLogoUrl}
+      brandIconUrl={brandIconUrl}
+      branding={branding}
+    />
+  );
 }

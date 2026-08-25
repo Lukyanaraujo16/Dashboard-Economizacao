@@ -206,6 +206,7 @@ describe('API administrativa /admin/tenants/:tenantId/branding (1.3C)', () => {
       expect(body).toEqual({
         tenantId: tenant.id,
         logoUrl: null,
+        iconUrl: null,
         light: null,
         dark: null,
         createdAt: null,
@@ -472,6 +473,7 @@ describe('API administrativa /admin/tenants/:tenantId/branding (1.3C)', () => {
       expect(getAfterReset.json()).toEqual({
         tenantId: tenant.id,
         logoUrl: null,
+        iconUrl: null,
         light: null,
         dark: null,
         createdAt: null,

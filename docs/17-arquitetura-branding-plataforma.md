@@ -66,7 +66,7 @@ Controla:
 |---|---|
 | Nome da plataforma | Sim |
 | Logo principal | Sim |
-| Ícone / mark | Planejado (MVP: logo; futuro: mark dedicado) |
+| Ícone / mark | **Sim** (PRE-IA-4C: `iconUrl` / `icon_file_id`; independente da logo principal) |
 | Favicon | Planejado (MVP documentado; runtime em 1.5E) |
 | Cores institucionais allowlisted | Sim (`primary`, `onPrimary`, `secondary`, `accent`) |
 | Branding da tela de **login** | Sim — exclusiva |
@@ -102,9 +102,9 @@ Controla:
 ### 4.2 Prioridade de resolução — Login (pré-auth)
 
 ```
-Platform Branding (nome, logo, cores)
+Platform Branding (nome, logo principal, ícone compacto, cores)
   → campos ausentes / registro inexistente
-    → Theme Default (código)
+    → Theme Default (código) / placeholder de marca
 ```
 
 **Tenant Branding: proibido.**
@@ -121,8 +121,8 @@ Platform Branding
 ### 4.4 Prioridade de resolução — Pós-login USER
 
 ```
-Tenant Branding (logo / cores / nome cadastral displayName)
-  → Platform Branding (fallback global)
+Tenant Branding (logo / ícone compacto / cores / nome cadastral displayName)
+  → Platform Branding (fallback global; papéis visuais não se cruzam)
     → Theme Default
 ```
 
@@ -152,10 +152,11 @@ Tokens protegidos (`success`, `danger`, `warning`, `info`, `focus`, fundos estru
 
 Fundamentação: ADR-042 (“login usa branding da plataforma”), ADR-044, PRD UX-001 / BRAND-002, `docs/14` §5.1.
 
-Wiring futuro (1.5E):
+Wiring (1.5E + PRE-IA-4C):
 
-- Login lê Platform Branding público ou embutido no bootstrap da rota `/login` (detalhe de 1.5C/E);
-- `PlatformBrandMark` recebe `logoUrl` da plataforma quando existir;
+- Login lê Platform Branding público no bootstrap da rota `/login`;
+- o card de autenticação recebe a **logo principal** (`logoUrl`);
+- o lockup institucional esquerdo e o shell recebem o **ícone compacto** (`iconUrl`);
 - preferência Light/Dark local na login **não** implica branding de tenant.
 
 ---
@@ -245,6 +246,7 @@ PlatformBranding (0..1 por ambiente — singleton lógico)
 |---|---|---|
 | `name` | **sim** | Nome da plataforma |
 | logo | **sim** | Via `logo_file_id` + `FileStorage` |
+| ícone compacto | **sim** (PRE-IA-4C) | Via `icon_file_id`; independente da logo |
 | favicon | **sim** (persistência) / wiring runtime em 1.5E | Via `favicon_file_id` |
 | `primary` | **sim** | Por scheme |
 | `onPrimary` | **sim** | Por scheme; derivável se omitido (mesma política 1.3) |
@@ -260,7 +262,7 @@ Para assets de plataforma:
 | Mudança | Motivo |
 |---|---|
 | `tenant_id` **nullable** | `null` = asset global da plataforma (`docs/03` §4.3) |
-| Enum: `PLATFORM_LOGO`, `PLATFORM_FAVICON` | Distinguir tipo e política de acesso |
+| Enum: `PLATFORM_LOGO`, `PLATFORM_ICON`, `PLATFORM_FAVICON`, `TENANT_ICON` | Distinguir tipo e política de acesso |
 | Isolamento | Arquivos com `tenant_id` setado **nunca** referenciados por `platform_branding` |
 
 Não duplicar abstração de storage.
@@ -284,7 +286,6 @@ Documentar, **não** implementar na 1.5:
 | Capacidade | Uso |
 |---|---|
 | Logos light / dark separados | Contraste real por scheme |
-| Mark / símbolo dedicado | Sidebar compacta, mobile |
 | Logos responsivas (srcset / variantes) | Densidade de tela |
 | Ícones de produto adicionais | App chrome |
 | Open Graph image | Compartilhamento social |
@@ -325,7 +326,7 @@ Não criar Theme Engine paralelo.
 | HTTP | `ETag` / `updatedAt`; `Cache-Control: private` no admin; runtime autenticado alinhado a 1.3F |
 | Client | Estado no provider; limpar no logout |
 | Falha de fetch | Theme Default; UI utilizável |
-| Logo/storage indisponível | `logoUrl: null` → placeholder `PlatformBrandMark`; cores persistidas ainda aplicam |
+| Logo/storage indisponível | `logoUrl` / `iconUrl` null → placeholder `PlatformBrandMark` no papel visual correspondente; cores persistidas ainda aplicam |
 
 ---
 
@@ -356,6 +357,8 @@ Prefixo dedicado — **não** sob `/admin/tenants`:
 | `PATCH` | `/admin/platform/branding` | Atualiza `name` e/ou cores (parcial) |
 | `POST` | `/admin/platform/branding/logo` | Upload multipart do logo |
 | `DELETE` | `/admin/platform/branding/logo` | Remove logo → Theme Default / placeholder |
+| `POST` | `/admin/platform/branding/icon` | Upload do ícone compacto |
+| `DELETE` | `/admin/platform/branding/icon` | Remove ícone compacto |
 | `POST` | `/admin/platform/branding/favicon` | Upload favicon (se no escopo da 1.5C) |
 | `DELETE` | `/admin/platform/branding/favicon` | Remove favicon |
 
@@ -367,6 +370,7 @@ Prefixo dedicado — **não** sob `/admin/tenants`:
 type PublicPlatformBranding = {
   name: string;
   logoUrl: string | null;
+  iconUrl: string | null;
   faviconUrl: string | null;
   light: Partial<AllowedBrandingColors> | null;
   dark: Partial<AllowedBrandingColors> | null;
@@ -457,5 +461,19 @@ Dependências: 1.5B → 1.5C → 1.5D/E; storage já existe (reuso).
 ## 18. Diretriz final
 
 > Platform Branding é a identidade Economização gerida e persistida — primeiro nível visual do sistema. Tenant Branding continua sendo overrides por empresa. Theme Default permanece a rede de segurança em código. Login usa somente a plataforma. ADMIN e SUPER_ADMIN usam somente a plataforma. USER usa tenant com fallback na plataforma. Sem misturar tabelas, sem settings bag, sem reutilizar `TenantBranding`.
+
+---
+
+## 19. PRE-IA-4C — Logo principal × Ícone compacto
+
+Dois papéis visuais persistidos (`logo_file_id` e `icon_file_id` em plataforma e tenant):
+
+| Papel | Campo | Uso oficial |
+|---|---|---|
+| Logo principal | `logoUrl` | Card de login (acima de “Bem-vindo de volta.”) e áreas de destaque |
+| Ícone compacto | `iconUrl` | Lockup institucional do login, sidebar/shell, regiões 1:1 |
+| Favicon | `faviconUrl` | Somente `<link rel="icon">` da aba; não substitui o ícone compacto |
+
+Fallback determinístico: ícone configurado → ícone da camada seguinte → placeholder. A logo principal **nunca** preenche o slot compacto. Assets ausentes usam placeholder Accent; `<img>` quebrada é evitada via `onError`. Upload reutiliza o pipeline PNG/JPEG/WebP existente (logo/ícone ≤ 2 MB; favicon ≤ 512 KB; SVG rejeitado).
 
 Implementação inicia na **1.5B**, obedecendo ADR-049 e este documento.

@@ -34,6 +34,7 @@ const company: Company = {
 const emptyBranding = {
   tenantId: companyId,
   logoUrl: null as string | null,
+  iconUrl: null as string | null,
   light: null as Record<string, string> | null,
   dark: null as Record<string, string> | null,
   createdAt: null,
@@ -43,6 +44,7 @@ const emptyBranding = {
 const branded = {
   ...emptyBranding,
   logoUrl: '/files/logo-1',
+  iconUrl: '/files/icon-1',
   light: { primary: '#112233', onPrimary: '#FFFFFF' },
   dark: { primary: '#AABBCC', onPrimary: '#111111' },
   createdAt: '2026-08-14T10:00:00.000Z',
@@ -168,7 +170,7 @@ describe('Company appearance UI', () => {
     stubLoad(company, emptyBranding);
     renderAppearance();
 
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     const nav = screen.getByRole('navigation', { name: 'Seções da empresa' });
     expect(within(nav).getByRole('link', { name: 'Geral' }).getAttribute('href')).toBe(
@@ -212,8 +214,8 @@ describe('Company appearance UI', () => {
     stubLoad(company, emptyBranding);
     renderAppearance();
 
-    await screen.findByText('Logo da empresa');
-    expect(screen.getByText(/PNG, JPEG ou WebP/i)).toBeTruthy();
+    await screen.findByText('Logo principal');
+    expect(screen.getAllByText(/PNG, JPEG ou WebP/i).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('button', { name: 'Enviar logo' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Remover logo' })).toBeNull();
   });
@@ -242,7 +244,7 @@ describe('Company appearance UI', () => {
     stubLoad(company, branded);
     renderAppearance();
 
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
     expect(screen.getByRole('button', { name: 'Substituir logo' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Remover logo' })).toBeTruthy();
     expect(
@@ -267,7 +269,7 @@ describe('Company appearance UI', () => {
   it('edita Light e Dark de forma independente', async () => {
     stubLoad(company, emptyBranding);
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     const editTabs = screen.getByRole('tablist', { name: 'Editar cores' });
     fireEvent.click(within(editTabs).getByRole('tab', { name: 'Escuro' }));
@@ -287,7 +289,7 @@ describe('Company appearance UI', () => {
   it('bloqueia save com contraste insuficiente e mensagem acessível', async () => {
     stubLoad(company, emptyBranding);
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     fireEvent.change(screen.getByLabelText('Cor principal — valor hexadecimal'), {
       target: { value: '#888888' },
@@ -324,7 +326,7 @@ describe('Company appearance UI', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     fireEvent.change(screen.getByLabelText('Cor principal — valor hexadecimal'), {
       target: { value: '#141452' },
@@ -344,7 +346,7 @@ describe('Company appearance UI', () => {
   it('preview usa overrides e troca Claro/Escuro sem alterar tema global', async () => {
     stubLoad(company, branded);
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     const preview = screen.getByTestId('company-branding-preview');
     expect(preview.getAttribute('data-theme')).toBe('light');
@@ -366,7 +368,7 @@ describe('Company appearance UI', () => {
   it('seleciona PNG e rejeita SVG e arquivo >2MB', async () => {
     stubLoad(company, emptyBranding);
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(input.accept).toBe('image/png,image/jpeg,image/webp');
@@ -410,7 +412,7 @@ describe('Company appearance UI', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, {
@@ -450,7 +452,7 @@ describe('Company appearance UI', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     fireEvent.click(screen.getByRole('button', { name: 'Remover logo' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar remoção' }));
@@ -475,7 +477,7 @@ describe('Company appearance UI', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     fireEvent.click(screen.getByRole('button', { name: 'Restaurar padrão' }));
     expect(screen.getByText(/cores e logo/i)).toBeTruthy();
@@ -505,27 +507,28 @@ describe('Company appearance UI', () => {
       hydrateOnMount: true,
     });
 
-    expect(await screen.findByText('Logo da empresa')).toBeTruthy();
+    expect(await screen.findByText('Logo principal')).toBeTruthy();
   });
 
   it('labels de produto estão presentes', async () => {
     stubLoad(company, emptyBranding);
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     expect(screen.getByText('Cor principal')).toBeTruthy();
     expect(screen.getByText('Texto sobre a cor principal')).toBeTruthy();
     expect(screen.getByText('Cor secundária')).toBeTruthy();
     expect(screen.getByText('Cor de destaque')).toBeTruthy();
-    expect(screen.getByText('Logo da empresa')).toBeTruthy();
+    expect(screen.getByText('Logo principal')).toBeTruthy();
+    expect(screen.getByText('Ícone da empresa')).toBeTruthy();
     expect(screen.getByText('Editar cores')).toBeTruthy();
-    expect(screen.getByText('Escolher imagem')).toBeTruthy();
+    expect(screen.getAllByText('Escolher imagem').length).toBeGreaterThanOrEqual(2);
   });
 
   it('preview mostra identidade da empresa sem valores financeiros', async () => {
     stubLoad(company, branded);
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     const preview = screen.getByTestId('company-branding-preview');
     expect(within(preview).getByText('Alpha Co')).toBeTruthy();
@@ -537,9 +540,47 @@ describe('Company appearance UI', () => {
   it('Editar cores e Prévia são controles distintos', async () => {
     stubLoad(company, emptyBranding);
     renderAppearance();
-    await screen.findByText('Logo da empresa');
+    await screen.findByText('Logo principal');
 
     expect(screen.getByRole('tablist', { name: 'Editar cores' })).toBeTruthy();
     expect(screen.getByRole('tablist', { name: 'Prévia' })).toBeTruthy();
+  });
+
+  it('envia ícone compacto sem reutilizar a logo principal', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      const path = String(url);
+      if (path.includes('/icon') && init?.method === 'POST') {
+        return Promise.resolve(jsonResponse({ ...emptyBranding, iconUrl: '/files/icon-new' }));
+      }
+      if (path.includes('/branding')) {
+        return Promise.resolve(jsonResponse(emptyBranding));
+      }
+      if (path.includes(`/tenants/${companyId}`)) {
+        return Promise.resolve(jsonResponse(company));
+      }
+      return Promise.resolve(jsonResponse({ error: { code: 'NOT_FOUND' } }, 404));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderAppearance();
+    await screen.findByText('Ícone da empresa');
+
+    const iconSection = screen
+      .getByRole('heading', { name: 'Ícone da empresa' })
+      .closest('section') as HTMLElement;
+    const input = iconSection.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: {
+        files: [new File([new Uint8Array([1, 2, 3])], 'icon.png', { type: 'image/png' })],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar ícone' }));
+
+    await waitFor(() => {
+      const uploadCall = fetchMock.mock.calls.find((call) => String(call[0]).includes('/icon'));
+      expect(uploadCall).toBeTruthy();
+      expect(uploadCall![1]?.body).toBeInstanceOf(FormData);
+    });
+    expect(await screen.findByText('Ícone atualizado.')).toBeTruthy();
   });
 });

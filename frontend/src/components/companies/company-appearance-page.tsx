@@ -7,10 +7,12 @@ import { useAuth } from '../../auth';
 import { darkColorTokens } from '../../theme/dark/colors';
 import { lightColorTokens } from '../../theme/light/colors';
 import {
+  deleteIcon,
   deleteLogo,
   getBranding,
   replaceBrandingColors,
   resetBranding,
+  uploadIcon,
   uploadLogo,
 } from '../../services/admin/branding';
 import {
@@ -104,8 +106,11 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
   routerRef.current = router;
 
   const fileInputId = useId();
+  const iconFileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const iconFileInputRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
+  const iconObjectUrlRef = useRef<string | null>(null);
 
   const [company, setCompany] = useState<Company | null>(null);
   const [appearance, setAppearance] = useState<CompanyBranding | null>(null);
@@ -118,14 +123,19 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
   >('loading');
   const [savingColors, setSavingColors] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
   const [removingLogo, setRemovingLogo] = useState(false);
+  const [removingIcon, setRemovingIcon] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [confirmRemoveLogo, setConfirmRemoveLogo] = useState(false);
+  const [confirmRemoveIcon, setConfirmRemoveIcon] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [selectedIconFileName, setSelectedIconFileName] = useState<string | null>(null);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  const [localIconPreviewUrl, setLocalIconPreviewUrl] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<BrandColorToken, string>>>({});
 
   function revokeLocalPreview() {
@@ -136,10 +146,21 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
     setLocalPreviewUrl(null);
   }
 
+  function revokeIconPreview() {
+    if (iconObjectUrlRef.current) {
+      URL.revokeObjectURL(iconObjectUrlRef.current);
+      iconObjectUrlRef.current = null;
+    }
+    setLocalIconPreviewUrl(null);
+  }
+
   useEffect(() => {
     return () => {
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
+      }
+      if (iconObjectUrlRef.current) {
+        URL.revokeObjectURL(iconObjectUrlRef.current);
       }
     };
   }, []);
@@ -374,6 +395,101 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
     }
   }
 
+  function handleIconFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    setFormError(null);
+    setSuccessMessage(null);
+    revokeIconPreview();
+    setSelectedIconFileName(null);
+
+    if (!file) {
+      return;
+    }
+
+    if (!isAllowedLogoFile(file)) {
+      setFormError('Envie um arquivo PNG, JPEG ou WebP.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_LOGO_BYTES) {
+      setFormError('O arquivo excede o tamanho máximo de 2 MB.');
+      event.target.value = '';
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    iconObjectUrlRef.current = objectUrl;
+    setLocalIconPreviewUrl(objectUrl);
+    setSelectedIconFileName(`${file.name} · ${(file.size / 1024).toFixed(0)} KB`);
+  }
+
+  async function handleUploadIcon() {
+    const file = iconFileInputRef.current?.files?.[0];
+    if (!file || uploadingIcon) {
+      if (!file) {
+        setFormError('Selecione um arquivo de ícone para enviar.');
+      }
+      return;
+    }
+
+    setUploadingIcon(true);
+    setFormError(null);
+    setSuccessMessage(null);
+
+    try {
+      const updated = await uploadIcon(companyId, file);
+      setAppearance(updated);
+      revokeIconPreview();
+      setSelectedIconFileName(null);
+      if (iconFileInputRef.current) {
+        iconFileInputRef.current.value = '';
+      }
+      setSuccessMessage('Ícone atualizado.');
+    } catch (error) {
+      if (error instanceof BrandingRequestError) {
+        if (error.kind === 'unauthenticated') {
+          await refreshSession().catch(() => undefined);
+          router.replace('/login');
+          return;
+        }
+        setFormError(error.message);
+        return;
+      }
+      setFormError('Não foi possível enviar o ícone. Tente novamente.');
+    } finally {
+      setUploadingIcon(false);
+    }
+  }
+
+  async function handleRemoveIcon() {
+    if (removingIcon) return;
+    setRemovingIcon(true);
+    setFormError(null);
+    setSuccessMessage(null);
+
+    try {
+      await deleteIcon(companyId);
+      const refreshed = await getBranding(companyId);
+      setAppearance(refreshed);
+      setConfirmRemoveIcon(false);
+      setSuccessMessage('Ícone removido. Logo e cores foram mantidos.');
+    } catch (error) {
+      if (error instanceof BrandingRequestError) {
+        if (error.kind === 'unauthenticated') {
+          await refreshSession().catch(() => undefined);
+          router.replace('/login');
+          return;
+        }
+        setFormError(error.message);
+        return;
+      }
+      setFormError('Não foi possível remover o ícone. Tente novamente.');
+    } finally {
+      setRemovingIcon(false);
+    }
+  }
+
   async function handleResetAppearance() {
     if (resetting) return;
     setResetting(true);
@@ -449,6 +565,7 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
   }
 
   const displayedLogoUrl = localPreviewUrl ?? appearance.logoUrl;
+  const displayedIconUrl = localIconPreviewUrl ?? appearance.iconUrl;
 
   return (
     <CompanySectionNav companyId={companyId} companyName={company.displayName}>
@@ -465,17 +582,19 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
             <section className={styles.appearanceSection} aria-labelledby="logo-section-title">
               <div className={styles.appearanceSectionHeader}>
                 <Typography as="h2" variant="label" id="logo-section-title">
-                  Logo da empresa
+                  Logo principal
                 </Typography>
                 <Typography as="p" variant="caption" className={styles.appearanceHelp}>
-                  PNG, JPEG ou WebP · máximo 2 MB. SVG não é aceito.
+                  Usada em áreas de destaque. PNG, JPEG ou WebP · máximo 2 MB. SVG não é aceito.
+                  Não é reutilizada no menu lateral.
                 </Typography>
               </div>
 
               <div className={styles.appearanceLogoDropzone}>
-                <div className={styles.appearanceLogoMarkFrame}>
+                <div className={styles.appearanceLogoPrincipalFrame}>
                   <PlatformBrandMark
                     size={56}
+                    variant="logo"
                     logoUrl={displayedLogoUrl}
                     alt={company.displayName}
                     className={styles.appearanceLogoMark}
@@ -552,6 +671,104 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
                       size="sm"
                       disabled={removingLogo}
                       onClick={() => setConfirmRemoveLogo(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            <section className={styles.appearanceSection} aria-labelledby="icon-section-title">
+              <div className={styles.appearanceSectionHeader}>
+                <Typography as="h2" variant="label" id="icon-section-title">
+                  Ícone da empresa
+                </Typography>
+                <Typography as="p" variant="caption" className={styles.appearanceHelp}>
+                  Usado em áreas compactas, como o menu lateral. PNG, JPEG ou WebP · máximo 2 MB.
+                </Typography>
+              </div>
+
+              <div className={styles.appearanceLogoDropzone}>
+                <div className={styles.appearanceLogoMarkFrame}>
+                  <PlatformBrandMark
+                    size={48}
+                    variant="compact"
+                    logoUrl={displayedIconUrl}
+                    decorative
+                  />
+                </div>
+                <div className={styles.appearanceLogoActions}>
+                  <label className={styles.appearanceFileLabel} htmlFor={iconFileInputId}>
+                    Escolher imagem
+                  </label>
+                  <input
+                    ref={iconFileInputRef}
+                    id={iconFileInputId}
+                    type="file"
+                    accept={ALLOWED_LOGO_ACCEPT}
+                    className={styles.appearanceFileInput}
+                    onChange={handleIconFileChange}
+                  />
+                  {selectedIconFileName ? (
+                    <Typography as="p" variant="caption" className={styles.appearanceSelectedFile}>
+                      {selectedIconFileName}
+                    </Typography>
+                  ) : (
+                    <Typography as="p" variant="caption" className={styles.appearanceHelp}>
+                      Selecione uma imagem quadrada para o menu lateral.
+                    </Typography>
+                  )}
+                  <div className={styles.appearanceLogoSubmit}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      loading={uploadingIcon}
+                      onClick={() => void handleUploadIcon()}
+                    >
+                      {appearance.iconUrl ? 'Substituir ícone' : 'Enviar ícone'}
+                    </Button>
+                    {appearance.iconUrl ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={uploadingIcon || removingIcon}
+                        onClick={() => setConfirmRemoveIcon(true)}
+                      >
+                        Remover ícone
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              {confirmRemoveIcon ? (
+                <div
+                  className={styles.appearanceConfirm}
+                  role="region"
+                  aria-label="Confirmar remoção do ícone"
+                >
+                  <Typography as="p" variant="body">
+                    Remover o ícone? A logo principal e as cores serão mantidas.
+                  </Typography>
+                  <div className={styles.formActions}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      loading={removingIcon}
+                      onClick={() => void handleRemoveIcon()}
+                    >
+                      Confirmar remoção
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={removingIcon}
+                      onClick={() => setConfirmRemoveIcon(false)}
                     >
                       Cancelar
                     </Button>
@@ -747,6 +964,7 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
               <CompanyBrandingPreview
                 companyName={company.displayName}
                 logoUrl={displayedLogoUrl}
+                iconUrl={displayedIconUrl}
                 colorScheme={previewScheme}
                 light={Object.keys(lightDraft).length > 0 ? lightDraft : null}
                 dark={Object.keys(darkDraft).length > 0 ? darkDraft : null}

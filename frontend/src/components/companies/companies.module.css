@@ -515,6 +515,26 @@
   background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
 }
 
+.appearanceLogoPrincipalFrame {
+  display: grid;
+  place-items: center;
+  width: min(100%, 16rem);
+  height: 4.5rem;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  background: var(--color-surface);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.appearanceLogoPrincipalFrame > img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
 .appearanceLogoMarkFrame {
   display: grid;
   place-items: center;

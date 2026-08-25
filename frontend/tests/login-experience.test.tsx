@@ -91,20 +91,63 @@ describe('LoginExperience (visual freeze)', () => {
   });
 
   it('usa placeholder de marca preparado para asset futuro', () => {
-    const { container, rerender, getCurrentUserAction, logoutAction } = renderWithAuth(
+    const { container, getCurrentUserAction, logoutAction } = renderWithAuth(
       <LoginExperience />,
     );
     expect(container.querySelector('[data-brand-placeholder="true"]')).toBeTruthy();
 
-    rerender(<LoginExperience brandLogoUrl="/brand/future-logo.svg" />);
-    // rerender without provider loses context — remount with helper
     cleanup();
-    const again = renderWithAuth(<LoginExperience brandLogoUrl="/brand/future-logo.svg" />, {
-      getCurrentUserAction,
-      logoutAction,
+    const withLogo = renderWithAuth(
+      <LoginExperience brandLogoUrl="/brand/future-logo.svg" />,
+      { getCurrentUserAction, logoutAction },
+    );
+    expect(withLogo.container.querySelector('[data-brand-role="logo"]')).toBeTruthy();
+    expect(withLogo.container.querySelector('img[src="/brand/future-logo.svg"]')).toBeTruthy();
+    expect(
+      withLogo.container
+        .querySelector('[data-testid="login-institutional-lockup"]')
+        ?.querySelector('[data-brand-placeholder="true"]'),
+    ).toBeTruthy();
+    expect(
+      withLogo.container
+        .querySelector('[data-testid="login-institutional-lockup"]')
+        ?.querySelector('img[src="/brand/future-logo.svg"]'),
+    ).toBeNull();
+  });
+
+  it('ícone compacto não reutiliza a logo principal', () => {
+    const { container } = renderWithAuth(
+      <LoginExperience
+        brandLogoUrl="/brand/logo-horizontal.png"
+        brandIconUrl="/brand/icon-square.png"
+      />,
+    );
+
+    const lockup = container.querySelector('[data-testid="login-institutional-lockup"]');
+    const card = container.querySelector('[data-testid="login-primary-logo"]');
+    expect(lockup?.querySelector('img[src="/brand/icon-square.png"]')).toBeTruthy();
+    expect(lockup?.querySelector('img[src="/brand/logo-horizontal.png"]')).toBeNull();
+    expect(card?.querySelector('img[src="/brand/logo-horizontal.png"]')).toBeTruthy();
+    expect(card?.querySelector('img[src="/brand/icon-square.png"]')).toBeNull();
+    expect(container.querySelector('img[src=""]')).toBeNull();
+  });
+
+  it('falha de carga da imagem cai no placeholder sem img quebrada', () => {
+    const { container } = renderWithAuth(
+      <LoginExperience
+        brandLogoUrl="/brand/broken-logo.png"
+        brandIconUrl="/brand/broken-icon.png"
+      />,
+    );
+
+    container.querySelectorAll('img').forEach((img) => {
+      fireEvent.error(img);
     });
-    expect(again.container.querySelector('[data-brand-placeholder="true"]')).toBeNull();
-    expect(again.container.querySelector('img[src="/brand/future-logo.svg"]')).toBeTruthy();
+
+    expect(container.querySelectorAll('img')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-brand-placeholder="true"]').length).toBeGreaterThanOrEqual(
+      2,
+    );
   });
 });
 

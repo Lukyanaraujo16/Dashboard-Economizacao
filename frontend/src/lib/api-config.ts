@@ -58,6 +58,10 @@ export function adminTenantBrandingLogoPath(tenantId: string): string {
   return `${adminTenantBrandingPath(tenantId)}/logo`;
 }
 
+export function adminTenantBrandingIconPath(tenantId: string): string {
+  return `${adminTenantBrandingPath(tenantId)}/icon`;
+}
+
 export function adminTenantContaAzulPath(tenantId: string): string {
   return `${adminTenantPath(tenantId)}/integrations/conta-azul`;
 }
@@ -93,6 +97,10 @@ export function adminPlatformBrandingLogoPath(): string {
 
 export function adminPlatformBrandingFaviconPath(): string {
   return `${adminPlatformBrandingPath()}/favicon`;
+}
+
+export function adminPlatformBrandingIconPath(): string {
+  return `${adminPlatformBrandingPath()}/icon`;
 }
 
 /** Prefixo same-origin dos administradores da plataforma (1.4C). */

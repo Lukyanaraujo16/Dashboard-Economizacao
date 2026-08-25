@@ -451,4 +451,106 @@ describe('API administrativa de logo (1.3D)', () => {
       expect(Buffer.from(served.rawPayload).equals(PNG_1X1)).toBe(true);
     });
   });
+
+  describe('POST /admin/tenants/:tenantId/branding/icon', () => {
+    it('cria TENANT_ICON independente da logo; USER é 403', async () => {
+      const tenant = await tenants.create({ name: 'icon-split', displayName: 'Icon Split' });
+      await createPlatformUser({ email: 'icon-admin@api.test', role: 'ADMIN' });
+      await createPlatformUser({
+        email: 'icon-user@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      const app = await buildTestApp();
+      const adminCookie = await loginAs(app, 'icon-admin@api.test');
+      const userCookie = await loginAs(app, 'icon-user@api.test');
+
+      const logo = await app.inject({
+        method: 'POST',
+        url: logoUrl(tenant.id),
+        headers: {
+          cookie: adminCookie,
+          'content-type': buildMultipartPayload({ body: PNG_1X1 }).contentType,
+        },
+        payload: buildMultipartPayload({ body: PNG_1X1 }).payload,
+      });
+      expect(logo.statusCode).toBe(200);
+
+      const userDenied = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/branding/icon`,
+        headers: {
+          cookie: userCookie,
+          'content-type': buildMultipartPayload({
+            fieldName: 'icon',
+            filename: 'icon.png',
+            body: PNG_1X1,
+          }).contentType,
+        },
+        payload: buildMultipartPayload({
+          fieldName: 'icon',
+          filename: 'icon.png',
+          body: PNG_1X1,
+        }).payload,
+      });
+      expect(userDenied.statusCode).toBe(403);
+
+      const icon = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/branding/icon`,
+        headers: {
+          cookie: adminCookie,
+          'content-type': buildMultipartPayload({
+            fieldName: 'icon',
+            filename: 'icon.png',
+            body: PNG_1X1,
+          }).contentType,
+        },
+        payload: buildMultipartPayload({
+          fieldName: 'icon',
+          filename: 'icon.png',
+          body: PNG_1X1,
+        }).payload,
+      });
+      expect(icon.statusCode).toBe(200);
+      expect(icon.json().iconUrl).toMatch(/^\/files\//);
+      expect(icon.json().logoUrl).toBe(logo.json().logoUrl);
+      expect(icon.json().iconUrl).not.toBe(icon.json().logoUrl);
+
+      const svg = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/branding/icon`,
+        headers: {
+          cookie: adminCookie,
+          'content-type': buildMultipartPayload({
+            fieldName: 'icon',
+            filename: 'x.svg',
+            mimeType: 'image/svg+xml',
+            body: SVG_FIXTURE,
+          }).contentType,
+        },
+        payload: buildMultipartPayload({
+          fieldName: 'icon',
+          filename: 'x.svg',
+          mimeType: 'image/svg+xml',
+          body: SVG_FIXTURE,
+        }).payload,
+      });
+      expect(svg.statusCode).toBe(422);
+
+      const del = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}/branding/icon`,
+        headers: { cookie: adminCookie },
+      });
+      expect(del.statusCode).toBe(204);
+      const after = await app.inject({
+        method: 'GET',
+        url: `/admin/tenants/${tenant.id}/branding`,
+        headers: { cookie: adminCookie },
+      });
+      expect(after.json().iconUrl).toBeNull();
+      expect(after.json().logoUrl).toBe(logo.json().logoUrl);
+    });
+  });
 });

@@ -47,6 +47,7 @@ function toTenantBrandingInput(current: CurrentBranding): TenantBrandingInput {
   return {
     name: current.name,
     logoUrl: current.logoUrl,
+    iconUrl: current.iconUrl,
     ...(current.light ? { light: current.light } : {}),
     ...(current.dark ? { dark: current.dark } : {}),
   };
@@ -58,6 +59,7 @@ function platformToSessionState(platform: PlatformBranding): SessionBrandingStat
     branding: {
       name,
       logoUrl: platform.logoUrl,
+      iconUrl: platform.iconUrl,
       ...(platform.light ? { light: platform.light } : {}),
       ...(platform.dark ? { dark: platform.dark } : {}),
     },

@@ -99,6 +99,11 @@ export function shouldPersistTenantBranding(
   lightColors: BrandColorOverrides | null,
   darkColors: BrandColorOverrides | null,
   logoFileId?: string | null,
+  iconFileId?: string | null,
 ): boolean {
-  return hasAnyBrandColorOverrides(lightColors, darkColors) || Boolean(logoFileId);
+  return (
+    hasAnyBrandColorOverrides(lightColors, darkColors) ||
+    Boolean(logoFileId) ||
+    Boolean(iconFileId)
+  );
 }

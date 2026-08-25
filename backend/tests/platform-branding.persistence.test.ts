@@ -61,6 +61,7 @@ describe('persistência branding — PlatformBrandingRepository (1.5B)', () => {
     expect(record.lightColors).toEqual({ primary: '#141452' });
     expect(record.darkColors).toBeNull();
     expect(record.logoFileId).toBeNull();
+    expect(record.iconFileId).toBeNull();
     expect(record.faviconFileId).toBeNull();
   });
 
@@ -236,6 +237,17 @@ describe('persistência branding — PlatformBrandingRepository (1.5B)', () => {
     expect(withFavicon.faviconFileId).toBe(favicon.id);
     expect(withLogo.logoFile?.tenantId).toBeNull();
     expect(withFavicon.faviconFile?.fileType).toBe('PLATFORM_FAVICON');
+
+    const platformIcon = await files.create({
+      fileType: 'PLATFORM_ICON',
+      storageKey: 'platform/branding/icon.png',
+      mimeType: 'image/png',
+      size: 8,
+      checksum: 'icon',
+    });
+    const withIcon = await platformBranding.attachIcon(platformIcon.id);
+    expect(withIcon.iconFileId).toBe(platformIcon.id);
+    expect(withIcon.iconFile?.fileType).toBe('PLATFORM_ICON');
   });
 
   it('tenant branding rejeita arquivo PLATFORM_* como logo', async () => {

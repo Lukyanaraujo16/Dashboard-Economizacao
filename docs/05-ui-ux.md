@@ -95,7 +95,8 @@ Existe ainda um quarto contexto especial:
 
 A tela de login deverá conter:
 
-* logo principal do Dashboard Economização;
+* logo principal da plataforma (área de destaque acima de “Bem-vindo de volta.”; proporção livre, sem distorção);
+* ícone compacto da plataforma no bloco institucional esquerdo (ícone + nome + subtítulo);
 * identificação visual da plataforma;
 * campo de e-mail;
 * campo de senha;
@@ -111,6 +112,10 @@ A experiência deverá ser simples, limpa e profissional.
 5.2 Branding no Login
 
 A tela de login utilizará a identidade principal da plataforma.
+
+A **logo principal** aparece no card de autenticação, com área visual suficiente para reconhecimento. O **ícone compacto** aparece apenas no lockup institucional esquerdo e nas regiões 1:1 da aplicação.
+
+Logo principal e ícone compacto são papéis visuais distintos: a logo horizontal não é forçada no quadrado compacto.
 
 Não será necessário identificar previamente o tenant antes do login.
 
@@ -1095,7 +1100,8 @@ Após login, o sistema deverá aplicar a identidade visual do tenant.
 
 Variáveis conceituais:
 
-* logo;
+* logo principal (destaque);
+* ícone compacto (menu lateral e regiões 1:1);
 * cor principal;
 * cor secundária;
 * fundo;
@@ -1122,6 +1128,14 @@ Tenant Branding
 valor ausente
 ↓
 Platform Branding
+↓
+Theme Default / placeholder Economização
+
+Assets visuais (PRE-IA-4C):
+
+* Logo principal: logo configurada → logo legado (`logoUrl`) → placeholder.
+* Ícone compacto: ícone configurado → ícone da plataforma → placeholder. A logo principal **não** preenche o slot compacto.
+* Ausência de asset nunca renderiza `<img>` quebrada nem colapsa o layout.
 
 A interface nunca deverá ficar sem estilo.
 

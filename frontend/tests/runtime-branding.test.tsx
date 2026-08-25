@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AuthenticatedLayout from '../app/(authenticated)/layout';
@@ -103,6 +103,7 @@ const tenantBranding: CurrentBranding = {
   tenantId: 'tenant-a',
   name: 'Acme Runtime',
   logoUrl: '/files/logo-acme',
+  iconUrl: '/files/icon-acme',
   faviconUrl: '/files/fav-acme',
   light: { primary: '#112233' },
   dark: { primary: '#AABBCC' },
@@ -114,6 +115,7 @@ const platformCurrentBranding: CurrentBranding = {
   tenantId: null,
   name: 'Economização',
   logoUrl: null,
+  iconUrl: null,
   faviconUrl: null,
   light: null,
   dark: null,
@@ -123,6 +125,7 @@ const platformCurrentBranding: CurrentBranding = {
 const adminPlatformBranding: PlatformBranding = {
   name: 'Plataforma Admin',
   logoUrl: '/files/logo-platform',
+  iconUrl: '/files/icon-platform',
   faviconUrl: '/files/fav-platform',
   light: { primary: '#334455' },
   dark: { primary: '#CCDDEE' },
@@ -136,6 +139,7 @@ function ThemeProbe() {
     <div>
       <span data-testid="brand-name">{theme.brandName ?? 'null'}</span>
       <span data-testid="logo-url">{theme.logoUrl ?? 'null'}</span>
+      <span data-testid="icon-url">{theme.iconUrl ?? 'null'}</span>
       <span data-testid="primary">{theme.colors.primary}</span>
       <span data-testid="scheme">{theme.colorScheme}</span>
       <span data-testid="branding-name">{branding?.name ?? 'null'}</span>
@@ -193,10 +197,12 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
       expect(screen.getByTestId('brand-name').textContent).toBe('Acme Runtime');
     });
     expect(screen.getByTestId('logo-url').textContent).toBe('/files/logo-acme');
+    expect(screen.getByTestId('icon-url').textContent).toBe('/files/icon-acme');
     expect(screen.getByTestId('primary').textContent).toBe('#112233');
-    expect(screen.getByRole('img', { name: 'Acme Runtime' }).getAttribute('src')).toBe(
-      '/files/logo-acme',
-    );
+    const sidebarBrand = screen.getByTestId('app-sidebar-brand');
+    expect(sidebarBrand.querySelector('img')?.getAttribute('src')).toBe('/files/icon-acme');
+    expect(sidebarBrand.querySelector('img[src="/files/logo-acme"]')).toBeNull();
+    expect(within(sidebarBrand).getByText('Acme Runtime')).toBeTruthy();
     expect(document.title).toBe('Acme Runtime');
     expect(
       document.head.querySelector('link[data-runtime-favicon="true"]')?.getAttribute('href'),
@@ -232,6 +238,7 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
       tenantId: 'tenant-a',
       name: 'Empresa Sem Branding',
       logoUrl: null,
+      iconUrl: null,
       faviconUrl: null,
       light: null,
       dark: null,
@@ -245,7 +252,11 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
     });
     expect(screen.getByTestId('primary').textContent).toBe(lightColorTokens.primary);
     expect(screen.getByTestId('logo-url').textContent).toBe('null');
-    expect(screen.getByLabelText('Empresa Sem Branding')).toBeTruthy();
+    expect(screen.getByTestId('icon-url').textContent).toBe('null');
+    expect(within(screen.getByTestId('app-sidebar-brand')).getByText('Empresa Sem Branding')).toBeTruthy();
+    expect(
+      screen.getByTestId('app-sidebar-brand').querySelector('[data-brand-placeholder="true"]'),
+    ).toBeTruthy();
   });
 
   it('ADMIN e SUPER_ADMIN usam getPlatformBranding com logo/cores', async () => {
@@ -260,6 +271,7 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('brand-name').textContent).toBe('Plataforma Admin');
       expect(screen.getByTestId('logo-url').textContent).toBe('/files/logo-platform');
+      expect(screen.getByTestId('icon-url').textContent).toBe('/files/icon-platform');
       expect(screen.getByTestId('primary').textContent).toBe('#334455');
     });
     expect(platformAction).toHaveBeenCalled();
@@ -392,6 +404,7 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
       tenantId: 'tenant-b',
       name: 'Beta Co',
       logoUrl: '/files/logo-beta',
+      iconUrl: null,
       faviconUrl: null,
       light: { primary: '#00FF00' },
       dark: null,

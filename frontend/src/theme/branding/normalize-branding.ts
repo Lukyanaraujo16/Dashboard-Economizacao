@@ -48,16 +48,18 @@ export function normalizeBrandingInput(
 
   const name = sanitizeOptionalText(branding.name);
   const logoUrl = sanitizeOptionalText(branding.logoUrl ?? undefined);
+  const iconUrl = sanitizeOptionalText(branding.iconUrl ?? undefined);
   const light = sanitizeColorPartial(branding.light);
   const dark = sanitizeColorPartial(branding.dark);
 
-  if (!name && !logoUrl && !light && !dark) {
+  if (!name && !logoUrl && !iconUrl && !light && !dark) {
     return null;
   }
 
   return {
     ...(name ? { name } : {}),
     ...(logoUrl ? { logoUrl } : {}),
+    ...(iconUrl ? { iconUrl } : {}),
     ...(light ? { light } : {}),
     ...(dark ? { dark } : {}),
   };

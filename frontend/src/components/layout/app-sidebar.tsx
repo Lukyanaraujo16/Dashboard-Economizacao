@@ -62,7 +62,7 @@ export function AppSidebar() {
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
   const brandName = theme.brandName?.trim() || DEFAULT_PLATFORM_BRAND_NAME;
-  const logoUrl = theme.logoUrl;
+  const iconUrl = theme.iconUrl;
 
   const visibleItems = NAV_ITEMS.filter((item) => {
     if (item.surface === 'platform') {
@@ -85,12 +85,13 @@ export function AppSidebar() {
 
   return (
     <aside className={styles.sidebar} aria-label="Navegação principal">
-      <div className={styles.sidebarBrand}>
+      <div className={styles.sidebarBrand} data-testid="app-sidebar-brand">
         <PlatformBrandMark
           size={36}
+          variant="compact"
           className={styles.brandMark}
-          logoUrl={logoUrl}
-          alt={brandName}
+          logoUrl={iconUrl}
+          decorative
         />
         <div className={styles.brandText}>
           <Typography as="span" variant="label" className={styles.brandName}>

@@ -26,7 +26,7 @@ async function readNamedMultipart(
       | undefined
     >;
   },
-  fieldName: 'logo' | 'favicon',
+  fieldName: 'logo' | 'icon' | 'favicon',
 ): Promise<{ body: Buffer; declaredMimeType: string }> {
   const file = await request.file();
   if (!file) {
@@ -121,6 +121,21 @@ export async function registerAdminPlatformBrandingRoutes(app: FastifyInstance):
     { preHandler: adminGuard },
     async (_request, reply) => {
       await adminPlatformBranding.deleteFavicon();
+      return reply.status(204).send();
+    },
+  );
+
+  app.post('/admin/platform/branding/icon', { preHandler: adminGuard }, async (request, reply) => {
+    const { body, declaredMimeType } = await readNamedMultipart(request, 'icon');
+    const response = await adminPlatformBranding.uploadIcon(body, declaredMimeType);
+    return reply.status(200).send(response);
+  });
+
+  app.delete(
+    '/admin/platform/branding/icon',
+    { preHandler: adminGuard },
+    async (_request, reply) => {
+      await adminPlatformBranding.deleteIcon();
       return reply.status(204).send();
     },
   );

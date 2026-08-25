@@ -27,6 +27,7 @@ const platformBranding: CurrentBranding = {
   tenantId: null,
   name: 'Marca Pública',
   logoUrl: '/files/logo-public',
+  iconUrl: '/files/icon-public',
   faviconUrl: '/files/fav-public',
   light: { primary: '#123456' },
   dark: null,

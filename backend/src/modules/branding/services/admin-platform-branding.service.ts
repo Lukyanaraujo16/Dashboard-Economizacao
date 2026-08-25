@@ -10,6 +10,7 @@ import {
 } from '../domain/logo-mime.js';
 import {
   createPlatformFaviconStorageKey,
+  createPlatformIconStorageKey,
   createPlatformLogoStorageKey,
 } from '../domain/logo-storage-key.js';
 import type { UpsertPlatformBrandingInput } from '../domain/types.js';
@@ -34,7 +35,7 @@ function validateImagePayload(
   body: Buffer,
   declaredMimeType: string | undefined,
   options: {
-    readonly field: 'logo' | 'favicon';
+    readonly field: 'logo' | 'icon' | 'favicon';
     readonly maxBytes: number;
     readonly maxLabel: string;
   },
@@ -88,6 +89,11 @@ export type AdminPlatformBrandingService = {
     declaredMimeType: string | undefined,
   ): Promise<PublicPlatformBrandingResponse>;
   deleteFavicon(): Promise<void>;
+  uploadIcon(
+    body: Buffer,
+    declaredMimeType: string | undefined,
+  ): Promise<PublicPlatformBrandingResponse>;
+  deleteIcon(): Promise<void>;
 };
 
 /**
@@ -121,6 +127,10 @@ export function createAdminPlatformBrandingService(deps: {
       if (existing?.faviconFile) {
         await deps.files.deleteById(existing.faviconFile.id);
         await bestEffortDelete(deps.storage, existing.faviconFile.storageKey);
+      }
+      if (existing?.iconFile) {
+        await deps.files.deleteById(existing.iconFile.id);
+        await bestEffortDelete(deps.storage, existing.iconFile.storageKey);
       }
     },
 
@@ -216,6 +226,53 @@ export function createAdminPlatformBrandingService(deps: {
       await withBrandingDomainError(() => deps.branding.clearFavicon());
       await deps.files.deleteById(existing.faviconFile.id);
       await bestEffortDelete(deps.storage, existing.faviconFile.storageKey);
+    },
+
+    async uploadIcon(body, declaredMimeType) {
+      const mimeType = validateImagePayload(body, declaredMimeType, {
+        field: 'icon',
+        maxBytes: MAX_LOGO_BYTES,
+        maxLabel: '2 MB',
+      });
+      await ensurePlatformBranding(deps.branding);
+
+      const storageKey = createPlatformIconStorageKey(mimeType);
+      const checksum = createHash('sha256').update(body).digest('hex');
+      const previous = await deps.branding.get();
+
+      await deps.storage.put(storageKey, body);
+
+      try {
+        const file = await deps.files.create({
+          fileType: 'PLATFORM_ICON',
+          storageKey,
+          mimeType,
+          size: body.byteLength,
+          checksum,
+        });
+        const record = await withBrandingDomainError(() => deps.branding.attachIcon(file.id));
+
+        if (previous?.iconFile) {
+          await deps.files.deleteById(previous.iconFile.id);
+          await bestEffortDelete(deps.storage, previous.iconFile.storageKey);
+        }
+
+        return toPublicPlatformBrandingResponse(record);
+      } catch (error) {
+        await bestEffortDelete(deps.storage, storageKey);
+        throw error;
+      }
+    },
+
+    async deleteIcon() {
+      const existing = await deps.branding.get();
+      if (!existing?.iconFile) {
+        return;
+      }
+
+      await withBrandingDomainError(() => deps.branding.clearIcon());
+      await deps.files.deleteById(existing.iconFile.id);
+      await bestEffortDelete(deps.storage, existing.iconFile.storageKey);
     },
   };
 }

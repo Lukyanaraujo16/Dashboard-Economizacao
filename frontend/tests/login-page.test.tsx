@@ -28,6 +28,7 @@ const emptyPlatformBranding = {
   tenantId: null,
   name: 'Economização',
   logoUrl: null,
+  iconUrl: null,
   faviconUrl: null,
   light: null,
   dark: null,

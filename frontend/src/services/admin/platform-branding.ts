@@ -1,5 +1,6 @@
 import {
   adminPlatformBrandingFaviconPath,
+  adminPlatformBrandingIconPath,
   adminPlatformBrandingLogoPath,
   adminPlatformBrandingPath,
 } from '../../lib/api-config';
@@ -16,7 +17,7 @@ type ErrorEnvelope = {
   };
 };
 
-type PayloadSizeContext = 'logo' | 'favicon' | 'generic';
+type PayloadSizeContext = 'logo' | 'icon' | 'favicon' | 'generic';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -55,6 +56,7 @@ function isPlatformBranding(value: unknown): value is PlatformBranding {
   return (
     (value.name === null || typeof value.name === 'string') &&
     (value.logoUrl === null || typeof value.logoUrl === 'string') &&
+    (value.iconUrl === null || typeof value.iconUrl === 'string') &&
     (value.faviconUrl === null || typeof value.faviconUrl === 'string') &&
     isBrandColorOverrides(value.light) &&
     isBrandColorOverrides(value.dark) &&
@@ -67,7 +69,7 @@ function payloadTooLargeMessage(context: PayloadSizeContext): string {
   if (context === 'favicon') {
     return 'O arquivo é muito grande. Use uma imagem de até 512 KB.';
   }
-  if (context === 'logo') {
+  if (context === 'logo' || context === 'icon') {
     return 'O arquivo é muito grande. Use uma imagem de até 2 MB.';
   }
   return 'O arquivo é muito grande.';
@@ -299,7 +301,7 @@ export async function savePlatformAppearance(input: {
   return result.branding;
 }
 
-export type PlatformAppearanceSaveStep = 'logo' | 'favicon' | 'fields';
+export type PlatformAppearanceSaveStep = 'logo' | 'icon' | 'favicon' | 'fields';
 
 export type PlatformAppearanceSaveChanges = {
   readonly name?: string;
@@ -307,6 +309,8 @@ export type PlatformAppearanceSaveChanges = {
   readonly dark?: BrandColorOverrides | null;
   readonly logoFile?: File;
   readonly removeLogo?: boolean;
+  readonly iconFile?: File;
+  readonly removeIcon?: boolean;
   readonly faviconFile?: File;
   readonly removeFavicon?: boolean;
 };
@@ -343,6 +347,15 @@ export async function savePlatformAppearanceChanges(
       await deletePlatformLogo();
       branding = await getPlatformBranding();
       completed.push('logo');
+    }
+
+    if (changes.iconFile) {
+      branding = await uploadPlatformIcon(changes.iconFile);
+      completed.push('icon');
+    } else if (changes.removeIcon) {
+      await deletePlatformIcon();
+      branding = await getPlatformBranding();
+      completed.push('icon');
     }
 
     if (changes.faviconFile) {
@@ -392,6 +405,8 @@ export async function savePlatformAppearanceChanges(
     let failedStep: PlatformAppearanceSaveStep = 'fields';
     if (!completed.includes('logo') && (changes.logoFile || changes.removeLogo)) {
       failedStep = 'logo';
+    } else if (!completed.includes('icon') && (changes.iconFile || changes.removeIcon)) {
+      failedStep = 'icon';
     } else if (!completed.includes('favicon') && (changes.faviconFile || changes.removeFavicon)) {
       failedStep = 'favicon';
     }
@@ -456,6 +471,46 @@ export async function deletePlatformLogo(): Promise<void> {
   const body = await readJsonBody(response);
   if (!response.ok) {
     throw toPlatformBrandingFailure(response, body, 'logo');
+  }
+}
+
+export async function uploadPlatformIcon(file: File): Promise<PlatformBranding> {
+  const formData = new FormData();
+  formData.append('icon', file);
+
+  const response = await platformBrandingFetch(adminPlatformBrandingIconPath(), {
+    method: 'POST',
+    body: formData,
+  });
+  const body = await readJsonBody(response);
+
+  if (!response.ok) {
+    throw toPlatformBrandingFailure(response, body, 'icon');
+  }
+
+  if (!isPlatformBranding(body)) {
+    throw new BrandingRequestError(
+      'unavailable',
+      'Não foi possível conectar ao serviço. Tente novamente.',
+      { httpStatus: response.status },
+    );
+  }
+
+  return body;
+}
+
+export async function deletePlatformIcon(): Promise<void> {
+  const response = await platformBrandingFetch(adminPlatformBrandingIconPath(), {
+    method: 'DELETE',
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toPlatformBrandingFailure(response, body, 'icon');
   }
 }
 

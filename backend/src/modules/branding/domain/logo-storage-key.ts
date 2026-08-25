@@ -23,3 +23,18 @@ export function createPlatformLogoStorageKey(mimeType: AllowedLogoMimeType): str
 export function createPlatformFaviconStorageKey(mimeType: AllowedLogoMimeType): string {
   return `platform/branding/favicon/${randomUUID()}.${extensionForLogoMimeType(mimeType)}`;
 }
+
+export function createPlatformIconStorageKey(mimeType: AllowedLogoMimeType): string {
+  return `platform/branding/icon/${randomUUID()}.${extensionForLogoMimeType(mimeType)}`;
+}
+
+export function createTenantIconStorageKey(
+  tenantId: string,
+  mimeType: AllowedLogoMimeType,
+): string {
+  if (!UUID_PATTERN.test(tenantId)) {
+    throw new Error('tenantId inválido para storageKey.');
+  }
+
+  return `tenants/${tenantId.toLowerCase()}/branding/icon/${randomUUID()}.${extensionForLogoMimeType(mimeType)}`;
+}

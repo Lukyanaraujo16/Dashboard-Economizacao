@@ -139,12 +139,16 @@ export function PlatformAppearancePage() {
   routerRef.current = router;
 
   const logoInputId = useId();
+  const iconInputId = useId();
   const faviconInputId = useId();
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
   const faviconInputRef = useRef<HTMLInputElement>(null);
   const logoObjectUrlRef = useRef<string | null>(null);
+  const iconObjectUrlRef = useRef<string | null>(null);
   const faviconObjectUrlRef = useRef<string | null>(null);
   const pendingLogoFileRef = useRef<File | null>(null);
+  const pendingIconFileRef = useRef<File | null>(null);
   const pendingFaviconFileRef = useRef<File | null>(null);
 
   const [appearance, setAppearance] = useState<PlatformBranding | null>(null);
@@ -159,17 +163,22 @@ export function PlatformAppearancePage() {
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [confirmRemoveLogo, setConfirmRemoveLogo] = useState(false);
+  const [confirmRemoveIcon, setConfirmRemoveIcon] = useState(false);
   const [confirmRemoveFavicon, setConfirmRemoveFavicon] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [logoRemovalPending, setLogoRemovalPending] = useState(false);
+  const [iconRemovalPending, setIconRemovalPending] = useState(false);
   const [faviconRemovalPending, setFaviconRemovalPending] = useState(false);
   const [pendingLogoSelected, setPendingLogoSelected] = useState(false);
+  const [pendingIconSelected, setPendingIconSelected] = useState(false);
   const [pendingFaviconSelected, setPendingFaviconSelected] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedLogoName, setSelectedLogoName] = useState<string | null>(null);
+  const [selectedIconName, setSelectedIconName] = useState<string | null>(null);
   const [selectedFaviconName, setSelectedFaviconName] = useState<string | null>(null);
   const [localLogoUrl, setLocalLogoUrl] = useState<string | null>(null);
+  const [localIconUrl, setLocalIconUrl] = useState<string | null>(null);
   const [localFaviconUrl, setLocalFaviconUrl] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<BrandColorToken, string>>>({});
@@ -180,6 +189,14 @@ export function PlatformAppearancePage() {
       logoObjectUrlRef.current = null;
     }
     setLocalLogoUrl(null);
+  }
+
+  function revokeIconPreview() {
+    if (iconObjectUrlRef.current) {
+      URL.revokeObjectURL(iconObjectUrlRef.current);
+      iconObjectUrlRef.current = null;
+    }
+    setLocalIconUrl(null);
   }
 
   function revokeFaviconPreview() {
@@ -197,6 +214,16 @@ export function PlatformAppearancePage() {
     revokeLogoPreview();
     if (logoInputRef.current) {
       logoInputRef.current.value = '';
+    }
+  }
+
+  function clearPendingIconSelection() {
+    pendingIconFileRef.current = null;
+    setPendingIconSelected(false);
+    setSelectedIconName(null);
+    revokeIconPreview();
+    if (iconInputRef.current) {
+      iconInputRef.current.value = '';
     }
   }
 
@@ -223,6 +250,11 @@ export function PlatformAppearancePage() {
       setLogoRemovalPending(false);
       setConfirmRemoveLogo(false);
     }
+    if (result.completed.includes('icon')) {
+      clearPendingIconSelection();
+      setIconRemovalPending(false);
+      setConfirmRemoveIcon(false);
+    }
     if (result.completed.includes('favicon')) {
       clearPendingFaviconSelection();
       setFaviconRemovalPending(false);
@@ -234,6 +266,9 @@ export function PlatformAppearancePage() {
     return () => {
       if (logoObjectUrlRef.current) {
         URL.revokeObjectURL(logoObjectUrlRef.current);
+      }
+      if (iconObjectUrlRef.current) {
+        URL.revokeObjectURL(iconObjectUrlRef.current);
       }
       if (faviconObjectUrlRef.current) {
         URL.revokeObjectURL(faviconObjectUrlRef.current);
@@ -295,12 +330,16 @@ export function PlatformAppearancePage() {
     lightDirty ||
     darkDirty ||
     pendingLogoSelected ||
+    pendingIconSelected ||
     pendingFaviconSelected ||
     logoRemovalPending ||
+    iconRemovalPending ||
     faviconRemovalPending;
 
   const showLogoRemove =
     (Boolean(appearance?.logoUrl) || pendingLogoSelected) && !logoRemovalPending;
+  const showIconRemove =
+    (Boolean(appearance?.iconUrl) || pendingIconSelected) && !iconRemovalPending;
   const showFaviconRemove =
     (Boolean(appearance?.faviconUrl) || pendingFaviconSelected) && !faviconRemovalPending;
 
@@ -392,6 +431,40 @@ export function PlatformAppearancePage() {
     setSelectedLogoName(`${file.name} · ${(file.size / 1024).toFixed(0)} KB`);
   }
 
+  function handleIconFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    markDirtyUi();
+    revokeIconPreview();
+    pendingIconFileRef.current = null;
+    setPendingIconSelected(false);
+    setSelectedIconName(null);
+
+    if (!file) {
+      return;
+    }
+
+    if (!isAllowedAssetFile(file)) {
+      setFormError('Envie um arquivo PNG, JPEG ou WebP.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_PLATFORM_LOGO_BYTES) {
+      setFormError('O arquivo excede o tamanho máximo de 2 MB.');
+      event.target.value = '';
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    iconObjectUrlRef.current = objectUrl;
+    pendingIconFileRef.current = file;
+    setLocalIconUrl(objectUrl);
+    setPendingIconSelected(true);
+    setIconRemovalPending(false);
+    setConfirmRemoveIcon(false);
+    setSelectedIconName(`${file.name} · ${(file.size / 1024).toFixed(0)} KB`);
+  }
+
   function handleFaviconFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     markDirtyUi();
@@ -435,6 +508,15 @@ export function PlatformAppearancePage() {
     setConfirmRemoveLogo(false);
   }
 
+  function confirmPendingIconRemoval() {
+    markDirtyUi();
+    clearPendingIconSelection();
+    if (appearance?.iconUrl) {
+      setIconRemovalPending(true);
+    }
+    setConfirmRemoveIcon(false);
+  }
+
   function confirmPendingFaviconRemoval() {
     markDirtyUi();
     clearPendingFaviconSelection();
@@ -447,6 +529,11 @@ export function PlatformAppearancePage() {
   function undoLogoRemovalPending() {
     markDirtyUi();
     setLogoRemovalPending(false);
+  }
+
+  function undoIconRemovalPending() {
+    markDirtyUi();
+    setIconRemovalPending(false);
   }
 
   function undoFaviconRemovalPending() {
@@ -485,6 +572,8 @@ export function PlatformAppearancePage() {
       ...(darkDirty ? { dark: toPersistedOverrides(darkDraft) } : {}),
       ...(pendingLogoFileRef.current ? { logoFile: pendingLogoFileRef.current } : {}),
       ...(!pendingLogoFileRef.current && logoRemovalPending ? { removeLogo: true } : {}),
+      ...(pendingIconFileRef.current ? { iconFile: pendingIconFileRef.current } : {}),
+      ...(!pendingIconFileRef.current && iconRemovalPending ? { removeIcon: true } : {}),
       ...(pendingFaviconFileRef.current ? { faviconFile: pendingFaviconFileRef.current } : {}),
       ...(!pendingFaviconFileRef.current && faviconRemovalPending ? { removeFavicon: true } : {}),
     };
@@ -535,10 +624,13 @@ export function PlatformAppearancePage() {
       const refreshed = await getPlatformBranding();
       applyBrandingState(refreshed);
       clearPendingLogoSelection();
+      clearPendingIconSelection();
       clearPendingFaviconSelection();
       setLogoRemovalPending(false);
+      setIconRemovalPending(false);
       setFaviconRemovalPending(false);
       setConfirmRemoveLogo(false);
+      setConfirmRemoveIcon(false);
       setConfirmRemoveFavicon(false);
       setConfirmReset(false);
       setSuccessMessage('Aparência da plataforma restaurada para o padrão.');
@@ -594,6 +686,7 @@ export function PlatformAppearancePage() {
   }
 
   const displayedLogoUrl = logoRemovalPending ? null : (localLogoUrl ?? appearance.logoUrl);
+  const displayedIconUrl = iconRemovalPending ? null : (localIconUrl ?? appearance.iconUrl);
   const displayedFaviconUrl = faviconRemovalPending
     ? null
     : (localFaviconUrl ?? appearance.faviconUrl);
@@ -661,10 +754,11 @@ export function PlatformAppearancePage() {
             >
               <div className={companyStyles.appearanceSectionHeader}>
                 <Typography as="h3" variant="label" id="logo-section-title">
-                  Logo da plataforma
+                  Logo principal
                 </Typography>
                 <Typography as="p" variant="caption" className={companyStyles.appearanceHelp}>
-                  PNG, JPEG ou WebP · máximo 2 MB. SVG não é aceito.
+                  Usada em áreas de destaque, como a tela de login. PNG, JPEG ou WebP · máximo 2 MB.
+                  SVG não é aceito.
                 </Typography>
                 <Typography
                   as="p"
@@ -672,8 +766,7 @@ export function PlatformAppearancePage() {
                   className={styles.assetGuidance}
                   data-testid="platform-logo-guidance"
                 >
-                  Para melhor resultado, use uma logo horizontal (proporção entre 3:1 e 4:1) ou uma
-                  marca quadrada (1:1). A imagem é ajustada no espaço sem distorção.
+                  Pode ser horizontal. A imagem é ajustada no espaço sem distorção.
                 </Typography>
                 <Typography
                   as="p"
@@ -694,6 +787,7 @@ export function PlatformAppearancePage() {
                 >
                   <PlatformBrandMark
                     size={56}
+                    variant="logo"
                     logoUrl={displayedLogoUrl}
                     alt={displayName}
                     className={styles.platformLogoAsset}
@@ -762,8 +856,8 @@ export function PlatformAppearancePage() {
                   aria-label="Confirmar remoção da logo"
                 >
                   <Typography as="p" variant="body">
-                    Remover a logo da plataforma? A remoção só será aplicada ao salvar as
-                    alterações. Nome, cores e favicon serão mantidos.
+                    Remover a logo principal? A remoção só será aplicada ao salvar as
+                    alterações. Nome, cores, ícone e favicon serão mantidos.
                   </Typography>
                   <div className={companyStyles.formActions}>
                     <Button
@@ -779,6 +873,127 @@ export function PlatformAppearancePage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setConfirmRemoveLogo(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            <section
+              className={`${companyStyles.appearanceSection} ${styles.compactSection}`}
+              aria-labelledby="icon-section-title"
+            >
+              <div className={companyStyles.appearanceSectionHeader}>
+                <Typography as="h3" variant="label" id="icon-section-title">
+                  Ícone da plataforma
+                </Typography>
+                <Typography as="p" variant="caption" className={companyStyles.appearanceHelp}>
+                  Usado em áreas compactas, como menu lateral e identificação da aplicação. PNG,
+                  JPEG ou WebP · máximo 2 MB. SVG não é aceito.
+                </Typography>
+                <Typography
+                  as="p"
+                  variant="caption"
+                  className={styles.assetGuidance}
+                  data-testid="platform-icon-guidance"
+                >
+                  Prefira uma imagem quadrada (1:1). A logo principal não é reutilizada neste
+                  espaço.
+                </Typography>
+              </div>
+
+              <div className={companyStyles.appearanceLogoDropzone}>
+                <div className={styles.faviconPreview} data-testid="platform-icon-frame">
+                  <PlatformBrandMark
+                    size={48}
+                    variant="compact"
+                    logoUrl={displayedIconUrl}
+                    alt=""
+                    decorative
+                  />
+                </div>
+                <div className={companyStyles.appearanceLogoActions}>
+                  <label className={companyStyles.appearanceFileLabel} htmlFor={iconInputId}>
+                    Escolher imagem
+                  </label>
+                  <input
+                    ref={iconInputRef}
+                    id={iconInputId}
+                    type="file"
+                    accept={ALLOWED_PLATFORM_ASSET_ACCEPT}
+                    className={companyStyles.appearanceFileInput}
+                    onChange={handleIconFileChange}
+                  />
+                  {selectedIconName ? (
+                    <Typography
+                      as="p"
+                      variant="caption"
+                      className={companyStyles.appearanceSelectedFile}
+                    >
+                      {selectedIconName} · pendente até salvar
+                    </Typography>
+                  ) : iconRemovalPending ? (
+                    <Typography as="p" variant="caption" className={companyStyles.appearanceHelp}>
+                      Remoção pendente até salvar as alterações.
+                    </Typography>
+                  ) : (
+                    <Typography as="p" variant="caption" className={companyStyles.appearanceHelp}>
+                      Selecione uma imagem. O envio ocorre ao salvar as alterações.
+                    </Typography>
+                  )}
+                  <div className={companyStyles.appearanceLogoSubmit}>
+                    {showIconRemove ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={saving || resetting}
+                        onClick={() => setConfirmRemoveIcon(true)}
+                      >
+                        Remover ícone
+                      </Button>
+                    ) : null}
+                    {iconRemovalPending ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={saving || resetting}
+                        onClick={undoIconRemovalPending}
+                      >
+                        Desfazer remoção
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              {confirmRemoveIcon ? (
+                <div
+                  className={companyStyles.appearanceConfirm}
+                  role="region"
+                  aria-label="Confirmar remoção do ícone da plataforma"
+                >
+                  <Typography as="p" variant="body">
+                    Remover o ícone da plataforma? A remoção só será aplicada ao salvar as
+                    alterações. Logo principal e favicon serão mantidos.
+                  </Typography>
+                  <div className={companyStyles.formActions}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={confirmPendingIconRemoval}
+                    >
+                      Confirmar remoção
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirmRemoveIcon(false)}
                     >
                       Cancelar
                     </Button>
@@ -861,7 +1076,7 @@ export function PlatformAppearancePage() {
                         disabled={saving || resetting}
                         onClick={() => setConfirmRemoveFavicon(true)}
                       >
-                        Remover ícone
+                        Remover ícone da aba
                       </Button>
                     ) : null}
                     {faviconRemovalPending ? (
@@ -887,7 +1102,7 @@ export function PlatformAppearancePage() {
                 >
                   <Typography as="p" variant="body">
                     Remover o ícone da aba? A remoção só será aplicada ao salvar as alterações.
-                    Nome, cores e logo serão mantidos.
+                    Nome, cores, logo principal e ícone da plataforma serão mantidos.
                   </Typography>
                   <div className={companyStyles.formActions}>
                     <Button
@@ -1121,6 +1336,7 @@ export function PlatformAppearancePage() {
             <PlatformBrandingPreview
               platformName={displayName}
               logoUrl={displayedLogoUrl}
+              iconUrl={displayedIconUrl}
               colorScheme={previewScheme}
               light={Object.keys(lightDraft).length > 0 ? lightDraft : null}
               dark={Object.keys(darkDraft).length > 0 ? darkDraft : null}

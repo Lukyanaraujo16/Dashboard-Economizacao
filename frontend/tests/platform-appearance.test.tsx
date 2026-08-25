@@ -18,6 +18,7 @@ const refreshMock = vi.fn();
 const emptyBranding = {
   name: null as string | null,
   logoUrl: null as string | null,
+  iconUrl: null as string | null,
   faviconUrl: null as string | null,
   light: null as Record<string, string> | null,
   dark: null as Record<string, string> | null,
@@ -29,6 +30,7 @@ const branded = {
   ...emptyBranding,
   name: 'Economização Custom',
   logoUrl: '/files/logo-1',
+  iconUrl: '/files/icon-1',
   faviconUrl: '/files/fav-1',
   light: { primary: '#112233', onPrimary: '#FFFFFF' },
   dark: { primary: '#AABBCC', onPrimary: '#111111' },
@@ -80,6 +82,7 @@ function renderAppearance(role: 'USER' | 'ADMIN' | 'SUPER_ADMIN' = 'SUPER_ADMIN'
         tenantId: null,
         name: (serverState.name as string | null)?.trim() || 'Economização',
         logoUrl: (serverState.logoUrl as string | null) ?? null,
+        iconUrl: (serverState.iconUrl as string | null) ?? null,
         faviconUrl: (serverState.faviconUrl as string | null) ?? null,
         light: (serverState.light as Record<string, string> | null) ?? null,
         dark: (serverState.dark as Record<string, string> | null) ?? null,
@@ -120,6 +123,7 @@ function stubBranding(initial: Record<string, unknown>, getStatus = 200) {
             tenantId: null,
             name: (serverState.name as string | null)?.trim() || 'Economização',
             logoUrl: serverState.logoUrl ?? null,
+            iconUrl: serverState.iconUrl ?? null,
             faviconUrl: serverState.faviconUrl ?? null,
             light: serverState.light ?? null,
             dark: serverState.dark ?? null,
@@ -143,6 +147,10 @@ function stubBranding(initial: Record<string, unknown>, getStatus = 200) {
           serverState = { ...serverState, logoUrl: null };
           return Promise.resolve(new Response(null, { status: 204 }));
         }
+        if (path.endsWith('/icon')) {
+          serverState = { ...serverState, iconUrl: null };
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }
         if (path.endsWith('/favicon')) {
           serverState = { ...serverState, faviconUrl: null };
           return Promise.resolve(new Response(null, { status: 204 }));
@@ -157,6 +165,16 @@ function stubBranding(initial: Record<string, unknown>, getStatus = 200) {
             ...serverState,
             name: serverState.name ?? 'Economização',
             logoUrl: '/files/logo-new',
+            createdAt: serverState.createdAt ?? '2026-08-15T12:00:00.000Z',
+            updatedAt: '2026-08-15T12:00:00.000Z',
+          };
+          return Promise.resolve(jsonResponse(serverState));
+        }
+        if (path.endsWith('/icon')) {
+          serverState = {
+            ...serverState,
+            name: serverState.name ?? 'Economização',
+            iconUrl: '/files/icon-new',
             createdAt: serverState.createdAt ?? '2026-08-15T12:00:00.000Z',
             updatedAt: '2026-08-15T12:00:00.000Z',
           };
@@ -313,7 +331,7 @@ describe('Platform appearance UI (1.5D.2)', () => {
     await screen.findByRole('textbox', { name: 'Nome da plataforma' });
 
     const logoSection = screen
-      .getByRole('heading', { name: 'Logo da plataforma' })
+      .getByRole('heading', { name: 'Logo principal' })
       .closest('section') as HTMLElement;
     const input = logoSection.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File([new Uint8Array([137, 80, 78, 71])], 'logo.png', { type: 'image/png' });
@@ -369,7 +387,7 @@ describe('Platform appearance UI (1.5D.2)', () => {
     renderAppearance();
     await screen.findByDisplayValue('Economização Custom');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remover ícone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remover ícone da aba' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar remoção' }));
 
     expect(
@@ -493,7 +511,8 @@ describe('Platform appearance UI (1.5D.2)', () => {
     stubBranding(emptyBranding);
     renderAppearance();
     await screen.findByRole('textbox', { name: 'Nome da plataforma' });
-    expect(screen.getByTestId('platform-logo-guidance').textContent).toMatch(/3:1 e 4:1/);
+    expect(screen.getByTestId('platform-logo-guidance').textContent).toMatch(/horizontal/i);
+    expect(screen.getByTestId('platform-icon-guidance').textContent).toMatch(/quadrada/i);
     expect(screen.getByTestId('platform-favicon-guidance').textContent).toMatch(/512×512/);
   });
 
@@ -503,7 +522,7 @@ describe('Platform appearance UI (1.5D.2)', () => {
     await screen.findByRole('textbox', { name: 'Nome da plataforma' });
 
     const logoSection = screen
-      .getByRole('heading', { name: 'Logo da plataforma' })
+      .getByRole('heading', { name: 'Logo principal' })
       .closest('section') as HTMLElement;
     fireEvent.change(logoSection.querySelector('input[type="file"]') as HTMLInputElement, {
       target: {
@@ -511,5 +530,35 @@ describe('Platform appearance UI (1.5D.2)', () => {
       },
     });
     expect(screen.getByRole('alert').textContent).toMatch(/PNG, JPEG ou WebP/i);
+  });
+
+  it('seleção de ícone compacto sobe no save sem reutilizar a logo', async () => {
+    stubBranding(emptyBranding);
+    renderAppearance();
+    await screen.findByRole('heading', { name: 'Ícone da plataforma' });
+
+    const iconSection = screen
+      .getByRole('heading', { name: 'Ícone da plataforma' })
+      .closest('section') as HTMLElement;
+    fireEvent.change(iconSection.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: {
+        files: [new File([new Uint8Array([1, 2, 3])], 'icon.png', { type: 'image/png' })],
+      },
+    });
+    expect(saveButton().disabled).toBe(false);
+
+    fireEvent.click(saveButton());
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/admin/platform/branding/icon',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    expect(
+      (fetch as ReturnType<typeof vi.fn>).mock.calls.every(
+        (call) => !(String(call[0]).endsWith('/logo') && call[1]?.method === 'POST'),
+      ),
+    ).toBe(true);
   });
 });

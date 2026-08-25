@@ -23,3 +23,29 @@
   object-position: center;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 70%, transparent);
 }
+
+.logoAsset {
+  display: block;
+  box-sizing: border-box;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 18rem);
+  max-height: 4.5rem;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
+}
+
+.logoPlaceholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 4.5rem;
+  height: 4.5rem;
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+  color: var(--color-accent);
+  background: var(--color-primary);
+  box-sizing: border-box;
+}

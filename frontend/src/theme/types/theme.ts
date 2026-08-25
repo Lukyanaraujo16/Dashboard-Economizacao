@@ -30,6 +30,7 @@ export type TenantBrandingInput = {
   /** Nome exibido do tenant (mock / futuro backend). */
   readonly name?: string | null;
   readonly logoUrl?: string | null;
+  readonly iconUrl?: string | null;
   readonly light?: Partial<ColorTokens>;
   readonly dark?: Partial<ColorTokens>;
 };
@@ -46,6 +47,8 @@ export type ResolvedTheme = ThemeFoundation & {
   readonly preference: ThemeModePreference;
   /** null = usar logo padrão da plataforma na camada de UI futura. */
   readonly logoUrl: string | null;
+  /** null = placeholder compacto (não reutiliza a logo principal). */
+  readonly iconUrl: string | null;
   /** null = Theme Default sem nome de tenant. */
   readonly brandName: string | null;
 };

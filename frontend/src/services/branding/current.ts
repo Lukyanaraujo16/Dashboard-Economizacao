@@ -49,6 +49,7 @@ function isCurrentBranding(value: unknown): value is CurrentBranding {
     (value.tenantId === null || typeof value.tenantId === 'string') &&
     typeof value.name === 'string' &&
     (value.logoUrl === null || typeof value.logoUrl === 'string') &&
+    (value.iconUrl === null || typeof value.iconUrl === 'string') &&
     (value.faviconUrl === null || typeof value.faviconUrl === 'string') &&
     isColorOverrides(value.light) &&
     isColorOverrides(value.dark) &&

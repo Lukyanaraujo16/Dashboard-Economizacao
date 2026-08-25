@@ -9,6 +9,7 @@ import {
   createUserRepository,
 } from '../src/modules/auth/index.js';
 import {
+  createPlatformBrandingRepository,
   createStoredFileRepository,
   createTenantBrandingRepository,
 } from '../src/modules/branding/index.js';
@@ -23,6 +24,7 @@ const apps = new Set<Awaited<ReturnType<typeof buildApp>>>();
 const prisma = getPrismaClient();
 const tenants = createTenantRepository(prisma);
 const branding = createTenantBrandingRepository(prisma);
+const platformBranding = createPlatformBrandingRepository(prisma);
 const files = createStoredFileRepository(prisma);
 const users = createUserRepository(prisma);
 const credentials = createUserCredentialRepository(prisma);
@@ -175,6 +177,7 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: tenant.id,
       name: 'Acme Runtime',
       logoUrl: `/files/${stored.id}`,
+      iconUrl: null,
       faviconUrl: null,
       light: { primary: '#141452', accent: '#F2C200' },
       dark: { primary: '#9A9AD4', onPrimary: '#0A0A12' },
@@ -211,6 +214,7 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: tenant.id,
       name: 'Empresa Sem Branding',
       logoUrl: null,
+      iconUrl: null,
       faviconUrl: null,
       light: null,
       dark: null,
@@ -317,6 +321,7 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: null,
       name: 'Economização',
       logoUrl: null,
+      iconUrl: null,
       faviconUrl: null,
       light: null,
       dark: null,
@@ -341,6 +346,7 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: null,
       name: 'Economização',
       logoUrl: null,
+      iconUrl: null,
       faviconUrl: null,
       light: null,
       dark: null,
@@ -357,10 +363,103 @@ describe('GET /branding/current (1.3F)', () => {
       tenantId: null,
       name: 'Economização',
       logoUrl: null,
+      iconUrl: null,
       faviconUrl: null,
       light: null,
       dark: null,
       updatedAt: null,
     });
+  });
+
+  it('logo do tenant não preenche iconUrl; ícone cai para a plataforma', async () => {
+    const tenant = await tenants.create({
+      name: 'runtime-logo-only',
+      displayName: 'Logo Only Co',
+    });
+    const tenantLogo = await files.create({
+      tenantId: tenant.id,
+      fileType: 'TENANT_LOGO',
+      storageKey: `tenants/${tenant.id}/branding/${tenant.id}.png`,
+      mimeType: 'image/png',
+      size: 32,
+      checksum: 'logo-only',
+    });
+    await branding.upsert(tenant.id, {});
+    await branding.setLogo(tenant.id, tenantLogo.id);
+
+    await platformBranding.upsert({ name: 'Economização' });
+    const platformIcon = await files.create({
+      fileType: 'PLATFORM_ICON',
+      storageKey: 'platform/branding/icon.png',
+      mimeType: 'image/png',
+      size: 16,
+      checksum: 'plat-icon',
+    });
+    await platformBranding.attachIcon(platformIcon.id);
+
+    await createPlatformUser({
+      email: 'user-logo-only@runtime.test',
+      role: 'USER',
+      tenantId: tenant.id,
+    });
+
+    const app = await buildTestApp();
+    const cookie = await loginAs(app, 'user-logo-only@runtime.test');
+    const response = await app.inject({
+      method: 'GET',
+      url: '/branding/current',
+      headers: { cookie },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().logoUrl).toBe(`/files/${tenantLogo.id}`);
+    expect(response.json().iconUrl).toBe(`/files/${platformIcon.id}`);
+    expect(response.json().iconUrl).not.toBe(response.json().logoUrl);
+  });
+
+  it('ícone do tenant prevalece sobre o ícone da plataforma', async () => {
+    const tenant = await tenants.create({
+      name: 'runtime-icon-own',
+      displayName: 'Own Icon Co',
+    });
+    await branding.upsert(tenant.id, {});
+    const tenantIcon = await files.create({
+      tenantId: tenant.id,
+      fileType: 'TENANT_ICON',
+      storageKey: `tenants/${tenant.id}/branding/icon/${tenant.id}.png`,
+      mimeType: 'image/png',
+      size: 20,
+      checksum: 'tenant-icon',
+    });
+    await branding.setIcon(tenant.id, tenantIcon.id);
+
+    await platformBranding.upsert({ name: 'Economização' });
+    const platformIcon = await files.create({
+      fileType: 'PLATFORM_ICON',
+      storageKey: 'platform/branding/icon-plat.png',
+      mimeType: 'image/png',
+      size: 16,
+      checksum: 'plat-icon-2',
+    });
+    await platformBranding.attachIcon(platformIcon.id);
+
+    await createPlatformUser({
+      email: 'user-own-icon@runtime.test',
+      role: 'USER',
+      tenantId: tenant.id,
+    });
+
+    const app = await buildTestApp();
+    const cookie = await loginAs(app, 'user-own-icon@runtime.test');
+    const body = (
+      await app.inject({
+        method: 'GET',
+        url: '/branding/current',
+        headers: { cookie },
+      })
+    ).json();
+
+    expect(body.iconUrl).toBe(`/files/${tenantIcon.id}`);
+    expect(body.iconUrl).not.toBe(`/files/${platformIcon.id}`);
   });
 });

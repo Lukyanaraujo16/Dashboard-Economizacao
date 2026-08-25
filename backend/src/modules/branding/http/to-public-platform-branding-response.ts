@@ -8,6 +8,7 @@ import { toPublicLogoUrl } from './to-public-branding-response.js';
 export type PublicPlatformBrandingResponse = {
   readonly name: string | null;
   readonly logoUrl: string | null;
+  readonly iconUrl: string | null;
   readonly faviconUrl: string | null;
   readonly light: BrandColorOverrides | null;
   readonly dark: BrandColorOverrides | null;
@@ -22,6 +23,7 @@ export function toPublicPlatformBrandingResponse(
     return {
       name: null,
       logoUrl: null,
+      iconUrl: null,
       faviconUrl: null,
       light: null,
       dark: null,
@@ -33,6 +35,7 @@ export function toPublicPlatformBrandingResponse(
   return {
     name: record.name,
     logoUrl: toPublicLogoUrl(record.logoFileId),
+    iconUrl: toPublicLogoUrl(record.iconFileId),
     faviconUrl: toPublicLogoUrl(record.faviconFileId),
     light: record.lightColors,
     dark: record.darkColors,

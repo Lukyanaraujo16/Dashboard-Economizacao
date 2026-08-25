@@ -53,6 +53,9 @@ describe('LocalFileStorage', () => {
     expect(isSafeStorageKey(`tenants/${tenantId}/branding/${randomUUID()}.webp`)).toBe(true);
     expect(isSafeStorageKey(`platform/branding/logo/${randomUUID()}.png`)).toBe(true);
     expect(isSafeStorageKey(`platform/branding/favicon/${randomUUID()}.webp`)).toBe(true);
+    expect(isSafeStorageKey(`platform/branding/icon/${randomUUID()}.png`)).toBe(true);
+    expect(isSafeStorageKey(`tenants/${tenantId}/branding/icon/${randomUUID()}.webp`)).toBe(true);
+    expect(isSafeStorageKey(`platform/branding/icon/not-a-uuid.png`)).toBe(false);
     expect(isSafeStorageKey(`platform/branding/logo/not-a-uuid.png`)).toBe(false);
   });
 

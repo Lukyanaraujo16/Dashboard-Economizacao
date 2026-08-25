@@ -10,7 +10,7 @@ import {
   MAX_LOGO_BYTES,
   type AllowedLogoMimeType,
 } from '../domain/logo-mime.js';
-import { createTenantLogoStorageKey } from '../domain/logo-storage-key.js';
+import { createTenantIconStorageKey, createTenantLogoStorageKey } from '../domain/logo-storage-key.js';
 import type { UpsertTenantBrandingInput } from '../domain/types.js';
 import { toPublicBrandingResponse } from '../http/to-public-branding-response.js';
 import type { PublicTenantBrandingResponse } from '../http/to-public-branding-response.js';
@@ -28,6 +28,12 @@ export type AdminBrandingService = {
     declaredMimeType: string | undefined,
   ): Promise<PublicTenantBrandingResponse>;
   deleteLogo(tenantId: string): Promise<void>;
+  uploadIcon(
+    tenantId: string,
+    body: Buffer,
+    declaredMimeType: string | undefined,
+  ): Promise<PublicTenantBrandingResponse>;
+  deleteIcon(tenantId: string): Promise<void>;
   collectStorageKeys(tenantId: string): Promise<readonly string[]>;
   deleteStoredObjects(keys: readonly string[]): Promise<void>;
 };
@@ -59,29 +65,30 @@ async function bestEffortDelete(storage: FileStorage, storageKey: string): Promi
 function validateLogoPayload(
   body: Buffer,
   declaredMimeType: string | undefined,
+  field: 'logo' | 'icon' = 'logo',
 ): AllowedLogoMimeType {
   if (body.byteLength === 0) {
-    throw new ValidationError('Arquivo de logo ausente.', {
-      details: [{ field: 'logo', issue: 'required' }],
+    throw new ValidationError(`Arquivo de ${field} ausente.`, {
+      details: [{ field, issue: 'required' }],
     });
   }
 
   if (body.byteLength > MAX_LOGO_BYTES) {
-    throw new ValidationError('Arquivo de logo excede 2 MB.', {
-      details: [{ field: 'logo', issue: 'too_large' }],
+    throw new ValidationError(`Arquivo de ${field} excede 2 MB.`, {
+      details: [{ field, issue: 'too_large' }],
     });
   }
 
   const detected = detectAllowedLogoMimeType(body);
   if (!detected) {
-    throw new ValidationError('Tipo de arquivo de logo não permitido.', {
-      details: [{ field: 'logo', issue: 'invalid_mime' }],
+    throw new ValidationError(`Tipo de arquivo de ${field} não permitido.`, {
+      details: [{ field, issue: 'invalid_mime' }],
     });
   }
 
   if (declaredMimeType && declaredMimeType !== detected) {
     throw new ValidationError('Tipo declarado do arquivo não corresponde ao conteúdo.', {
-      details: [{ field: 'logo', issue: 'mime_mismatch' }],
+      details: [{ field, issue: 'mime_mismatch' }],
     });
   }
 
@@ -114,6 +121,10 @@ export function createAdminBrandingService(deps: {
       if (existing?.logoFile) {
         await deps.files.deleteById(existing.logoFile.id);
         await bestEffortDelete(deps.storage, existing.logoFile.storageKey);
+      }
+      if (existing?.iconFile) {
+        await deps.files.deleteById(existing.iconFile.id);
+        await bestEffortDelete(deps.storage, existing.iconFile.storageKey);
       }
     },
 
@@ -161,6 +172,52 @@ export function createAdminBrandingService(deps: {
       await withBrandingDomainError(() => deps.branding.clearLogo(tenantId));
       await deps.files.deleteById(existing.logoFile.id);
       await bestEffortDelete(deps.storage, existing.logoFile.storageKey);
+    },
+
+    async uploadIcon(tenantId, body, declaredMimeType) {
+      await withTenantNotFound(assertTenantExists(deps.tenants, tenantId));
+      const mimeType = validateLogoPayload(body, declaredMimeType, 'icon');
+      const storageKey = createTenantIconStorageKey(tenantId, mimeType);
+      const checksum = createHash('sha256').update(body).digest('hex');
+      const previous = await deps.branding.findByTenantId(tenantId);
+
+      await deps.storage.put(storageKey, body);
+
+      try {
+        const file = await deps.files.create({
+          tenantId,
+          fileType: 'TENANT_ICON',
+          storageKey,
+          mimeType,
+          size: body.byteLength,
+          checksum,
+        });
+        const record = await withBrandingDomainError(() =>
+          deps.branding.setIcon(tenantId, file.id),
+        );
+
+        if (previous?.iconFile) {
+          await deps.files.deleteById(previous.iconFile.id);
+          await bestEffortDelete(deps.storage, previous.iconFile.storageKey);
+        }
+
+        return toPublicBrandingResponse(tenantId, record);
+      } catch (error) {
+        await bestEffortDelete(deps.storage, storageKey);
+        throw error;
+      }
+    },
+
+    async deleteIcon(tenantId) {
+      await withTenantNotFound(assertTenantExists(deps.tenants, tenantId));
+      const existing = await deps.branding.findByTenantId(tenantId);
+      if (!existing?.iconFile) {
+        return;
+      }
+
+      await withBrandingDomainError(() => deps.branding.clearIcon(tenantId));
+      await deps.files.deleteById(existing.iconFile.id);
+      await bestEffortDelete(deps.storage, existing.iconFile.storageKey);
     },
 
     async collectStorageKeys(tenantId) {
