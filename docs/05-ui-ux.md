@@ -176,6 +176,13 @@ PRE-IA-1 — contexto de navegação (25/08/2026):
 
 Helper oficial: `canUseTenantSurfaces` (USER **ou** operador de plataforma com `support.active`).
 
+PRE-IA-2 — saúde operacional na lista `/empresas` (25/08/2026):
+
+A listagem de empresas exibe o estado da **conexão** Conta Azul (`Integration.status`)
+e a **última sincronização com sucesso** (`lastSuccessfulSyncAt`).
+`CONNECTED` não significa “sync saudável”. Sem heurística de atraso.
+Não é dashboard administrativa. Histórico de sync permanece na Fase 17.
+
 ⸻
 
 8. Cabeçalho

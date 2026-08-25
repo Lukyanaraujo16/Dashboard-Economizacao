@@ -19,6 +19,7 @@ export type {
   CreateTenantInput,
   ListTenantsFilter,
   ListTenantsResult,
+  TenantContaAzulSummary,
   TenantRecord,
   TenantStatus,
   UpdateTenantInput,

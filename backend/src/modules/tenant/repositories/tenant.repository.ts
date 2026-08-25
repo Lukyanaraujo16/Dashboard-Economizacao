@@ -20,10 +20,21 @@ import type {
   TenantRecord,
   UpdateTenantInput,
 } from '../domain/types.js';
-import { mapTenantRecord } from './mappers.js';
+import { mapContaAzulSummary, mapTenantRecord } from './mappers.js';
 
 const DEFAULT_LIST_LIMIT = 50;
 const MAX_LIST_LIMIT = 100;
+
+/** Include O(1): tenants + integrations WHERE tenantId IN (...). Não é N+1. */
+const CONTA_AZUL_SUMMARY_INCLUDE = {
+  integrations: {
+    where: { provider: 'CONTA_AZUL' as const },
+    select: {
+      status: true,
+      lastSuccessfulSyncAt: true,
+    },
+  },
+} as const;
 
 function resolveListPagination(filter: ListTenantsFilter): { limit: number; offset: number } {
   const limit =
@@ -82,8 +93,11 @@ export function createTenantRepository(prisma: PrismaClient): TenantRepository {
     },
 
     async findById(id) {
-      const row = await prisma.tenant.findUnique({ where: { id } });
-      return row ? mapTenantRecord(row) : null;
+      const row = await prisma.tenant.findUnique({
+        where: { id },
+        include: CONTA_AZUL_SUMMARY_INCLUDE,
+      });
+      return row ? mapTenantRecord(row, mapContaAzulSummary(row.integrations)) : null;
     },
 
     async findByName(name) {
@@ -119,12 +133,13 @@ export function createTenantRepository(prisma: PrismaClient): TenantRepository {
           orderBy: [{ displayName: 'asc' }, { name: 'asc' }, { id: 'asc' }],
           take: limit,
           skip: offset,
+          include: CONTA_AZUL_SUMMARY_INCLUDE,
         }),
         prisma.tenant.count({ where }),
       ]);
 
       return {
-        items: rows.map(mapTenantRecord),
+        items: rows.map((row) => mapTenantRecord(row, mapContaAzulSummary(row.integrations))),
         total,
         limit,
         offset,

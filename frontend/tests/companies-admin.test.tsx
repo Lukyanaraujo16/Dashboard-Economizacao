@@ -26,6 +26,7 @@ const companyA: Company = {
   createdAt: '2026-08-14T10:00:00.000Z',
   updatedAt: '2026-08-14T11:00:00.000Z',
   deactivatedAt: null,
+  integration: null,
 };
 
 const companyB: Company = {
@@ -36,6 +37,7 @@ const companyB: Company = {
   createdAt: '2026-08-14T09:00:00.000Z',
   updatedAt: '2026-08-14T12:00:00.000Z',
   deactivatedAt: '2026-08-14T12:00:00.000Z',
+  integration: null,
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -291,6 +293,88 @@ describe('UI administrativa de Empresas (1.2D)', () => {
       expect(within(table).getAllByText('Desativada').length).toBeGreaterThan(0);
       expect(screen.queryByText(companyA.id)).toBeNull();
       expect(screen.queryByText(companyB.id)).toBeNull();
+    });
+
+    it('exibe saúde operacional da Conta Azul sem ISO bruto', async () => {
+      const connected: Company = {
+        ...companyA,
+        integration: {
+          status: 'CONNECTED',
+          lastSuccessfulSyncAt: '2026-08-25T12:15:00.000Z',
+        },
+      };
+      const neverSynced: Company = {
+        ...companyB,
+        id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        name: 'gamma-co',
+        displayName: 'Gamma Co',
+        status: 'ACTIVE',
+        deactivatedAt: null,
+        integration: {
+          status: 'CONNECTED',
+          lastSuccessfulSyncAt: null,
+        },
+      };
+      const missing: Company = {
+        ...companyA,
+        id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        name: 'delta-co',
+        displayName: 'Delta Co',
+        integration: null,
+      };
+      const errored: Company = {
+        ...companyA,
+        id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+        name: 'epsilon-co',
+        displayName: 'Epsilon Co',
+        integration: {
+          status: 'ERROR',
+          lastSuccessfulSyncAt: null,
+        },
+      };
+
+      stubListFetch([connected, neverSynced, missing, errored]);
+      renderCompaniesPage('ADMIN');
+
+      const table = await getCompanyTable();
+      expect(within(table).getByRole('columnheader', { name: 'Conta Azul' })).toBeTruthy();
+      expect(within(table).getByRole('columnheader', { name: 'Última sincronização' })).toBeTruthy();
+      expect(within(table).getAllByLabelText('Conta Azul: Conectada').length).toBeGreaterThan(0);
+      expect(within(table).getByLabelText('Conta Azul: Não configurada')).toBeTruthy();
+      expect(within(table).getByLabelText('Conta Azul: Atenção necessária')).toBeTruthy();
+      expect(within(table).getAllByText('Nunca sincronizou').length).toBeGreaterThan(0);
+      expect(within(table).queryByText('2026-08-25T12:15:00.000Z')).toBeNull();
+      expect(within(table).getByRole('button', { name: 'Editar Alpha Co' })).toBeTruthy();
+      expect(
+        within(table).getByRole('button', { name: 'Acessar Alpha Co em modo suporte' }),
+      ).toBeTruthy();
+
+      const cardList = await screen.findByLabelText('Lista de empresas');
+      expect(within(cardList).getByText('Gamma Co')).toBeTruthy();
+      expect(within(cardList).getAllByText('Nunca sincronizou').length).toBeGreaterThan(0);
+    });
+
+    it('SUPER_ADMIN também vê o resumo operacional', async () => {
+      stubListFetch([
+        {
+          ...companyA,
+          integration: { status: 'DISCONNECTED', lastSuccessfulSyncAt: null },
+        },
+      ]);
+      renderCompaniesPage('SUPER_ADMIN');
+      const table = await getCompanyTable();
+      expect(within(table).getByLabelText('Conta Azul: Não conectada')).toBeTruthy();
+      expect(within(table).getByText('Nunca sincronizou')).toBeTruthy();
+    });
+
+    it('CSS mobile esconde tabela e mostra cards', async () => {
+      const { readFile } = await import('node:fs/promises');
+      const { dirname, join } = await import('node:path');
+      const { fileURLToPath } = await import('node:url');
+      const here = dirname(fileURLToPath(import.meta.url));
+      const css = await readFile(join(here, '../src/components/companies/companies.module.css'), 'utf8');
+      expect(css).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.tableWrap \{[\s\S]*display:\s*none/);
+      expect(css).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.cardList \{[\s\S]*display:\s*flex/);
     });
 
     it('mobile mantém cards utilizáveis', async () => {

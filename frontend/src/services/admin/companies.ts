@@ -38,6 +38,21 @@ async function readJsonBody(response: Response): Promise<unknown> {
   }
 }
 
+function isCompanyIntegration(value: unknown): value is Company['integration'] {
+  if (value === null) {
+    return true;
+  }
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    (value.status === 'CONNECTED' ||
+      value.status === 'DISCONNECTED' ||
+      value.status === 'ERROR') &&
+    (value.lastSuccessfulSyncAt === null || typeof value.lastSuccessfulSyncAt === 'string')
+  );
+}
+
 function isCompany(value: unknown): value is Company {
   if (!isRecord(value)) {
     return false;
@@ -49,7 +64,8 @@ function isCompany(value: unknown): value is Company {
     (value.status === 'ACTIVE' || value.status === 'DISABLED') &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string' &&
-    (value.deactivatedAt === null || typeof value.deactivatedAt === 'string')
+    (value.deactivatedAt === null || typeof value.deactivatedAt === 'string') &&
+    isCompanyIntegration(value.integration)
   );
 }
 

@@ -44,6 +44,7 @@ describe('domínio tenant — normalização e invariantes', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       deactivatedAt: null,
+      contaAzul: null,
     };
     const disabledTenant = {
       ...activeTenant,
@@ -93,6 +94,27 @@ describe('persistência tenant — TenantRepository', () => {
     const created = await tenants.create({ name: 'find-me', displayName: 'Find Me' });
     const found = await tenants.findById(created.id);
     expect(found?.id).toBe(created.id);
+    expect(found?.contaAzul).toBeNull();
+  });
+
+  it('list inclui resumo Conta Azul quando a integração existe', async () => {
+    const tenant = await tenants.create({ name: 'with-ca', displayName: 'With CA' });
+    const syncedAt = new Date('2026-08-25T12:15:00.000Z');
+    await prisma.integration.create({
+      data: {
+        tenantId: tenant.id,
+        provider: 'CONTA_AZUL',
+        status: 'CONNECTED',
+        lastSuccessfulSyncAt: syncedAt,
+      },
+    });
+
+    const listed = await tenants.list();
+    expect(listed.items[0]?.contaAzul).toEqual({
+      status: 'CONNECTED',
+      lastSuccessfulSyncAt: syncedAt,
+    });
+    expect((await tenants.create({ name: 'plain', displayName: 'Plain' })).contaAzul).toBeNull();
   });
 
   it('list ordena deterministicamente e filtra por status com paginação', async () => {

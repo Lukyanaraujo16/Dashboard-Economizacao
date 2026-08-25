@@ -1248,6 +1248,11 @@ Exemplos
 * sincronização falhou;
 * atenção necessária.
 
+PRE-IA-2 (25/08/2026): recorte mínimo na lista `/empresas` — conexão Conta Azul
+(`Integration.status`) e `lastSuccessfulSyncAt`. Não interpreta CONNECTED como
+sync saudável. Histórico de sync, falha de SyncRun e dashboard administrativa
+permanecem na Fase 17.
+
 ⸻
 
 ADMIN-008 — Administração da marca principal

@@ -22,6 +22,7 @@ const company: Company = {
   createdAt: '2026-08-14T10:00:00.000Z',
   updatedAt: '2026-08-14T11:00:00.000Z',
   deactivatedAt: null,
+  integration: null,
 };
 
 const disconnected: ContaAzulIntegration = {

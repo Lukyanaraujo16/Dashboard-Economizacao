@@ -121,7 +121,9 @@ Estado atual
 ✔ F12-C — Exportação PDF/XLSX da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 ✔ F12-D — Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 
-✔ PRE-IA-1 — Admin shell (landing `/empresas` + sidebar contextual) IMPLEMENTADA (25/08/2026)
+✔ PRE-IA-1 — Admin shell (landing `/empresas` + sidebar contextual) HOMOLOGADA HUMANAMENTE (25/08/2026)
+
+✔ PRE-IA-2 — Saúde operacional básica na lista de empresas IMPLEMENTADA (25/08/2026)
 
 ✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
 

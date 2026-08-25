@@ -4,3 +4,4 @@ export { CompanyFormPage } from './company-form-page';
 export { CompanyIntegrationsPage } from './company-integrations-page';
 export { CompanySectionNav } from './company-section-nav';
 export { CompanyStatusBadge } from './company-status-badge';
+export { CompanyContaAzulBadge } from './company-conta-azul-badge';

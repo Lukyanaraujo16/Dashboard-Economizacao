@@ -322,6 +322,103 @@ describe('API administrativa /admin/tenants (1.2C)', () => {
       ).toBe(true);
       expect(disabledOnly.json().data.some((t: { id: string }) => t.id === disabled.id)).toBe(true);
     });
+
+    it('inclui resumo operacional da Conta Azul sem secrets', async () => {
+      await tenants.create({ name: 'ops-none', displayName: 'Ops None' });
+      const connected = await tenants.create({ name: 'ops-ok', displayName: 'Ops Ok' });
+      const never = await tenants.create({ name: 'ops-never', displayName: 'Ops Never' });
+      const errored = await tenants.create({ name: 'ops-err', displayName: 'Ops Err' });
+      const disconnected = await tenants.create({ name: 'ops-off', displayName: 'Ops Off' });
+      const syncedAt = new Date('2026-08-25T12:15:00.000Z');
+
+      await prisma.integration.create({
+        data: {
+          tenantId: connected.id,
+          provider: 'CONTA_AZUL',
+          status: 'CONNECTED',
+          lastSuccessfulSyncAt: syncedAt,
+        },
+      });
+      await prisma.integration.create({
+        data: {
+          tenantId: never.id,
+          provider: 'CONTA_AZUL',
+          status: 'CONNECTED',
+          lastSuccessfulSyncAt: null,
+        },
+      });
+      await prisma.integration.create({
+        data: {
+          tenantId: errored.id,
+          provider: 'CONTA_AZUL',
+          status: 'ERROR',
+          lastErrorCode: 'refresh_failed',
+          lastErrorAt: new Date('2026-08-25T11:00:00.000Z'),
+        },
+      });
+      await prisma.integration.create({
+        data: {
+          tenantId: disconnected.id,
+          provider: 'CONTA_AZUL',
+          status: 'DISCONNECTED',
+        },
+      });
+
+      await createPlatformUser({ email: 'admin-ops-list@api.test', role: 'ADMIN' });
+      await createPlatformUser({ email: 'super-ops-list@api.test', role: 'SUPER_ADMIN' });
+      const app = await buildTestApp();
+
+      for (const email of ['admin-ops-list@api.test', 'super-ops-list@api.test']) {
+        const cookie = await loginAs(app, email);
+        const response = await app.inject({
+          method: 'GET',
+          url: '/admin/tenants?limit=20',
+          headers: { cookie },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const byName = Object.fromEntries(
+          (response.json().data as Array<{ name: string; integration: unknown }>).map((row) => [
+            row.name,
+            row,
+          ]),
+        );
+
+        expect(byName['ops-none']?.integration).toBeNull();
+        expect(byName['ops-ok']?.integration).toEqual({
+          status: 'CONNECTED',
+          lastSuccessfulSyncAt: syncedAt.toISOString(),
+        });
+        expect(byName['ops-never']?.integration).toEqual({
+          status: 'CONNECTED',
+          lastSuccessfulSyncAt: null,
+        });
+        expect(byName['ops-err']?.integration).toEqual({
+          status: 'ERROR',
+          lastSuccessfulSyncAt: null,
+        });
+        expect(byName['ops-off']?.integration).toEqual({
+          status: 'DISCONNECTED',
+          lastSuccessfulSyncAt: null,
+        });
+
+        const serialized = JSON.stringify(response.json());
+        expect(serialized).not.toMatch(/encryptedAccessToken|encryptedRefreshToken|clientSecret|Bearer /);
+        expect(Object.keys(byName['ops-ok'] as object).sort()).toEqual([
+          'createdAt',
+          'deactivatedAt',
+          'displayName',
+          'id',
+          'integration',
+          'name',
+          'status',
+          'updatedAt',
+        ]);
+        expect(Object.keys((byName['ops-ok'] as { integration: object }).integration).sort()).toEqual(
+          ['lastSuccessfulSyncAt', 'status'],
+        );
+      }
+    });
   });
 
   describe('GET /admin/tenants/:tenantId', () => {
@@ -591,10 +688,12 @@ describe('API administrativa /admin/tenants (1.2C)', () => {
         'deactivatedAt',
         'displayName',
         'id',
+        'integration',
         'name',
         'status',
         'updatedAt',
       ]);
+      expect(response.json().integration).toBeNull();
     });
 
     it('tenantId no body não altera operação de criação', async () => {

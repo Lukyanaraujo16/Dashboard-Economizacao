@@ -24,10 +24,12 @@ import {
   ReactivateCompanyIcon,
   SupportCompanyIcon,
 } from './company-action-icons';
+import { CompanyContaAzulBadge } from './company-conta-azul-badge';
 import { CompanyStatusBadge } from './company-status-badge';
 import {
   COMPANY_STATUS_FILTER_OPTIONS,
   formatCompanyDate,
+  formatLastSuccessfulSync,
   paginationRangeLabel,
   type CompanyStatusFilter,
 } from './company-utils';
@@ -359,6 +361,8 @@ export function CompaniesPage() {
                   <th scope="col">Empresa</th>
                   <th scope="col">Identificador</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Conta Azul</th>
+                  <th scope="col">Última sincronização</th>
                   <th scope="col">Atualizada em</th>
                   <th scope="col">Ações</th>
                 </tr>
@@ -371,6 +375,10 @@ export function CompaniesPage() {
                     <td>
                       <CompanyStatusBadge status={company.status} />
                     </td>
+                    <td>
+                      <CompanyContaAzulBadge status={company.integration?.status ?? null} />
+                    </td>
+                    <td>{formatLastSuccessfulSync(company.integration?.lastSuccessfulSyncAt)}</td>
                     <td>{formatCompanyDate(company.updatedAt)}</td>
                     <td>
                       <CompanyRowActions
@@ -411,6 +419,22 @@ export function CompaniesPage() {
                   </Typography>
                   <Typography as="p" variant="body" className={styles.cardValue}>
                     {company.name}
+                  </Typography>
+                </div>
+                <div className={styles.cardMeta}>
+                  <Typography as="p" variant="caption" className={styles.cardLabel}>
+                    Conta Azul
+                  </Typography>
+                  <div className={styles.cardValue}>
+                    <CompanyContaAzulBadge status={company.integration?.status ?? null} />
+                  </div>
+                </div>
+                <div className={styles.cardMeta}>
+                  <Typography as="p" variant="caption" className={styles.cardLabel}>
+                    Última sincronização
+                  </Typography>
+                  <Typography as="p" variant="body" className={styles.cardValue}>
+                    {formatLastSuccessfulSync(company.integration?.lastSuccessfulSyncAt)}
                   </Typography>
                 </div>
                 <div className={styles.cardMeta}>

@@ -24,6 +24,7 @@ const company = {
   createdAt: '2026-08-15T10:00:00.000Z',
   updatedAt: '2026-08-15T10:00:00.000Z',
   deactivatedAt: null,
+  integration: null,
 };
 
 const userA: ManagedUser = {

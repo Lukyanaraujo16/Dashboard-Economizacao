@@ -26,6 +26,14 @@ export function formatCompanyDate(iso: string): string {
   }).format(date);
 }
 
+export function formatLastSuccessfulSync(iso: string | null | undefined): string {
+  if (!iso) {
+    return 'Nunca sincronizou';
+  }
+  const formatted = formatCompanyDate(iso);
+  return formatted === '—' ? 'Nunca sincronizou' : formatted;
+}
+
 /** Pré-visualização amigável do identificador — backend permanece autoridade. */
 export function previewCompanyIdentifier(value: string): string {
   return value

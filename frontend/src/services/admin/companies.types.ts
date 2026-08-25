@@ -1,5 +1,13 @@
 export type CompanyStatus = 'ACTIVE' | 'DISABLED';
 
+export type CompanyContaAzulStatus = 'CONNECTED' | 'DISCONNECTED' | 'ERROR';
+
+/** Resumo operacional da Conta Azul na listagem. Sem tokens. */
+export type CompanyContaAzulIntegration = {
+  readonly status: CompanyContaAzulStatus;
+  readonly lastSuccessfulSyncAt: string | null;
+};
+
 /** Registro público de Empresa exposto pela API administrativa. */
 export type Company = {
   readonly id: string;
@@ -9,6 +17,7 @@ export type Company = {
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly deactivatedAt: string | null;
+  readonly integration: CompanyContaAzulIntegration | null;
 };
 
 export type CompanyPagination = {

@@ -61,8 +61,11 @@ HOMOLOGADA TECNICAMENTE (25/08/2026) — PDF/XLSX da Receita. F12-D IMPLEMENTADA
 HOMOLOGADA TECNICAMENTE (25/08/2026) — Relatório de Despesas + PDF/XLSX.
 Fase 12 completa: NÃO (recorte V1 Receita+Despesas entregue; itens históricos
 do PRD fora da V1).
-PRE-IA-1 — Admin shell: IMPLEMENTADA (landing de plataforma `/empresas`;
-Dashboard/Relatórios só em contexto de tenant ou Support Mode).
+PRE-IA-1 — Admin shell: HOMOLOGADA HUMANAMENTE (25/08/2026).
+PRE-IA-2 — Saúde operacional na lista `/empresas`: IMPLEMENTADA.
+  Resumo Conta Azul (`Integration.status`) + `lastSuccessfulSyncAt`.
+  Não é dashboard administrativa. Histórico de sync, métricas e auditoria
+  permanecem na Fase 17. Sem heurística de “sync atrasada”. Sem migration.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
 L1-A (financial_transactions): WIP isolado em stash — NÃO está no HEAD publicado.
@@ -1018,6 +1021,10 @@ Escopo
 * estado das integrações;
 * ai_runs;
 * visão administrativa de saúde.
+
+PRE-IA-2 cobre apenas o resumo `status` + `lastSuccessfulSyncAt` na lista
+`/empresas`. Não substitui esta fase: histórico de sync, auditoria, métricas
+SaaS e `ai_runs` continuam aqui.
 
 Requisitos relacionados
 
