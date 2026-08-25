@@ -31,7 +31,9 @@ monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
 De/Até. Ledger L1-A fora do HEAD (stash). L1-B: BLOCKED_BY_CASH_SEMANTICS.
 Semântica de caixa: não reabrir aqui.
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
-Receita reutiliza o motor mensal (D1/D8/D9/CC1). PDF/XLSX = F12-C.
+Receita reutiliza o motor mensal (D1/D8/D9/CC1). F12-C (25/08/2026):
+IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — PDF/XLSX formatam o mesmo
+resultado; sem motor financeiro paralelo.
 
 ⸻
 

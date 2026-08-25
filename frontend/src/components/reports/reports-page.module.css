@@ -129,6 +129,19 @@
   font-size: 0.8125rem;
 }
 
+.resultActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.resultActions p {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
 .tableWrap {
   width: 100%;
   min-width: 0;
@@ -223,6 +236,14 @@
   }
 
   .actions > * {
+    flex: 1 1 auto;
+  }
+
+  .resultActions {
+    width: 100%;
+  }
+
+  .resultActions > button {
     flex: 1 1 auto;
   }
 

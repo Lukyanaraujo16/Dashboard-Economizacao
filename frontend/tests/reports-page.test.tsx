@@ -5,7 +5,7 @@ import RelatoriosPage from '../app/(authenticated)/relatorios/page';
 import { ReportsPage } from '../src/components/reports/reports-page';
 import { getDashboardCategories } from '../src/services/dashboard/categories';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
-import { getReportsRevenue } from '../src/services/reports/revenue';
+import { getReportsRevenue, downloadReportsRevenueExport } from '../src/services/reports/revenue';
 import {
   ReportsRevenueRequestError,
   type ReportsRevenueResponse,
@@ -31,6 +31,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('../src/services/reports/revenue', () => ({
   getReportsRevenue: vi.fn(),
+  downloadReportsRevenueExport: vi.fn(),
 }));
 
 vi.mock('../src/services/dashboard/categories', () => ({
@@ -152,6 +153,8 @@ describe('página /relatorios', () => {
     vi.mocked(getDashboardCategories).mockResolvedValue({ items: [] });
     vi.mocked(getDashboardCostCenters).mockResolvedValue({ items: [] });
     vi.mocked(getReportsRevenue).mockReset();
+    vi.mocked(downloadReportsRevenueExport).mockReset();
+    vi.mocked(downloadReportsRevenueExport).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -271,6 +274,8 @@ describe('página /relatorios', () => {
     expect(css).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.filtersRow/);
     expect(css).toMatch(/flex-direction:\s*column/);
     expect(css).toMatch(/\.tableWrap \{[\s\S]*overflow-x:\s*auto/);
+    expect(css).toMatch(/\.resultActions \{[\s\S]*flex-wrap:\s*wrap/);
+    expect(css).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.resultActions > button/);
   });
 
   it('filtra situação antes de visualizar', async () => {
@@ -285,5 +290,67 @@ describe('página /relatorios', () => {
       );
     });
     expect(replaceMock.mock.calls.at(-1)?.[0]).toContain('situation=overdue');
+  });
+
+  it('exporta o snapshot visualizado, invalida ao mudar filtro e protege clique duplo', async () => {
+    vi.mocked(getReportsRevenue).mockResolvedValue(readyBody);
+    let releaseExport: (() => void) | undefined;
+    vi.mocked(downloadReportsRevenueExport).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseExport = () => resolve();
+        }),
+    );
+    renderReports();
+    fireEvent.click(await screen.findByRole('button', { name: 'Visualizar relatório' }));
+    const pdf = await screen.findByRole('button', { name: 'Exportar PDF' });
+    const excel = screen.getByRole('button', { name: 'Exportar Excel' });
+    expect(pdf).toHaveProperty('disabled', false);
+    expect(excel).toHaveProperty('disabled', false);
+
+    fireEvent.click(pdf);
+    fireEvent.click(pdf);
+    fireEvent.click(excel);
+    await waitFor(() => {
+      expect(downloadReportsRevenueExport).toHaveBeenCalledTimes(1);
+    });
+    expect(downloadReportsRevenueExport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: expect.stringMatching(/^\d{4}-\d{2}$/),
+        to: expect.stringMatching(/^\d{4}-\d{2}$/),
+        format: 'pdf',
+      }),
+    );
+    expect(pdf.getAttribute('aria-busy')).toBe('true');
+    expect(excel).toHaveProperty('disabled', true);
+    releaseExport?.();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Exportar PDF' })).toHaveProperty('disabled', false);
+    });
+
+    fireEvent.change(screen.getByLabelText('Situação'), { target: { value: 'overdue' } });
+    expect(screen.getByRole('button', { name: 'Exportar PDF' })).toHaveProperty('disabled', true);
+    expect(
+      screen.getByText(/Filtros alterados — clique em Visualizar/),
+    ).toBeTruthy();
+    expect(downloadReportsRevenueExport).toHaveBeenCalledTimes(1);
+
+    vi.mocked(downloadReportsRevenueExport).mockRejectedValueOnce(
+      new ReportsRevenueRequestError('unavailable', 'Não foi possível exportar o relatório de receita.'),
+    );
+    vi.mocked(getReportsRevenue).mockResolvedValue(readyBody);
+    fireEvent.click(screen.getByRole('button', { name: 'Visualizar relatório' }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Exportar Excel' })).toHaveProperty('disabled', false);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar Excel' }));
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    vi.mocked(downloadReportsRevenueExport).mockResolvedValue(undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar Excel' }));
+    await waitFor(() => {
+      expect(downloadReportsRevenueExport).toHaveBeenLastCalledWith(
+        expect.objectContaining({ format: 'xlsx', situation: 'overdue' }),
+      );
+    });
   });
 });

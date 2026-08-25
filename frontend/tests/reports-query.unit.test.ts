@@ -59,5 +59,13 @@ describe('reportsRevenuePath', () => {
     ).toBe(
       '/reports/revenue?from=2026-01&to=2026-08&costCenter=11111111-1111-4111-8111-111111111111&situation=overdue&category=22222222-2222-4222-8222-222222222222',
     );
+    expect(
+      reportsRevenuePath({
+        from: '2026-01',
+        to: '2026-06',
+        format: 'pdf',
+      }),
+    ).toBe('/reports/revenue?from=2026-01&to=2026-06&format=pdf');
+    expect(reportsRevenuePath({ from: '2026-01', to: '2026-06' })).not.toContain('format=');
   });
 });

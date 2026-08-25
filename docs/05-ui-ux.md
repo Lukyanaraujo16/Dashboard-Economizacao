@@ -810,7 +810,11 @@ placeholder no sidebar (regra §7). Item de tenant (`platformOnly: false`).
 Rota: `/relatorios`. Título: Relatórios.
 
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — tipo Receita
-com visualização na tela. Despesas e exportação PDF/Excel: F12-C.
+com visualização na tela. F12-C (25/08/2026): IMPLEMENTADA / HOMOLOGADA
+TECNICAMENTE — exportação PDF e Excel do Relatório de Receita. Despesas:
+ainda não implementadas.
+
+Estrutura V1 (F12-A):
 
 Estrutura V1 (F12-A):
 
@@ -834,7 +838,11 @@ Inadimplência de estoque: fora da V1.
 URL: `from`, `to`, `costCenter`, `situation`, `category`, `type` (ou o tipo
 na rota). Não usar `tenantId`, `costCenterId`, `status`.
 
-Ações: Visualizar. PDF e Excel na F12-C (não botões mortos na F12-B).
+Ações: Visualizar. Quando o relatório estiver visualizado (resultado ou
+vazio), Exportar PDF e Exportar Excel. Se o usuário alterar um filtro
+depois de visualizar, a exportação fica desabilitada até clicar de novo
+em Visualizar (snapshot dos filtros da tela). Loading/erro de exportação
+são por formato e não bloqueiam a página.
 Resultado abaixo dos filtros.
 
 Estados: inicial · loading · vazio · erro · resultado.
@@ -854,14 +862,15 @@ Aplicar filtros (centro, situação, categoria)
 ↓
 Visualizar
 ↓
-Exportar (F12-C: PDF / Excel; print do browser se suficiente)
+Exportar PDF / Exportar Excel (F12-C: síncrono; mesmos filtros
+visualizados; sem job/202)
 
 Eixo: `competenceDate`, timezone `America/Sao_Paulo`. Inclusive.
 
 Formatos da Fase 12:
 
-* PDF (F12-C);
-* Excel/XLSX (F12-C);
+* PDF (F12-C — `GET /reports/revenue?format=pdf`);
+* Excel/XLSX (F12-C — `GET /reports/revenue?format=xlsx`);
 * impressão do browser se suficiente.
 
 Sem link público, e-mail ou agendamento.

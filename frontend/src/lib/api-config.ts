@@ -276,6 +276,7 @@ export function reportsRevenuePath(options: {
   readonly costCenterId?: string | null;
   readonly situation?: DashboardSituation | null;
   readonly categoryId?: string | null;
+  readonly format?: 'pdf' | 'xlsx';
 }): string {
   const params = new URLSearchParams();
   params.set('from', options.from);
@@ -292,7 +293,18 @@ export function reportsRevenuePath(options: {
   if (categoryId) {
     params.set('category', categoryId);
   }
+  if (options.format === 'pdf' || options.format === 'xlsx') {
+    params.set('format', options.format);
+  }
   return `${REPORTS_API_PREFIX}/revenue?${params.toString()}`;
+}
+
+export function reportsRevenueExportFilename(
+  from: string,
+  to: string,
+  format: 'pdf' | 'xlsx',
+): string {
+  return `relatorio-receita-${from}-a-${to}.${format}`;
 }
 
 export function dashboardMonthEndCashPressurePath(

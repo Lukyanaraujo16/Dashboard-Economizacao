@@ -1,4 +1,8 @@
-import { reportsRevenuePath } from '../../lib/api-config';
+import {
+  reportsRevenueExportFilename,
+  reportsRevenuePath,
+} from '../../lib/api-config';
+import { triggerBrowserDownload } from '../../lib/trigger-browser-download';
 import type { DashboardSituation } from '../../lib/dashboard-situation';
 import type {
   ReportsRevenueDailyPoint,
@@ -200,4 +204,78 @@ export async function getReportsRevenue(options: {
   }
 
   return body;
+}
+
+const PDF_ACCEPT = 'application/pdf';
+const XLSX_ACCEPT = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const SAFE_EXPORT_FILENAME = /^relatorio-receita-\d{4}-\d{2}-a-\d{4}-\d{2}\.(pdf|xlsx)$/;
+
+export type ReportsRevenueExportFormat = 'pdf' | 'xlsx';
+
+function filenameFromContentDisposition(header: string | null, fallback: string): string {
+  if (!header) {
+    return fallback;
+  }
+  const quoted = /filename="([^"]+)"/.exec(header);
+  const name = quoted?.[1]?.trim();
+  if (name && SAFE_EXPORT_FILENAME.test(name)) {
+    return name;
+  }
+  return fallback;
+}
+
+export async function downloadReportsRevenueExport(options: {
+  readonly from: string;
+  readonly to: string;
+  readonly costCenterId?: string | null;
+  readonly situation?: DashboardSituation | null;
+  readonly categoryId?: string | null;
+  readonly format: ReportsRevenueExportFormat;
+}): Promise<void> {
+  let response: Response;
+  const accept = options.format === 'pdf' ? PDF_ACCEPT : XLSX_ACCEPT;
+
+  try {
+    response = await fetch(
+      reportsRevenuePath({
+        from: options.from,
+        to: options.to,
+        costCenterId: options.costCenterId,
+        situation: options.situation,
+        categoryId: options.categoryId,
+        format: options.format,
+      }),
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: accept },
+      },
+    );
+  } catch (cause) {
+    throw new ReportsRevenueRequestError(
+      'unavailable',
+      'Não foi possível exportar o relatório de receita.',
+      { cause },
+    );
+  }
+
+  if (!response.ok) {
+    const body = await readJsonBody(response);
+    const failure = toFailure(response, body);
+    if (failure.kind === 'unavailable' || failure.kind === 'invalid_response') {
+      throw new ReportsRevenueRequestError(
+        failure.kind,
+        'Não foi possível exportar o relatório de receita.',
+        { httpStatus: failure.httpStatus, code: failure.code, requestId: failure.requestId },
+      );
+    }
+    throw failure;
+  }
+
+  const blob = await response.blob();
+  const filename = filenameFromContentDisposition(
+    response.headers.get('Content-Disposition'),
+    reportsRevenueExportFilename(options.from, options.to, options.format),
+  );
+  triggerBrowserDownload(blob, filename);
 }

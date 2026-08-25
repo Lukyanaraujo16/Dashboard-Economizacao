@@ -17,7 +17,11 @@ import { getDashboardCategories } from '../../services/dashboard/categories';
 import type { DashboardCategoryItem } from '../../services/dashboard/categories.types';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
-import { getReportsRevenue } from '../../services/reports/revenue';
+import {
+  downloadReportsRevenueExport,
+  getReportsRevenue,
+  type ReportsRevenueExportFormat,
+} from '../../services/reports/revenue';
 import {
   ReportsRevenueRequestError,
   type ReportsRevenueResponse,
@@ -34,6 +38,14 @@ import { isRevenueReportEmpty, revenueReportPeriodLabel } from './reports-revenu
 import styles from './reports-page.module.css';
 
 type ViewState = 'idle' | 'loading' | 'empty' | 'error' | 'ready';
+
+type AppliedFilters = {
+  readonly from: string;
+  readonly to: string;
+  readonly costCenterId: string | null;
+  readonly situation: DashboardSituation | null;
+  readonly categoryId: string | null;
+};
 
 function moneyOrDash(value: string | null | undefined): string {
   return value === null || value === undefined ? '—' : formatMoneyBrl(value);
@@ -70,8 +82,12 @@ export function ReportsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [data, setData] = useState<ReportsRevenueResponse | null>(null);
   const [rangeHint, setRangeHint] = useState<string | null>(null);
+  const [appliedFilters, setAppliedFilters] = useState<AppliedFilters | null>(null);
+  const [exporting, setExporting] = useState<ReportsRevenueExportFormat | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const lastRequestKey = useRef<string | null>(null);
+  const exportLock = useRef(false);
 
   const hasTenant = hasOperationalDashboardTenant(user, support);
   const canQuery = hasTenant && Boolean(user);
@@ -144,6 +160,8 @@ export function ReportsPage() {
       lastRequestKey.current = requestKeyOf(next);
       setViewState('loading');
       setErrorMessage(null);
+      setExportError(null);
+      setExporting(null);
       try {
         const result = await getReportsRevenue({
           from: next.from,
@@ -153,6 +171,7 @@ export function ReportsPage() {
           categoryId: next.categoryId,
         });
         setData(result);
+        setAppliedFilters(next);
         setViewState(isRevenueReportEmpty(result) ? 'empty' : 'ready');
       } catch (error) {
         if (error instanceof ReportsRevenueRequestError && error.kind === 'unauthenticated') {
@@ -161,6 +180,7 @@ export function ReportsPage() {
           return;
         }
         setData(null);
+        setAppliedFilters(null);
         setViewState('error');
         setErrorMessage(
           error instanceof ReportsRevenueRequestError
@@ -219,19 +239,70 @@ export function ReportsPage() {
   ]);
 
   const appliedSummary = useMemo(() => {
-    if (!data) {
+    if (!data || !appliedFilters) {
       return null;
     }
     const categoryName =
-      categoryId === null
+      appliedFilters.categoryId === null
         ? 'Todas'
-        : (categories.find((item) => item.id === categoryId)?.name ?? 'Categoria selecionada');
+        : (categories.find((item) => item.id === appliedFilters.categoryId)?.name ??
+          'Categoria selecionada');
     const centerName =
-      costCenterId === null
+      appliedFilters.costCenterId === null
         ? 'Todos'
-        : (costCenters.find((item) => item.id === costCenterId)?.name ?? 'Centro selecionado');
-    return `Receita · ${revenueReportPeriodLabel(data.from, data.to)} · Centro ${centerName} · Situação ${situationLabel(situation)} · Categoria ${categoryName}`;
-  }, [data, categoryId, categories, costCenterId, costCenters, situation]);
+        : (costCenters.find((item) => item.id === appliedFilters.costCenterId)?.name ??
+          'Centro selecionado');
+    return `Receita · ${revenueReportPeriodLabel(data.from, data.to)} · Centro ${centerName} · Situação ${situationLabel(appliedFilters.situation)} · Categoria ${categoryName}`;
+  }, [appliedFilters, categories, costCenters, data]);
+
+  const draftKey = requestKeyOf({
+    from: fromKey,
+    to: toKey,
+    costCenterId,
+    situation,
+    categoryId,
+  });
+  const filtersInSync = appliedFilters !== null && requestKeyOf(appliedFilters) === draftKey;
+  const visualized = (viewState === 'ready' || viewState === 'empty') && data !== null;
+  const exportReady = visualized && filtersInSync && canQuery;
+
+  const exportReport = useCallback(
+    async (format: ReportsRevenueExportFormat) => {
+      if (!appliedFilters || !exportReady || exportLock.current) {
+        return;
+      }
+      exportLock.current = true;
+      setExporting(format);
+      setExportError(null);
+      try {
+        await downloadReportsRevenueExport({
+          from: appliedFilters.from,
+          to: appliedFilters.to,
+          costCenterId: appliedFilters.costCenterId,
+          situation: appliedFilters.situation,
+          categoryId: appliedFilters.categoryId,
+          format,
+        });
+      } catch (error) {
+        if (error instanceof ReportsRevenueRequestError && error.kind === 'unauthenticated') {
+          await refreshSession().catch(() => undefined);
+          router.replace('/login');
+          return;
+        }
+        setExportError(
+          error instanceof ReportsRevenueRequestError
+            ? error.message
+            : format === 'pdf'
+              ? 'Não foi possível exportar o PDF.'
+              : 'Não foi possível exportar o Excel.',
+        );
+      } finally {
+        exportLock.current = false;
+        setExporting(null);
+      }
+    },
+    [appliedFilters, exportReady, refreshSession, router],
+  );
 
   const filtersDisabled = viewState === 'loading' || !canQuery;
 
@@ -338,6 +409,41 @@ export function ReportsPage() {
       </form>
 
       <div className={styles.result} data-reports-result={viewState}>
+        {visualized ? (
+          <div className={styles.resultActions} data-reports-export="true">
+            <Button
+              type="button"
+              variant="secondary"
+              loading={exporting === 'pdf'}
+              disabled={!exportReady || exporting !== null}
+              aria-label="Exportar PDF"
+              onClick={() => void exportReport('pdf')}
+            >
+              Exportar PDF
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              loading={exporting === 'xlsx'}
+              disabled={!exportReady || exporting !== null}
+              aria-label="Exportar Excel"
+              onClick={() => void exportReport('xlsx')}
+            >
+              Exportar Excel
+            </Button>
+            {!filtersInSync ? (
+              <Typography as="p" variant="caption">
+                Filtros alterados — clique em Visualizar para atualizar o relatório antes de exportar.
+              </Typography>
+            ) : null}
+            {exportError ? (
+              <Typography as="p" variant="caption" role="alert">
+                {exportError}
+              </Typography>
+            ) : null}
+          </div>
+        ) : null}
+
         {viewState === 'idle' ? (
           <p className={styles.idle}>
             {canQuery

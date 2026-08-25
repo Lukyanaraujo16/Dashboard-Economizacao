@@ -19,6 +19,18 @@ import { parseDashboardCategoryQuery } from '../../dashboard/http/parse-dashboar
 import { parseDashboardCostCenterQuery } from '../../dashboard/http/parse-dashboard-cost-center-query.js';
 import { parseDashboardSituationQuery } from '../../dashboard/http/parse-dashboard-situation-query.js';
 import { parseReportMonthRange } from './parse-report-month-range.js';
+import { parseReportExportFormat } from './parse-report-export-format.js';
+import { buildRevenueExportContext } from './build-revenue-export-context.js';
+import {
+  PDF_CONTENT_TYPE,
+  XLSX_CONTENT_TYPE,
+} from '../exporters/export-content-types.js';
+import {
+  buildRevenueExportFilename,
+  revenueExportContentDisposition,
+} from '../exporters/build-revenue-export-filename.js';
+import { renderRevenueReportPdf } from '../exporters/revenue-pdf.exporter.js';
+import { renderRevenueReportXlsx } from '../exporters/revenue-xlsx.exporter.js';
 
 export async function registerReportsRoutes(app: FastifyInstance): Promise<void> {
   const prisma = getPrismaClient();
@@ -50,6 +62,7 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
     const costCenterId = parseDashboardCostCenterQuery(request.query);
     const situation = parseDashboardSituationQuery(request.query);
     const categoryId = parseDashboardCategoryQuery(request.query);
+    const format = parseReportExportFormat(request.query);
     const body = await dashboard.getRevenueReport(
       auth,
       range.from,
@@ -58,6 +71,32 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
       situation,
       categoryId,
     );
-    return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    if (format === 'json') {
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    }
+
+    const exportContext = await buildRevenueExportContext({
+      auth,
+      report: body,
+      generatedAt: new Date(),
+      costCenterId,
+      situation,
+      categoryId,
+      tenants,
+      costCenters,
+      categories,
+    });
+    const filename = buildRevenueExportFilename(range.from, range.to, format);
+    const file =
+      format === 'pdf'
+        ? await renderRevenueReportPdf(exportContext)
+        : await renderRevenueReportXlsx(exportContext);
+    return reply
+      .status(200)
+      .header('Cache-Control', 'private, no-store')
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Content-Type', format === 'pdf' ? PDF_CONTENT_TYPE : XLSX_CONTENT_TYPE)
+      .header('Content-Disposition', revenueExportContentDisposition(filename))
+      .send(file);
   });
 }

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { reportsRevenuePath } from '../src/lib/api-config';
-import { getReportsRevenue } from '../src/services/reports/revenue';
+import { downloadReportsRevenueExport, getReportsRevenue } from '../src/services/reports/revenue';
 import { ReportsRevenueRequestError } from '../src/services/reports/revenue.types';
 
 afterEach(() => {
@@ -150,6 +150,47 @@ describe('reports revenue service', () => {
     vi.stubGlobal('fetch', fetchMock);
     await expect(getReportsRevenue({ from: '2026-01', to: '2026-01' })).rejects.toMatchObject({
       kind: 'forbidden',
+    });
+  });
+
+  it('baixa PDF/XLSX com format e credentials include', async () => {
+    const createObjectURL = vi.fn(() => 'blob:report');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: {
+        get: (name: string) =>
+          name.toLowerCase() === 'content-disposition'
+            ? 'attachment; filename="relatorio-receita-2026-01-a-2026-02.pdf"'
+            : null,
+      },
+      blob: async () => new Blob(['%PDF-1.4'], { type: 'application/pdf' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await downloadReportsRevenueExport({ from: '2026-01', to: '2026-02', format: 'pdf' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      reportsRevenuePath({ from: '2026-01', to: '2026-02', format: 'pdf' }),
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/pdf' },
+      },
+    );
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalled();
+
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      text: async () => JSON.stringify({ error: { code: 'INTERNAL_ERROR' } }),
+    });
+    await expect(
+      downloadReportsRevenueExport({ from: '2026-01', to: '2026-02', format: 'xlsx' }),
+    ).rejects.toMatchObject({
+      kind: 'unavailable',
+      message: 'Não foi possível exportar o relatório de receita.',
     });
   });
 });
