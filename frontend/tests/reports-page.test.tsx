@@ -5,6 +5,8 @@ import RelatoriosPage from '../app/(authenticated)/relatorios/page';
 import { ReportsPage } from '../src/components/reports/reports-page';
 import { getDashboardCategories } from '../src/services/dashboard/categories';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
+import { getReportsExpenses, downloadReportsExpensesExport } from '../src/services/reports/expenses';
+import { type ReportsExpensesResponse } from '../src/services/reports/expenses.types';
 import { getReportsRevenue, downloadReportsRevenueExport } from '../src/services/reports/revenue';
 import {
   ReportsRevenueRequestError,
@@ -32,6 +34,11 @@ vi.mock('next/navigation', () => ({
 vi.mock('../src/services/reports/revenue', () => ({
   getReportsRevenue: vi.fn(),
   downloadReportsRevenueExport: vi.fn(),
+}));
+
+vi.mock('../src/services/reports/expenses', () => ({
+  getReportsExpenses: vi.fn(),
+  downloadReportsExpensesExport: vi.fn(),
 }));
 
 vi.mock('../src/services/dashboard/categories', () => ({
@@ -118,6 +125,82 @@ const readyBody: ReportsRevenueResponse = {
   ],
 };
 
+const expensesReadyBody: ReportsExpensesResponse = {
+  today: '2026-08-19',
+  from: '2026-01',
+  to: '2026-02',
+  payables: {
+    total: '8000',
+    paid: '5000',
+    outstanding: '3000',
+    overdue: '0',
+    classified: '8000',
+    uncategorized: '0',
+    imprecise: '0',
+    coverageRate: '100',
+    items: [
+      {
+        kind: 'category',
+        name: 'Aluguel',
+        amount: '8000',
+        paid: '5000',
+        outstanding: '3000',
+        percentage: '100',
+      },
+    ],
+  },
+  months: [
+    {
+      monthKey: '2026-01',
+      payables: {
+        total: '5000',
+        paid: '2000',
+        outstanding: '3000',
+        overdue: '0',
+        classified: '5000',
+        uncategorized: '0',
+        imprecise: '0',
+        coverageRate: '100',
+        items: [
+          {
+            kind: 'category',
+            name: 'Aluguel',
+            amount: '5000',
+            paid: '2000',
+            outstanding: '3000',
+            percentage: '100',
+          },
+        ],
+        daily: [{ date: '2026-01-01', amount: '5000', received: '2000', outstanding: '3000' }],
+      },
+    },
+    {
+      monthKey: '2026-02',
+      payables: {
+        total: '3000',
+        paid: '3000',
+        outstanding: '0',
+        overdue: '0',
+        classified: '3000',
+        uncategorized: '0',
+        imprecise: '0',
+        coverageRate: '100',
+        items: [
+          {
+            kind: 'category',
+            name: 'Aluguel',
+            amount: '3000',
+            paid: '3000',
+            outstanding: '0',
+            percentage: '100',
+          },
+        ],
+        daily: [{ date: '2026-02-01', amount: '3000', received: '3000', outstanding: '0' }],
+      },
+    },
+  ],
+};
+
 function renderReports(options?: {
   readonly role?: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
   readonly support?: { readonly active: true; readonly tenantId: string; readonly tenantDisplayName: string };
@@ -155,6 +238,9 @@ describe('página /relatorios', () => {
     vi.mocked(getReportsRevenue).mockReset();
     vi.mocked(downloadReportsRevenueExport).mockReset();
     vi.mocked(downloadReportsRevenueExport).mockResolvedValue(undefined);
+    vi.mocked(getReportsExpenses).mockReset();
+    vi.mocked(downloadReportsExpensesExport).mockReset();
+    vi.mocked(downloadReportsExpensesExport).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -166,12 +252,15 @@ describe('página /relatorios', () => {
     expect(await screen.findByRole('heading', { name: 'Relatórios', level: 1 })).toBeTruthy();
     expect(RelatoriosPage).toBeTypeOf('function');
     expect(screen.getByLabelText('Tipo de relatório')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Receita' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Despesas' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'De' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Até' })).toBeTruthy();
     expect(screen.getByLabelText('Situação')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Visualizar relatório' })).toBeTruthy();
     expect(screen.getByText('Selecione o intervalo e clique em Visualizar.')).toBeTruthy();
     expect(getReportsRevenue).not.toHaveBeenCalled();
+    expect(getReportsExpenses).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /pdf|excel/i })).toBeNull();
   });
 
@@ -352,5 +441,48 @@ describe('página /relatorios', () => {
         expect.objectContaining({ format: 'xlsx', situation: 'overdue' }),
       );
     });
+  });
+
+  it('visualiza despesas, grava type=expenses e exporta o snapshot', async () => {
+    vi.mocked(getReportsExpenses).mockResolvedValue(expensesReadyBody);
+    renderReports();
+    await screen.findByRole('heading', { name: 'Relatórios', level: 1 });
+    fireEvent.change(screen.getByLabelText('Tipo de relatório'), { target: { value: 'expenses' } });
+    expect(getReportsExpenses).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Visualizar relatório' }));
+    await waitFor(() => {
+      expect(getReportsExpenses).toHaveBeenCalled();
+    });
+    expect(getReportsRevenue).not.toHaveBeenCalled();
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/^\/relatorios\?type=expenses&from=/));
+    expect(await screen.findByText('Aluguel')).toBeTruthy();
+    expect(screen.getByText('Despesas por mês de competência')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Despesas' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Pago' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'A pagar' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar PDF' }));
+    await waitFor(() => {
+      expect(downloadReportsExpensesExport).toHaveBeenCalledWith(
+        expect.objectContaining({ format: 'pdf' }),
+      );
+    });
+    expect(downloadReportsRevenueExport).not.toHaveBeenCalled();
+  });
+
+  it('trocar o tipo invalida a exportação sem buscar de novo', async () => {
+    vi.mocked(getReportsRevenue).mockResolvedValue(readyBody);
+    renderReports();
+    fireEvent.click(await screen.findByRole('button', { name: 'Visualizar relatório' }));
+    const pdf = await screen.findByRole('button', { name: 'Exportar PDF' });
+    expect(pdf).toHaveProperty('disabled', false);
+
+    fireEvent.change(screen.getByLabelText('Tipo de relatório'), { target: { value: 'expenses' } });
+    expect(screen.getByRole('button', { name: 'Exportar PDF' })).toHaveProperty('disabled', true);
+    expect(
+      screen.getByText(/Filtros alterados — clique em Visualizar/),
+    ).toBeTruthy();
+    expect(getReportsExpenses).not.toHaveBeenCalled();
+    expect(getReportsRevenue).toHaveBeenCalledTimes(1);
   });
 });

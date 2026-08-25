@@ -307,6 +307,43 @@ export function reportsRevenueExportFilename(
   return `relatorio-receita-${from}-a-${to}.${format}`;
 }
 
+export function reportsExpensesPath(options: {
+  readonly from: string;
+  readonly to: string;
+  readonly costCenterId?: string | null;
+  readonly situation?: DashboardSituation | null;
+  readonly categoryId?: string | null;
+  readonly format?: 'pdf' | 'xlsx';
+}): string {
+  const params = new URLSearchParams();
+  params.set('from', options.from);
+  params.set('to', options.to);
+  const costCenterId = options.costCenterId?.trim();
+  if (costCenterId) {
+    params.set('costCenter', costCenterId);
+  }
+  const situation = options.situation?.trim();
+  if (situation) {
+    params.set('situation', situation);
+  }
+  const categoryId = options.categoryId?.trim();
+  if (categoryId) {
+    params.set('category', categoryId);
+  }
+  if (options.format === 'pdf' || options.format === 'xlsx') {
+    params.set('format', options.format);
+  }
+  return `${REPORTS_API_PREFIX}/expenses?${params.toString()}`;
+}
+
+export function reportsExpensesExportFilename(
+  from: string,
+  to: string,
+  format: 'pdf' | 'xlsx',
+): string {
+  return `relatorio-despesas-${from}-a-${to}.${format}`;
+}
+
 export function dashboardMonthEndCashPressurePath(
   costCenterId?: string | null,
   categoryId?: string | null,

@@ -1,4 +1,5 @@
 import type {
+  DashboardMonthlyExpenseResponse,
   DashboardMonthlyRevenueCompositionItem,
   DashboardMonthlyRevenueResponse,
 } from '../../dashboard/domain/types.js';
@@ -29,3 +30,28 @@ export type RevenueReportResponse = {
 };
 
 export type { DashboardMonthlyRevenueCompositionItem };
+
+/** Totais do intervalo — mesmo shape de §12c despesas sem a série diária. */
+export type ExpensesReportPayables = Omit<
+  DashboardMonthlyExpenseResponse['payables'],
+  'daily'
+>;
+
+export type ExpensesReportMonth = {
+  readonly monthKey: string;
+  readonly payables: DashboardMonthlyExpenseResponse['payables'];
+};
+
+/** Resposta de `GET /reports/expenses` (F12-D §17.5). `from`/`to` = YYYY-MM. */
+export type ExpensesReportResponse = {
+  readonly today: string;
+  readonly from: string;
+  readonly to: string;
+  /**
+   * false = algum mês do intervalo com filtro de centro (cash split null).
+   * Ausente = consolidado em todos os meses.
+   */
+  readonly costCenterCashSplit?: boolean;
+  readonly payables: ExpensesReportPayables;
+  readonly months: readonly ExpensesReportMonth[];
+};

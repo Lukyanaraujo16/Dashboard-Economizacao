@@ -811,8 +811,11 @@ Rota: `/relatorios`. Título: Relatórios.
 
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — tipo Receita
 com visualização na tela. F12-C (25/08/2026): IMPLEMENTADA / HOMOLOGADA
-TECNICAMENTE — exportação PDF e Excel do Relatório de Receita. Despesas:
-ainda não implementadas.
+TECNICAMENTE — exportação PDF e Excel do Relatório de Receita. F12-D
+(25/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
+Despesas na mesma `/relatorios` (tipo funcional) + PDF/XLSX. Fase 12
+completa: NÃO (itens históricos do PRD — caixa realizado, inadimplência
+de estoque ranged, listagens AR/AP — permanecem fora da V1).
 
 Estrutura V1 (F12-A):
 
@@ -869,8 +872,8 @@ Eixo: `competenceDate`, timezone `America/Sao_Paulo`. Inclusive.
 
 Formatos da Fase 12:
 
-* PDF (F12-C — `GET /reports/revenue?format=pdf`);
-* Excel/XLSX (F12-C — `GET /reports/revenue?format=xlsx`);
+* PDF (`GET /reports/revenue|expenses?format=pdf`);
+* Excel/XLSX (`GET /reports/revenue|expenses?format=xlsx`);
 * impressão do browser se suficiente.
 
 Sem link público, e-mail ou agendamento.

@@ -20,7 +20,7 @@ feat(sync): adiciona sincronizacao automatica incremental conta azul
 
 Próxima fase executável:
 
-F12-B — Relatório de Despesas (visualização)
+Fase 13 — Consultor Financeiro Reativo (Fase 12 recorte V1 entregue)
 
 Estado atual
 
@@ -118,6 +118,8 @@ Estado atual
 
 ✔ F12-A — Contrato de Relatórios congelado (24/08/2026)
 ✔ F12-B — Relatório de Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (24/08/2026)
+✔ F12-C — Exportação PDF/XLSX da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
+✔ F12-D — Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 
 ✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
 
@@ -867,7 +869,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Relatório de Despesas. F12-C PDF/Excel da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
+Próxima fase: Fase 13 (Consultor). F12-D Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-C PDF/Excel da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. Fase 12 recorte V1 (Receita+Despesas+export) entregue; Fase 12 completa: NÃO. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -1001,7 +1003,7 @@ Caminho até o primeiro Dashboard
    (9A CONCLUÍDA; 9B CONCLUÍDA; 9C CONCLUÍDA; Grupo A CONCLUÍDO; sem 9D)
 3. Fase 10 — Dashboard do Cliente (recorte utilizável entregue)
 4. Fase 11 — Filtros da Home (CONCLUÍDA no recorte mensal; F11-C = F12)
-5. Fase 12 — Relatórios (F12-A congelada; F12-B Receita homologada; F12-C PDF/XLSX da Receita homologada tecnicamente; próxima = Despesas)
+5. Fase 12 — Relatórios (F12-A congelada; F12-B/C Receita+PDF homologadas; F12-D Despesas+PDF/XLSX homologada tecnicamente; recorte V1 entregue; Fase 12 completa: NÃO)
 
 10A — facade/API tenant-scoped: CONCLUÍDA
      GET /dashboard/overview (contrato em docs/09.6 §10)
@@ -1133,7 +1135,7 @@ Fase 11 Home: CONCLUÍDA no recorte mensal.
 F12-A — Freeze de Relatórios: CONTRATO CONGELADO (24/08/2026)
      Tipos V1: Receita e Despesas (monthly-revenue / monthly-expenses).
      Contas vencidas = situation=overdue (D1), não taxa de estoque ranged.
-     Visualização F12-B; PDF/Excel F12-C (Receita entregue). Sem ledger, sem caixa realizado,
+     Visualização F12-B/F12-D; PDF/Excel F12-C (Receita) e F12-D (Despesas). Sem ledger, sem caixa realizado,
      sem tenantId em query, sem POST /reports 202 na V1.
      Contrato: docs/09.6 §17. UX: docs/05 §33–35.
 F12-B — Relatório de Receita: IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (24/08/2026)
@@ -1142,6 +1144,11 @@ F12-C — Exportação PDF/XLSX da Receita: IMPLEMENTADA / HOMOLOGADA TECNICAMEN
      (25/08/2026). `GET /reports/revenue?format=pdf|xlsx`. Síncrono. Sem job/202.
      Backend (`pdfkit` + `exceljs`) formata o mesmo `getRevenueReport`. Snapshot
      de filtros na UI (exportação desabilitada se o draft divergir).
+F12-D — Relatório de Despesas: IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
+     `GET /reports/expenses?from&to` (+ `format=pdf|xlsx`). Mesma `/relatorios`
+     com tipo funcional. Motor = `getMonthlyCompetenceExpenses`. Semântica HTTP
+     `payables`/`paid`. Paridade 1 mês com `GET /dashboard/monthly-expenses`.
+     Inadimplência NÃO é terceiro tipo (situation=overdue). Fase 12 completa: NÃO.
 L1-B — Semântica oficial do caixa + read model mensal:
      BLOCKED_BY_CASH_SEMANTICS (20/08/2026)
      Doc oficial ValorComposicaoDTO da baixa: 5 campos (valor_bruto required +
@@ -1239,8 +1246,10 @@ Relatórios
 
 F12-A CONTRATO CONGELADO (docs/09.6 §17). F12-B IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (Receita).
 F12-C IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (PDF/XLSX da Receita).
-Tipos V1: Receita (entregue) e Despesas (pendente). Sidebar real em /relatorios (docs/05 §7).
-Fase 12 completa: NÃO.
+F12-D IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (Despesas + PDF/XLSX).
+Tipos V1: Receita e Despesas (entregues). Sidebar real em /relatorios (docs/05 §7).
+Fase 12 completa: NÃO (itens históricos do PRD fora da V1: caixa realizado,
+inadimplência de estoque ranged, listagens AR/AP).
 
 ===========================================================
 

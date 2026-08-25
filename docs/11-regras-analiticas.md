@@ -33,7 +33,9 @@ Semântica de caixa: não reabrir aqui.
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
 Receita reutiliza o motor mensal (D1/D8/D9/CC1). F12-C (25/08/2026):
 IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — PDF/XLSX formatam o mesmo
-resultado; sem motor financeiro paralelo.
+resultado; sem motor financeiro paralelo. F12-D (25/08/2026): IMPLEMENTADA /
+HOMOLOGADA TECNICAMENTE — Relatório de Despesas reutiliza
+`getMonthlyCompetenceExpenses`; PDF/XLSX formatam o mesmo DTO.
 
 ⸻
 
@@ -703,3 +705,7 @@ Não duplicar regra. Não criar semântica de caixa. Não misturar
 F12-B (24/08/2026): o Relatório de Receita chama o mesmo
 `getMonthlyCompetenceRevenue` mês a mês no intervalo; totais e `items`
 são agregação, não uma segunda fórmula.
+F12-D (25/08/2026): o Relatório de Despesas chama o mesmo
+`getMonthlyCompetenceExpenses`; HTTP mapeia `received` interno → `paid`.
+Cash split mensal indisponível propaga `costCenterCashSplit: false` e
+nulos para o intervalo — não somar paid/outstanding silenciosamente.

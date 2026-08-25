@@ -7,16 +7,27 @@ import { isPlatformRole, useAuth } from '../../auth';
 import { formatDelinquencyRate, formatMoneyBrl } from '../../lib/format-money-brl';
 import { currentDashboardMonthKey } from '../../lib/dashboard-month';
 import {
+  REPORT_TYPE_EXPENSES,
   REPORT_TYPE_REVENUE,
   buildReportsSearchParams,
+  isReportType,
   parseReportsQuery,
   validateReportMonthRange,
+  type ReportType,
 } from '../../lib/reports-query';
 import type { DashboardSituation } from '../../lib/dashboard-situation';
 import { getDashboardCategories } from '../../services/dashboard/categories';
 import type { DashboardCategoryItem } from '../../services/dashboard/categories.types';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
+import {
+  downloadReportsExpensesExport,
+  getReportsExpenses,
+} from '../../services/reports/expenses';
+import {
+  ReportsExpensesRequestError,
+  type ReportsExpensesResponse,
+} from '../../services/reports/expenses.types';
 import {
   downloadReportsRevenueExport,
   getReportsRevenue,
@@ -34,12 +45,14 @@ import { DashboardSituationSelector } from '../dashboard/dashboard-situation-sel
 import { hasOperationalDashboardTenant } from '../dashboard/dashboard-overview-view';
 import { formatMonthKeyPtBr } from '../dashboard/dashboard-forecast-view';
 import { Button, Typography } from '../ui';
+import { isExpensesReportEmpty } from './reports-expenses-view';
 import { isRevenueReportEmpty, revenueReportPeriodLabel } from './reports-revenue-view';
 import styles from './reports-page.module.css';
 
 type ViewState = 'idle' | 'loading' | 'empty' | 'error' | 'ready';
 
 type AppliedFilters = {
+  readonly type: ReportType;
   readonly from: string;
   readonly to: string;
   readonly costCenterId: string | null;
@@ -58,6 +71,14 @@ function situationLabel(situation: DashboardSituation | null): string {
   return 'Todas';
 }
 
+function isReportRequestError(
+  error: unknown,
+): error is ReportsRevenueRequestError | ReportsExpensesRequestError {
+  return (
+    error instanceof ReportsRevenueRequestError || error instanceof ReportsExpensesRequestError
+  );
+}
+
 export function ReportsPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -70,6 +91,7 @@ export function ReportsPage() {
     [searchParams],
   );
 
+  const [reportType, setReportType] = useState<ReportType>(parsed.type);
   const [fromKey, setFromKey] = useState(parsed.from ?? todayMonthKey);
   const [toKey, setToKey] = useState(parsed.to ?? todayMonthKey);
   const [situation, setSituation] = useState<DashboardSituation | null>(parsed.situation);
@@ -80,7 +102,8 @@ export function ReportsPage() {
   const [filtersLoading, setFiltersLoading] = useState(false);
   const [viewState, setViewState] = useState<ViewState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [data, setData] = useState<ReportsRevenueResponse | null>(null);
+  const [revenueData, setRevenueData] = useState<ReportsRevenueResponse | null>(null);
+  const [expensesData, setExpensesData] = useState<ReportsExpensesResponse | null>(null);
   const [rangeHint, setRangeHint] = useState<string | null>(null);
   const [appliedFilters, setAppliedFilters] = useState<AppliedFilters | null>(null);
   const [exporting, setExporting] = useState<ReportsRevenueExportFormat | null>(null);
@@ -94,13 +117,14 @@ export function ReportsPage() {
 
   const requestKeyOf = useCallback(
     (next: {
+      readonly type: ReportType;
       readonly from: string;
       readonly to: string;
       readonly costCenterId: string | null;
       readonly situation: DashboardSituation | null;
       readonly categoryId: string | null;
     }) =>
-      `${next.from}|${next.to}|${next.costCenterId ?? ''}|${next.situation ?? ''}|${next.categoryId ?? ''}|${canQuery ? '1' : '0'}`,
+      `${next.type}|${next.from}|${next.to}|${next.costCenterId ?? ''}|${next.situation ?? ''}|${next.categoryId ?? ''}|${canQuery ? '1' : '0'}`,
     [canQuery],
   );
 
@@ -131,13 +155,7 @@ export function ReportsPage() {
   }, [loadFilterCatalogs]);
 
   const fetchReport = useCallback(
-    async (next: {
-      readonly from: string;
-      readonly to: string;
-      readonly costCenterId: string | null;
-      readonly situation: DashboardSituation | null;
-      readonly categoryId: string | null;
-    }) => {
+    async (next: AppliedFilters) => {
       const issue = validateReportMonthRange(next.from, next.to);
       if (issue === 'inverted') {
         setRangeHint('O mês inicial não pode ser posterior ao mês final.');
@@ -163,6 +181,20 @@ export function ReportsPage() {
       setExportError(null);
       setExporting(null);
       try {
+        if (next.type === REPORT_TYPE_EXPENSES) {
+          const result = await getReportsExpenses({
+            from: next.from,
+            to: next.to,
+            costCenterId: next.costCenterId,
+            situation: next.situation,
+            categoryId: next.categoryId,
+          });
+          setExpensesData(result);
+          setRevenueData(null);
+          setAppliedFilters(next);
+          setViewState(isExpensesReportEmpty(result) ? 'empty' : 'ready');
+          return;
+        }
         const result = await getReportsRevenue({
           from: next.from,
           to: next.to,
@@ -170,22 +202,26 @@ export function ReportsPage() {
           situation: next.situation,
           categoryId: next.categoryId,
         });
-        setData(result);
+        setRevenueData(result);
+        setExpensesData(null);
         setAppliedFilters(next);
         setViewState(isRevenueReportEmpty(result) ? 'empty' : 'ready');
       } catch (error) {
-        if (error instanceof ReportsRevenueRequestError && error.kind === 'unauthenticated') {
+        if (isReportRequestError(error) && error.kind === 'unauthenticated') {
           await refreshSession().catch(() => undefined);
           router.replace('/login');
           return;
         }
-        setData(null);
+        setRevenueData(null);
+        setExpensesData(null);
         setAppliedFilters(null);
         setViewState('error');
         setErrorMessage(
-          error instanceof ReportsRevenueRequestError
+          isReportRequestError(error)
             ? error.message
-            : 'Não foi possível carregar o relatório de receita.',
+            : next.type === REPORT_TYPE_EXPENSES
+              ? 'Não foi possível carregar o relatório de despesas.'
+              : 'Não foi possível carregar o relatório de receita.',
         );
       }
     },
@@ -193,13 +229,7 @@ export function ReportsPage() {
   );
 
   const visualize = useCallback(
-    (next: {
-      readonly from: string;
-      readonly to: string;
-      readonly costCenterId: string | null;
-      readonly situation: DashboardSituation | null;
-      readonly categoryId: string | null;
-    }) => {
+    (next: AppliedFilters) => {
       const qs = buildReportsSearchParams(next);
       router.replace(`${pathname}?${qs.toString()}`);
       void fetchReport(next);
@@ -211,12 +241,14 @@ export function ReportsPage() {
     if (!parsed.from || !parsed.to) {
       return;
     }
+    setReportType(parsed.type);
     setFromKey(parsed.from);
     setToKey(parsed.to);
     setSituation(parsed.situation);
     setCategoryId(parsed.categoryId);
     setCostCenterId(parsed.costCenterId);
     const next = {
+      type: parsed.type,
       from: parsed.from,
       to: parsed.to,
       costCenterId: parsed.costCenterId,
@@ -228,6 +260,7 @@ export function ReportsPage() {
     }
     void fetchReport(next);
   }, [
+    parsed.type,
     parsed.from,
     parsed.to,
     parsed.costCenterId,
@@ -238,8 +271,12 @@ export function ReportsPage() {
     requestKeyOf,
   ]);
 
+  const snapshotFrom = revenueData?.from ?? expensesData?.from;
+  const snapshotTo = revenueData?.to ?? expensesData?.to;
+  const copyType = appliedFilters?.type ?? reportType;
+
   const appliedSummary = useMemo(() => {
-    if (!data || !appliedFilters) {
+    if (!appliedFilters || snapshotFrom === undefined || snapshotTo === undefined) {
       return null;
     }
     const categoryName =
@@ -252,10 +289,12 @@ export function ReportsPage() {
         ? 'Todos'
         : (costCenters.find((item) => item.id === appliedFilters.costCenterId)?.name ??
           'Centro selecionado');
-    return `Receita · ${revenueReportPeriodLabel(data.from, data.to)} · Centro ${centerName} · Situação ${situationLabel(appliedFilters.situation)} · Categoria ${categoryName}`;
-  }, [appliedFilters, categories, costCenters, data]);
+    const typeLabel = appliedFilters.type === REPORT_TYPE_EXPENSES ? 'Despesas' : 'Receita';
+    return `${typeLabel} · ${revenueReportPeriodLabel(snapshotFrom, snapshotTo)} · Centro ${centerName} · Situação ${situationLabel(appliedFilters.situation)} · Categoria ${categoryName}`;
+  }, [appliedFilters, categories, costCenters, snapshotFrom, snapshotTo]);
 
   const draftKey = requestKeyOf({
+    type: reportType,
     from: fromKey,
     to: toKey,
     costCenterId,
@@ -263,7 +302,9 @@ export function ReportsPage() {
     categoryId,
   });
   const filtersInSync = appliedFilters !== null && requestKeyOf(appliedFilters) === draftKey;
-  const visualized = (viewState === 'ready' || viewState === 'empty') && data !== null;
+  const visualized =
+    (viewState === 'ready' || viewState === 'empty') &&
+    (revenueData !== null || expensesData !== null);
   const exportReady = visualized && filtersInSync && canQuery;
 
   const exportReport = useCallback(
@@ -275,22 +316,27 @@ export function ReportsPage() {
       setExporting(format);
       setExportError(null);
       try {
-        await downloadReportsRevenueExport({
+        const payload = {
           from: appliedFilters.from,
           to: appliedFilters.to,
           costCenterId: appliedFilters.costCenterId,
           situation: appliedFilters.situation,
           categoryId: appliedFilters.categoryId,
           format,
-        });
+        };
+        if (appliedFilters.type === REPORT_TYPE_EXPENSES) {
+          await downloadReportsExpensesExport(payload);
+        } else {
+          await downloadReportsRevenueExport(payload);
+        }
       } catch (error) {
-        if (error instanceof ReportsRevenueRequestError && error.kind === 'unauthenticated') {
+        if (isReportRequestError(error) && error.kind === 'unauthenticated') {
           await refreshSession().catch(() => undefined);
           router.replace('/login');
           return;
         }
         setExportError(
-          error instanceof ReportsRevenueRequestError
+          isReportRequestError(error)
             ? error.message
             : format === 'pdf'
               ? 'Não foi possível exportar o PDF.'
@@ -305,12 +351,24 @@ export function ReportsPage() {
   );
 
   const filtersDisabled = viewState === 'loading' || !canQuery;
+  const draftFilters: AppliedFilters = {
+    type: reportType,
+    from: fromKey,
+    to: toKey,
+    costCenterId,
+    situation,
+    categoryId,
+  };
 
   return (
     <div className={styles.root} data-reports-page="true">
       <header className={styles.pageHeader}>
         <h1 className={styles.pageTitle}>Relatórios</h1>
-        <p className={styles.pageSubtitle}>Receita por competência no intervalo de meses.</p>
+        <p className={styles.pageSubtitle}>
+          {reportType === REPORT_TYPE_EXPENSES
+            ? 'Despesas por competência no intervalo de meses.'
+            : 'Receita por competência no intervalo de meses.'}
+        </p>
       </header>
 
       <form
@@ -318,13 +376,7 @@ export function ReportsPage() {
         data-reports-filters="true"
         onSubmit={(event) => {
           event.preventDefault();
-          visualize({
-            from: fromKey,
-            to: toKey,
-            costCenterId,
-            situation,
-            categoryId,
-          });
+          visualize(draftFilters);
         }}
       >
         <div className={styles.filtersRow}>
@@ -335,12 +387,18 @@ export function ReportsPage() {
             <select
               id={typeSelectId}
               className={styles.typeSelect}
-              value={REPORT_TYPE_REVENUE}
+              value={reportType}
               disabled={filtersDisabled}
               aria-label="Tipo de relatório"
-              onChange={() => undefined}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (isReportType(value)) {
+                  setReportType(value);
+                }
+              }}
             >
               <option value={REPORT_TYPE_REVENUE}>Receita</option>
+              <option value={REPORT_TYPE_EXPENSES}>Despesas</option>
             </select>
           </div>
           <div className={styles.field}>
@@ -458,53 +516,55 @@ export function ReportsPage() {
           <StateWrapper
             state={viewState === 'loading' ? 'loading' : viewState}
             loadingLabel="Gerando relatório"
-            emptyMessage="Não há receita de competência no intervalo selecionado."
-            errorMessage={errorMessage ?? 'Não foi possível carregar o relatório de receita.'}
+            emptyMessage={
+              copyType === REPORT_TYPE_EXPENSES
+                ? 'Não há despesa de competência no intervalo selecionado.'
+                : 'Não há receita de competência no intervalo selecionado.'
+            }
+            errorMessage={
+              errorMessage ??
+              (copyType === REPORT_TYPE_EXPENSES
+                ? 'Não foi possível carregar o relatório de despesas.'
+                : 'Não foi possível carregar o relatório de receita.')
+            }
             onRetry={
               viewState === 'error'
-                ? () =>
-                    void visualize({
-                      from: fromKey,
-                      to: toKey,
-                      costCenterId,
-                      situation,
-                      categoryId,
-                    })
+                ? () => void visualize(draftFilters)
                 : undefined
             }
           />
         ) : null}
 
-        {viewState === 'ready' && data ? (
+        {viewState === 'ready' && revenueData ? (
           <>
             <p className={styles.applied}>{appliedSummary}</p>
             <FinancialGrid minItemWidth="12rem">
               <KpiCard
                 title="Receita"
                 state="ready"
-                value={formatMoneyBrl(data.receivables.total)}
-                meta={revenueReportPeriodLabel(data.from, data.to)}
+                value={formatMoneyBrl(revenueData.receivables.total)}
+                meta={revenueReportPeriodLabel(revenueData.from, revenueData.to)}
               />
               <KpiCard
                 title="Recebido"
                 state="ready"
-                value={moneyOrDash(data.receivables.received)}
+                value={moneyOrDash(revenueData.receivables.received)}
                 meta="Snapshot atual dos títulos do intervalo"
               />
               <KpiCard
                 title="A receber"
                 state="ready"
-                value={moneyOrDash(data.receivables.outstanding)}
+                value={moneyOrDash(revenueData.receivables.outstanding)}
               />
               <KpiCard
                 title="Vencido"
                 state="ready"
-                value={moneyOrDash(data.receivables.overdue)}
+                value={moneyOrDash(revenueData.receivables.overdue)}
               />
               <KpiCard
                 title="Cobertura"
                 state="ready"
-                value={formatDelinquencyRate(data.receivables.coverageRate)}
+                value={formatDelinquencyRate(revenueData.receivables.coverageRate)}
                 meta="Classificados sobre o total (D9)"
               />
             </FinancialGrid>
@@ -515,8 +575,8 @@ export function ReportsPage() {
               subtitle="Participação no total de competência do intervalo."
             >
               <ul className={styles.compositionList}>
-                {data.receivables.items.map((item) => (
-                  <li key={`${item.kind}-${item.name}`} className={styles.compositionRow}>
+                {revenueData.receivables.items.map((item, index) => (
+                  <li key={`${item.kind}:${index}:${item.name}`} className={styles.compositionRow}>
                     <span className={styles.compositionName}>{item.name}</span>
                     <span className={styles.compositionAmount}>{formatMoneyBrl(item.amount)}</span>
                     <span className={styles.compositionShare}>
@@ -540,13 +600,93 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.months.map((month) => (
+                  {revenueData.months.map((month) => (
                     <tr key={month.monthKey}>
                       <th scope="row">{formatMonthKeyPtBr(month.monthKey)}</th>
                       <td>{formatMoneyBrl(month.receivables.total)}</td>
                       <td>{moneyOrDash(month.receivables.received)}</td>
                       <td>{moneyOrDash(month.receivables.outstanding)}</td>
                       <td>{moneyOrDash(month.receivables.overdue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+
+        {viewState === 'ready' && expensesData ? (
+          <>
+            <p className={styles.applied}>{appliedSummary}</p>
+            <FinancialGrid minItemWidth="12rem">
+              <KpiCard
+                title="Despesas"
+                state="ready"
+                value={formatMoneyBrl(expensesData.payables.total)}
+                meta={revenueReportPeriodLabel(expensesData.from, expensesData.to)}
+              />
+              <KpiCard
+                title="Pago"
+                state="ready"
+                value={moneyOrDash(expensesData.payables.paid)}
+                meta="Snapshot atual dos títulos do intervalo"
+              />
+              <KpiCard
+                title="A pagar"
+                state="ready"
+                value={moneyOrDash(expensesData.payables.outstanding)}
+              />
+              <KpiCard
+                title="Vencido"
+                state="ready"
+                value={moneyOrDash(expensesData.payables.overdue)}
+              />
+              <KpiCard
+                title="Cobertura"
+                state="ready"
+                value={formatDelinquencyRate(expensesData.payables.coverageRate)}
+                meta="Classificados sobre o total (D9)"
+              />
+            </FinancialGrid>
+
+            <FinancialSection
+              id="despesas-composicao"
+              title="Composição por categoria"
+              subtitle="Participação no total de competência do intervalo."
+            >
+              <ul className={styles.compositionList}>
+                {expensesData.payables.items.map((item, index) => (
+                  <li key={`${item.kind}:${index}:${item.name}`} className={styles.compositionRow}>
+                    <span className={styles.compositionName}>{item.name}</span>
+                    <span className={styles.compositionAmount}>{formatMoneyBrl(item.amount)}</span>
+                    <span className={styles.compositionShare}>
+                      {formatDelinquencyRate(item.percentage)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </FinancialSection>
+
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <caption>Despesas por mês de competência</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Mês</th>
+                    <th scope="col">Despesas</th>
+                    <th scope="col">Pago</th>
+                    <th scope="col">A pagar</th>
+                    <th scope="col">Vencido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expensesData.months.map((month) => (
+                    <tr key={month.monthKey}>
+                      <th scope="row">{formatMonthKeyPtBr(month.monthKey)}</th>
+                      <td>{formatMoneyBrl(month.payables.total)}</td>
+                      <td>{moneyOrDash(month.payables.paid)}</td>
+                      <td>{moneyOrDash(month.payables.outstanding)}</td>
+                      <td>{moneyOrDash(month.payables.overdue)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -18,8 +18,9 @@ import {
 } from './dashboard-situation';
 
 export const REPORT_TYPE_REVENUE = 'revenue' as const;
+export const REPORT_TYPE_EXPENSES = 'expenses' as const;
 
-export type ReportType = typeof REPORT_TYPE_REVENUE;
+export type ReportType = typeof REPORT_TYPE_REVENUE | typeof REPORT_TYPE_EXPENSES;
 
 export type ReportsQuery = {
   readonly type: ReportType;
@@ -31,7 +32,7 @@ export type ReportsQuery = {
 };
 
 export function isReportType(value: string): value is ReportType {
-  return value === REPORT_TYPE_REVENUE;
+  return value === REPORT_TYPE_REVENUE || value === REPORT_TYPE_EXPENSES;
 }
 
 export function parseReportMonthParam(

@@ -57,8 +57,10 @@ Fase 11 (filtros e comparações da Home): CONCLUÍDA no recorte mensal (24/08/2
           (não na Home; não cancelada; pouso oficial = Fase 12 Relatórios / F12-A).
 Fase 12 (Relatórios): F12-A CONTRATO CONGELADO (24/08/2026). F12-B IMPLEMENTADA /
 HOMOLOGADA TECNICAMENTE (24/08/2026) — Relatório de Receita. F12-C IMPLEMENTADA /
-HOMOLOGADA TECNICAMENTE (25/08/2026) — PDF/XLSX da Receita. Próxima = Relatório
-de Despesas. Fase 12 completa: NÃO.
+HOMOLOGADA TECNICAMENTE (25/08/2026) — PDF/XLSX da Receita. F12-D IMPLEMENTADA /
+HOMOLOGADA TECNICAMENTE (25/08/2026) — Relatório de Despesas + PDF/XLSX.
+Fase 12 completa: NÃO (recorte V1 Receita+Despesas entregue; itens históricos
+do PRD fora da V1).
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
 L1-A (financial_transactions): WIP isolado em stash — NÃO está no HEAD publicado.
@@ -790,7 +792,9 @@ Status: F12-A CONTRATO CONGELADO (24/08/2026). F12-B IMPLEMENTADA /
 HOMOLOGADA TECNICAMENTE (24/08/2026) — Receita (`GET /reports/revenue`,
 `/relatorios`). F12-C IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 — PDF/XLSX síncronos do Relatório de Receita (`format=pdf|xlsx`).
-Despesas ainda não implementadas. Fase 12 completa: NÃO.
+F12-D IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026) — Despesas
+(`GET /reports/expenses` + PDF/XLSX na mesma `/relatorios`). Fase 12
+completa: NÃO.
 
 Objetivo
 
@@ -809,7 +813,8 @@ Recorte V1 (F12-A)
 * Relatório de Receita (`GET /reports/revenue`) — monthly-revenue.
 * Relatório de Despesas (`GET /reports/expenses`) — monthly-expenses.
 * Contas vencidas = `situation=overdue` (D1) sobre os tipos acima.
-* Visualização na tela na F12-B; PDF e Excel da Receita na F12-C.
+* Visualização na tela na F12-B (Receita) e F12-D (Despesas).
+* PDF e Excel da Receita na F12-C; da Despesas na F12-D.
 * Print do browser se suficiente.
 * Geração síncrona; teto 24 meses; job só depois (REPORT-005).
 * Sem link público (REPORT-004). Sem e-mail. Sem agendamento.
