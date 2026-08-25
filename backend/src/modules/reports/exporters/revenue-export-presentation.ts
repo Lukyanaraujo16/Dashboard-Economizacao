@@ -1,5 +1,6 @@
 import type { DashboardMonthlyRevenueCompositionItem } from '../../dashboard/domain/types.js';
 import type { RevenueReportResponse } from '../domain/types.js';
+import type { ReportPdfBranding } from './report-pdf-presentation.js';
 
 const MONTHS_PT = [
   'jan',
@@ -32,6 +33,8 @@ export type RevenueExportContext = {
   readonly companyName: string;
   readonly generatedAt: Date;
   readonly filters: RevenueExportFilters;
+  /** Somente PDF. XLSX ignora. Ausente = wordmark, sem logo. */
+  readonly pdfBranding?: ReportPdfBranding;
 };
 
 export function formatMonthKeyPtBr(key: string): string {

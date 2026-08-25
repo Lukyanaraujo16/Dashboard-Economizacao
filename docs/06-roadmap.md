@@ -59,6 +59,8 @@ Fase 12 (Relatórios): F12-A CONTRATO CONGELADO (24/08/2026). F12-B IMPLEMENTADA
 HOMOLOGADA TECNICAMENTE (24/08/2026) — Relatório de Receita. F12-C IMPLEMENTADA /
 HOMOLOGADA TECNICAMENTE (25/08/2026) — PDF/XLSX da Receita. F12-D IMPLEMENTADA /
 HOMOLOGADA TECNICAMENTE (25/08/2026) — Relatório de Despesas + PDF/XLSX.
+PRE-IA-4D IMPLEMENTADA (25/08/2026) — PDF profissional de Receita e Despesas
+(camada visual compartilhada + logo principal; XLSX inalterado). Homologação humana pendente.
 Fase 12 completa: NÃO (recorte V1 Receita+Despesas entregue; itens históricos
 do PRD fora da V1).
 PRE-IA-1 — Admin shell: HOMOLOGADA HUMANAMENTE (25/08/2026).
@@ -798,8 +800,9 @@ HOMOLOGADA TECNICAMENTE (24/08/2026) — Receita (`GET /reports/revenue`,
 `/relatorios`). F12-C IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 — PDF/XLSX síncronos do Relatório de Receita (`format=pdf|xlsx`).
 F12-D IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026) — Despesas
-(`GET /reports/expenses` + PDF/XLSX na mesma `/relatorios`). Fase 12
-completa: NÃO.
+(`GET /reports/expenses` + PDF/XLSX na mesma `/relatorios`). PRE-IA-4D
+IMPLEMENTADA (25/08/2026) — acabamento visual profissional do PDF (Receita
+e Despesas; XLSX inalterado). Fase 12 completa: NÃO.
 
 Objetivo
 

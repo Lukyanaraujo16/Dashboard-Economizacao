@@ -121,6 +121,9 @@ Estado atual
 ✔ F12-C — Exportação PDF/XLSX da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 ✔ F12-D — Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 
+✔ PRE-IA-4D — PDF profissional de Receita e Despesas IMPLEMENTADA (25/08/2026)
+     Camada visual compartilhada. Sem alteração de DTO, filtros, XLSX ou motor.
+
 ✔ PRE-IA-1 — Admin shell (landing `/empresas` + sidebar contextual) HOMOLOGADA HUMANAMENTE (25/08/2026)
 
 ✔ PRE-IA-2 — Saúde operacional básica na lista de empresas IMPLEMENTADA (25/08/2026)
@@ -1252,6 +1255,7 @@ Relatórios
 F12-A CONTRATO CONGELADO (docs/09.6 §17). F12-B IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (Receita).
 F12-C IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (PDF/XLSX da Receita).
 F12-D IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (Despesas + PDF/XLSX).
+PRE-IA-4D IMPLEMENTADA — PDF profissional (Receita + Despesas), homologação humana pendente.
 Tipos V1: Receita e Despesas (entregues). Sidebar real em /relatorios (docs/05 §7).
 Fase 12 completa: NÃO (itens históricos do PRD fora da V1: caixa realizado,
 inadimplência de estoque ranged, listagens AR/AP).

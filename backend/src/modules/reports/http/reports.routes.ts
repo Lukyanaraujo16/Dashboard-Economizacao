@@ -1,10 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 
+import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { createFileStorage } from '../../../infrastructure/storage/index.js';
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
 import { createAnalyticsService } from '../../analytics/services/analytics.service.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
+import { createPlatformBrandingRepository } from '../../branding/repositories/platform-branding.repository.js';
+import { createTenantBrandingRepository } from '../../branding/repositories/tenant-branding.repository.js';
 import { createCostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
 import { createCostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import { createFinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
@@ -39,8 +43,12 @@ import { renderRevenueReportXlsx } from '../exporters/revenue-xlsx.exporter.js';
 
 export async function registerReportsRoutes(app: FastifyInstance): Promise<void> {
   const prisma = getPrismaClient();
+  const environment = loadEnvironment();
+  const storage = createFileStorage(environment);
   const users = createUserRepository(prisma);
   const tenants = createTenantRepository(prisma);
+  const tenantBranding = createTenantBrandingRepository(prisma);
+  const platformBranding = createPlatformBrandingRepository(prisma);
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const costCenters = createCostCenterReadRepository(prisma);
   const categories = createFinancialCategoryReadRepository(prisma);
@@ -90,6 +98,9 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
       tenants,
       costCenters,
       categories,
+      tenantBranding,
+      platformBranding,
+      storage,
     });
     const filename = buildRevenueExportFilename(range.from, range.to, format);
     const file =
@@ -138,6 +149,9 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
       tenants,
       costCenters,
       categories,
+      tenantBranding,
+      platformBranding,
+      storage,
     });
     const filename = buildExpensesExportFilename(range.from, range.to, format);
     const file =

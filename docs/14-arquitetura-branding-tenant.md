@@ -319,7 +319,7 @@ valor em tenant_branding.{scheme}_colors[token]
 
 | Asset | MVP | Uso runtime |
 |---|---|---|
-| Logo principal | **sim** | Card de login e áreas de destaque (`ResolvedTheme.logoUrl`) |
+| Logo principal | **sim** | Card de login, áreas de destaque (`ResolvedTheme.logoUrl`) e cabeçalho do PDF de Relatórios (PRE-IA-4D; bytes do storage, não URL) |
 | Mark / símbolo | **sim** (PRE-IA-4C) | Sidebar, lockup institucional, regiões compactas (`ResolvedTheme.iconUrl`) |
 | Favicon | **sim** | `<link rel="icon">` dinâmico; não substitui o ícone compacto |
 

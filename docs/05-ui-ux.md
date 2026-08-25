@@ -898,6 +898,16 @@ Formatos da Fase 12:
 * Excel/XLSX (`GET /reports/revenue|expenses?format=xlsx`);
 * impressão do browser se suficiente.
 
+Padrão visual do PDF (PRE-IA-4D, 25/08/2026): Receita e Despesas compartilham
+a mesma apresentação (margens, paleta clara, Helvetica, header institucional,
+KPIs em cards, tabela com header repetido, footer com página). A **logo
+principal** da empresa assistida (ou da plataforma, se a empresa não tiver)
+entra no topo quando o asset local estiver disponível; ícone compacto **não**
+substitui a logo em área institucional larga. Sem logo ou com asset
+indisponível/corrompido, o PDF usa o wordmark “Dashboard Economização” e
+permanece válido. Cobertura nula continua “—” (nunca 0% inventado). XLSX
+não entra neste recorte visual.
+
 Sem link público, e-mail ou agendamento.
 
 ⸻

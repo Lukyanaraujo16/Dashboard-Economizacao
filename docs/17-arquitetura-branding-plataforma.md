@@ -477,3 +477,11 @@ Dois papéis visuais persistidos (`logo_file_id` e `icon_file_id` em plataforma 
 Fallback determinístico: ícone configurado → ícone da camada seguinte → placeholder. A logo principal **nunca** preenche o slot compacto. Assets ausentes usam placeholder Accent; `<img>` quebrada é evitada via `onError`. Upload reutiliza o pipeline PNG/JPEG/WebP existente (logo/ícone ≤ 2 MB; favicon ≤ 512 KB; SVG rejeitado).
 
 Implementação inicia na **1.5B**, obedecendo ADR-049 e este documento.
+
+## 20. PRE-IA-4D — PDF dos Relatórios
+
+O PDF de Receita e Despesas consome a **logo principal** (tenant operacional →
+plataforma → wordmark). O ícone compacto **não** entra no cabeçalho institucional
+largo. Asset ausente ou ilegível não falha a exportação. Identidade de empresa
+(nome + logo do tenant assistido) permanece separada do rodapé do produto
+(“Dashboard Economização”).

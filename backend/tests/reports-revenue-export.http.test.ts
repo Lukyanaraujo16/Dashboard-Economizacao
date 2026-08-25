@@ -326,7 +326,7 @@ describe('GET /reports/revenue export', () => {
     });
     expect(empty.statusCode).toBe(200);
     const emptyText = decodedPdfStrings(Buffer.from(empty.rawPayload));
-    expect(emptyText).toContain('intervalo selecionado');
+    expect(emptyText).toContain('filtros selecionados');
     expect(emptyText).not.toContain('0%');
 
     const emptyXlsx = await app.inject({

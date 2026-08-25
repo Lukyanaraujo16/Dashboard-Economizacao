@@ -101,7 +101,7 @@ describe('exporters de despesas', () => {
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
     const text = decodedPdfStrings(pdf);
     expect(text).toContain('Dashboard Economiza');
-    expect(text).toContain('Relat');
+    expect(text.toLowerCase()).toContain('relat');
     expect(text).toContain('Empresa Alfa');
     expect(text).toContain('8.000,00');
     expect(text).toContain('7.000,00');
@@ -145,7 +145,7 @@ describe('exporters de despesas', () => {
     });
     const pdf = await renderExpensesReportPdf(context(empty));
     const text = decodedPdfStrings(pdf);
-    expect(text).toContain('intervalo selecionado');
+    expect(text).toContain('filtros selecionados');
     expect(text).not.toContain('0%');
   });
 
@@ -178,6 +178,7 @@ describe('exporters de despesas', () => {
     expect(summary?.getCell('B8').value).toBe(15000);
     expect(typeof summary?.getCell('B8').value).toBe('number');
     expect(summary?.getCell('B2').value).toBe("'+Empresa");
+    expect(summary?.getCell('B3').value).toBe('jan/2026 — fev/2026');
 
     const monthly = workbook.getWorksheet('Mensal');
     expect(monthly?.getCell('B2').value).toBe(10000);
