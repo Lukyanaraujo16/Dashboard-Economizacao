@@ -20,7 +20,7 @@ feat(sync): adiciona sincronizacao automatica incremental conta azul
 
 Próxima fase executável:
 
-F12-B — Relatório de Receita (visualização; contrato F12-A)
+F12-B — Relatório de Despesas (visualização) ou F12-C (PDF/Excel)
 
 Estado atual
 
@@ -116,7 +116,8 @@ Estado atual
 
 ✔ F11 — Filtros da Home (F11-A/B) concluída no recorte mensal; F11-C = Relatórios
 
-✔ F12-A — Contrato de Relatórios congelado (24/08/2026); F12-B não iniciada
+✔ F12-A — Contrato de Relatórios congelado (24/08/2026)
+✔ F12-B — Relatório de Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (24/08/2026)
 
 ✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
 
@@ -836,7 +837,7 @@ Recorte mensal da Fase 11 (F11-A/B) CONCLUÍDO. F11-B2 HOMOLOGADA.
 F11-B3 CONCLUÍDA (24/08/2026). F11-C permanece ADIADA / RECLASSIFICADA
 (pouso oficial: Relatórios / F12-A — intervalo De/Até YYYY-MM).
 Fase 11 Home: CONCLUÍDA no recorte mensal.
-F12-A: CONTRATO CONGELADO (docs/09.6 §17). F12-B: não iniciada.
+F12-A: CONTRATO CONGELADO (docs/09.6 §17). F12-B: IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (Receita).
 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE.
 E1 Pressão de caixa: HOMOLOGADA VISUALMENTE.
 E2 composição das despesas: HOMOLOGADA.
@@ -866,7 +867,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: F12-B (Relatório de Receita, visualização). F11 Home CONCLUÍDA. F12-A CONGELADA. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
+Próxima fase: F12-C (PDF/Excel) ou Relatório de Despesas. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -1000,7 +1001,7 @@ Caminho até o primeiro Dashboard
    (9A CONCLUÍDA; 9B CONCLUÍDA; 9C CONCLUÍDA; Grupo A CONCLUÍDO; sem 9D)
 3. Fase 10 — Dashboard do Cliente (recorte utilizável entregue)
 4. Fase 11 — Filtros da Home (CONCLUÍDA no recorte mensal; F11-C = F12)
-5. Fase 12 — Relatórios (F12-A congelada; próxima = F12-B Receita)
+5. Fase 12 — Relatórios (F12-A congelada; F12-B Receita homologada tecnicamente; próxima = F12-C export ou Despesas)
 
 10A — facade/API tenant-scoped: CONCLUÍDA
      GET /dashboard/overview (contrato em docs/09.6 §10)
@@ -1135,6 +1136,8 @@ F12-A — Freeze de Relatórios: CONTRATO CONGELADO (24/08/2026)
      Visualização F12-B; PDF/Excel F12-C. Sem ledger, sem caixa realizado,
      sem tenantId em query, sem POST /reports 202 na V1.
      Contrato: docs/09.6 §17. UX: docs/05 §33–35.
+F12-B — Relatório de Receita: IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (24/08/2026)
+     `GET /reports/revenue?from&to` + página `/relatorios`. Sem PDF/XLSX.
 L1-B — Semântica oficial do caixa + read model mensal:
      BLOCKED_BY_CASH_SEMANTICS (20/08/2026)
      Doc oficial ValorComposicaoDTO da baixa: 5 campos (valor_bruto required +
@@ -1230,8 +1233,9 @@ F11-A/B CONCLUÍDAS na Home. F11-C = Relatórios.
 
 Relatórios
 
-F12-A CONTRATO CONGELADO (docs/09.6 §17). F12-B não iniciada.
-Tipos V1: Receita e Despesas. Sidebar só quando a página existir (docs/05 §7).
+F12-A CONTRATO CONGELADO (docs/09.6 §17). F12-B IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (Receita).
+Tipos V1: Receita (entregue) e Despesas (pendente). Sidebar real em /relatorios (docs/05 §7).
+PDF/Excel = F12-C. Fase 12 completa: NÃO.
 
 ===========================================================
 

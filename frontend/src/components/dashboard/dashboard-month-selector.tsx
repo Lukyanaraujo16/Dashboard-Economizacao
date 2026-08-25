@@ -19,6 +19,8 @@ export type DashboardMonthSelectorProps = {
   readonly todayMonthKey: string;
   readonly onSelect: (monthKey: string) => void;
   readonly disabled?: boolean;
+  /** Rótulo do agrupamento (ex.: De / Até nos Relatórios). */
+  readonly groupLabel?: string;
 };
 
 function phaseHint(phase: DashboardMonthPhase): string {
@@ -45,6 +47,7 @@ export function DashboardMonthSelector({
   todayMonthKey,
   onSelect,
   disabled = false,
+  groupLabel = 'Visão mensal por competência',
 }: DashboardMonthSelectorProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -99,7 +102,7 @@ export function DashboardMonthSelector({
     <section
       ref={rootRef}
       className={styles.root}
-      aria-label="Visão mensal por competência"
+      aria-label={groupLabel}
       data-selected-phase={selectedPhase}
     >
       <IconButton

@@ -30,6 +30,8 @@ F12-A (24/08/2026): CONTRATO CONGELADO. Paridade com monthly-revenue /
 monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
 De/Até. Ledger L1-A fora do HEAD (stash). L1-B: BLOCKED_BY_CASH_SEMANTICS.
 Semântica de caixa: não reabrir aqui.
+F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
+Receita reutiliza o motor mensal (D1/D8/D9/CC1). PDF/XLSX = F12-C.
 
 ⸻
 
@@ -695,3 +697,7 @@ no intervalo usa D9.
 
 Não duplicar regra. Não criar semântica de caixa. Não misturar
 `competenceDate`, `dueDate` e data de baixa num único filtro de Relatórios.
+
+F12-B (24/08/2026): o Relatório de Receita chama o mesmo
+`getMonthlyCompetenceRevenue` mês a mês no intervalo; totais e `items`
+são agregação, não uma segunda fórmula.

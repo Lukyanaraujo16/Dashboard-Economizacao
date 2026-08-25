@@ -111,3 +111,29 @@ export function buildDashboardMonthSearchParams(
   }
   return next;
 }
+
+/** Teto V1 de Relatórios (F12-A): amplitude inclusiva máxima. */
+export const REPORT_MAX_MONTH_SPAN = 24;
+
+/** Meses civis inclusivos `from`..`to`. Inválido ou invertido → []. */
+export function listInclusiveDashboardMonthKeys(
+  fromKey: string,
+  toKey: string,
+): readonly string[] {
+  if (!isValidDashboardMonthKey(fromKey) || !isValidDashboardMonthKey(toKey)) {
+    return [];
+  }
+  if (compareMonthKeys(fromKey, toKey) > 0) {
+    return [];
+  }
+  const keys: string[] = [];
+  let cursor = fromKey;
+  while (compareMonthKeys(cursor, toKey) <= 0) {
+    keys.push(cursor);
+    if (keys.length > REPORT_MAX_MONTH_SPAN) {
+      break;
+    }
+    cursor = shiftDashboardMonthKey(cursor, 1);
+  }
+  return keys;
+}

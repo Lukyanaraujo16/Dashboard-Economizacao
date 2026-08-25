@@ -23,6 +23,7 @@ describe('dashboard monthly expense serializer', () => {
       items: [
         {
           kind: 'category',
+          key: 'limp',
           name: 'Profissional de Limpeza',
           amount: new Prisma.Decimal('600'),
           received: new Prisma.Decimal('600'),
@@ -48,5 +49,6 @@ describe('dashboard monthly expense serializer', () => {
     const json = JSON.stringify(dto);
     expect(json).not.toContain('secret-tenant');
     expect(json).not.toContain('tenantId');
+    expect(json).not.toContain('"key"');
   });
 });

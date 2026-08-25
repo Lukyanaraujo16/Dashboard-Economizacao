@@ -55,7 +55,9 @@ Fase 11 (filtros e comparações da Home): CONCLUÍDA no recorte mensal (24/08/2
     F11-B3 — Homologação F11-B2: CONCLUÍDA (24/08/2026).
   F11-C — Períodos rolantes e range personalizado: ADIADA / RECLASSIFICADA
           (não na Home; não cancelada; pouso oficial = Fase 12 Relatórios / F12-A).
-Fase 12 (Relatórios): F12-A CONTRATO CONGELADO (24/08/2026). F12-B não iniciada.
+Fase 12 (Relatórios): F12-A CONTRATO CONGELADO (24/08/2026). F12-B IMPLEMENTADA /
+HOMOLOGADA TECNICAMENTE (24/08/2026) — Relatório de Receita. Próxima = F12-C
+(PDF/Excel) ou Relatório de Despesas. Fase 12 completa: NÃO.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
 L1-A (financial_transactions): WIP isolado em stash — NÃO está no HEAD publicado.
@@ -783,7 +785,10 @@ Critérios de aceite (recorte vigente da Home)
 
 16. Fase 12 — Relatórios
 
-Status: F12-A CONTRATO CONGELADO (24/08/2026). F12-B não iniciada.
+Status: F12-A CONTRATO CONGELADO (24/08/2026). F12-B IMPLEMENTADA /
+HOMOLOGADA TECNICAMENTE (24/08/2026) — Receita (`GET /reports/revenue`,
+`/relatorios`). PDF/Excel = F12-C. Despesas ainda não implementadas.
+Fase 12 completa: NÃO.
 
 Objetivo
 

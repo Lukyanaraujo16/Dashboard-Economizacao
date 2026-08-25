@@ -180,7 +180,10 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
       'page',
     );
-    expect(navigation.textContent).not.toMatch(/Relatórios|Consultor|Notificações|Minha Conta/);
+    expect(screen.getByRole('link', { name: 'Relatórios' }).getAttribute('href')).toBe(
+      '/relatorios',
+    );
+    expect(navigation.textContent).not.toMatch(/Consultor|Notificações|Minha Conta/);
     expect(navigation.textContent).not.toMatch(
       /Empresas|Administradores|Usuários|Integrações|Configurações/,
     );

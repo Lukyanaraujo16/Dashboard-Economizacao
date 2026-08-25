@@ -33,6 +33,7 @@ function revenue(input: {
     coverageRate: classified.greaterThan(ZERO) ? new Prisma.Decimal(100) : null,
     items: (input.items ?? []).map((item) => ({
       kind: item.kind,
+      key: item.name,
       name: item.name,
       amount: new Prisma.Decimal(item.amount),
       received: ZERO,
@@ -77,6 +78,7 @@ function expense(input: {
     coverageRate: classified.greaterThan(ZERO) ? new Prisma.Decimal(100) : null,
     items: (input.items ?? []).map((item) => ({
       kind: item.kind,
+      key: item.name,
       name: item.name,
       amount: new Prisma.Decimal(item.amount),
       received: ZERO,

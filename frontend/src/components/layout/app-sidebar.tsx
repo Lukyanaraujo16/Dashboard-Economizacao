@@ -10,6 +10,7 @@ import { DEFAULT_PLATFORM_BRAND_NAME } from '../../services/admin/platform-brand
 import { useTheme } from '../../theme';
 import { Button, Typography } from '../ui';
 import {
+  IconBarChart3,
   IconBuilding2,
   IconLayoutDashboard,
   IconLogOut,
@@ -24,6 +25,12 @@ const NAV_ITEMS = [
     label: 'Dashboard',
     platformOnly: false,
     icon: IconLayoutDashboard,
+  },
+  {
+    href: '/relatorios',
+    label: 'Relatórios',
+    platformOnly: false,
+    icon: IconBarChart3,
   },
   {
     href: '/empresas',

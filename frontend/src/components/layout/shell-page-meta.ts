@@ -37,6 +37,7 @@ export function resolveShellSystemBar(pathname: string): ShellSystemBarMeta {
   if (
     pathname === '/' ||
     pathname === '/empresas' ||
+    pathname === '/relatorios' ||
     pathname === '/administradores' ||
     pathname === '/configuracoes' ||
     pathname === '/configuracoes/aparencia'
@@ -95,6 +96,9 @@ export function resolveShellPageMeta(pathname: string): ShellPageMeta {
   const bar = resolveShellSystemBar(pathname);
   if (!bar.breadcrumbs || bar.breadcrumbs.length === 0) {
     if (pathname === '/') return { context: 'Visão geral', title: 'Dashboard' };
+    if (pathname.startsWith('/relatorios')) {
+      return { context: 'Relatórios', title: 'Relatórios' };
+    }
     if (pathname.startsWith('/configuracoes')) {
       return { context: 'Configurações', title: 'Aparência' };
     }

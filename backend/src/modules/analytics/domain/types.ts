@@ -125,6 +125,8 @@ export type MonthlyCompetenceRevenueResult = {
   readonly coverageRate: Prisma.Decimal | null;
   readonly items: readonly {
     readonly kind: 'category' | 'other' | 'uncategorized' | 'imprecise';
+    /** Id interno de categoria / bucket — não vai para o HTTP (§12c). */
+    readonly key: string;
     readonly name: string;
     readonly amount: Prisma.Decimal;
     readonly received: Prisma.Decimal | null;

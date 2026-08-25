@@ -426,14 +426,7 @@ async function loadMonthlyCompetenceRevenue(
     uncategorized: calculated.uncategorized,
     imprecise: calculated.imprecise,
     coverageRate: calculated.coverageRate,
-    items: calculated.items.map((item) => ({
-      kind: item.kind,
-      name: item.name,
-      amount: item.amount,
-      received: item.received,
-      outstanding: item.outstanding,
-      percentage: item.percentage,
-    })),
+    items: calculated.items,
     daily: buildDailyCompetenceTotals(receivables, from, to),
   };
 }
@@ -528,14 +521,7 @@ async function loadMonthlyCompetenceExpenses(
     uncategorized: calculated.uncategorized,
     imprecise: calculated.imprecise,
     coverageRate: calculated.coverageRate,
-    items: calculated.items.map((item) => ({
-      kind: item.kind,
-      name: item.name,
-      amount: item.amount,
-      received: item.received,
-      outstanding: item.outstanding,
-      percentage: item.percentage,
-    })),
+    items: calculated.items,
     daily: buildDailyCompetenceTotals(payables, from, to),
   };
 }

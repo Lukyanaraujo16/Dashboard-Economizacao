@@ -155,6 +155,7 @@ export function adminTenantUserResetPasswordPath(tenantId: string, userId: strin
 
 /** Prefixo same-origin da Dashboard financeira do cliente (10A/10B). */
 export const DASHBOARD_API_PREFIX = '/dashboard';
+export const REPORTS_API_PREFIX = '/reports';
 
 export type DashboardQueryOptions = DashboardHomeQuery;
 
@@ -267,6 +268,31 @@ export function dashboardExecutiveInsightsPath(
 /** Meta mensal de faturamento (F2) — sempre consolidada; sem `costCenter`. */
 export function dashboardRevenueGoalPath(monthKey?: string | null): string {
   return `${DASHBOARD_API_PREFIX}/revenue-goal${dashboardQueryString({ monthKey })}`;
+}
+
+export function reportsRevenuePath(options: {
+  readonly from: string;
+  readonly to: string;
+  readonly costCenterId?: string | null;
+  readonly situation?: DashboardSituation | null;
+  readonly categoryId?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  params.set('from', options.from);
+  params.set('to', options.to);
+  const costCenterId = options.costCenterId?.trim();
+  if (costCenterId) {
+    params.set('costCenter', costCenterId);
+  }
+  const situation = options.situation?.trim();
+  if (situation) {
+    params.set('situation', situation);
+  }
+  const categoryId = options.categoryId?.trim();
+  if (categoryId) {
+    params.set('category', categoryId);
+  }
+  return `${REPORTS_API_PREFIX}/revenue?${params.toString()}`;
 }
 
 export function dashboardMonthEndCashPressurePath(

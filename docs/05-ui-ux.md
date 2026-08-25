@@ -809,7 +809,10 @@ O menu Relatórios só aparece quando a página existir (F12-B). Não usar
 placeholder no sidebar (regra §7). Item de tenant (`platformOnly: false`).
 Rota: `/relatorios`. Título: Relatórios.
 
-Estrutura V1 (F12-A; não implementar nesta subfase):
+F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — tipo Receita
+com visualização na tela. Despesas e exportação PDF/Excel: F12-C.
+
+Estrutura V1 (F12-A):
 
 Relatórios
 ├── Receita

@@ -6,6 +6,7 @@ import {
   currentDashboardMonthKey,
   dashboardMonthPhase,
   isValidDashboardMonthKey,
+  listInclusiveDashboardMonthKeys,
   resolveSelectedDashboardMonthKey,
   shiftDashboardMonthKey,
 } from '../src/lib/dashboard-month';
@@ -34,6 +35,21 @@ describe('dashboard-month', () => {
   it('shiftDashboardMonthKey atravessa virada de ano', () => {
     expect(shiftDashboardMonthKey('2026-12', 1)).toBe('2027-01');
     expect(shiftDashboardMonthKey('2027-01', -1)).toBe('2026-12');
+  });
+
+  it('lista meses inclusivos até o teto de 24', () => {
+    expect(listInclusiveDashboardMonthKeys('2026-01', '2026-08')).toEqual([
+      '2026-01',
+      '2026-02',
+      '2026-03',
+      '2026-04',
+      '2026-05',
+      '2026-06',
+      '2026-07',
+      '2026-08',
+    ]);
+    expect(listInclusiveDashboardMonthKeys('2026-08', '2026-01')).toEqual([]);
+    expect(listInclusiveDashboardMonthKeys('2025-01', '2026-12')).toHaveLength(24);
   });
 
   it('buildDashboardMonthSearchParams omite mês corrente', () => {

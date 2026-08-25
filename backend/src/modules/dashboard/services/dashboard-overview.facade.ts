@@ -1,6 +1,6 @@
 import type { Prisma } from '../../../generated/prisma/client.js';
 import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
-import { civilMonthKey } from '../../analytics/domain/civil-calendar.js';
+import { civilMonthKey, listInclusiveMonthKeysFromKeys } from '../../analytics/domain/civil-calendar.js';
 import type { AnalyticsService } from '../../analytics/services/analytics.service.js';
 import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import type { ContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
@@ -41,6 +41,8 @@ import { toDashboardOverviewResponse } from '../http/to-dashboard-overview-respo
 import { toDashboardReceivableCompositionResponse } from '../http/to-dashboard-receivable-composition-response.js';
 import { toDashboardRevenueGoalResponse } from '../http/to-dashboard-revenue-goal-response.js';
 import { toDashboardUpcomingResponse } from '../http/to-dashboard-upcoming-response.js';
+import { toRevenueReportResponse } from '../../reports/http/to-revenue-report-response.js';
+import type { RevenueReportResponse } from '../../reports/domain/types.js';
 
 /** Competências exibidas no histórico compacto da meta, incluindo a selecionada. */
 export const REVENUE_GOAL_HISTORY_MONTHS = 6;
@@ -77,6 +79,14 @@ export type DashboardOverviewFacade = {
     situation?: DashboardSituation | null,
     categoryId?: string | null,
   ): Promise<DashboardMonthlyRevenueResponse>;
+  getRevenueReport(
+    auth: AuthenticatedRequestContext,
+    fromKey: string,
+    toKey: string,
+    costCenterId?: string | null,
+    situation?: DashboardSituation | null,
+    categoryId?: string | null,
+  ): Promise<RevenueReportResponse>;
   getMonthlyExpenses(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
@@ -212,6 +222,31 @@ export function createDashboardOverviewFacade(
         ...homeFilterSpread(situation, categoryFilter),
       });
       return toDashboardMonthlyRevenueResponse(revenue);
+    },
+
+    async getRevenueReport(
+      auth,
+      fromKey,
+      toKey,
+      costCenterId = null,
+      situation = null,
+      categoryId = null,
+    ) {
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
+      const monthKeys = listInclusiveMonthKeysFromKeys(fromKey, toKey);
+      const months = await Promise.all(
+        monthKeys.map((monthKey) =>
+          deps.analytics.getMonthlyCompetenceRevenue({
+            tenantId,
+            monthKey,
+            ...costCenterFilter(resolved),
+            ...homeFilterSpread(situation, categoryFilter),
+          }),
+        ),
+      );
+      return toRevenueReportResponse(fromKey, toKey, months);
     },
 
     async getMonthlyExpenses(

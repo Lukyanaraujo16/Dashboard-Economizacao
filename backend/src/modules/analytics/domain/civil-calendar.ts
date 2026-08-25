@@ -63,3 +63,16 @@ export function civilMonthBoundsFromKey(monthKey: string): {
 export function isValidMonthKey(monthKey: string): boolean {
   return MONTH_KEY_PATTERN.test(monthKey);
 }
+
+/** Teto V1 de Relatórios (F12-A): amplitude inclusiva máxima de meses civis. */
+export const MAX_REPORT_INCLUSIVE_MONTHS = 24;
+
+/** Lista YYYY-MM inclusivos a partir de chaves já validadas. */
+export function listInclusiveMonthKeysFromKeys(
+  fromKey: string,
+  toKey: string,
+): readonly string[] {
+  const from = civilMonthBoundsFromKey(fromKey).from;
+  const to = civilMonthBoundsFromKey(toKey).to;
+  return listInclusiveCivilMonthKeys(from, to);
+}

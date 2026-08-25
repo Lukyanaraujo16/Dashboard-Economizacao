@@ -23,6 +23,7 @@ describe('dashboard monthly revenue serializer', () => {
       items: [
         {
           kind: 'category',
+          key: 'serv',
           name: 'Serviços',
           amount: new Prisma.Decimal('10000'),
           received: new Prisma.Decimal('4000'),
@@ -57,6 +58,8 @@ describe('dashboard monthly revenue serializer', () => {
     const json = JSON.stringify(dto);
     expect(json).not.toContain('secret-tenant');
     expect(json).not.toContain('tenantId');
+    expect(json).not.toContain('"key"');
+    expect(json).not.toContain('serv');
     expect(json).not.toMatch(/faturamento/i);
   });
 });
