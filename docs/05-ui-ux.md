@@ -1566,6 +1566,18 @@ Resolved Theme
 ↓
 Componentes
 
+Preferência de interface (UI), independente do branding do tenant:
+
+* valores oficiais: `light`, `dark`, `system`;
+* default para quem nunca escolheu: `system`;
+* `light` força o tema claro; `dark` força o tema escuro;
+* `system` acompanha `prefers-color-scheme` do sistema operacional (inclusive mudanças enquanto a app está aberta);
+* a escolha é persistida localmente no navegador/dispositivo atual;
+* logout, novo login e refresh não resetam a preferência;
+* a tela de login aplica a preferência salva antes da autenticação.
+
+O preview Claro/Escuro em Aparência (empresa/plataforma) é prévia de branding, não a preferência de tema da interface.
+
 ⸻
 
 86. Não Permitido na Interface

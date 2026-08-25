@@ -251,25 +251,30 @@
 /* ThemeControl */
 .themeControl {
   display: inline-flex;
+  flex-wrap: nowrap;
   gap: 0.125rem;
   padding: 0.125rem;
   border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-surface-elevated);
   flex-shrink: 0;
+  max-width: 100%;
 }
 
 .themeOption {
-  min-height: 1.5rem;
-  padding: 0 var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text-secondary);
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
   cursor: pointer;
+  flex-shrink: 0;
   transition:
     background-color var(--duration-fast) ease,
     color var(--duration-fast) ease,
@@ -285,6 +290,11 @@
 .themeOption:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
+}
+
+.themeOptionIcon {
+  display: block;
+  flex-shrink: 0;
 }
 
 .logoutError {
@@ -379,11 +389,18 @@
   }
 
   .breadcrumbCurrent {
-    max-width: 8rem;
+    max-width: 6.5rem;
   }
 
   .themeControl {
     width: auto;
+    flex-shrink: 0;
+  }
+
+  .themeOption {
+    width: 1.875rem;
+    min-width: 1.875rem;
+    min-height: 1.875rem;
   }
 
   .main {

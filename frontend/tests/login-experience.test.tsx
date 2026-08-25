@@ -74,6 +74,17 @@ describe('LoginExperience (visual freeze)', () => {
     expect(shell()?.getAttribute('data-scheme')).toBe('light');
   });
 
+  it('produto aplica preferência dark persistida antes da autenticação', async () => {
+    localStorage.setItem('dashboard-economizacao:theme-preference', 'dark');
+    const { container } = renderWithAuth(<LoginExperience />);
+
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe('dark');
+      expect(container.querySelector('[data-scheme]')?.getAttribute('data-scheme')).toBe('dark');
+    });
+    expect(localStorage.getItem('dashboard-economizacao:theme-preference')).toBe('dark');
+  });
+
   it('usa brandName customizado quando informado', () => {
     renderWithAuth(<LoginExperience brandName="Marca Custom" />);
     expect(screen.getByText('Marca Custom')).toBeTruthy();

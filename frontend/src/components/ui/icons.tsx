@@ -14,10 +14,13 @@ import {
   Lock,
   LockOpen,
   LogOut,
+  Monitor,
+  Moon,
   PencilLine,
   Settings2,
   Shield,
   ShieldUser,
+  Sun,
   Trash2,
   TriangleAlert,
   Zap,
@@ -113,4 +116,15 @@ export function IconShield(props: UiIconProps = {}) {
 }
 export function IconZap(props: UiIconProps = {}) {
   return withDefaults(Zap, props);
+}
+
+/* ——— Tema da interface ——— */
+export function IconSun(props: UiIconProps = {}) {
+  return withDefaults(Sun, props);
+}
+export function IconMoon(props: UiIconProps = {}) {
+  return withDefaults(Moon, props);
+}
+export function IconMonitor(props: UiIconProps = {}) {
+  return withDefaults(Monitor, props);
 }

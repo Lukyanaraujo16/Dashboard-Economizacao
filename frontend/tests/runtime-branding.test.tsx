@@ -211,18 +211,18 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('brand-name').textContent).toBe('Acme Runtime');
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Escuro' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Tema escuro' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('scheme').textContent).toBe('dark');
       expect(screen.getByTestId('primary').textContent).toBe('#AABBCC');
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sistema' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Usar tema do sistema' }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sistema' }).getAttribute('aria-pressed')).toBe(
-        'true',
-      );
+      expect(
+        screen.getByRole('button', { name: 'Usar tema do sistema' }).getAttribute('aria-pressed'),
+      ).toBe('true');
     });
   });
 

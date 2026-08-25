@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { resolveAuthenticatedHomePath, useAuth } from '../auth';
 import {
@@ -17,7 +17,7 @@ import {
 } from '../components/ui';
 import { IconGauge, IconShield, IconZap } from '../components/ui/icons';
 import { login, LoginRequestError } from '../services/auth/login';
-import { ThemeProvider } from '../theme';
+import { ThemeProvider, useTheme } from '../theme';
 import type { ResolvedColorScheme, TenantBrandingInput } from '../theme/types/theme';
 import {
   mapLoginValidationDetails,
@@ -61,6 +61,21 @@ function HighlightIcon({ kind }: { readonly kind: HighlightIconKind }) {
     return <IconShield size={18} />;
   }
   return <IconZap size={18} />;
+}
+
+function LoginShell({
+  children,
+  forcedScheme,
+}: {
+  readonly children: ReactNode;
+  readonly forcedScheme?: ResolvedColorScheme;
+}) {
+  const { theme } = useTheme();
+  return (
+    <div className={styles.shell} data-scheme={forcedScheme ?? theme.colorScheme}>
+      {children}
+    </div>
+  );
 }
 
 type LoginStatus = 'idle' | 'submitting' | 'success';
@@ -170,8 +185,8 @@ export function LoginExperience({
       : null;
 
   return (
-    <ThemeProvider preference={scheme} branding={themeBranding}>
-      <div className={styles.shell} data-scheme={scheme}>
+    <ThemeProvider preference={showThemeControls ? scheme : undefined} branding={themeBranding}>
+      <LoginShell forcedScheme={showThemeControls ? scheme : undefined}>
         <div className={styles.atmosphere} aria-hidden="true" />
         <div className={styles.gridOverlay} aria-hidden="true" />
         <div className={styles.accentWash} aria-hidden="true" />
@@ -351,7 +366,7 @@ export function LoginExperience({
             </Card>
           </section>
         </main>
-      </div>
+      </LoginShell>
     </ThemeProvider>
   );
 }

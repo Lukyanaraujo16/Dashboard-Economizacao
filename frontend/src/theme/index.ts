@@ -7,6 +7,13 @@ export { lightColorTokens } from './light/colors';
 export { lightTheme } from './light/theme';
 export { ThemeProvider } from './provider/theme-provider';
 export { RuntimeThemeProvider } from './provider/runtime-theme-provider';
+export {
+  THEME_PREFERENCE_BOOTSTRAP_SCRIPT,
+  THEME_PREFERENCE_STORAGE_KEY,
+  parseThemePreference,
+  readStoredThemePreference,
+  writeStoredThemePreference,
+} from './preference/theme-preference-storage';
 export { RuntimePlatformBrandingProvider } from './provider/runtime-platform-branding-provider';
 export { applyDocumentBranding } from './runtime/apply-document-branding';
 export { resolveTheme } from './resolver/resolve-theme';

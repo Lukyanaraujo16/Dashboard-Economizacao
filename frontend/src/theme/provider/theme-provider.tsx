@@ -1,7 +1,13 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 
+import {
+  getServerThemePreferenceSnapshot,
+  readStoredThemePreference,
+  subscribeToStoredThemePreference,
+  writeStoredThemePreference,
+} from '../preference/theme-preference-storage';
 import { resolveTheme } from '../resolver/resolve-theme';
 import type { ResolvedColorScheme, TenantBrandingInput, ThemeModePreference } from '../types/theme';
 import { applyCssVariables, themeToCssVariables } from '../utils/css-variables';
@@ -9,6 +15,7 @@ import { ThemeContext } from './theme-context';
 
 type ThemeProviderProps = {
   readonly children: ReactNode;
+  /** Modo controlado (testes / playground DEV). Sem prop = preferência persistida. */
   readonly preference?: ThemeModePreference;
   /** Overrides de branding (runtime /admin preview); null = Theme Default. */
   readonly branding?: TenantBrandingInput | null;
@@ -35,13 +42,34 @@ function getServerSystemSchemeSnapshot(): ResolvedColorScheme {
   return 'light';
 }
 
+function applyResolvedTheme(
+  preference: ThemeModePreference,
+  systemScheme: ResolvedColorScheme,
+  branding: TenantBrandingInput | null,
+): void {
+  const resolved = resolveTheme({
+    preference,
+    systemScheme,
+    branding,
+  });
+  const root = document.documentElement;
+  applyCssVariables(root, themeToCssVariables(resolved));
+  root.dataset.theme = resolved.colorScheme;
+  root.style.colorScheme = resolved.colorScheme;
+}
+
 /**
  * Fornece ResolvedTheme e aplica CSS variables no documentElement.
- * Pode operar de forma controlada ou manter a preferência localmente.
+ * Preferência não controlada: localStorage namespaced (sobrevive logout).
+ * Controlada: `preference` prop (testes / DEV); não substitui o storage.
  */
 export function ThemeProvider({ children, preference, branding = null }: ThemeProviderProps) {
-  const [internalPreference, setInternalPreference] = useState<ThemeModePreference>('system');
-  const resolvedPreference = preference ?? internalPreference;
+  const storedPreference = useSyncExternalStore(
+    subscribeToStoredThemePreference,
+    readStoredThemePreference,
+    getServerThemePreferenceSnapshot,
+  );
+  const resolvedPreference = preference ?? storedPreference;
   const systemScheme = useSyncExternalStore(
     subscribeToSystemScheme,
     getSystemSchemeSnapshot,
@@ -54,17 +82,16 @@ export function ThemeProvider({ children, preference, branding = null }: ThemePr
     branding,
   });
 
+  const setPreference = useCallback((next: ThemeModePreference) => {
+    writeStoredThemePreference(next);
+  }, []);
+
   useEffect(() => {
-    const resolved = resolveTheme({
-      preference: resolvedPreference,
-      systemScheme,
-      branding,
-    });
-    const root = document.documentElement;
-    applyCssVariables(root, themeToCssVariables(resolved));
-    root.dataset.theme = resolved.colorScheme;
-    root.style.colorScheme = resolved.colorScheme;
-  }, [resolvedPreference, systemScheme, branding]);
+    // Lê o storage no efeito para não sobrescrever o script de bootstrap
+    // com o snapshot de hidratação (`system`) quando a preferência já é light/dark.
+    const activePreference = preference ?? readStoredThemePreference();
+    applyResolvedTheme(activePreference, getSystemSchemeSnapshot(), branding);
+  }, [preference, resolvedPreference, systemScheme, branding]);
 
   return (
     <ThemeContext.Provider
@@ -72,7 +99,7 @@ export function ThemeProvider({ children, preference, branding = null }: ThemePr
         theme,
         preference: resolvedPreference,
         branding,
-        setPreference: setInternalPreference,
+        setPreference,
       }}
     >
       {children}

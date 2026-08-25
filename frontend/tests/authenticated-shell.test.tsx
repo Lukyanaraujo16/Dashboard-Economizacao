@@ -145,9 +145,9 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
       hydrateOnMount: true,
     });
 
-    const system = await screen.findByRole('button', { name: 'Sistema' });
-    const light = screen.getByRole('button', { name: 'Claro' });
-    const dark = screen.getByRole('button', { name: 'Escuro' });
+    const system = await screen.findByRole('button', { name: 'Usar tema do sistema' });
+    const light = screen.getByRole('button', { name: 'Tema claro' });
+    const dark = screen.getByRole('button', { name: 'Tema escuro' });
 
     expect(system.getAttribute('aria-pressed')).toBe('true');
     expect(document.documentElement.dataset.theme).toBe('light');
