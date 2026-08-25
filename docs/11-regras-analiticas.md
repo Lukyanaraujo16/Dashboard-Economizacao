@@ -19,13 +19,17 @@ Estoque AR/AP permanece no motor e nos endpoints; não alimenta os KPIs principa
 MVP financeiro completo: NÃO.
 F11-A (23/08/2026): CONCLUÍDA — congelamento de escopo da Home.
 Home = competência mensal civil (`month=YYYY-MM`, `competenceDate`,
-`America/Sao_Paulo`). FILTER-001/005 (ranges) NÃO na Home (F11-C).
+`America/Sao_Paulo`). FILTER-001/005 (ranges diários) NÃO na Home.
 F11-B1: CONCLUÍDA (contrato backend).
 F11-B2: HOMOLOGADA. F11-B3: CONCLUÍDA (24/08/2026).
 F11-B completa (recorte mensal): SIM.
-F11-C: ADIADA / RECLASSIFICADA (relatórios / superfície futura).
-Ledger L1: FORA da Fase 11. Semântica de caixa: não reabrir aqui.
-Fase 11 total: EM ANDAMENTO.
+F11-C: ADIADA / RECLASSIFICADA — pouso oficial Relatórios / F12-A
+(intervalo De/Até YYYY-MM de competência; não dias soltos).
+Fase 11 Home: CONCLUÍDA no recorte mensal.
+F12-A (24/08/2026): CONTRATO CONGELADO. Paridade com monthly-revenue /
+monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
+De/Até. Ledger L1-A fora do HEAD (stash). L1-B: BLOCKED_BY_CASH_SEMANTICS.
+Semântica de caixa: não reabrir aqui.
 
 ⸻
 
@@ -656,13 +660,38 @@ universo do mês de competência já selecionado. Não mudam o eixo temporal.
   situation+category aos widgets mensais/insights/comparação; forecast e
   pressão recebem category e não situation; meta permanece company-level.
 
-F11-C: hoje / ontem / 7d / 30d / 12 meses / ano / range personalizado
-NÃO entram na Home. Reclassificados (relatórios / Fase 12). Não é
+F11-C: hoje / ontem / 7d / 30d / 12 meses / ano / range **diário**
+NÃO entram na Home. Reclassificados (Relatórios / F12-A). Não é
 regressão. Não estão implementados na Home.
 
-Ledger (`financial_transactions` / L1-A / L1-B): FORA da Fase 11.
+Na F12 V1 o intervalo oficial é De/Até de **meses civis de competência**
+(`from`/`to` YYYY-MM). Soma os snapshots mensais já definidos. Não é
+as-of. Não é caixa. Não altera D1: `situation=overdue` continua
+`dueDate < hoje` SP sobre o universo de competência filtrado.
+
+Taxa de inadimplência de estoque (`overview.delinquency`, §4 / D2):
+filtro temporal **não** muda a data de referência. Relatórios V1 **não**
+oferecem essa taxa como métrica do intervalo De/Até.
+
+Ledger (`financial_transactions` / L1-A / L1-B): FORA da Fase 11 e da
+F12 V1. L1-A não está no HEAD. L1-B BLOCKED_BY_CASH_SEMANTICS.
 Não definir recebido/pago por período via ledger nesta fase.
 
 Query params oficiais da Home: `month`, `costCenter`, `situation`, `category`.
 `costCenterId` não é query param. `period`, `comparison` e `status` não
 existem no contrato da Home.
+
+⸻
+
+21. Relatórios — paridade analítica (F12-A)
+
+Decisão oficial 24/08/2026.
+
+Relatórios de Receita e Despesas reutilizam as fórmulas de
+`monthly-revenue` e `monthly-expenses` (competência, timezone
+`America/Sao_Paulo`, D8, CC1, F11-B). Intervalo De/Até = união das
+competências inclusas; totais = soma dos totais mensais. `coverageRate`
+no intervalo usa D9.
+
+Não duplicar regra. Não criar semântica de caixa. Não misturar
+`competenceDate`, `dueDate` e data de baixa num único filtro de Relatórios.

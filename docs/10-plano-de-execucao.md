@@ -20,7 +20,7 @@ feat(sync): adiciona sincronizacao automatica incremental conta azul
 
 Próxima fase executável:
 
-2.5 — Histórico de sincronizações (não iniciada)
+F12-B — Relatório de Receita (visualização; contrato F12-A)
 
 Estado atual
 
@@ -113,6 +113,10 @@ Estado atual
 ✔ Design System / UI base: **congelado**
 
 ✔ 1.6 — Modo Suporte concluída (ADMIN + SUPER_ADMIN, overlay de contexto, `support_sessions`)
+
+✔ F11 — Filtros da Home (F11-A/B) concluída no recorte mensal; F11-C = Relatórios
+
+✔ F12-A — Contrato de Relatórios congelado (24/08/2026); F12-B não iniciada
 
 ✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
 
@@ -830,8 +834,9 @@ Não bloqueia:
 
 Recorte mensal da Fase 11 (F11-A/B) CONCLUÍDO. F11-B2 HOMOLOGADA.
 F11-B3 CONCLUÍDA (24/08/2026). F11-C permanece ADIADA / RECLASSIFICADA
-(não é próxima da Home).
-Fase 11 total: EM ANDAMENTO.
+(pouso oficial: Relatórios / F12-A — intervalo De/Até YYYY-MM).
+Fase 11 Home: CONCLUÍDA no recorte mensal.
+F12-A: CONTRATO CONGELADO (docs/09.6 §17). F12-B: não iniciada.
 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE.
 E1 Pressão de caixa: HOMOLOGADA VISUALMENTE.
 E2 composição das despesas: HOMOLOGADA.
@@ -861,7 +866,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 11 recorte mensal CONCLUÍDO (F11-A CONCLUÍDA; F11-B1 CONCLUÍDA; F11-B2 HOMOLOGADA; F11-B3 CONCLUÍDA; F11-C ADIADA / RECLASSIFICADA). 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
+Próxima fase: F12-B (Relatório de Receita, visualização). F11 Home CONCLUÍDA. F12-A CONGELADA. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -993,7 +998,9 @@ Caminho até o primeiro Dashboard
 1. Fase 8 — CONCLUÍDA (8A incluída; 8B desnecessária)
 2. Fase 9 — Motor Analítico: CONCLUÍDA NO RECORTE APROVADO
    (9A CONCLUÍDA; 9B CONCLUÍDA; 9C CONCLUÍDA; Grupo A CONCLUÍDO; sem 9D)
-3. Fase 10 — Dashboard do Cliente (EM ANDAMENTO no recorte)
+3. Fase 10 — Dashboard do Cliente (recorte utilizável entregue)
+4. Fase 11 — Filtros da Home (CONCLUÍDA no recorte mensal; F11-C = F12)
+5. Fase 12 — Relatórios (F12-A congelada; próxima = F12-B Receita)
 
 10A — facade/API tenant-scoped: CONCLUÍDA
      GET /dashboard/overview (contrato em docs/09.6 §10)
@@ -1067,9 +1074,10 @@ F2 — Meta de faturamento: HOMOLOGADA
 Sidebar sticky desktop (AppShell): HOMOLOGADA.
 L0 — Spike real de baixas Conta Azul (GET-only): PARCIAL / SUFICIENTE PARA L1-A
 L1-A — Persistência/ingestão read-only (`financial_transactions`):
-     IMPLEMENTADA / HOMOLOGADA (bootstrap DEV: 77 baixas ACTIVE)
-     Bootstrap/incremental após AR/AP; GET `/parcelas/{id}/baixa` apenas.
-     Tombstone automático DESLIGADO. KPI recebido/pago por período: NÃO.
+     WIP isolado em stash (`stash@{0}` L1-A). NÃO está no HEAD publicado.
+     NÃO aplicar na F12. Tabela/migration ausentes neste checkout.
+     Bootstrap DEV histórico permanece fora do Git oficial até retomada
+     explícita. KPI recebido/pago por período: NÃO.
 CC1 — Centros de custo + alocação + filtro Home:
      HOMOLOGADA (CC1.1 incorporada)
      Sync `cost_centers` + `installment_cost_center_allocations`;
@@ -1119,8 +1127,14 @@ F11-B — Filtros por situação e categoria no mês: CONCLUÍDA (recorte mensal
      aceitam category e ignoram situation válida; meta permanece
      company-level.
 F11-C — Períodos rolantes / range: ADIADA / RECLASSIFICADA
-     Destino preferencial: relatórios / Fase 12.
-Fase 11 total: EM ANDAMENTO.
+     Destino oficial: Relatórios / F12-A (De/Até YYYY-MM de competência).
+Fase 11 Home: CONCLUÍDA no recorte mensal.
+F12-A — Freeze de Relatórios: CONTRATO CONGELADO (24/08/2026)
+     Tipos V1: Receita e Despesas (monthly-revenue / monthly-expenses).
+     Contas vencidas = situation=overdue (D1), não taxa de estoque ranged.
+     Visualização F12-B; PDF/Excel F12-C. Sem ledger, sem caixa realizado,
+     sem tenantId em query, sem POST /reports 202 na V1.
+     Contrato: docs/09.6 §17. UX: docs/05 §33–35.
 L1-B — Semântica oficial do caixa + read model mensal:
      BLOCKED_BY_CASH_SEMANTICS (20/08/2026)
      Doc oficial ValorComposicaoDTO da baixa: 5 campos (valor_bruto required +
@@ -1212,7 +1226,12 @@ Gráficos
 
 Filtros
 
+F11-A/B CONCLUÍDAS na Home. F11-C = Relatórios.
+
 Relatórios
+
+F12-A CONTRATO CONGELADO (docs/09.6 §17). F12-B não iniciada.
+Tipos V1: Receita e Despesas. Sidebar só quando a página existir (docs/05 §7).
 
 ===========================================================
 

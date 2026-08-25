@@ -557,9 +557,9 @@ Opções iniciais:
 Evolução F11-A (23/08/2026): a lista acima permanece como requisito
 histórico. Na Home vigente o filtro temporal é o seletor de mês civil
 de competência (`?month=YYYY-MM`, `America/Sao_Paulo`). Hoje / ontem /
-7d / 30d / 12 meses / ano / personalizado NÃO serão implementados na
-Home nesta Fase 11 (F11-C; destino preferencial: relatórios / Fase 12).
-Não é regressão. Não marcar esses presets como disponíveis na Home.
+7d / 30d / 12 meses / ano / personalizado diário NÃO serão implementados
+na Home (F11-C). F12-A: Relatórios V1 usam De/Até de meses (`from`/`to`).
+Não é regressão. Não marcar esses presets diários como disponíveis na Home.
 
 Filtros oficiais da Home hoje:
 
@@ -805,41 +805,63 @@ Devem permitir, quando aplicável:
 
 33. Relatórios
 
-O menu Relatórios deverá permitir acesso às análises exportáveis.
+O menu Relatórios só aparece quando a página existir (F12-B). Não usar
+placeholder no sidebar (regra §7). Item de tenant (`platformOnly: false`).
+Rota: `/relatorios`. Título: Relatórios.
 
-Estrutura inicial:
+Estrutura V1 (F12-A; não implementar nesta subfase):
 
 Relatórios
-├── Financeiro
-├── Contas a Receber
-├── Contas a Pagar
-├── Inadimplência
-├── Categorias
-└── Fluxo de Caixa
+├── Receita
+└── Despesas
 
-A lista final deverá refletir somente relatórios efetivamente implementados.
+Lista final = somente tipos implementados. Contas vencidas = filtro
+`situation=overdue`, não um terceiro tipo. Financeiro / Fluxo de caixa /
+Inadimplência de estoque: fora da V1.
+
+Área de seleção:
+
+* Tipo de relatório
+* De (YYYY-MM)
+* Até (YYYY-MM)
+* Centro de custo
+* Situação
+* Categoria
+
+URL: `from`, `to`, `costCenter`, `situation`, `category`, `type` (ou o tipo
+na rota). Não usar `tenantId`, `costCenterId`, `status`.
+
+Ações: Visualizar. PDF e Excel na F12-C (não botões mortos na F12-B).
+Resultado abaixo dos filtros.
+
+Estados: inicial · loading · vazio · erro · resultado.
+Mobile: filtros empilham; resultado sem overflow destrutivo.
 
 ⸻
 
 34. Construção de Relatório
 
-Fluxo conceitual:
+Fluxo V1:
 
 Escolher relatório
 ↓
-Definir período
+Definir De / Até (meses de competência)
 ↓
-Aplicar filtros
+Aplicar filtros (centro, situação, categoria)
 ↓
 Visualizar
 ↓
-Exportar
+Exportar (F12-C: PDF / Excel; print do browser se suficiente)
 
-Formatos:
+Eixo: `competenceDate`, timezone `America/Sao_Paulo`. Inclusive.
 
-* PDF;
-* Excel;
-* impressão.
+Formatos da Fase 12:
+
+* PDF (F12-C);
+* Excel/XLSX (F12-C);
+* impressão do browser se suficiente.
+
+Sem link público, e-mail ou agendamento.
 
 ⸻
 

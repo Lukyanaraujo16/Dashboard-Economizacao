@@ -36,7 +36,7 @@ deste documento prevalece. Fases executadas até o momento:
   - V2.3.1 — Final Home Polish (copy Meta + Leitura semântica + Comparativo tooltip): HOMOLOGADA — baseline visual/funcional congelado da Home
   - F1-G — Faturamento Gerencial (monthly-revenue): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
   - L0 — Spike real de baixas Conta Azul: PARCIAL / SUFICIENTE PARA INFRA L1
-  - L1-A — Persistência/ingestão read-only do ledger: IMPLEMENTADA / HOMOLOGADA (bootstrap DEV)
+  - L1-A — Persistência/ingestão read-only do ledger: WIP em stash (fora do HEAD); não aplicar na F12
   - L1-B — Semântica oficial do caixa + read model mensal: BLOCKED_BY_CASH_SEMANTICS
   - Dashboard Executiva V1 / E3 — Leitura executiva (insights determinísticos): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO
   - F2 — Meta de faturamento (persistência/API/CRUD): HOMOLOGADA (widget funcional na Home; F2.0.1 status temporal)
@@ -46,7 +46,7 @@ deste documento prevalece. Fases executadas até o momento:
   - CC1.3 — Cash split por centro (híbrido EXACT) + seletor em tabs: HOMOLOGADA VISUALMENTE
   - CC1.3.1 — Fluidez na troca de centro (soft refresh / sem loading global): HOMOLOGADA VISUALMENTE
   - CC1.3.2 — Séries temporais (sparkline) cash por centro: HOMOLOGADA VISUALMENTE
-Fase 11 (filtros e comparações): EM ANDAMENTO.
+Fase 11 (filtros e comparações da Home): CONCLUÍDA no recorte mensal (24/08/2026).
   F11-A — Congelamento de escopo: CONCLUÍDA (23/08/2026).
   F11-B — Situação + categoria sobre o mês de competência: CONCLUÍDA
           (recorte mensal aprovado).
@@ -54,10 +54,12 @@ Fase 11 (filtros e comparações): EM ANDAMENTO.
     F11-B2 — Frontend: HOMOLOGADA.
     F11-B3 — Homologação F11-B2: CONCLUÍDA (24/08/2026).
   F11-C — Períodos rolantes e range personalizado: ADIADA / RECLASSIFICADA
-          (não cancelada; não é regressão; destino preferencial: relatórios / Fase 12).
+          (não na Home; não cancelada; pouso oficial = Fase 12 Relatórios / F12-A).
+Fase 12 (Relatórios): F12-A CONTRATO CONGELADO (24/08/2026). F12-B não iniciada.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
-L1-A (financial_transactions): IMPLEMENTADA / HOMOLOGADA (bootstrap DEV).
+L1-A (financial_transactions): WIP isolado em stash — NÃO está no HEAD publicado.
+  Não aplicar na F12. Docs antigas que diziam “IMPLEMENTADA no Git” estavam defasadas.
 L1-B: BLOCKED_BY_CASH_SEMANTICS — valor oficial de caixa (bruto vs líquido) NÃO FECHADO;
   KPI mensal / API monthly-cash-flow NÃO criados.
 KPI recebido/pago por período: NÃO IMPLEMENTADO. Valor oficial de caixa: NÃO DEFINIDO.
@@ -579,7 +581,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Fase 11: EM ANDAMENTO (F11-A CONCLUÍDA; F11-B CONCLUÍDA no recorte mensal; F11-C RECLASSIFICADA). 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: aguardando execução real. L1: NÃO INICIADA.
+Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A: stash (fora do HEAD). L1-B: BLOCKED_BY_CASH_SEMANTICS.
 
 ⸻
 
@@ -604,9 +606,8 @@ prevista). A lista de próximos vencimentos permanece provisória na Home
 até a futura área Financeiro. E2 composição das despesas HOMOLOGADA.
 Receitas do mês por competência (M1) HOMOLOGADA (PAID permanece no mês;
 não é faturamento nem caixa). E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
-E4 ADIADA. Fase 11 EM ANDAMENTO (F11-A CONCLUÍDA; F11-B1 CONCLUÍDA;
-F11-B2 HOMOLOGADA; F11-B3 CONCLUÍDA; F11-B CONCLUÍDA no recorte mensal;
-F11-C ADIADA / RECLASSIFICADA). Faturamento gerencial / meta F2: ver header.
+E4 ADIADA. Fase 11 Home CONCLUÍDA no recorte mensal (F11-C = Fase 12 / F12-A).
+F12-A CONTRATO CONGELADO. Faturamento gerencial / meta F2: ver header.
 Fixas×variáveis: NÃO INICIADAS.
 
 Contrato 10A (sem fórmulas; fórmulas em docs/11):
@@ -658,7 +659,8 @@ Critérios de aceite
 
 15. Fase 11 — Filtros e Comparações
 
-Status: EM ANDAMENTO (23/08/2026).
+Status: CONCLUÍDA no recorte da Home (24/08/2026). F11-C não é trabalho
+restante na Home — pouso oficial na Fase 12 / F12-A.
 
 F11-A — Congelamento de escopo: CONCLUÍDA.
 F11-B — Filtros mensais por situação e categoria: CONCLUÍDA
@@ -666,7 +668,8 @@ F11-B — Filtros mensais por situação e categoria: CONCLUÍDA
         recorte mensal CONCLUÍDO).
 F11-C — Períodos rolantes e range personalizado: ADIADA / RECLASSIFICADA
         (não implementado na Home; não cancelado; não é regressão;
-        destino preferencial: relatórios / Fase 12).
+        destino oficial: Relatórios / F12-A — intervalo De/Até YYYY-MM
+        de competência, não dias soltos).
 
 Objetivo original (histórico)
 
@@ -780,17 +783,32 @@ Critérios de aceite (recorte vigente da Home)
 
 16. Fase 12 — Relatórios
 
+Status: F12-A CONTRATO CONGELADO (24/08/2026). F12-B não iniciada.
+
 Objetivo
 
-Permitir exportação e impressão das informações.
+Permitir exportação, impressão e leitura analítica fora da Home, sem
+converter a Home em BI de ranges e sem inventar caixa.
 
-Nota F11-C: períodos rolantes (hoje/ontem/7d/30d/12 meses/ano) e range
-personalizado (FILTER-001 / FILTER-005) NÃO entram na Home. Destino
-preferencial desta superfície futura, com eixo temporal definido por
-contexto de relatório — não misturar competência, vencimento e caixa
-num filtro genérico único.
+Nota F11-C: períodos rolantes diários (hoje/ontem/7d/30d) e range
+personalizado **em dias** continuam fora da V1. O pouso oficial de
+FILTER-001/005 nesta fase, no recorte V1, é o intervalo **De/Até de
+meses civis de competência** (`from`/`to` YYYY-MM, inclusive,
+`America/Sao_Paulo`, `competenceDate`). Não misturar competência,
+vencimento e caixa num filtro genérico único. Contrato: docs/09.6 §17.
 
-Escopo
+Recorte V1 (F12-A)
+
+* Relatório de Receita (`GET /reports/revenue`) — monthly-revenue.
+* Relatório de Despesas (`GET /reports/expenses`) — monthly-expenses.
+* Contas vencidas = `situation=overdue` (D1) sobre os tipos acima.
+* Visualização na tela na F12-B; PDF e Excel na Fase 12 (F12-C).
+* Print do browser se suficiente.
+* Geração síncrona; teto 24 meses; job só depois (REPORT-005).
+* Sem link público (REPORT-004). Sem e-mail. Sem agendamento.
+* Sem fluxo de caixa realizado (L1-B bloqueado; L1-A fora do HEAD).
+
+Escopo histórico (PRD REPORT-001 a REPORT-005 — texto preservado)
 
 * relatório financeiro;
 * contas a receber;
@@ -803,16 +821,23 @@ Escopo
 * impressão;
 * jobs quando necessário.
 
+A lista UX (§33 de docs/05) só exibe tipos efetivamente implementados.
+Taxa de inadimplência de estoque (overview / D2) **não** varia com De/Até.
+Fluxo de caixa realizado permanece no texto histórico e **fora** da V1.
+
 Requisitos relacionados
 
-* REPORT-001 a REPORT-005.
+* REPORT-001 a REPORT-005 (PDF/Excel na Fase 12; V1 visual primeiro).
+* FILTER-003 e FILTER-004 — mesmos contratos da Home (situation/category).
+* FILTER-001 / FILTER-005 — intervalo mensal de competência na F12 V1.
 
-Critérios de aceite
+Critérios de aceite (V1)
 
-* valores batem com dashboard;
-* filtros são respeitados;
+* valores batem com dashboard no mesmo mês e nos mesmos filtros;
+* intervalo De/Até soma competências sem mudar D1/D8/D9/CC1;
 * relatório de tenant A nunca contém tenant B;
-* arquivos temporários possuem controle apropriado.
+* `tenantId` em query é 400;
+* Home permanece month-scoped (um `month`).
 
 ⸻
 
@@ -932,6 +957,10 @@ Critérios de aceite
 ⸻
 
 20. Fase 16 — Modo Suporte
+
+Status: ENTREGUE no produto (épico 1.6). ADMIN e SUPER_ADMIN. Overlay de
+contexto; identidade `tenantId` de plataforma permanece `null`. Não
+reimplementar na F12.
 
 Objetivo
 
@@ -1255,7 +1284,9 @@ O MVP estará pronto quando:
 * KPIs principais estiverem implementados;
 * dashboard estiver funcional;
 * filtros e comparações estiverem funcionais
-  (Home: competência mensal + F11-B situação/categoria; ranges = F11-C / relatórios);
+  (Home: competência mensal + F11-B situação/categoria;
+  Relatórios V1: intervalo De/Até YYYY-MM de competência — F12-A;
+  ranges diários FILTER-001/005 continuam fora da V1);
 * relatórios estiverem funcionais;
 * Consultor reativo estiver funcional;
 * ao menos um conjunto inicial de insights proativos estiver funcional;

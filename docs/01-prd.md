@@ -57,8 +57,9 @@ O MVP deverá permitir:
 * auditoria.
 
 Nota F11-A (23/08/2026): na Home, “período” vigente = competência mensal
-civil (`?month=YYYY-MM`). Ranges rolantes e personalizados permanecem
-no MVP como capacidade futura (F11-C / relatórios), não na Home.
+civil (`?month=YYYY-MM`). Ranges rolantes e personalizados em dias
+permanecem fora da Home. F12-A (24/08/2026): Relatórios V1 usam intervalo
+De/Até de meses civis de competência (`from`/`to`). Contrato: docs/09.6 §17.
 
 ⸻
 
@@ -795,13 +796,13 @@ Critérios de aceite
 * mudança de período atualiza os componentes compatíveis;
 * período ativo permanece visível para o usuário.
 
-Evolução posterior (F11-A): na Home, o filtro temporal vigente é o mês
+Evolução posterior (F11-A / F12-A): na Home, o filtro temporal vigente é o mês
 civil de competência (`?month=YYYY-MM`, timezone `America/Sao_Paulo`,
 agregação por `competenceDate`). Hoje, ontem, 7 dias, 30 dias, 12 meses,
-ano atual, ano anterior e range personalizado NÃO serão implementados
-na Home nesta Fase 11. Não estão cancelados: reclassificados para
-superfície futura (F11-C / relatórios / Fase 12). Não é regressão.
-Não marcar FILTER-001 como implementado na Home.
+ano atual, ano anterior e range **diário** NÃO serão implementados
+na Home. Não estão cancelados. F12-A congela o pouso V1 como intervalo
+De/Até de **meses** (`from`/`to` YYYY-MM) em Relatórios — não como
+presets diários. Não marcar FILTER-001 como implementado na Home.
 
 ⸻
 
@@ -839,10 +840,9 @@ Exemplos
 * recebido;
 * a receber.
 
-Evolução posterior (F11-A): permanece válido. Recorte da Fase 11 da Home
-= F11-B (filtro sobre o mês de competência já selecionado, preservando
-`month`, `costCenter`, tenant, comparação mês × anterior e meta
-company-level). Status: NÃO INICIADO.
+Evolução posterior (F11-A / F11-B): implementado na Home sobre o mês de
+competência (`situation=settled|open|overdue`). F12-A: o mesmo contrato
+vale em Relatórios. Não usar query `status`.
 
 ⸻
 
@@ -852,9 +852,9 @@ Requisito
 
 Relatórios e visões compatíveis deverão permitir filtrar por categoria.
 
-Evolução posterior (F11-A): permanece válido. Recorte F11-B da Home
-(sobre o mês de competência). Composição por categoria já existente
-NÃO substitui este filtro global. Status: NÃO INICIADO.
+Evolução posterior (F11-A / F11-B): implementado na Home
+(`category=<uuid>` de FinancialCategory.id, match D8). F12-A: o mesmo
+contrato vale em Relatórios. Composição por categoria não substitui o filtro.
 
 ⸻
 
@@ -869,11 +869,10 @@ Critérios de aceite
 * datas inválidas são rejeitadas;
 * intervalo é aplicado apenas ao tenant atual.
 
-Evolução posterior (F11-A): NÃO implementado na Home. Reclassificado
-(F11-C). Destino preferencial: relatórios / Fase 12, com eixo temporal
-definido por contexto. Não misturar `competenceDate`, `dueDate` e data
-de pagamento/baixa num filtro genérico da Home. Não é regressão.
-Não marcar FILTER-005 como implementado na Home.
+Evolução posterior (F11-A / F12-A): NÃO implementado na Home. Reclassificado
+(F11-C). V1 de Relatórios: intervalo De/Até de meses civis (`from`/`to`),
+não datas D/M/A soltas. Eixo = `competenceDate`. Não misturar com
+`dueDate` nem data de baixa. Não marcar FILTER-005 como implementado na Home.
 
 ⸻
 
@@ -1178,6 +1177,11 @@ Critérios de aceite
 
 * usuário não precisa manter requisição aberta durante processamento longo;
 * falha na geração pode ser diagnosticada.
+
+Evolução F12-A (24/08/2026): a V1 é **síncrona** (`GET /reports/revenue` e
+`GET /reports/expenses`). O exemplo `POST /reports` 202 em docs/09.6 §6.6
+**não** é o contrato da V1. Job assíncrono só se o intervalo exceder 24
+meses ou a exportação item a item estourar HTTP.
 
 ⸻
 
