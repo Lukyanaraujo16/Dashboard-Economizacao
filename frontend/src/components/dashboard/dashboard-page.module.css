@@ -397,9 +397,13 @@
 
   .controlsCluster {
     width: 100%;
+    max-width: 100%;
   }
 
   .freshnessPill {
-    flex: 1;
+    flex: 1 1 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
   }
 }

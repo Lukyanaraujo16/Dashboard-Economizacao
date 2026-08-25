@@ -163,6 +163,7 @@ export function DashboardCategorySelector({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={`Categoria: ${loading ? 'Carregando…' : triggerLabel}`}
+        title={loading ? undefined : triggerLabel}
         data-active={selectedId !== null ? 'true' : undefined}
         disabled={isDisabled}
         onClick={() => setOpen((previous) => !previous)}

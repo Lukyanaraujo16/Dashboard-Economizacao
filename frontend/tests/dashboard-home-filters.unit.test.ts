@@ -163,9 +163,34 @@ describe('dashboard home filters layout', () => {
     expect(pageCss).toMatch(/\.controlsCluster \{[\s\S]*flex-wrap:\s*wrap/);
     expect(pageCss).toMatch(/\.costCenterRow \{/);
     expect(pageCss).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.controlsCluster/);
+    const desktopCss = pageCss.split('@media')[0] ?? '';
+    expect(desktopCss).toMatch(/\.freshnessPill \{[\s\S]*display:\s*inline-flex/);
+    expect(desktopCss).not.toMatch(/flex:\s*1 1 100%/);
+    expect(desktopCss).not.toMatch(/justify-content:\s*center/);
+    expect(pageCss).toMatch(
+      /@media \(max-width: 767px\) \{[\s\S]*\.freshnessPill \{[\s\S]*flex:\s*1 1 100%/,
+    );
+    expect(pageCss).toMatch(
+      /@media \(max-width: 767px\) \{[\s\S]*\.freshnessPill \{[\s\S]*max-width:\s*100%/,
+    );
+    expect(pageCss).toMatch(
+      /@media \(max-width: 767px\) \{[\s\S]*\.freshnessPill \{[\s\S]*justify-content:\s*center/,
+    );
     expect(situationCss).toMatch(/@media \(max-width: 767px\) \{[\s\S]*flex:\s*1 1/);
     expect(categoryCss).toMatch(/@media \(max-width: 767px\) \{[\s\S]*flex:\s*1 1/);
+    expect(categoryCss).toMatch(/\.root \{[\s\S]*width:\s*11rem/);
+    expect(categoryCss).toMatch(/\.root \{[\s\S]*max-width:\s*16rem/);
+    expect(categoryCss).toMatch(/\.trigger \{[\s\S]*height:\s*2\.25rem[\s\S]*max-height:\s*2\.25rem/);
+    expect(categoryCss).toMatch(/\.trigger \{[\s\S]*white-space:\s*nowrap/);
+    expect(categoryCss).toMatch(/\.trigger \{[\s\S]*overflow:\s*hidden/);
+    expect(categoryCss).toMatch(
+      /\.triggerText \{[\s\S]*overflow:\s*hidden[\s\S]*text-overflow:\s*ellipsis[\s\S]*white-space:\s*nowrap/,
+    );
+    expect(categoryCss).toMatch(/\.triggerText \{[\s\S]*flex:\s*1 1 0/);
     expect(categoryCss).toMatch(/right:\s*0/);
     expect(categoryCss).toMatch(/width:\s*min\(20rem, calc\(100vw - 2rem\)\)/);
+    expect(categoryCss).toMatch(
+      /@media \(max-width: 767px\) \{[\s\S]*\.root \{[\s\S]*max-width:\s*100%/,
+    );
   });
 });

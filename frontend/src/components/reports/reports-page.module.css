@@ -225,6 +225,13 @@
     width: 100%;
   }
 
+  /* Situação/Categoria usam flex-basis horizontal na Home; em coluna isso vira altura. */
+  .filtersRow > * {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+  }
+
   .field,
   .typeSelect {
     width: 100%;

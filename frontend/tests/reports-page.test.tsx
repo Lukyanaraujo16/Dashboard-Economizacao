@@ -379,6 +379,17 @@ describe('página /relatorios', () => {
     const css = await readFile(join(here, '../src/components/reports/reports-page.module.css'), 'utf8');
     expect(css).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.filtersRow/);
     expect(css).toMatch(/flex-direction:\s*column/);
+    expect(css).toMatch(
+      /@media \(max-width: 767px\) \{[\s\S]*\.filtersRow > \* \{[\s\S]*flex:\s*0 0 auto/,
+    );
+    expect(css).not.toMatch(/\.filtersRow \{[\s\S]*justify-content:\s*space-between/);
+    expect(css).not.toMatch(/grid-template-rows:\s*1fr/);
+    expect(css).toMatch(/\.idle \{[\s\S]*margin:\s*0/);
+    expect(css).not.toMatch(/\.idle \{[\s\S]*min-height/);
+    expect(css).not.toMatch(/\.result \{[\s\S]*min-height:\s*100/);
+    expect(css).not.toMatch(/\.root \{[\s\S]*min-height:\s*100vh/);
+    expect(css).toMatch(/\.costCenterField \{/);
+    expect(css).toMatch(/\.actions \{/);
     expect(css).toMatch(/\.tableWrap \{[\s\S]*overflow-x:\s*auto/);
     expect(css).toMatch(/\.resultActions \{[\s\S]*flex-wrap:\s*wrap/);
     expect(css).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.resultActions > button/);

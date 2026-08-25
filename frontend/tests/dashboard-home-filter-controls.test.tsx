@@ -127,4 +127,53 @@ describe('DashboardCategorySelector', () => {
     const list = screen.getByRole('listbox', { name: 'Categorias' });
     expect(within(list).getAllByRole('option').length).toBe(41);
   });
+
+  it('categoria longa preserva nome acessível e não quebra o trigger', () => {
+    const longName = 'Descontos financeiros obtidos';
+    const extremeName =
+      'Descontos financeiros obtidos em renegociações extraordinárias de contratos de longo prazo';
+    const longId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const onSelect = vi.fn();
+    const { rerender } = render(
+      <ThemeProvider>
+        <DashboardCategorySelector
+          items={[
+            { id: longId, name: longName, type: 'EXPENSE' },
+            { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: extremeName, type: 'EXPENSE' },
+            { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Folha', type: 'EXPENSE' },
+          ]}
+          selectedId={longId}
+          onSelect={onSelect}
+        />
+      </ThemeProvider>,
+    );
+
+    const trigger = screen.getByRole('button', { name: `Categoria: ${longName}` });
+    expect(trigger.getAttribute('title')).toBe(longName);
+    expect(trigger.className).toMatch(/trigger/);
+    const triggerText = trigger.querySelector('[class*="triggerText"]');
+    expect(triggerText?.textContent).toBe(longName);
+
+    fireEvent.click(trigger);
+    const list = screen.getByRole('listbox', { name: 'Categorias' });
+    expect(within(list).getByRole('option', { name: longName })).toBeTruthy();
+    fireEvent.click(within(list).getByRole('option', { name: extremeName }));
+    expect(onSelect).toHaveBeenCalledWith('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+
+    rerender(
+      <ThemeProvider>
+        <DashboardCategorySelector
+          items={[
+            { id: longId, name: longName, type: 'EXPENSE' },
+            { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: extremeName, type: 'EXPENSE' },
+            { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Folha', type: 'EXPENSE' },
+          ]}
+          selectedId={null}
+          onSelect={onSelect}
+        />
+      </ThemeProvider>,
+    );
+    const reset = screen.getByRole('button', { name: 'Categoria: Todas as categorias' });
+    expect(reset.getAttribute('title')).toBe('Todas as categorias');
+  });
 });
