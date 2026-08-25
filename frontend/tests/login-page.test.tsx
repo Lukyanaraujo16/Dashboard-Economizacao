@@ -59,7 +59,7 @@ describe('rota /login', () => {
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
-  it('autenticado → redirect /', async () => {
+  it('autenticado USER → redirect /', async () => {
     renderLoginPage({
       getCurrentUserAction: createAuthenticatedGetCurrentUser(),
       hydrateOnMount: true,
@@ -69,6 +69,42 @@ describe('rota /login', () => {
       expect(replaceMock).toHaveBeenCalledWith('/');
     });
     expect(screen.queryByRole('heading', { name: /bem-vindo de volta/i })).toBeNull();
+  });
+
+  it('autenticado ADMIN → redirect /empresas', async () => {
+    renderLoginPage({
+      getCurrentUserAction: createAuthenticatedGetCurrentUser({
+        id: 'admin-1',
+        name: 'Admin',
+        email: 'admin@plataforma.com',
+        role: 'ADMIN',
+        tenantId: null,
+      }),
+      hydrateOnMount: true,
+    });
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    expect(replaceMock).not.toHaveBeenCalledWith('/');
+  });
+
+  it('autenticado SUPER_ADMIN → redirect /empresas', async () => {
+    renderLoginPage({
+      getCurrentUserAction: createAuthenticatedGetCurrentUser({
+        id: 'super-1',
+        name: 'Super',
+        email: 'super@plataforma.com',
+        role: 'SUPER_ADMIN',
+        tenantId: null,
+      }),
+      hydrateOnMount: true,
+    });
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    expect(replaceMock).not.toHaveBeenCalledWith('/');
   });
 
   it('durante loading não flasha o formulário', () => {

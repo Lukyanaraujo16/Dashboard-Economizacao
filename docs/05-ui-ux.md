@@ -157,7 +157,7 @@ Elementos principais:
 
 7. Menu Lateral
 
-Itens iniciais previstos:
+Itens iniciais previstos (contexto de tenant):
 
 * Dashboard;
 * Relatórios;
@@ -166,6 +166,15 @@ Itens iniciais previstos:
 * Minha Conta.
 
 Itens que não possuírem funcionalidade no MVP não deverão ser exibidos apenas como placeholders.
+
+PRE-IA-1 — contexto de navegação (25/08/2026):
+
+* USER (tenant): landing `/`; Dashboard e Relatórios visíveis.
+* ADMIN / SUPER_ADMIN sem Support Mode: landing `/empresas`; Dashboard e Relatórios financeiros ocultos. Acesso direto a `/` ou `/relatorios` redireciona para `/empresas`.
+* ADMIN / SUPER_ADMIN com Support Mode ativo: Dashboard e Relatórios visíveis; enter continua indo para `/`; exit retorna a `/empresas`.
+* Não criar dashboard administrativa nesta fase. `/empresas` é a landing operacional da plataforma.
+
+Helper oficial: `canUseTenantSurfaces` (USER **ou** operador de plataforma com `support.active`).
 
 ⸻
 
@@ -806,7 +815,8 @@ Devem permitir, quando aplicável:
 33. Relatórios
 
 O menu Relatórios só aparece quando a página existir (F12-B). Não usar
-placeholder no sidebar (regra §7). Item de tenant (`platformOnly: false`).
+placeholder no sidebar (regra §7). Superfície de tenant: visível para USER
+e para operador de plataforma somente com Support Mode ativo (`canUseTenantSurfaces`).
 Rota: `/relatorios`. Título: Relatórios.
 
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — tipo Receita
@@ -1317,7 +1327,9 @@ O objetivo é evitar que o operador esqueça que está agindo dentro do ambiente
 
 A ação para sair deverá ser facilmente acessível.
 
-Após sair, o administrador retorna ao contexto administrativo original.
+Após sair, o administrador retorna ao contexto administrativo original
+(`/empresas`). Dashboard e Relatórios financeiros deixam de aparecer na
+sidebar até nova entrada em Support Mode.
 
 ⸻
 
@@ -1705,6 +1717,8 @@ UX-001 — Login utiliza branding da plataforma.
 UX-002 — Após login, branding do tenant é aplicado.
 
 UX-003 — Dashboard é a primeira tela do cliente.
+
+UX-003.1 — ADMIN/SUPER_ADMIN sem Support Mode aterrissam em `/empresas`. Dashboard financeira não é a home da plataforma.
 
 UX-004 — Período funciona como filtro global.
 

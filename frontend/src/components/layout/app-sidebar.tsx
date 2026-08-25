@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
-import { isPlatformRole, useAuth } from '../../auth';
+import { canUseTenantSurfaces, isPlatformRole, useAuth } from '../../auth';
 import { PlatformBrandMark } from '../../login/platform-brand-mark';
 import { DEFAULT_PLATFORM_BRAND_NAME } from '../../services/admin/platform-branding.types';
 import { useTheme } from '../../theme';
@@ -23,31 +23,31 @@ const NAV_ITEMS = [
   {
     href: '/',
     label: 'Dashboard',
-    platformOnly: false,
+    surface: 'tenant',
     icon: IconLayoutDashboard,
   },
   {
     href: '/relatorios',
     label: 'Relatórios',
-    platformOnly: false,
+    surface: 'tenant',
     icon: IconBarChart3,
   },
   {
     href: '/empresas',
     label: 'Empresas',
-    platformOnly: true,
+    surface: 'platform',
     icon: IconBuilding2,
   },
   {
     href: '/administradores',
     label: 'Administradores',
-    platformOnly: true,
+    surface: 'platform',
     icon: IconShieldUser,
   },
   {
     href: '/configuracoes/aparencia',
     label: 'Configurações',
-    platformOnly: true,
+    surface: 'platform',
     icon: IconSettings2,
   },
 ] as const;
@@ -64,9 +64,12 @@ export function AppSidebar() {
   const brandName = theme.brandName?.trim() || DEFAULT_PLATFORM_BRAND_NAME;
   const logoUrl = theme.logoUrl;
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.platformOnly || (user && isPlatformRole(user.role) && !support.active),
-  );
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.surface === 'platform') {
+      return Boolean(user && isPlatformRole(user.role) && !support.active);
+    }
+    return canUseTenantSurfaces(user, support);
+  });
 
   async function handleLogout() {
     if (loggingOut) return;

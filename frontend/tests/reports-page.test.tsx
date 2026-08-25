@@ -2,7 +2,6 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import RelatoriosPage from '../app/(authenticated)/relatorios/page';
-import { ReportsPage } from '../src/components/reports/reports-page';
 import { getDashboardCategories } from '../src/services/dashboard/categories';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
 import { getReportsExpenses, downloadReportsExpensesExport } from '../src/services/reports/expenses';
@@ -220,7 +219,7 @@ function renderReports(options?: {
     : { active: false as const };
   return renderWithAuth(
     <ThemeProvider>
-      <ReportsPage />
+      <RelatoriosPage />
     </ThemeProvider>,
     {
       getCurrentUserAction: createAuthenticatedGetCurrentUser(user, support),
@@ -334,11 +333,11 @@ describe('página /relatorios', () => {
     reportsSearchParams = new URLSearchParams();
     vi.mocked(getReportsRevenue).mockReset();
     renderReports({ role: 'ADMIN' });
-    expect(
-      await screen.findByText(
-        'Selecione uma empresa pelo modo suporte para visualizar este relatório.',
-      ),
-    ).toBeTruthy();
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    expect(screen.queryByRole('heading', { name: 'Relatórios', level: 1 })).toBeNull();
+    expect(vi.mocked(getReportsRevenue)).not.toHaveBeenCalled();
 
     cleanup();
     vi.mocked(getReportsRevenue).mockReset();
@@ -352,6 +351,24 @@ describe('página /relatorios', () => {
       expect(getReportsRevenue).toHaveBeenCalled();
     });
     expect(await screen.findByText('Serviços')).toBeTruthy();
+  });
+
+  it('SUPER_ADMIN sem Support Mode em /relatorios redireciona /empresas', async () => {
+    renderReports({ role: 'SUPER_ADMIN' });
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    expect(vi.mocked(getReportsRevenue)).not.toHaveBeenCalled();
+  });
+
+  it('Support Mode ativo em /relatorios não redireciona', async () => {
+    vi.mocked(getReportsRevenue).mockResolvedValue(readyBody);
+    renderReports({
+      role: 'ADMIN',
+      support: { active: true, tenantId: 'tenant-a', tenantDisplayName: 'Empresa A' },
+    });
+    expect(await screen.findByRole('heading', { name: 'Relatórios', level: 1 })).toBeTruthy();
+    expect(replaceMock).not.toHaveBeenCalledWith('/empresas');
   });
 
   it('empilha filtros no CSS mobile e usa tabela com overflow controlado', async () => {

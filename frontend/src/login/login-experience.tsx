@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent } from 'react';
 
-import { useAuth } from '../auth';
+import { resolveAuthenticatedHomePath, useAuth } from '../auth';
 import {
   Badge,
   Button,
@@ -127,14 +127,14 @@ export function LoginExperience({
         password,
       });
       const session = await refreshSession();
-      if (session !== 'authenticated') {
+      if (session.kind !== 'authenticated') {
         submittingRef.current = false;
         setStatus('idle');
         setFormError('Não foi possível verificar a sessão. Tente novamente.');
         return;
       }
       setStatus('success');
-      router.replace('/');
+      router.replace(resolveAuthenticatedHomePath(session.user, session.support));
     } catch (error) {
       submittingRef.current = false;
       setStatus('idle');

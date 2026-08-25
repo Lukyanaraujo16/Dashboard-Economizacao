@@ -16,11 +16,15 @@ import { logout as logoutRequest } from '../services/auth/logout';
 import { getCurrentUser, SessionRequestError } from '../services/auth/me';
 import type { AuthMeResponse, AuthenticatedUser, AuthStatus, SupportState } from './types';
 
+export type RefreshSessionResult =
+  | { readonly kind: 'authenticated'; readonly user: AuthenticatedUser; readonly support: SupportState }
+  | { readonly kind: 'unauthenticated' };
+
 export type AuthContextValue = {
   readonly status: AuthStatus;
   readonly user: AuthenticatedUser | null;
   readonly support: SupportState;
-  readonly refreshSession: () => Promise<'authenticated' | 'unauthenticated'>;
+  readonly refreshSession: () => Promise<RefreshSessionResult>;
   /** Aplica resposta de enter/exit sem segundo round-trip. */
   readonly applySession: (session: AuthMeResponse) => void;
   readonly logout: () => Promise<void>;
@@ -54,23 +58,25 @@ export function AuthProvider({
   const [support, setSupport] = useState<SupportState>(INACTIVE_SUPPORT);
   const requestIdRef = useRef(0);
 
-  const refreshSession = useCallback(async (): Promise<'authenticated' | 'unauthenticated'> => {
+  const refreshSession = useCallback(async (): Promise<RefreshSessionResult> => {
     const requestId = ++requestIdRef.current;
     try {
       const result = await getCurrentUserAction();
       if (requestId !== requestIdRef.current) {
-        return result.kind === 'authenticated' ? 'authenticated' : 'unauthenticated';
+        return result.kind === 'authenticated'
+          ? { kind: 'authenticated', user: result.user, support: result.support }
+          : { kind: 'unauthenticated' };
       }
       if (result.kind === 'authenticated') {
         setUser(result.user);
         setSupport(result.support);
         setStatus('authenticated');
-        return 'authenticated';
+        return { kind: 'authenticated', user: result.user, support: result.support };
       }
       setUser(null);
       setSupport(INACTIVE_SUPPORT);
       setStatus('unauthenticated');
-      return 'unauthenticated';
+      return { kind: 'unauthenticated' };
     } catch (error) {
       if (requestId === requestIdRef.current) {
         setUser(null);

@@ -170,6 +170,75 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     expect(system.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('ADMIN sem Support Mode oculta Dashboard/Relatórios e redireciona /empresas', async () => {
+    const admin = {
+      ...mockAuthenticatedUser,
+      role: 'ADMIN' as const,
+      tenantId: null,
+    };
+
+    renderShell({
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(admin),
+      hydrateOnMount: true,
+    });
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    const navigation = await screen.findByRole('navigation', { name: 'Seções' });
+    expect(within(navigation).queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    expect(within(navigation).queryByRole('link', { name: 'Relatórios' })).toBeNull();
+    expect(within(navigation).getByRole('link', { name: 'Empresas' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Dashboard financeiro' })).toBeNull();
+  });
+
+  it('SUPER_ADMIN sem Support Mode oculta Dashboard/Relatórios e redireciona /empresas', async () => {
+    const superAdmin = {
+      ...mockAuthenticatedUser,
+      role: 'SUPER_ADMIN' as const,
+      tenantId: null,
+    };
+
+    renderShell({
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(superAdmin),
+      hydrateOnMount: true,
+    });
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    const navigation = await screen.findByRole('navigation', { name: 'Seções' });
+    expect(within(navigation).queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    expect(within(navigation).queryByRole('link', { name: 'Relatórios' })).toBeNull();
+    expect(within(navigation).getByRole('link', { name: 'Empresas' })).toBeTruthy();
+  });
+
+  it('ADMIN em Support Mode vê Dashboard e Relatórios e não redireciona', async () => {
+    const admin = {
+      ...mockAuthenticatedUser,
+      role: 'ADMIN' as const,
+      tenantId: null,
+    };
+    const activeSupport = {
+      active: true as const,
+      tenantId: 'tenant-support',
+      tenantDisplayName: 'Empresa Assistida',
+      startedAt: '2026-08-17T12:00:00.000Z',
+      supportSessionId: 'support-1',
+    };
+
+    renderShell({
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(admin, activeSupport),
+      hydrateOnMount: true,
+    });
+
+    const navigation = await screen.findByRole('navigation', { name: 'Seções' });
+    expect(within(navigation).getByRole('link', { name: 'Dashboard' })).toBeTruthy();
+    expect(within(navigation).getByRole('link', { name: 'Relatórios' })).toBeTruthy();
+    expect(navigation.textContent).not.toMatch(/Empresas|Administradores|Configurações/);
+    expect(replaceMock).not.toHaveBeenCalledWith('/empresas');
+  });
+
   it('exibe somente módulos permitidos para USER', async () => {
     renderShell({
       getCurrentUserAction: createAuthenticatedGetCurrentUser(),

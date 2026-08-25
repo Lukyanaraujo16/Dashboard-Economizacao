@@ -121,6 +121,8 @@ Estado atual
 ✔ F12-C — Exportação PDF/XLSX da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 ✔ F12-D — Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 
+✔ PRE-IA-1 — Admin shell (landing `/empresas` + sidebar contextual) IMPLEMENTADA (25/08/2026)
+
 ✔ 2.1 — OAuth Conta Azul concluída (OAuth real homologado; sem consumo financeiro)
 
 ✔ 2.2 — Gestão das conexões concluída (identidade/health homologados; sem sync financeira)
@@ -606,7 +608,8 @@ Contrato:
 - USER recebe 403 no enter; sem sessão recebe 401
 - SUPER_ADMIN permanece o operador técnico de nível máximo; ADMIN é o administrador operacional
 - banner persistente com nome da empresa e saída sem F5
-- sidebar tenant-like; itens `platformOnly` ocultos durante suporte
+- sidebar: Dashboard/Relatórios só no contexto de tenant (`canUseTenantSurfaces`); itens de plataforma ocultos durante suporte
+- landing de plataforma (sem Support Mode): `/empresas`; enter Support Mode → `/`; exit → `/empresas`
 - `requireAuthentication` reconcilia Redis ↔ registro aberto no PostgreSQL
 - tenant DISABLED/inexistente invalida o suporte na próxima request
 - login novo sempre começa na plataforma e encerra sessões abertas do operador

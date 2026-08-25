@@ -149,10 +149,12 @@ beforeEach(() => {
 
 describe('UI administrativa de Empresas (1.2D)', () => {
   describe('navegação por role', () => {
-    it('ADMIN vê item Empresas', async () => {
+    it('ADMIN vê item Empresas e não vê Dashboard/Relatórios', async () => {
       stubListFetch([]);
       renderShell('ADMIN');
       expect(await screen.findByRole('link', { name: 'Empresas' })).toBeTruthy();
+      expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Relatórios' })).toBeNull();
     });
 
     it('SUPER_ADMIN vê item Empresas', async () => {

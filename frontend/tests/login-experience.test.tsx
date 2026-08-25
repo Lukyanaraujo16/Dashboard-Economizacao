@@ -311,11 +311,64 @@ describe('LoginExperience (integração funcional)', () => {
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith('/');
     });
+    expect(replaceMock).not.toHaveBeenCalledWith('/empresas');
 
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
     expect(JSON.stringify(localStorage)).not.toContain('Password#12345');
     expect(JSON.stringify(sessionStorage)).not.toContain('Password#12345');
+  });
+
+  it('ADMIN autenticado é enviado para /empresas', async () => {
+    const admin = {
+      ...mockAuthenticatedUser,
+      role: 'ADMIN' as const,
+      tenantId: null,
+    };
+    const loginAction = vi.fn().mockResolvedValue({ status: 'ok' });
+
+    renderWithAuth(<LoginExperience loginAction={loginAction} />, {
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(admin),
+    });
+
+    fireEvent.change(screen.getByLabelText(/e-mail/i), {
+      target: { value: 'admin@plataforma.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^senha/i), {
+      target: { value: 'Password#12345' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    expect(replaceMock).not.toHaveBeenCalledWith('/');
+  });
+
+  it('SUPER_ADMIN autenticado é enviado para /empresas', async () => {
+    const superAdmin = {
+      ...mockAuthenticatedUser,
+      role: 'SUPER_ADMIN' as const,
+      tenantId: null,
+    };
+    const loginAction = vi.fn().mockResolvedValue({ status: 'ok' });
+
+    renderWithAuth(<LoginExperience loginAction={loginAction} />, {
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(superAdmin),
+    });
+
+    fireEvent.change(screen.getByLabelText(/e-mail/i), {
+      target: { value: 'super@plataforma.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^senha/i), {
+      target: { value: 'Password#12345' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+    });
+    expect(replaceMock).not.toHaveBeenCalledWith('/');
   });
 
   it('exige AuthProvider', () => {

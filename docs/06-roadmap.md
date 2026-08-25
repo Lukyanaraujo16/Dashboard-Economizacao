@@ -61,6 +61,8 @@ HOMOLOGADA TECNICAMENTE (25/08/2026) — PDF/XLSX da Receita. F12-D IMPLEMENTADA
 HOMOLOGADA TECNICAMENTE (25/08/2026) — Relatório de Despesas + PDF/XLSX.
 Fase 12 completa: NÃO (recorte V1 Receita+Despesas entregue; itens históricos
 do PRD fora da V1).
+PRE-IA-1 — Admin shell: IMPLEMENTADA (landing de plataforma `/empresas`;
+Dashboard/Relatórios só em contexto de tenant ou Support Mode).
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
 L1-A (financial_transactions): WIP isolado em stash — NÃO está no HEAD publicado.

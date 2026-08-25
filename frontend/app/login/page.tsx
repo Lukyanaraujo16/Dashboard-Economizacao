@@ -3,26 +3,26 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { useAuth } from '../../src/auth';
+import { resolveAuthenticatedHomePath, useAuth } from '../../src/auth';
 import { LoginExperience } from '../../src/login/login-experience';
 import { applyDocumentBranding, useRuntimePlatformBranding } from '../../src/theme';
 import type { TenantBrandingInput } from '../../src/theme/types/theme';
 
 /**
  * Rota de produção do login.
- * Usuário autenticado é redirecionado para `/` (destino temporário).
+ * USER autenticado → `/`. ADMIN/SUPER_ADMIN sem Support Mode → `/empresas`.
  * Branding vem de GET /branding/platform via RuntimePlatformBrandingProvider.
  */
 export default function LoginPage() {
   const router = useRouter();
-  const { status } = useAuth();
+  const { status, user, support } = useAuth();
   const { platformBranding, status: brandingStatus } = useRuntimePlatformBranding();
 
   useEffect(() => {
-    if (status === 'authenticated') {
-      router.replace('/');
+    if (status === 'authenticated' && user) {
+      router.replace(resolveAuthenticatedHomePath(user, support));
     }
-  }, [status, router]);
+  }, [status, user, support, router]);
 
   useEffect(() => {
     if (brandingStatus === 'loading') {

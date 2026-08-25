@@ -2,6 +2,7 @@
 
 import { Suspense } from 'react';
 
+import { RequireTenantSurface } from '../../auth';
 import { DashboardPage } from '../dashboard';
 
 /**
@@ -9,8 +10,10 @@ import { DashboardPage } from '../dashboard';
  */
 export function AuthenticatedHome() {
   return (
-    <Suspense fallback={null}>
-      <DashboardPage />
-    </Suspense>
+    <RequireTenantSurface>
+      <Suspense fallback={null}>
+        <DashboardPage />
+      </Suspense>
+    </RequireTenantSurface>
   );
 }
