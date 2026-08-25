@@ -1,4 +1,7 @@
-import { Workbook, type Row, type Worksheet } from 'exceljs';
+import ExcelJS from 'exceljs';
+import type { Row, Worksheet } from 'exceljs';
+
+type Workbook = ExcelJS.Workbook;
 
 import {
   EMPTY_EXPENSES_REPORT_NOTICE,
@@ -15,7 +18,7 @@ import {
 import { sanitizeSpreadsheetText } from './sanitize-spreadsheet-text.js';
 
 export async function renderExpensesReportXlsx(context: ExpensesExportContext): Promise<Buffer> {
-  const workbook = new Workbook();
+  const workbook = new ExcelJS.Workbook();
   workbook.creator = PRODUCT_NAME;
   workbook.created = context.generatedAt;
   workbook.modified = context.generatedAt;
