@@ -28,6 +28,7 @@ import {
   DashboardMonthlyRevenueRequestError,
   type DashboardMonthlyRevenueResponse,
 } from '../src/services/dashboard/monthly-revenue.types';
+import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import {
   DashboardMonthlyExpenseRequestError,
@@ -43,6 +44,7 @@ import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
 import { getDashboardCategories } from '../src/services/dashboard/categories';
 import { ThemeProvider } from '../src/theme';
+import { cashFlowHomeFixture } from './helpers/monthly-cash-flow-fixture';
 import {
   createAuthenticatedGetCurrentUser,
   mockAuthenticatedUser,
@@ -80,6 +82,10 @@ vi.mock('../src/services/dashboard/monthly-revenue', () => ({
   getDashboardMonthlyRevenue: vi.fn(),
 }));
 
+vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
+  getDashboardMonthlyCashFlow: vi.fn(),
+}));
+
 vi.mock('../src/services/dashboard/executive-insights', () => ({
   getDashboardExecutiveInsights: vi.fn(),
 }));
@@ -102,6 +108,7 @@ const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
+const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
@@ -319,6 +326,7 @@ beforeEach(() => {
   getForecast.mockResolvedValue(emptyForecast);
   getMonthlyExpenses.mockResolvedValue(emptyMonthlyExpenses);
   getMonthlyRevenue.mockResolvedValue(emptyMonthlyRevenue);
+  getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
   getInsights.mockResolvedValue(emptyInsights);
   getRevenueGoal.mockResolvedValue(emptyRevenueGoal);
   getCostCenters.mockResolvedValue({

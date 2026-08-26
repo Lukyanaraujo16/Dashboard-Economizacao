@@ -29,11 +29,15 @@ Fase 11 Home: CONCLUÍDA no recorte mensal.
 F12-A (24/08/2026): CONTRATO CONGELADO. Paridade com monthly-revenue /
 monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
 De/Até. Ledger CASH-2 persistido no HEAD (`financial_transactions`).
-KPI de caixa / Home: ainda competência até CASH-4. CASH-3A: domínio
-`MonthlyCashFlow`. CASH-3B: `GET /dashboard/monthly-cash-flow` (sem Home).
+KPI de caixa / Home: CASH-4A carrega MonthlyCashFlow; cards visíveis ainda
+competência até CASH-4B. CASH-3A: domínio `MonthlyCashFlow`. CASH-3B:
+`GET /dashboard/monthly-cash-flow`.
 Semântica: `netAmount` / `occurredOn`.
 Faturamento oficial (Felipe, 26/08/2026): `realized.inflows + expected.receivables`.
-Vencido não compõe. Meta permanece PENDENTE de decisão humana (não ligar ao novo Faturamento).
+Despesas oficiais (Felipe, simétrico): `realized.outflows + expected.payables`.
+Resultado da Home: `billing − monthlyExpenses`. Vencidos AR/AP fora dos totais.
+Meta futura (opção A): `actual = billing`. UI da Meta ainda competência (CASH-4B).
+Pagamento tardio no mês da baixa. Competência não define Faturamento/Despesas.
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
 Receita reutiliza o motor mensal (D1/D8/D9/CC1). F12-C (25/08/2026):
 IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — PDF/XLSX formatam o mesmo
@@ -387,6 +391,8 @@ A Home apresenta despesa mensal por competência (`GET /dashboard/monthly-expens
 AP com competenceDate no mês civil selecionado, incluindo PAID; D8 sobre o
 total do mês. `paid` HTTP = Σ paid do snapshot, não caixa do mês.
 Título: “Despesas por categoria”. Não é estoque até 2028.
+CASH-4B (ainda não iniciado): Despesas da Home =
+`realized.outflows + expected.payables` (vencido AP fora). CASH-4A só infra.
 
 A Home apresenta receita mensal por competência (`GET /dashboard/monthly-revenue`):
 AR com competenceDate no mês civil corrente, incluindo PAID; D8 sobre o
@@ -434,12 +440,42 @@ Se a baixa ocorrer ainda no mês do vencimento: volta ao Faturamento via realiza
 (sem duplicar título: expected/overdue usam unpaid atual; realizado usa ledger).
 Helper de domínio: `monthlyBilling(flow)` — composição das peças; não é motor paralelo.
 HTTP CASH-3B: `GET /dashboard/monthly-cash-flow` serializa `billing` a partir do helper.
-Home ainda renderiza F1-G (competência / monthly-revenue) até CASH-4.
-Meta permanece PENDENTE de decisão humana — não ligar ao novo Faturamento.
+CASH-4A: Home carrega o DTO e o view-model (`toMonthlyCashFlowView`); cards ainda F1-G.
+Home visual permanece F1-G (competência / monthly-revenue) até CASH-4B.
+
+Despesas oficiais (Felipe, simétrico ao Faturamento):
+
+  monthlyExpenses(month, today) =
+    MonthlyCashFlow.realized.outflows
+    + MonthlyCashFlow.expected.payables
+
+  realized.outflows = Σ financial_transactions.netAmount
+    WHERE transactionType = PAYMENT, lifecycleStatus = ACTIVE, occurredOn ∈ mês
+  expected.payables = Σ payables.unpaid
+    WHERE status ativo, unpaid > 0, dueDate ∈ mês, dueDate >= today (civil SP)
+
+Vencido (`overdue.payables`) NÃO entra. Baixa tardia: mês de `occurredOn`.
+
+Resultado principal da Home (CASH-4B):
+
+  managerialResult = billing − monthlyExpenses
+
+`realized.result` permanece disponível e NÃO substitui o card principal.
+
+Meta futura (decisão Felipe = opção A; UI ainda competência neste CASH-4A):
+
+  actual = billing = realized.inflows + expected.receivables
+
+Não usar competência / monthly-revenue.total / somente realized.inflows.
+
+Vencidos são estoque separado (D1). PROIBIDO somar billing + overdue.receivables
+ou monthlyExpenses + overdue.payables.
+
+Meta permanece na UI atual (`loadCompetenceActual`) até CASH-4B — não ligar agora.
 
 Faturamento fiscal (NF-e/NFS-e): capacidade futura separada — NÃO IMPLEMENTADO.
 
-Home atual (F1-G, até CASH-4) — NÃO é a fórmula oficial de produto:
+Home atual (F1-G, até CASH-4B) — NÃO é a fórmula oficial de produto:
 
   Faturamento Gerencial mensal (legado da Home) =
     Σ total dos AR com competenceDate no mês civil selecionado
@@ -576,7 +612,8 @@ utilizável (Grupo A):
 * janela N de "próximos vencimentos" além da regra dueDate >= hoje
   (detalhe de apresentação; horizonte de 90 dias já define o fluxo);
 * Faturamento (§12) — fórmula oficial homologada (caixa: inflows + previsto no prazo).
-  Home ainda F1-G competência até CASH-4. Meta NÃO ligada. Fiscal futuro separado;
+  Home visual ainda F1-G competência até CASH-4B. CASH-4A = infra. Meta futura = billing;
+  UI da Meta ainda competência. Fiscal futuro separado;
 * ledger / data efetiva de baixa (§8) — `paid` acumulado ≠ ledger;
 * saldo de conta (§13);
 * fixas/variáveis (§14);
@@ -595,8 +632,10 @@ Não bloqueia Fase 10. Não apagar do MVP completo.
 
 A — Faturamento:
 * Faturamento oficial (§12) — HOMOLOGADO Felipe (CASH-3A): inflows + expected.receivables
-* Home F1-G competência — SUPERSEDED como fórmula de produto; permanece na UI até CASH-4
-* Meta — PENDENTE de decisão humana (não inferir do Faturamento)
+* Despesas oficiais — HOMOLOGADO Felipe: outflows + expected.payables; vencido AP fora
+* Resultado da Home — billing − monthlyExpenses (`realized.result` não substitui)
+* Home F1-G competência — SUPERSEDED como fórmula de produto; permanece na UI até CASH-4B
+* Meta — decisão A: futuro actual = billing; UI ainda competência (CASH-4B)
 * Faturamento fiscal (NF-e/NFS-e) — futuro separado (F0 preservado)
 
 B — Extensão analítica com dados parcialmente disponíveis:
@@ -716,8 +755,10 @@ oferecem essa taxa como métrica do intervalo De/Até.
 
 Ledger (`financial_transactions`): CASH-2 persiste baixas; CASH-3A calcula
 `MonthlyCashFlow` no domínio. CASH-3B expõe `GET /dashboard/monthly-cash-flow`
-(`billing` = `monthlyBilling`; vencido fora). Home e F12 V1 continuam competência
-até CASH-4/CASH-6. Meta pendente.
+(`billing` = `monthlyBilling`; vencido fora). CASH-4A: Home carrega o DTO
+(view-model); cards e F12 V1 continuam competência até CASH-4B/CASH-6.
+Meta futura = billing; UI da Meta ainda competência.
+HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO CASH-7.
 Estorno/tombstone automático DESLIGADO. Bootstrap/backfill: CASH-7. Sem as-of.
 
 Query params oficiais da Home: `month`, `costCenter`, `situation`, `category`.

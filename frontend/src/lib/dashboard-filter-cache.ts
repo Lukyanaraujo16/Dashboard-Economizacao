@@ -24,6 +24,18 @@ export function dashboardCashWindowCacheKey(
   return `${costCenterId ?? ''}|${categoryId ?? ''}`;
 }
 
+/**
+ * MonthlyCashFlow (CASH-3B): month × centro × categoria.
+ * situation NÃO entra — o realizado histórico não é filtrado por situação.
+ */
+export function dashboardCashFlowCacheKey(
+  monthKey: string,
+  costCenterId: string | null,
+  categoryId: string | null = null,
+): string {
+  return `${monthKey}|${costCenterId ?? ''}|${categoryId ?? ''}`;
+}
+
 export function createDashboardFilterCache<T>() {
   const map = new Map<string, T>();
   return {

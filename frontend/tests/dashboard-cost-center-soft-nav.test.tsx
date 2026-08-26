@@ -14,6 +14,7 @@ import { ThemeProvider } from '../src/theme';
 import { DashboardPage } from '../src/components/dashboard/dashboard-page';
 import {
   createDashboardFilterCache,
+  dashboardCashFlowCacheKey,
   dashboardFilterCacheKey,
 } from '../src/lib/dashboard-filter-cache';
 import { getDashboardOverview } from '../src/services/dashboard/overview';
@@ -21,6 +22,7 @@ import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/mont
 import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
+import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -37,6 +39,7 @@ import {
   mockAuthenticatedUser,
   renderWithAuth,
 } from './helpers/render-with-auth';
+import { cashFlowHomeFixture } from './helpers/monthly-cash-flow-fixture';
 
 const CENTER_A = '11111111-1111-4111-8111-111111111111';
 const CENTER_B = '22222222-2222-4222-8222-222222222222';
@@ -96,6 +99,9 @@ vi.mock('../src/services/dashboard/monthly-expenses', () => ({
 vi.mock('../src/services/dashboard/monthly-revenue', () => ({
   getDashboardMonthlyRevenue: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
+  getDashboardMonthlyCashFlow: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/executive-insights', () => ({
   getDashboardExecutiveInsights: vi.fn(),
 }));
@@ -111,6 +117,7 @@ const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
+const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
@@ -230,6 +237,8 @@ describe('dashboardFilterCache', () => {
   it('chave e get/set', () => {
     expect(dashboardFilterCacheKey('2026-08', null)).toBe('2026-08|||');
     expect(dashboardFilterCacheKey('2026-08', CENTER_A)).toBe(`2026-08|${CENTER_A}||`);
+    expect(dashboardCashFlowCacheKey('2026-08', CENTER_A, null)).toBe(`2026-08|${CENTER_A}|`);
+    expect(dashboardCashFlowCacheKey('2026-08', CENTER_A, null)).not.toContain('open');
     const cache = createDashboardFilterCache<string>();
     cache.set('k', 'v');
     expect(cache.get('k')).toBe('v');
@@ -245,6 +254,7 @@ describe('CC1.3.1 soft filter refresh', () => {
     getForecast.mockResolvedValue(emptyForecast);
     getMonthlyExpenses.mockResolvedValue(emptyExpenses);
     getMonthlyRevenue.mockResolvedValue(revenueWithTotal('1000'));
+    getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
     getInsights.mockResolvedValue(emptyInsights);
     getRevenueGoal.mockResolvedValue(emptyGoal);
     getCostCenters.mockResolvedValue({

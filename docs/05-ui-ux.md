@@ -319,6 +319,15 @@ V2.3.1 — Final Home Polish (HOMOLOGADA): baseline visual/funcional **congelado
 da Home (copy comercial da Meta, ícones semânticos da Leitura, Comparativo sem
 colisão de labels + hover/tooltip). Não redesenhar a Home sem nova fase.
 
+CASH-4A (infra Home / caixa): a Home **carrega** `GET /dashboard/monthly-cash-flow`
+(`month`, `costCenter`, `category`; `situation` não filtra o realizado).
+KPIs visíveis, Meta e gráficos permanecem competência até CASH-4B.
+Faturamento futuro = `realized.inflows + expected.receivables`.
+Despesas futuras = `realized.outflows + expected.payables`.
+Resultado futuro = Faturamento − Despesas. Vencidos AR/AP fora dos totais.
+Meta futura: `actual = billing`. `costCenterCashSplit=false` → métricas null
+(“—”), nunca R$ 0,00. Números reais de caixa **não** homologar antes de CASH-7.
+
 Grade principal (`mainGrid`):
 * Receitas × Despesas (`sectionId` `receitas-mes`);
 * Despesas por categoria (`sectionId` `despesas-mes`, `id` `despesas-categoria`);

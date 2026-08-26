@@ -10,6 +10,7 @@ import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast
 import type { DashboardCashFlowForecastResponse } from '../src/services/dashboard/forecast.types';
 import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
 import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
+import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
 import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
@@ -22,6 +23,7 @@ import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
 import { getDashboardCategories } from '../src/services/dashboard/categories';
 import { ThemeProvider } from '../src/theme';
+import { cashFlowHomeFixture } from './helpers/monthly-cash-flow-fixture';
 import {
   createAuthenticatedGetCurrentUser,
   mockAuthenticatedUser,
@@ -59,6 +61,10 @@ vi.mock('../src/services/dashboard/monthly-revenue', () => ({
   getDashboardMonthlyRevenue: vi.fn(),
 }));
 
+vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
+  getDashboardMonthlyCashFlow: vi.fn(),
+}));
+
 vi.mock('../src/services/dashboard/executive-insights', () => ({
   getDashboardExecutiveInsights: vi.fn(),
 }));
@@ -81,6 +87,7 @@ const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
+const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const putRevenueGoal = vi.mocked(putDashboardRevenueGoal);
@@ -291,6 +298,7 @@ beforeEach(() => {
   getForecast.mockResolvedValue(forecast);
   getMonthlyExpenses.mockResolvedValue(loadedExpenses);
   getMonthlyRevenue.mockResolvedValue(loadedRevenue);
+  getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
   getInsights.mockResolvedValue(insights);
   getRevenueGoal.mockResolvedValue(unconfiguredGoal);
   putRevenueGoal.mockResolvedValue(configuredGoal);

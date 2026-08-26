@@ -36,7 +36,7 @@ export type DashboardMonthlyCashFlowDailyExpectedPoint = {
 /**
  * Contrato GET /dashboard/monthly-cash-flow (CASH-3B).
  * `billing` = realized.inflows + expected.receivables. Vencido não entra.
- * Home ainda não consome este cliente.
+ * CASH-4A: a Home carrega este cliente; KPIs visíveis ainda competência (CASH-4B).
  */
 export type DashboardMonthlyCashFlowResponse = {
   readonly today: string;

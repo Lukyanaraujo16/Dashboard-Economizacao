@@ -74,14 +74,18 @@ L1-A / CASH-2 (financial_transactions): IMPLEMENTADA no HEAD (persistência).
   Stash L1 histórico NÃO aplicar.
 L1-B / CASH-3A: read model `MonthlyCashFlow` IMPLEMENTADO (domínio + loader + testes).
 CASH-3B: `GET /dashboard/monthly-cash-flow` IMPLEMENTADO (DTO + tipos frontend).
-  Home/Relatórios ainda competência. CASH-4 = troca da Home.
+CASH-4A: infra Home (fetch + view-model) IMPLEMENTADA. KPIs visíveis ainda competência.
+CASH-4B: troca visual dos KPIs — NÃO INICIADO.
   Faturamento oficial (Felipe): `realized.inflows + expected.receivables`.
+  Despesas oficiais: `realized.outflows + expected.payables`. Vencido AP fora.
+  Resultado da Home: `billing − monthlyExpenses`. `realized.result` não substitui.
   Vencido não compõe. Pagamento tardio no mês da baixa. Competência não define.
-  Meta permanece PENDENTE (não ligar ao novo Faturamento).
-Faturamento Gerencial (F1-G): Home atual ainda competência / monthly-revenue até CASH-4
+  Meta futura (opção A): `actual = billing`. UI da Meta ainda competência (CASH-4B).
+Faturamento Gerencial (F1-G): Home atual ainda competência / monthly-revenue até CASH-4B
   (fórmula de produto SUPERSEDED pela decisão Felipe acima).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
-F2 meta de faturamento: HOMOLOGADA (realizado da Meta = competência; NÃO redefinir pela decisão de Faturamento)
+F2 meta de faturamento: HOMOLOGADA (realizado da Meta = competência até CASH-4B;
+  decisão Felipe: futuro `actual = billing`. NÃO redefinir a UI neste CASH-4A)
   (`revenue_goals` + `GET`/`PUT /dashboard/revenue-goal`; realizado = competência,
   sem duplicar fórmula; sem histórico de revisões da meta).
   Persistência SIM · por tenant SIM · por competência SIM · cadastro/edição SIM ·

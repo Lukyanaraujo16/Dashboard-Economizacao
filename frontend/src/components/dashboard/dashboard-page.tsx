@@ -34,6 +34,7 @@ import {
 } from '../../lib/dashboard-category';
 import {
   createDashboardFilterCache,
+  dashboardCashFlowCacheKey,
   dashboardCashWindowCacheKey,
   dashboardFilterCacheKey,
 } from '../../lib/dashboard-filter-cache';
@@ -51,6 +52,11 @@ import {
   DashboardMonthlyRevenueRequestError,
   type DashboardMonthlyRevenueResponse,
 } from '../../services/dashboard/monthly-revenue.types';
+import { getDashboardMonthlyCashFlow } from '../../services/dashboard/monthly-cash-flow';
+import {
+  DashboardMonthlyCashFlowRequestError,
+  type DashboardMonthlyCashFlowResponse,
+} from '../../services/dashboard/monthly-cash-flow.types';
 import { getDashboardExecutiveInsights } from '../../services/dashboard/executive-insights';
 import {
   DashboardExecutiveInsightsRequestError,
@@ -88,6 +94,10 @@ import {
   emptyManagerialBillingKpi,
   toManagerialBillingKpi,
 } from './dashboard-managerial-billing-view';
+import {
+  toMonthlyCashFlowView,
+  type MonthlyCashFlowView,
+} from './dashboard-monthly-cash-flow-view';
 import {
   competenceSharePercent,
   isMonthlyExpenseEmpty,
@@ -191,6 +201,17 @@ type MonthlyRevenueView =
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'empty'; readonly data: DashboardMonthlyRevenueResponse }
   | { readonly kind: 'ready'; readonly data: DashboardMonthlyRevenueResponse };
+
+/** CASH-4A: carregado em paralelo; ainda não alimenta KPIs visíveis. */
+type MonthlyCashFlowLoadView =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly message: string }
+  | {
+      readonly kind: 'ready';
+      readonly data: DashboardMonthlyCashFlowResponse;
+      readonly model: MonthlyCashFlowView;
+    };
 
 type RevenueGoalView =
   | { readonly kind: 'idle' }
@@ -455,6 +476,9 @@ export function DashboardPage() {
   const [monthlyRevenueView, setMonthlyRevenueView] = useState<MonthlyRevenueView>({
     kind: 'idle',
   });
+  const [monthlyCashFlowView, setMonthlyCashFlowView] = useState<MonthlyCashFlowLoadView>({
+    kind: 'idle',
+  });
   const [insightsView, setInsightsView] = useState<InsightsView>({ kind: 'idle' });
   const [previousMonthView, setPreviousMonthView] = useState<PreviousMonthView>({ kind: 'idle' });
   const [revenueGoalView, setRevenueGoalView] = useState<RevenueGoalView>({ kind: 'idle' });
@@ -478,6 +502,8 @@ export function DashboardPage() {
   monthlyExpenseViewRef.current = monthlyExpenseView;
   const monthlyRevenueViewRef = useRef(monthlyRevenueView);
   monthlyRevenueViewRef.current = monthlyRevenueView;
+  const monthlyCashFlowViewRef = useRef(monthlyCashFlowView);
+  monthlyCashFlowViewRef.current = monthlyCashFlowView;
   const insightsViewRef = useRef(insightsView);
   insightsViewRef.current = insightsView;
   const previousMonthViewRef = useRef(previousMonthView);
@@ -485,6 +511,7 @@ export function DashboardPage() {
 
   const overviewCacheRef = useRef(createDashboardFilterCache<DashboardOverviewResponse>());
   const revenueCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyRevenueResponse>());
+  const cashFlowCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyCashFlowResponse>());
   const expenseCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyExpenseResponse>());
   const insightsCacheRef = useRef(createDashboardFilterCache<DashboardExecutiveInsightsResponse>());
   const previousMonthCacheRef = useRef(
@@ -504,6 +531,7 @@ export function DashboardPage() {
         setForecastView({ kind: 'idle' });
         setMonthlyExpenseView({ kind: 'idle' });
         setMonthlyRevenueView({ kind: 'idle' });
+        setMonthlyCashFlowView({ kind: 'idle' });
         setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
@@ -516,6 +544,7 @@ export function DashboardPage() {
         setForecastView({ kind: 'idle' });
         setMonthlyExpenseView({ kind: 'idle' });
         setMonthlyRevenueView({ kind: 'idle' });
+        setMonthlyCashFlowView({ kind: 'idle' });
         setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
@@ -544,6 +573,7 @@ export function DashboardPage() {
           setForecastView({ kind: 'idle' });
           setMonthlyExpenseView({ kind: 'idle' });
           setMonthlyRevenueView({ kind: 'idle' });
+          setMonthlyCashFlowView({ kind: 'idle' });
           setInsightsView({ kind: 'idle' });
           setPreviousMonthView({ kind: 'idle' });
           setRevenueGoalView({ kind: 'idle' });
@@ -561,6 +591,7 @@ export function DashboardPage() {
           setForecastView({ kind: 'idle' });
           setMonthlyExpenseView({ kind: 'idle' });
           setMonthlyRevenueView({ kind: 'idle' });
+          setMonthlyCashFlowView({ kind: 'idle' });
           setInsightsView({ kind: 'idle' });
           setPreviousMonthView({ kind: 'idle' });
           setRevenueGoalView({ kind: 'idle' });
@@ -578,6 +609,7 @@ export function DashboardPage() {
         setForecastView({ kind: 'idle' });
         setMonthlyExpenseView({ kind: 'idle' });
         setMonthlyRevenueView({ kind: 'idle' });
+        setMonthlyCashFlowView({ kind: 'idle' });
         setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
@@ -811,6 +843,59 @@ export function DashboardPage() {
             ? error.message
             : 'Não foi possível carregar as receitas do mês.';
         setMonthlyRevenueView({ kind: 'error', message });
+      }
+    },
+    [],
+  );
+
+  const loadMonthlyCashFlow = useCallback(
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      costCenterId: string | null,
+      categoryId: string | null,
+      options?: SoftLoadOptions,
+    ) => {
+      const soft = options?.soft === true;
+      const cacheKey = dashboardCashFlowCacheKey(monthKey, costCenterId, categoryId);
+      const cached = cashFlowCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setMonthlyCashFlowView({
+          kind: 'ready',
+          data: cached,
+          model: toMonthlyCashFlowView(cached),
+        });
+      } else if (!(soft && monthlyCashFlowViewRef.current.kind === 'ready')) {
+        setMonthlyCashFlowView({ kind: 'loading' });
+      }
+      try {
+        const data = await getDashboardMonthlyCashFlow(
+          monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
+          categoryId,
+        );
+        if (signal.aborted) {
+          return;
+        }
+        cashFlowCacheRef.current.set(cacheKey, data);
+        setMonthlyCashFlowView({
+          kind: 'ready',
+          data,
+          model: toMonthlyCashFlowView(data),
+        });
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        if (soft && monthlyCashFlowViewRef.current.kind === 'ready') {
+          return;
+        }
+        const message =
+          error instanceof DashboardMonthlyCashFlowRequestError
+            ? error.message
+            : 'Não foi possível carregar o fluxo de caixa do mês.';
+        setMonthlyCashFlowView({ kind: 'error', message });
       }
     },
     [],
@@ -1080,6 +1165,31 @@ export function DashboardPage() {
     selectedCostCenterId,
     selectedMonthKey,
     selectedSituation,
+    todayMonthKey,
+    view.kind,
+  ]);
+
+  useEffect(() => {
+    if (view.kind !== 'ready') {
+      setMonthlyCashFlowView({ kind: 'idle' });
+      return;
+    }
+    const controller = new AbortController();
+    const soft = monthlyCashFlowViewRef.current.kind === 'ready';
+    void loadMonthlyCashFlow(
+      controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+      selectedCategoryId,
+      { soft },
+    );
+    return () => controller.abort();
+  }, [
+    loadMonthlyCashFlow,
+    selectedCategoryId,
+    selectedCostCenterId,
+    selectedMonthKey,
     todayMonthKey,
     view.kind,
   ]);
@@ -1529,6 +1639,7 @@ export function DashboardPage() {
       className={styles.root}
       data-dashboard-page="true"
       data-overview-state={view.kind}
+      data-cash-flow-state={monthlyCashFlowView.kind}
       data-filter-stable={view.kind === 'ready' ? 'true' : undefined}
       data-situation={selectedSituation ?? 'all'}
       data-category={selectedCategoryId ?? 'all'}
