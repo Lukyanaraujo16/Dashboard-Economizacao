@@ -29,8 +29,10 @@ Fase 11 Home: CONCLUÍDA no recorte mensal.
 F12-A (24/08/2026): CONTRATO CONGELADO. Paridade com monthly-revenue /
 monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
 De/Até. Ledger CASH-2 persistido no HEAD (`financial_transactions`).
-KPI de caixa / Home: ainda competência até CASH-4. Semântica de caixa
-oficial futura: `netAmount` / `occurredOn`. Não misturar eixos na F12 V1.
+KPI de caixa / Home: ainda competência até CASH-4. CASH-3A: domínio
+`MonthlyCashFlow` (sem HTTP). Semântica: `netAmount` / `occurredOn`.
+Faturamento oficial (Felipe, 26/08/2026): `realized.inflows + expected.receivables`.
+Vencido não compõe. Meta permanece PENDENTE de decisão humana (não ligar ao novo Faturamento).
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
 Receita reutiliza o motor mensal (D1/D8/D9/CC1). F12-C (25/08/2026):
 IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — PDF/XLSX formatam o mesmo
@@ -221,7 +223,13 @@ D. Recebido no período
    CASH-2 (26/08/2026): ledger `financial_transactions` persiste cada baixa
    com `occurredOn` = `data_pagamento` e `netAmount` = `valor_liquido`.
    Fórmula observada: líquido = bruto + juros + multa − desconto − taxa.
-   Read model / KPI de realizado: CASH-3+. Não alterar Home nesta fase.
+   CASH-3A (26/08/2026): domínio `MonthlyCashFlow` (sem HTTP/Home).
+   REALIZADO = Σ `netAmount` ACTIVE com `occurredOn` no mês.
+   PREVISTO = Σ `unpaid` ativo com `dueDate` no mês e `dueDate >= today`.
+   VENCIDO = D1 carteira atual (`dueDate < today`), independente do mês.
+   FATURAMENTO homologado = realizado.inflows + expected.receivables
+   (vencido fora; pagamento tardio no mês da baixa; competência não define).
+   Sem as-of. Fluxo ≠ estoque. Home/Relatórios ainda competência até CASH-4/CASH-6.
 
 E. Próximos vencimentos
    AR WHERE status IN (OPEN, OVERDUE, PARTIALLY_PAID)
@@ -407,12 +415,31 @@ rótulo neste item antes de implementar.
 
 12. Faturamento
 
-Status: FATURAMENTO GERENCIAL IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO (F1-G).
+Status oficial (26/08/2026, decisão humana Felipe / PRE-F13-CASH-3A-HOMOLOG):
+nomenclatura permanece FATURAMENTO; NÃO é mais competência.
+
+  Faturamento(month, today) =
+    MonthlyCashFlow.realized.inflows
+    + MonthlyCashFlow.expected.receivables
+
+  realized.inflows = Σ financial_transactions.netAmount
+    WHERE transactionType = RECEIPT, lifecycleStatus = ACTIVE, occurredOn ∈ mês
+  expected.receivables = Σ receivables.unpaid
+    WHERE status ativo, unpaid > 0, dueDate ∈ mês, dueDate >= today (civil SP)
+
+Vencido (`overdue.receivables`, dueDate < today) NÃO entra.
+Pagamento tardio: mês da baixa (`occurredOn`), nunca competenceDate.
+Se a baixa ocorrer ainda no mês do vencimento: volta ao Faturamento via realizado
+(sem duplicar título: expected/overdue usam unpaid atual; realizado usa ledger).
+Helper de domínio: `monthlyBilling(flow)` — composição das peças; não é motor paralelo.
+Home ainda renderiza F1-G (competência / monthly-revenue) até CASH-4.
+Meta permanece PENDENTE de decisão humana — não ligar ao novo Faturamento.
+
 Faturamento fiscal (NF-e/NFS-e): capacidade futura separada — NÃO IMPLEMENTADO.
 
-Definição homologada (F0-G + decisão de produto):
+Home atual (F1-G, até CASH-4) — NÃO é a fórmula oficial de produto:
 
-  Faturamento Gerencial mensal =
+  Faturamento Gerencial mensal (legado da Home) =
     Σ total dos AR com competenceDate no mês civil selecionado
     status ∈ {OPEN, OVERDUE, PARTIALLY_PAID, PAID}
     fora: RENEGOTIATED, LOST, UNKNOWN
@@ -546,8 +573,8 @@ utilizável (Grupo A):
   (Fase 10);
 * janela N de "próximos vencimentos" além da regra dueDate >= hoje
   (detalhe de apresentação; horizonte de 90 dias já define o fluxo);
-* Faturamento Gerencial (§12 / F1-G) — IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
-  (fonte = monthly-revenue); faturamento fiscal futuro separado;
+* Faturamento (§12) — fórmula oficial homologada (caixa: inflows + previsto no prazo).
+  Home ainda F1-G competência até CASH-4. Meta NÃO ligada. Fiscal futuro separado;
 * ledger / data efetiva de baixa (§8) — `paid` acumulado ≠ ledger;
 * saldo de conta (§13);
 * fixas/variáveis (§14);
@@ -565,7 +592,9 @@ utilizável (Grupo A):
 Não bloqueia Fase 10. Não apagar do MVP completo.
 
 A — Faturamento:
-* Faturamento Gerencial (§12 / F1-G) — IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+* Faturamento oficial (§12) — HOMOLOGADO Felipe (CASH-3A): inflows + expected.receivables
+* Home F1-G competência — SUPERSEDED como fórmula de produto; permanece na UI até CASH-4
+* Meta — PENDENTE de decisão humana (não inferir do Faturamento)
 * Faturamento fiscal (NF-e/NFS-e) — futuro separado (F0 preservado)
 
 B — Extensão analítica com dados parcialmente disponíveis:
@@ -683,11 +712,11 @@ Taxa de inadimplência de estoque (`overview.delinquency`, §4 / D2):
 filtro temporal **não** muda a data de referência. Relatórios V1 **não**
 oferecem essa taxa como métrica do intervalo De/Até.
 
-Ledger (`financial_transactions`): CASH-2 persiste baixas no HEAD.
-KPI recebido/pago por período / monthly-cash-flow: ainda NÃO. Home e
-F12 V1 continuam competência até CASH-4/CASH-6. Estorno/tombstone
-automático DESLIGADO. Bootstrap/backfill: CASH-7.
-Não definir recebido/pago por período via ledger nesta fase.
+Ledger (`financial_transactions`): CASH-2 persiste baixas; CASH-3A calcula
+`MonthlyCashFlow` no domínio (sem HTTP). Faturamento oficial =
+`monthlyBilling` = inflows + expected.receivables (vencido fora).
+Home e F12 V1 continuam competência até CASH-4/CASH-6. Meta pendente.
+Estorno/tombstone automático DESLIGADO. Bootstrap/backfill: CASH-7. Sem as-of.
 
 Query params oficiais da Home: `month`, `costCenter`, `situation`, `category`.
 `costCenterId` não é query param. `period`, `comparison` e `status` não

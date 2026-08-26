@@ -9,7 +9,13 @@ export {
 } from './domain/payable-category-composition.js';
 export { buildDailyCompetenceTotals, accumulateDailyCompetence } from './domain/daily-competence-series.js';
 export type { DailyCompetencePoint } from './domain/daily-competence-series.js';
-export { calculateMonthlyCompetenceRevenue } from './domain/monthly-competence-revenue.js';
+export { calculateMonthlyCashFlow, monthlyBilling } from './domain/monthly-cash-flow.js';
+export type { CashSettlementSource } from './domain/monthly-cash-flow.js';
+export { createMonthlyCashFlowService } from './services/monthly-cash-flow.service.js';
+export type {
+  MonthlyCashFlowService,
+  MonthlyCashFlowServiceDependencies,
+} from './services/monthly-cash-flow.service.js';
 export {
   buildDailyCompetenceAllocationTotals,
   calculateMonthlyCompetenceFromAllocations,
@@ -36,6 +42,8 @@ export type {
   MonthlyCompetenceExpenseResult,
   MonthlyCompetenceRevenueResult,
   MonthEndCashPressureResult,
+  MonthlyCashFlow,
+  GetMonthlyCashFlowInput,
   ReceivableDelinquency,
   UpcomingInstallment,
   UpcomingInstallments,

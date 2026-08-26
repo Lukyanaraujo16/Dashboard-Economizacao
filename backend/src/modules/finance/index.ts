@@ -14,6 +14,11 @@ export { createFinancialCategoryReadRepository } from './repositories/financial-
 export type { FinancialCategoryReadRepository } from './repositories/financial-category-read.repository.js';
 export { createPayableReadRepository } from './repositories/payable-read.repository.js';
 export type { PayableReadRepository } from './repositories/payable-read.repository.js';
+export { createLedgerReadRepository } from './repositories/ledger-read.repository.js';
+export type {
+  LedgerReadRepository,
+  LedgerSettlementReadRecord,
+} from './repositories/ledger-read.repository.js';
 export { createReceivableReadRepository } from './repositories/receivable-read.repository.js';
 export type { ReceivableReadRepository } from './repositories/receivable-read.repository.js';
 export { createCostCenterReadRepository } from './repositories/cost-center-read.repository.js';

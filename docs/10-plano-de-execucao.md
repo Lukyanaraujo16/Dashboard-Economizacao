@@ -1030,7 +1030,7 @@ Receitas do mês por competência (AR / competenceDate / inclui PAID):
      (P1.1). Estoque AP/AR do overview NÃO alimenta os cards principais.
      Já recebido = snapshot de paid das receitas do mês, não caixa.
 F1-G — Faturamento Gerencial (`monthly-revenue.total`):
-     IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
+     Home atual até CASH-4. Fórmula de produto SUPERSEDED (ver CASH-3A / §12).
 P1-UX — Semântica estoque × mês na Home: SUPERSEDED (rejeitada na homologação humana)
 P1.1 — Monthly context: IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
      A receber/pagar/categorias/inadimplência da Home seguem a competência.
@@ -1089,7 +1089,13 @@ L1-A / CASH-2 — Persistência/ingestão read-only (`financial_transactions`):
      Stash L1 histórico permanece como referência; NÃO aplicar.
      Engine busca `/baixa` só para parcelas upsertadas na run com `paid>0`.
      Bootstrap/listPaid + discovery `data_pagamento_*`: prontos no código,
-     NÃO acionados nesta fase (CASH-7). KPI recebido/pago por período: NÃO.
+     NÃO acionados nesta fase (CASH-7).
+CASH-3A — Read model mensal de caixa (`MonthlyCashFlow`): IMPLEMENTADA no domínio
+     (sem HTTP). Realizado = ledger net/`occurredOn`; previsto = unpaid+dueDate≥today;
+     vencido = D1 global. Home/Relatórios não consomem ainda (CASH-3B/CASH-4/CASH-6).
+     Faturamento oficial (Felipe, 26/08/2026) = realized.inflows + expected.receivables
+     (`monthlyBilling`). Vencido não compõe. Pagamento tardio no mês da baixa.
+     Competência não define Faturamento. Meta permanece PENDENTE de decisão humana.
 CC1 — Centros de custo + alocação + filtro Home:
      HOMOLOGADA (CC1.1 incorporada)
      Sync `cost_centers` + `installment_cost_center_allocations`;
@@ -1235,7 +1241,7 @@ GRUPO B — Extensão analítica (dados parciais; D8). NÃO bloqueia Fase 10:
 
 GRUPO C/D — Adiados; NÃO bloqueiam Fase 10:
 - Receita × Despesa (D7; docs/11 §11)
-- Faturamento (docs/11 §12)
+- Faturamento (docs/11 §12) — fórmula oficial homologada (caixa); Home F1-G até CASH-4
 - Fluxo de caixa realizado / ledger (docs/11 §8)
 - Saldo (docs/11 §13)
 - Despesas fixas/variáveis (docs/11 §14)

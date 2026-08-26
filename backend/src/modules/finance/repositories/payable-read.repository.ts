@@ -1,4 +1,4 @@
-import type { PrismaClient } from '../../../generated/prisma/client.js';
+import type { Prisma, PrismaClient } from '../../../generated/prisma/client.js';
 import type {
   CompetenceDateRangeQuery,
   DueDateRangeQuery,
@@ -19,6 +19,10 @@ export type PayableReadRepository = {
   ): Promise<readonly FinancialInstallmentReadRecord[]>;
   findMonthlyCompetenceExpenses(
     query: CompetenceDateRangeQuery,
+  ): Promise<readonly FinancialInstallmentReadRecord[]>;
+  findByExternalIds(
+    scope: FinanceReadScope,
+    externalIds: readonly string[],
   ): Promise<readonly FinancialInstallmentReadRecord[]>;
 };
 
@@ -56,6 +60,26 @@ export function createPayableReadRepository(prisma: PrismaClient): PayableReadRe
       const rows = await prisma.payable.findMany({
         where: buildMonthlyCompetenceWhere(query, query.from, query.to),
         orderBy: [{ competenceDate: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map(mapPayableReadRecord);
+    },
+
+    async findByExternalIds(scope, externalIds) {
+      assertTenantId(scope.tenantId);
+      const unique = [...new Set(externalIds.filter((id) => id.trim() !== ''))];
+      if (unique.length === 0) {
+        return [];
+      }
+      const where: Prisma.PayableWhereInput = {
+        tenantId: scope.tenantId,
+        externalId: { in: unique },
+      };
+      if (scope.integrationId !== undefined && scope.integrationId.trim() !== '') {
+        where.integrationId = scope.integrationId;
+      }
+      const rows = await prisma.payable.findMany({
+        where,
+        orderBy: [{ id: 'asc' }],
       });
       return rows.map(mapPayableReadRecord);
     },

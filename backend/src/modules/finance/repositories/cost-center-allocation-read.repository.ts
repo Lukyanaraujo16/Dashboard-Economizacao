@@ -43,6 +43,18 @@ export type CostCenterAllocationReadRepository = {
   findActivePayableAllocationsByDueDate(
     query: DueDateRangeQuery & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
+  findReceivableAllocationsByExternalIds(
+    query: FinanceReadScope & {
+      readonly costCenterId: string;
+      readonly externalIds: readonly string[];
+    },
+  ): Promise<readonly CostCenterAllocationInstallment[]>;
+  findPayableAllocationsByExternalIds(
+    query: FinanceReadScope & {
+      readonly costCenterId: string;
+      readonly externalIds: readonly string[];
+    },
+  ): Promise<readonly CostCenterAllocationInstallment[]>;
 };
 
 export function createCostCenterAllocationReadRepository(
@@ -166,6 +178,64 @@ export function createCostCenterAllocationReadRepository(
             ...buildActiveInstallmentWhere(query),
             dueDate: { gte: query.from, lte: query.to },
           },
+        },
+        include: { payable: true },
+        orderBy: [{ id: 'asc' }],
+      })) as AllocationWithPayableRow[];
+      return rows.map((row) => ({
+        amount: row.amount,
+        installment: mapPayableReadRecord(asPayable(row.payable)),
+      }));
+    },
+
+    async findReceivableAllocationsByExternalIds(query) {
+      assertTenantId(query.tenantId);
+      const unique = [...new Set(query.externalIds.filter((id) => id.trim() !== ''))];
+      if (unique.length === 0) {
+        return [];
+      }
+      const receivableWhere: Prisma.ReceivableWhereInput = {
+        tenantId: query.tenantId,
+        externalId: { in: unique },
+      };
+      if (query.integrationId !== undefined && query.integrationId.trim() !== '') {
+        receivableWhere.integrationId = query.integrationId;
+      }
+      const rows = (await client.installmentCostCenterAllocation.findMany({
+        where: {
+          tenantId: query.tenantId,
+          costCenterId: query.costCenterId,
+          receivableId: { not: null },
+          receivable: receivableWhere,
+        },
+        include: { receivable: true },
+        orderBy: [{ id: 'asc' }],
+      })) as AllocationWithReceivableRow[];
+      return rows.map((row) => ({
+        amount: row.amount,
+        installment: mapReceivableReadRecord(asReceivable(row.receivable)),
+      }));
+    },
+
+    async findPayableAllocationsByExternalIds(query) {
+      assertTenantId(query.tenantId);
+      const unique = [...new Set(query.externalIds.filter((id) => id.trim() !== ''))];
+      if (unique.length === 0) {
+        return [];
+      }
+      const payableWhere: Prisma.PayableWhereInput = {
+        tenantId: query.tenantId,
+        externalId: { in: unique },
+      };
+      if (query.integrationId !== undefined && query.integrationId.trim() !== '') {
+        payableWhere.integrationId = query.integrationId;
+      }
+      const rows = (await client.installmentCostCenterAllocation.findMany({
+        where: {
+          tenantId: query.tenantId,
+          costCenterId: query.costCenterId,
+          payableId: { not: null },
+          payable: payableWhere,
         },
         include: { payable: true },
         orderBy: [{ id: 'asc' }],

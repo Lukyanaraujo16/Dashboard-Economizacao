@@ -144,3 +144,67 @@ export type ExecutiveInsightsResult =
 
 export type MonthEndCashPressureResult =
   import('./month-end-cash-pressure.js').MonthEndCashPressureResult;
+
+export type MonthlyCashFlowDailyRealizedPoint = {
+  readonly date: Date;
+  readonly inflows: Prisma.Decimal | null;
+  readonly outflows: Prisma.Decimal | null;
+  readonly result: Prisma.Decimal | null;
+};
+
+export type MonthlyCashFlowDailyExpectedPoint = {
+  readonly date: Date;
+  readonly receivables: Prisma.Decimal | null;
+  readonly payables: Prisma.Decimal | null;
+  readonly result: Prisma.Decimal | null;
+};
+
+export type MonthlyCashFlowTotals = {
+  readonly inflows: Prisma.Decimal | null;
+  readonly outflows: Prisma.Decimal | null;
+  readonly result: Prisma.Decimal | null;
+};
+
+export type MonthlyCashFlowExpected = {
+  readonly receivables: Prisma.Decimal | null;
+  readonly payables: Prisma.Decimal | null;
+  readonly result: Prisma.Decimal | null;
+};
+
+export type MonthlyCashFlowOverdue = {
+  readonly receivables: Prisma.Decimal | null;
+  readonly payables: Prisma.Decimal | null;
+  readonly ofMonth: {
+    readonly receivables: Prisma.Decimal | null;
+    readonly payables: Prisma.Decimal | null;
+  };
+};
+
+/** Read model de caixa CASH-3A. Sem HTTP. Fluxo = ledger; estoque = unpaid atual. */
+export type MonthlyCashFlow = {
+  readonly tenantId: string;
+  readonly today: Date;
+  readonly monthKey: string;
+  readonly from: Date;
+  readonly to: Date;
+  readonly costCenterCashSplit: boolean;
+  readonly realized: MonthlyCashFlowTotals;
+  readonly expected: MonthlyCashFlowExpected;
+  readonly overdue: MonthlyCashFlowOverdue;
+  /**
+   * Mês corrente: inflows / (inflows + expected.receivables).
+   * Passado/futuro ou denominador 0 ou split unavailable → null.
+   * Não é Faturamento. Faturamento = monthlyBilling(flow) =
+   * realized.inflows + expected.receivables (vencido fora).
+   */
+  readonly coverage: Prisma.Decimal | null;
+  readonly daily: {
+    readonly realized: readonly MonthlyCashFlowDailyRealizedPoint[];
+    readonly expected: readonly MonthlyCashFlowDailyExpectedPoint[];
+  };
+};
+
+export type GetMonthlyCashFlowInput = GetFinancialStockSnapshotInput & {
+  /** Mês civil (`YYYY-MM`). Ausente = mês corrente em America/Sao_Paulo. */
+  readonly monthKey?: string;
+};

@@ -71,13 +71,16 @@ PRE-IA-2 — Saúde operacional na lista `/empresas`: IMPLEMENTADA.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
 L1-A / CASH-2 (financial_transactions): IMPLEMENTADA no HEAD (persistência).
-  Stash L1 histórico NÃO aplicar. KPI mensal / monthly-cash-flow: CASH-3+.
-L1-B: valor oficial de caixa = `netAmount` (`valor_liquido`); fórmula
-  líquido = bruto + juros + multa − desconto − taxa (CASH-2A). Read model NÃO.
-KPI recebido/pago por período: NÃO IMPLEMENTADO (ledger persiste; Home não lê).
-Faturamento Gerencial (F1-G): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO (fonte = monthly-revenue / competência).
+  Stash L1 histórico NÃO aplicar.
+L1-B / CASH-3A: read model `MonthlyCashFlow` IMPLEMENTADO (domínio + loader + testes).
+  Sem endpoint HTTP. Home/Relatórios ainda competência. CASH-3B = endpoint.
+  Faturamento oficial (Felipe): `realized.inflows + expected.receivables`.
+  Vencido não compõe. Pagamento tardio no mês da baixa. Competência não define.
+  Meta permanece PENDENTE (não ligar ao novo Faturamento).
+Faturamento Gerencial (F1-G): Home atual ainda competência / monthly-revenue até CASH-4
+  (fórmula de produto SUPERSEDED pela decisão Felipe acima).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
-F2 meta de faturamento: HOMOLOGADA
+F2 meta de faturamento: HOMOLOGADA (realizado da Meta = competência; NÃO redefinir pela decisão de Faturamento)
   (`revenue_goals` + `GET`/`PUT /dashboard/revenue-goal`; realizado = competência,
   sem duplicar fórmula; sem histórico de revisões da meta).
   Persistência SIM · por tenant SIM · por competência SIM · cadastro/edição SIM ·
