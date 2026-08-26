@@ -70,11 +70,11 @@ PRE-IA-2 — Saúde operacional na lista `/empresas`: IMPLEMENTADA.
   permanecem na Fase 17. Sem heurística de “sync atrasada”. Sem migration.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
-L1-A (financial_transactions): WIP isolado em stash — NÃO está no HEAD publicado.
-  Não aplicar na F12. Docs antigas que diziam “IMPLEMENTADA no Git” estavam defasadas.
-L1-B: BLOCKED_BY_CASH_SEMANTICS — valor oficial de caixa (bruto vs líquido) NÃO FECHADO;
-  KPI mensal / API monthly-cash-flow NÃO criados.
-KPI recebido/pago por período: NÃO IMPLEMENTADO. Valor oficial de caixa: NÃO DEFINIDO.
+L1-A / CASH-2 (financial_transactions): IMPLEMENTADA no HEAD (persistência).
+  Stash L1 histórico NÃO aplicar. KPI mensal / monthly-cash-flow: CASH-3+.
+L1-B: valor oficial de caixa = `netAmount` (`valor_liquido`); fórmula
+  líquido = bruto + juros + multa − desconto − taxa (CASH-2A). Read model NÃO.
+KPI recebido/pago por período: NÃO IMPLEMENTADO (ledger persiste; Home não lê).
 Faturamento Gerencial (F1-G): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO (fonte = monthly-revenue / competência).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
 F2 meta de faturamento: HOMOLOGADA

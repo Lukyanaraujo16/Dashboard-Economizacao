@@ -89,6 +89,12 @@ function mapCounts(value: Prisma.JsonValue | null): ContaAzulSyncCounts | null {
     costCenterDetailPartial: nonNegativeInt(record.costCenterDetailPartial) ?? 0,
     costCenterDetailUnresolved: nonNegativeInt(record.costCenterDetailUnresolved) ?? 0,
     costCenterDetailErrors: nonNegativeInt(record.costCenterDetailErrors) ?? 0,
+    ledgerCandidates: nonNegativeInt(record.ledgerCandidates) ?? 0,
+    ledgerFetched: nonNegativeInt(record.ledgerFetched) ?? 0,
+    ledgerUpserted: nonNegativeInt(record.ledgerUpserted) ?? 0,
+    ledgerSkippedInvalid: nonNegativeInt(record.ledgerSkippedInvalid) ?? 0,
+    ledgerIdentityMismatches: nonNegativeInt(record.ledgerIdentityMismatches) ?? 0,
+    ledgerParcelFailures: nonNegativeInt(record.ledgerParcelFailures) ?? 0,
   };
 }
 

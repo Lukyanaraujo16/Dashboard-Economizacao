@@ -156,4 +156,34 @@ describe('Cliente HTTP financeiro Conta Azul', () => {
       `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/parcela-uuid`,
     );
   });
+
+  it('GET baixas via parcelas/{id}/baixa', async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => jsonResponse([]));
+    const client = createContaAzulApiClient({ fetchImpl });
+    await client.getInstallmentSettlements('token', 'parcela-uuid');
+    expect(String(fetchImpl.mock.calls[0]![0])).toBe(
+      `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/parcela-uuid/baixa`,
+    );
+  });
+
+  it('envia data_pagamento opcional na busca AR/AP e omite quando ausente', async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => jsonResponse({ itens: [] }));
+    const client = createContaAzulApiClient({ fetchImpl });
+    await client.searchReceivables('token', {
+      pagina: 1,
+      dataVencimentoDe: '2026-01-01',
+      dataVencimentoAte: '2026-03-31',
+      dataPagamentoDe: '2026-02-01',
+      dataPagamentoAte: '2026-02-28',
+    });
+    const withPayment = String(fetchImpl.mock.calls[0]![0]);
+    expect(withPayment).toContain('data_pagamento_de=2026-02-01');
+    expect(withPayment).toContain('data_pagamento_ate=2026-02-28');
+    await client.searchReceivables('token', {
+      pagina: 1,
+      dataVencimentoDe: '2026-01-01',
+      dataVencimentoAte: '2026-03-31',
+    });
+    expect(String(fetchImpl.mock.calls[1]![0])).not.toContain('data_pagamento');
+  });
 });

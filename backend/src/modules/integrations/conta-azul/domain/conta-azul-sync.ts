@@ -79,6 +79,13 @@ export type ContaAzulSyncCounts = {
   readonly costCenterDetailPartial: number;
   readonly costCenterDetailUnresolved: number;
   readonly costCenterDetailErrors: number;
+  /** CASH-2 — parcelas elegíveis a GET /baixa nesta execução. */
+  readonly ledgerCandidates: number;
+  readonly ledgerFetched: number;
+  readonly ledgerUpserted: number;
+  readonly ledgerSkippedInvalid: number;
+  readonly ledgerIdentityMismatches: number;
+  readonly ledgerParcelFailures: number;
 };
 
 export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
@@ -97,6 +104,12 @@ export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
   costCenterDetailPartial: 0,
   costCenterDetailUnresolved: 0,
   costCenterDetailErrors: 0,
+  ledgerCandidates: 0,
+  ledgerFetched: 0,
+  ledgerUpserted: 0,
+  ledgerSkippedInvalid: 0,
+  ledgerIdentityMismatches: 0,
+  ledgerParcelFailures: 0,
 };
 
 export type ContaAzulSyncTrigger = 'MANUAL' | 'SCHEDULED';

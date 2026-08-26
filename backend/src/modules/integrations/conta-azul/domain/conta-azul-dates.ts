@@ -43,6 +43,27 @@ export function parseOptionalCivilDate(value: unknown, field: string): Date | nu
   return parseCivilDate(value, field);
 }
 
+const OFFSET_INSTANT =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Instante só quando o payload traz offset explícito.
+ * `atualizado_em` da baixa pode vir sem offset — não inventar timezone.
+ */
+export function parseOptionalOffsetTimestamp(value: unknown, field: string): Date | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new ContaAzulDateError(`Campo ${field} deve ser um instante.`);
+  }
+  const trimmed = value.trim();
+  if (!OFFSET_INSTANT.test(trimmed)) {
+    return null;
+  }
+  return parseOptionalTimestamp(trimmed, field);
+}
+
 export function parseOptionalTimestamp(value: unknown, field: string): Date | null {
   if (value === null || value === undefined || value === '') {
     return null;

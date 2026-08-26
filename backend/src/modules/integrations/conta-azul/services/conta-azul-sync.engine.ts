@@ -43,6 +43,8 @@ import type { TenantRepository } from '../../../tenant/repositories/tenant.repos
 import type { ContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
 import type { ContaAzulRateLimiter } from './conta-azul-rate-limiter.js';
 import type { ContaAzulCostCenterSyncService } from './conta-azul-cost-center-sync.service.js';
+import type { ContaAzulLedgerSyncService } from './conta-azul-ledger-sync.service.js';
+import type { LedgerInstallmentCandidate } from '../domain/conta-azul-settlement-mappers.js';
 
 export class ContaAzulSyncExecutionError extends Error {
   readonly code: ContaAzulSyncErrorCode;
@@ -165,6 +167,7 @@ export function createContaAzulManualSyncEngine(deps: {
   readonly timeoutMs?: number;
   readonly heartbeatMinIntervalMs?: number;
   readonly costCenterSync?: ContaAzulCostCenterSyncService;
+  readonly ledgerSync?: ContaAzulLedgerSyncService;
 }): ContaAzulManualSyncEngine {
   const now = deps.clock ?? (() => new Date());
   const timeoutMs = deps.timeoutMs ?? CONTA_AZUL_SYNC_JOB_TIMEOUT_MS;
@@ -237,6 +240,12 @@ export function createContaAzulManualSyncEngine(deps: {
         costCenterDetailPartial: 0,
         costCenterDetailUnresolved: 0,
         costCenterDetailErrors: 0,
+        ledgerCandidates: 0,
+        ledgerFetched: 0,
+        ledgerUpserted: 0,
+        ledgerSkippedInvalid: 0,
+        ledgerIdentityMismatches: 0,
+        ledgerParcelFailures: 0,
       };
 
       try {
@@ -356,6 +365,7 @@ export function createContaAzulManualSyncEngine(deps: {
           lookaheadYears: CONTA_AZUL_SYNC_LOOKAHEAD_YEARS,
           windowDays: CONTA_AZUL_SYNC_WINDOW_DAYS,
         });
+        const ledgerCandidates = new Map<string, LedgerInstallmentCandidate>();
 
         async function advanceCursor(
           resource: IntegrationSyncCursorResource,
@@ -421,6 +431,7 @@ export function createContaAzulManualSyncEngine(deps: {
               : (items: Parameters<typeof deps.financial.upsertPayables>[1]) =>
                   deps.financial.upsertPayables(scopeOf(), items);
           const mapPage = kind === 'receivables' ? mapReceivablePage : mapPayablePage;
+          const installmentKind = kind === 'receivables' ? 'RECEIVABLE' : 'PAYABLE';
           const alterationChunks = window ? splitAlterationChunks(window) : [null];
           let count = 0;
           for (const chunk of alterationChunks) {
@@ -437,7 +448,17 @@ export function createContaAzulManualSyncEngine(deps: {
                     }),
                   ),
                 mapPage,
-                persist,
+                persist: async (items) => {
+                  await persist(items);
+                  for (const item of items) {
+                    if (item.paid.gt(0)) {
+                      ledgerCandidates.set(`${installmentKind}:${item.externalId}`, {
+                        kind: installmentKind,
+                        externalId: item.externalId,
+                      });
+                    }
+                  }
+                },
                 heartbeat,
               });
             }
@@ -499,6 +520,30 @@ export function createContaAzulManualSyncEngine(deps: {
           processed.costCenterDetailPartial = allocationResult.partial;
           processed.costCenterDetailUnresolved = allocationResult.unresolved;
           processed.costCenterDetailErrors = allocationResult.errors;
+        }
+
+        if (deps.ledgerSync) {
+          const firstWindow = dueWindows[0];
+          const lastWindow = dueWindows[dueWindows.length - 1];
+          const ledgerResult = await deps.ledgerSync.sync({
+            scope: scopeOf(),
+            mode: 'incremental',
+            changedInstallments: [...ledgerCandidates.values()],
+            paymentDiscoveryWindow: null,
+            dueHorizon: {
+              de: firstWindow?.from ?? '1970-01-01',
+              ate: lastWindow?.to ?? '1970-01-01',
+            },
+            requestWithAuth,
+            gatedGet,
+            heartbeat,
+          });
+          processed.ledgerCandidates = ledgerResult.candidates;
+          processed.ledgerFetched = ledgerResult.fetched;
+          processed.ledgerUpserted = ledgerResult.upserted;
+          processed.ledgerSkippedInvalid = ledgerResult.skippedInvalid;
+          processed.ledgerIdentityMismatches = ledgerResult.skippedIdentityMismatch;
+          processed.ledgerParcelFailures = ledgerResult.parcelFailures;
         }
 
         const tenantAgain = await deps.tenants.findById(input.tenantId);

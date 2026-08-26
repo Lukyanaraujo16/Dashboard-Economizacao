@@ -111,6 +111,7 @@ function pageClient(options?: { readonly failReceivablesOnPage?: number }): Cont
       };
     },
     getInstallmentDetail: async () => ({ id: 'r-1', evento: { rateio: [] } }),
+    getInstallmentSettlements: async () => [],
   };
 }
 

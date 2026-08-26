@@ -590,6 +590,20 @@ Campos conceituais:
 * external_updated_at;
 * synced_at.
 
+CASH-2 (26/08/2026): persistência física no HEAD. Uma linha = uma baixa
+Conta Azul (`GET .../parcelas/{id}/baixa`). Sem FK para AR/AP; vínculo
+lógico `installment_external_id`. Unique `(integration_id, external_id)`.
+
+Campos físicos:
+
+* occurred_on = `data_pagamento` civil;
+* gross_amount = `valor_bruto` (quitação do título);
+* net_amount = `valor_liquido` (caixa oficial futuro);
+* interest/fine/discount/fee;
+* lifecycle_status ACTIVE|DELETED (tombstone automático DESLIGADO).
+
+KPI realizado / Home / Relatórios: ainda não usam esta tabela.
+
 ⸻
 
 7.7.1 cost_centers (CC1)

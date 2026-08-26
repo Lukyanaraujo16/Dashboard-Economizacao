@@ -34,6 +34,12 @@ export type ContaAzulSyncCounts = {
   readonly costCenterDetailPartial?: number;
   readonly costCenterDetailUnresolved?: number;
   readonly costCenterDetailErrors?: number;
+  readonly ledgerCandidates?: number;
+  readonly ledgerFetched?: number;
+  readonly ledgerUpserted?: number;
+  readonly ledgerSkippedInvalid?: number;
+  readonly ledgerIdentityMismatches?: number;
+  readonly ledgerParcelFailures?: number;
 };
 
 export type ContaAzulSyncRun = {

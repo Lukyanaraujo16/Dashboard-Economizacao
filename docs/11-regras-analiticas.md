@@ -28,8 +28,9 @@ F11-C: ADIADA / RECLASSIFICADA — pouso oficial Relatórios / F12-A
 Fase 11 Home: CONCLUÍDA no recorte mensal.
 F12-A (24/08/2026): CONTRATO CONGELADO. Paridade com monthly-revenue /
 monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
-De/Até. Ledger L1-A fora do HEAD (stash). L1-B: BLOCKED_BY_CASH_SEMANTICS.
-Semântica de caixa: não reabrir aqui.
+De/Até. Ledger CASH-2 persistido no HEAD (`financial_transactions`).
+KPI de caixa / Home: ainda competência até CASH-4. Semântica de caixa
+oficial futura: `netAmount` / `occurredOn`. Não misturar eixos na F12 V1.
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
 Receita reutiliza o motor mensal (D1/D8/D9/CC1). F12-C (25/08/2026):
 IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — PDF/XLSX formatam o mesmo
@@ -214,10 +215,13 @@ C. Total a vencer (em aberto)
    Campo: `unpaid`, `dueDate`
 
 D. Recebido no período
-   LIMITAÇÃO: `paid` é valor acumulado por parcela, não movimento temporal.
-   NÃO é possível calcular "recebido no mês X" com dados atuais.
-   Requer endpoint de baixas/movimentos (expansão futura).
-   Fora do primeiro recorte.
+   LIMITAÇÃO da Home F11/F12: `paid` é valor acumulado por parcela, não
+   movimento temporal. Não usar `paid` como caixa do mês.
+
+   CASH-2 (26/08/2026): ledger `financial_transactions` persiste cada baixa
+   com `occurredOn` = `data_pagamento` e `netAmount` = `valor_liquido`.
+   Fórmula observada: líquido = bruto + juros + multa − desconto − taxa.
+   Read model / KPI de realizado: CASH-3+. Não alterar Home nesta fase.
 
 E. Próximos vencimentos
    AR WHERE status IN (OPEN, OVERDUE, PARTIALLY_PAID)
@@ -679,8 +683,10 @@ Taxa de inadimplência de estoque (`overview.delinquency`, §4 / D2):
 filtro temporal **não** muda a data de referência. Relatórios V1 **não**
 oferecem essa taxa como métrica do intervalo De/Até.
 
-Ledger (`financial_transactions` / L1-A / L1-B): FORA da Fase 11 e da
-F12 V1. L1-A não está no HEAD. L1-B BLOCKED_BY_CASH_SEMANTICS.
+Ledger (`financial_transactions`): CASH-2 persiste baixas no HEAD.
+KPI recebido/pago por período / monthly-cash-flow: ainda NÃO. Home e
+F12 V1 continuam competência até CASH-4/CASH-6. Estorno/tombstone
+automático DESLIGADO. Bootstrap/backfill: CASH-7.
 Não definir recebido/pago por período via ledger nesta fase.
 
 Query params oficiais da Home: `month`, `costCenter`, `situation`, `category`.

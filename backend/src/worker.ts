@@ -14,12 +14,14 @@ import { createContaAzulTokenClient } from './modules/integrations/conta-azul/co
 import { createContaAzulFinancialRepository } from './modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from './modules/integrations/conta-azul/repositories/integration.repository.js';
 import { createContaAzulCostCenterRepository } from './modules/integrations/conta-azul/repositories/cost-center.repository.js';
+import { createContaAzulLedgerRepository } from './modules/integrations/conta-azul/repositories/ledger.repository.js';
 import { createContaAzulSyncCursorRepository } from './modules/integrations/conta-azul/repositories/sync-cursor.repository.js';
 import { createContaAzulSyncRunRepository } from './modules/integrations/conta-azul/repositories/sync-run.repository.js';
 import { createContaAzulAutoSyncPlanner } from './modules/integrations/conta-azul/services/conta-azul-auto-sync.planner.js';
 import { createContaAzulOAuthService } from './modules/integrations/conta-azul/services/conta-azul-oauth.service.js';
 import { createContaAzulRateLimiter } from './modules/integrations/conta-azul/services/conta-azul-rate-limiter.js';
 import { createContaAzulCostCenterSyncService } from './modules/integrations/conta-azul/services/conta-azul-cost-center-sync.service.js';
+import { createContaAzulLedgerSyncService } from './modules/integrations/conta-azul/services/conta-azul-ledger-sync.service.js';
 import { createContaAzulManualSyncEngine } from './modules/integrations/conta-azul/services/conta-azul-sync.engine.js';
 import { createContaAzulSyncReconciler } from './modules/integrations/conta-azul/services/conta-azul-sync-reconcile.js';
 import { createTenantRepository } from './modules/tenant/repositories/tenant.repository.js';
@@ -49,6 +51,12 @@ const costCenters = createContaAzulCostCenterRepository(prisma);
 const apiClient = createContaAzulApiClient();
 const costCenterSync = createContaAzulCostCenterSyncService({
   costCenters,
+  apiClient,
+});
+const ledger = createContaAzulLedgerRepository(prisma);
+const ledgerSync = createContaAzulLedgerSyncService({
+  prisma,
+  ledger,
   apiClient,
 });
 const cursors = createContaAzulSyncCursorRepository(prisma);
@@ -87,6 +95,7 @@ const engine = createContaAzulManualSyncEngine({
   cursors,
   apiClient,
   costCenterSync,
+  ledgerSync,
   getValidAccessToken: (tenantId) => oauth.getValidAccessToken(tenantId),
   forceRefresh: (tenantId) => oauth.forceRefresh(tenantId),
   rateLimiter: createContaAzulRateLimiter(),

@@ -150,5 +150,9 @@ export function createMockContaAzulApiClient(
       options.onCall?.('installmentDetail');
       return { id: 'r-1', evento: { rateio: [] } };
     },
+    getInstallmentSettlements: async () => {
+      options.onCall?.('installmentSettlements');
+      return [];
+    },
   };
 }

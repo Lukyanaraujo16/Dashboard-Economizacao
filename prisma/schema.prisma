@@ -54,6 +54,7 @@ model Tenant {
   costCenters         CostCenter[]
   installmentCostCenterAllocations InstallmentCostCenterAllocation[]
   revenueGoals        RevenueGoal[]
+  financialTransactions FinancialTransaction[]
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
 
@@ -211,6 +212,7 @@ model Integration {
   receivables           Receivable[]
   payables              Payable[]
   costCenters           CostCenter[]
+  financialTransactions FinancialTransaction[]
   syncRuns              SyncRun[]
   syncCursors           IntegrationSyncCursor[]
 
@@ -289,6 +291,28 @@ enum CostCenterDetailStatus {
   ERROR
 
   @@map("cost_center_detail_status")
+}
+
+enum FinancialTransactionType {
+  RECEIPT
+  DISBURSEMENT
+
+  @@map("financial_transaction_type")
+}
+
+/// Tombstone estrutural. Automação DESLIGADA até existir payload real de estorno.
+enum FinancialTransactionLifecycle {
+  ACTIVE
+  DELETED
+
+  @@map("financial_transaction_lifecycle")
+}
+
+enum FinancialTransactionInstallmentKind {
+  RECEIVABLE
+  PAYABLE
+
+  @@map("financial_transaction_installment_kind")
 }
 
 enum SyncRunTriggerType {
@@ -517,6 +541,42 @@ model RevenueGoal {
   @@unique([tenantId, monthKey], map: "uq_revenue_goals_tenant_month")
   @@index([tenantId, monthKey], map: "idx_revenue_goals_tenant_month")
   @@map("revenue_goals")
+}
+
+/// Uma linha = uma baixa Conta Azul (CASH-2). Sem FK para AR/AP.
+/// grossAmount = quitação do título; netAmount = caixa oficial futuro.
+model FinancialTransaction {
+  id                         String                              @id @default(uuid()) @db.Uuid
+  tenantId                   String                              @map("tenant_id") @db.Uuid
+  integrationId              String                              @map("integration_id") @db.Uuid
+  externalId                 String                              @map("external_id")
+  installmentExternalId      String                              @map("installment_external_id")
+  installmentKind            FinancialTransactionInstallmentKind @map("installment_kind")
+  transactionType            FinancialTransactionType            @map("transaction_type")
+  occurredOn                 DateTime                            @map("occurred_on") @db.Date
+  grossAmount                Decimal                             @map("gross_amount") @db.Decimal(19, 4)
+  netAmount                  Decimal                             @map("net_amount") @db.Decimal(19, 4)
+  interestAmount             Decimal                             @map("interest_amount") @db.Decimal(19, 4)
+  fineAmount                 Decimal                             @map("fine_amount") @db.Decimal(19, 4)
+  discountAmount             Decimal                             @map("discount_amount") @db.Decimal(19, 4)
+  feeAmount                  Decimal                             @map("fee_amount") @db.Decimal(19, 4)
+  financialAccountExternalId String?                             @map("financial_account_external_id")
+  paymentMethod              String?                             @map("payment_method")
+  upstreamVersion            Int?                                @map("upstream_version")
+  upstreamUpdatedAt          DateTime?                           @map("upstream_updated_at") @db.Timestamptz(3)
+  lifecycleStatus            FinancialTransactionLifecycle       @map("lifecycle_status")
+  syncedAt                   DateTime                            @map("synced_at") @db.Timestamptz(3)
+  createdAt                  DateTime                            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime                            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                     Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  integration                Integration                         @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+
+  @@unique([integrationId, externalId], map: "uq_financial_transactions_integration_external_id")
+  @@index([tenantId], map: "idx_financial_transactions_tenant_id")
+  @@index([tenantId, occurredOn], map: "idx_financial_transactions_tenant_occurred_on")
+  @@index([tenantId, installmentExternalId], map: "idx_financial_transactions_tenant_installment")
+  @@index([tenantId, transactionType, occurredOn], map: "idx_financial_transactions_tenant_type_occurred_on")
+  @@map("financial_transactions")
 }
 
 /// Execução técnica da sync (2.3 manual / 2.4 scheduled). Não é o produto de histórico da 2.5.

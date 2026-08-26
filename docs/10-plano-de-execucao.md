@@ -1084,11 +1084,12 @@ F2 — Meta de faturamento: HOMOLOGADA
 
 Sidebar sticky desktop (AppShell): HOMOLOGADA.
 L0 — Spike real de baixas Conta Azul (GET-only): PARCIAL / SUFICIENTE PARA L1-A
-L1-A — Persistência/ingestão read-only (`financial_transactions`):
-     WIP isolado em stash (`stash@{0}` L1-A). NÃO está no HEAD publicado.
-     NÃO aplicar na F12. Tabela/migration ausentes neste checkout.
-     Bootstrap DEV histórico permanece fora do Git oficial até retomada
-     explícita. KPI recebido/pago por período: NÃO.
+L1-A / CASH-2 — Persistência/ingestão read-only (`financial_transactions`):
+     IMPLEMENTADA no HEAD (CASH-2). Migration `20260826190000_...`.
+     Stash L1 histórico permanece como referência; NÃO aplicar.
+     Engine busca `/baixa` só para parcelas upsertadas na run com `paid>0`.
+     Bootstrap/listPaid + discovery `data_pagamento_*`: prontos no código,
+     NÃO acionados nesta fase (CASH-7). KPI recebido/pago por período: NÃO.
 CC1 — Centros de custo + alocação + filtro Home:
      HOMOLOGADA (CC1.1 incorporada)
      Sync `cost_centers` + `installment_cost_center_allocations`;

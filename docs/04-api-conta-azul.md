@@ -1065,8 +1065,10 @@ HOMOLOGADO com conta ERP real (Fases 2.1–2.4):
 
 PENDENTE — necessidade condicional ao recorte de produto:
 
-6.  filtros por pagamento (data efetiva de baixa) — não consumido;
-    necessário para fluxo de caixa realizado fiel;
+6.  filtros por pagamento (data efetiva de baixa) — client aceita
+    `data_pagamento_de/ate` (CASH-2); NÃO usado no engine nesta fase.
+    GET `/parcelas/{id}/baixa` consumido para persistir o ledger.
+    KPI de caixa realizado: CASH-3+;
 8.  rateios valorados (`categorias` com percentual/valor por parcela)
     — endpoint de detalhe `/parcelas/{id}` documentado; não consumido;
     necessário para KPI de receita/despesa por categoria precisa;

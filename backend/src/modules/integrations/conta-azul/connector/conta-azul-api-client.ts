@@ -55,6 +55,8 @@ export type ContaAzulInstallmentSearchQuery = ContaAzulPageQuery & {
   readonly dataVencimentoAte: string;
   readonly dataAlteracaoDe?: string;
   readonly dataAlteracaoAte?: string;
+  readonly dataPagamentoDe?: string;
+  readonly dataPagamentoAte?: string;
 };
 
 export type ContaAzulCostCentersQuery = ContaAzulPageQuery & {
@@ -70,6 +72,7 @@ export type ContaAzulApiClient = {
   searchReceivables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
   searchPayables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
   getInstallmentDetail(accessToken: string, installmentExternalId: string): Promise<unknown>;
+  getInstallmentSettlements(accessToken: string, installmentExternalId: string): Promise<unknown>;
 };
 
 export type ContaAzulApiClientConfig = {
@@ -266,6 +269,8 @@ export function createContaAzulApiClient(
           data_vencimento_ate: query.dataVencimentoAte,
           data_alteracao_de: query.dataAlteracaoDe,
           data_alteracao_ate: query.dataAlteracaoAte,
+          data_pagamento_de: query.dataPagamentoDe,
+          data_pagamento_ate: query.dataPagamentoAte,
         }),
         accessToken,
       );
@@ -280,6 +285,8 @@ export function createContaAzulApiClient(
           data_vencimento_ate: query.dataVencimentoAte,
           data_alteracao_de: query.dataAlteracaoDe,
           data_alteracao_ate: query.dataAlteracaoAte,
+          data_pagamento_de: query.dataPagamentoDe,
+          data_pagamento_ate: query.dataPagamentoAte,
         }),
         accessToken,
       );
@@ -288,6 +295,13 @@ export function createContaAzulApiClient(
     getInstallmentDetail(accessToken, installmentExternalId) {
       return getJson(
         `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/${encodeURIComponent(installmentExternalId)}`,
+        accessToken,
+      );
+    },
+
+    getInstallmentSettlements(accessToken, installmentExternalId) {
+      return getJson(
+        `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/${encodeURIComponent(installmentExternalId)}/baixa`,
         accessToken,
       );
     },
