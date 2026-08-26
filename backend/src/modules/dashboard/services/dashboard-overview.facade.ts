@@ -2,6 +2,7 @@ import type { Prisma } from '../../../generated/prisma/client.js';
 import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
 import { civilMonthKey, listInclusiveMonthKeysFromKeys } from '../../analytics/domain/civil-calendar.js';
 import type { AnalyticsService } from '../../analytics/services/analytics.service.js';
+import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import type { ContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
 import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
@@ -25,6 +26,7 @@ import type {
   DashboardMonthEndCashPressureResponse,
   DashboardOverviewResponse,
   DashboardReceivableCompositionResponse,
+  DashboardMonthlyCashFlowResponse,
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyRevenueResponse,
   DashboardRevenueGoalResponse,
@@ -35,6 +37,7 @@ import { toDashboardCashFlowForecastResponse } from '../http/to-dashboard-cash-f
 import { toDashboardExecutiveInsightsResponse } from '../http/to-dashboard-executive-insights-response.js';
 import { toDashboardMonthEndCashPressureResponse } from '../http/to-dashboard-month-end-cash-pressure-response.js';
 import { toDashboardExpenseCompositionResponse } from '../http/to-dashboard-expense-composition-response.js';
+import { toDashboardMonthlyCashFlowResponse } from '../http/to-dashboard-monthly-cash-flow-response.js';
 import { toDashboardMonthlyExpenseResponse } from '../http/to-dashboard-monthly-expense-response.js';
 import { toDashboardMonthlyRevenueResponse } from '../http/to-dashboard-monthly-revenue-response.js';
 import { toDashboardOverviewResponse } from '../http/to-dashboard-overview-response.js';
@@ -103,6 +106,12 @@ export type DashboardOverviewFacade = {
     situation?: DashboardSituation | null,
     categoryId?: string | null,
   ): Promise<DashboardMonthlyExpenseResponse>;
+  getMonthlyCashFlow(
+    auth: AuthenticatedRequestContext,
+    monthKey: string | null,
+    costCenterId?: string | null,
+    categoryId?: string | null,
+  ): Promise<DashboardMonthlyCashFlowResponse>;
   getMonthlyExecutiveInsights(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
@@ -134,6 +143,8 @@ export type DashboardOverviewFacadeDependencies = {
   readonly revenueGoals: RevenueGoalRepository;
   readonly costCenters: CostCenterReadRepository;
   readonly categories: FinancialCategoryReadRepository;
+  /** CASH-3B. Ausente nas rotas de Relatórios, que não expõem caixa. */
+  readonly cashFlow?: MonthlyCashFlowService;
 };
 
 export function createDashboardOverviewFacade(
@@ -302,6 +313,20 @@ export function createDashboardOverviewFacade(
       return toDashboardMonthlyExpenseResponse(expense);
     },
 
+    async getMonthlyCashFlow(auth, monthKey, costCenterId = null, categoryId = null) {
+      const cashFlow = requireCashFlow(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
+      const flow = await cashFlow.getMonthlyCashFlow({
+        tenantId,
+        ...(monthKey === null ? {} : { monthKey }),
+        ...costCenterFilter(resolved),
+        ...categoryFilterSpread(categoryFilter),
+      });
+      return toDashboardMonthlyCashFlowResponse(flow);
+    },
+
     async getMonthlyExecutiveInsights(
       auth,
       monthKey,
@@ -458,6 +483,13 @@ function costCenterFilter(
   costCenterId: string | undefined,
 ): { readonly costCenterId: string } | Record<string, never> {
   return costCenterId === undefined ? {} : { costCenterId };
+}
+
+function requireCashFlow(deps: DashboardOverviewFacadeDependencies): MonthlyCashFlowService {
+  if (!deps.cashFlow) {
+    throw new Error('MonthlyCashFlowService é obrigatório para GET /dashboard/monthly-cash-flow.');
+  }
+  return deps.cashFlow;
 }
 
 function requireOperationalTenantId(auth: AuthenticatedRequestContext): string {

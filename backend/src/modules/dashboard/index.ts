@@ -9,6 +9,7 @@ export type {
   DashboardExpenseCompositionResponse,
   DashboardMonthEndCashPressureResponse,
   DashboardMonthlyExpenseResponse,
+  DashboardMonthlyCashFlowResponse,
   DashboardMonthlyRevenueResponse,
   DashboardOverviewResponse,
   DashboardReceivableCompositionResponse,

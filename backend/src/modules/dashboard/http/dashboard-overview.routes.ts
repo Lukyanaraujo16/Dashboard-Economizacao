@@ -3,11 +3,13 @@ import type { FastifyInstance } from 'fastify';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
 import { createAnalyticsService } from '../../analytics/services/analytics.service.js';
+import { createMonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
 import { createCostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
 import { createCostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import { createFinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
+import { createLedgerReadRepository } from '../../finance/repositories/ledger-read.repository.js';
 import { createPayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { createContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
@@ -29,12 +31,21 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const costCenters = createCostCenterReadRepository(prisma);
   const categories = createFinancialCategoryReadRepository(prisma);
+  const receivables = createReceivableReadRepository(prisma);
+  const payables = createPayableReadRepository(prisma);
+  const costCenterAllocations = createCostCenterAllocationReadRepository(prisma);
   const dashboard = createDashboardOverviewFacade({
     analytics: createAnalyticsService({
-      receivables: createReceivableReadRepository(prisma),
-      payables: createPayableReadRepository(prisma),
+      receivables,
+      payables,
       categories,
-      costCenterAllocations: createCostCenterAllocationReadRepository(prisma),
+      costCenterAllocations,
+    }),
+    cashFlow: createMonthlyCashFlowService({
+      ledger: createLedgerReadRepository(prisma),
+      receivables,
+      payables,
+      costCenterAllocations,
     }),
     integrations: createContaAzulIntegrationRepository(prisma),
     revenueGoals: createRevenueGoalRepository(prisma),
@@ -184,6 +195,25 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         situation,
         categoryId,
       );
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
+    '/dashboard/monthly-cash-flow',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const monthKey = parseDashboardMonth(request.query);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      // situation, se presente, é validada e ignorada: realizado é evento histórico.
+      parseDashboardSituationQuery(request.query);
+      const body = await dashboard.getMonthlyCashFlow(auth, monthKey, costCenterId, categoryId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

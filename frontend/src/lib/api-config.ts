@@ -259,6 +259,19 @@ export function dashboardMonthlyExpensesPath(
   })}`;
 }
 
+/** CASH-3B. `situation` não faz parte do contrato (realizado é histórico). */
+export function dashboardMonthlyCashFlowPath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+  categoryId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/monthly-cash-flow${dashboardQueryString({
+    monthKey,
+    costCenterId,
+    categoryId,
+  })}`;
+}
+
 export function dashboardExecutiveInsightsPath(
   monthKey?: string | null,
   costCenterId?: string | null,

@@ -1090,12 +1090,11 @@ L1-A / CASH-2 — Persistência/ingestão read-only (`financial_transactions`):
      Engine busca `/baixa` só para parcelas upsertadas na run com `paid>0`.
      Bootstrap/listPaid + discovery `data_pagamento_*`: prontos no código,
      NÃO acionados nesta fase (CASH-7).
-CASH-3A — Read model mensal de caixa (`MonthlyCashFlow`): IMPLEMENTADA no domínio
-     (sem HTTP). Realizado = ledger net/`occurredOn`; previsto = unpaid+dueDate≥today;
-     vencido = D1 global. Home/Relatórios não consomem ainda (CASH-3B/CASH-4/CASH-6).
-     Faturamento oficial (Felipe, 26/08/2026) = realized.inflows + expected.receivables
-     (`monthlyBilling`). Vencido não compõe. Pagamento tardio no mês da baixa.
-     Competência não define Faturamento. Meta permanece PENDENTE de decisão humana.
+CASH-3A — Read model mensal de caixa (`MonthlyCashFlow`): IMPLEMENTADA no domínio.
+CASH-3B — `GET /dashboard/monthly-cash-flow`: IMPLEMENTADA (facade + DTO + tipos frontend).
+     Sem Home. `billing` = monthlyBilling = inflows + expected.receivables.
+     `situation` se presente é validada e ignorada (realizado histórico).
+     CASH-4 troca a Home. Relatórios/PDF/XLSX intactos.
 CC1 — Centros de custo + alocação + filtro Home:
      HOMOLOGADA (CC1.1 incorporada)
      Sync `cost_centers` + `installment_cost_center_allocations`;
@@ -1173,7 +1172,7 @@ L1-B — Semântica oficial do caixa + read model mensal:
      (componentes zero). Σ valor_bruto == installment.paid (77/77) prova
      reconciliação do título, NÃO o valor de caixa bancário.
      NÃO inventar fórmula. gross/net/componentes permanecem separados.
-     API GET /dashboard/monthly-cash-flow: NÃO CRIADA.
+     API GET /dashboard/monthly-cash-flow: IMPLEMENTADA (CASH-3B; Home ainda não consome).
      UI / Previsto×Realizado: NÃO.
 Faturamento Fiscal / meta / fixa×variável / D1 drill-down: NÃO IMPLEMENTADOS.
 E4: ADIADA.

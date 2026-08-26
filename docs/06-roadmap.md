@@ -73,7 +73,8 @@ L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprov
 L1-A / CASH-2 (financial_transactions): IMPLEMENTADA no HEAD (persistência).
   Stash L1 histórico NÃO aplicar.
 L1-B / CASH-3A: read model `MonthlyCashFlow` IMPLEMENTADO (domínio + loader + testes).
-  Sem endpoint HTTP. Home/Relatórios ainda competência. CASH-3B = endpoint.
+CASH-3B: `GET /dashboard/monthly-cash-flow` IMPLEMENTADO (DTO + tipos frontend).
+  Home/Relatórios ainda competência. CASH-4 = troca da Home.
   Faturamento oficial (Felipe): `realized.inflows + expected.receivables`.
   Vencido não compõe. Pagamento tardio no mês da baixa. Competência não define.
   Meta permanece PENDENTE (não ligar ao novo Faturamento).

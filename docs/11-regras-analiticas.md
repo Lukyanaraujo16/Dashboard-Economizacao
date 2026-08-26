@@ -30,7 +30,8 @@ F12-A (24/08/2026): CONTRATO CONGELADO. Paridade com monthly-revenue /
 monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
 De/Até. Ledger CASH-2 persistido no HEAD (`financial_transactions`).
 KPI de caixa / Home: ainda competência até CASH-4. CASH-3A: domínio
-`MonthlyCashFlow` (sem HTTP). Semântica: `netAmount` / `occurredOn`.
+`MonthlyCashFlow`. CASH-3B: `GET /dashboard/monthly-cash-flow` (sem Home).
+Semântica: `netAmount` / `occurredOn`.
 Faturamento oficial (Felipe, 26/08/2026): `realized.inflows + expected.receivables`.
 Vencido não compõe. Meta permanece PENDENTE de decisão humana (não ligar ao novo Faturamento).
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
@@ -432,6 +433,7 @@ Pagamento tardio: mês da baixa (`occurredOn`), nunca competenceDate.
 Se a baixa ocorrer ainda no mês do vencimento: volta ao Faturamento via realizado
 (sem duplicar título: expected/overdue usam unpaid atual; realizado usa ledger).
 Helper de domínio: `monthlyBilling(flow)` — composição das peças; não é motor paralelo.
+HTTP CASH-3B: `GET /dashboard/monthly-cash-flow` serializa `billing` a partir do helper.
 Home ainda renderiza F1-G (competência / monthly-revenue) até CASH-4.
 Meta permanece PENDENTE de decisão humana — não ligar ao novo Faturamento.
 
@@ -713,9 +715,9 @@ filtro temporal **não** muda a data de referência. Relatórios V1 **não**
 oferecem essa taxa como métrica do intervalo De/Até.
 
 Ledger (`financial_transactions`): CASH-2 persiste baixas; CASH-3A calcula
-`MonthlyCashFlow` no domínio (sem HTTP). Faturamento oficial =
-`monthlyBilling` = inflows + expected.receivables (vencido fora).
-Home e F12 V1 continuam competência até CASH-4/CASH-6. Meta pendente.
+`MonthlyCashFlow` no domínio. CASH-3B expõe `GET /dashboard/monthly-cash-flow`
+(`billing` = `monthlyBilling`; vencido fora). Home e F12 V1 continuam competência
+até CASH-4/CASH-6. Meta pendente.
 Estorno/tombstone automático DESLIGADO. Bootstrap/backfill: CASH-7. Sem as-of.
 
 Query params oficiais da Home: `month`, `costCenter`, `situation`, `category`.

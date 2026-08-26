@@ -180,7 +180,7 @@ export type MonthlyCashFlowOverdue = {
   };
 };
 
-/** Read model de caixa CASH-3A. Sem HTTP. Fluxo = ledger; estoque = unpaid atual. */
+/** Read model de caixa CASH-3A. HTTP CASH-3B serializa este shape; Home ainda não consome. */
 export type MonthlyCashFlow = {
   readonly tenantId: string;
   readonly today: Date;
