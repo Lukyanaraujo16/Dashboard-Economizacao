@@ -180,7 +180,23 @@ export type MonthlyCashFlowOverdue = {
   };
 };
 
-/** Read model de caixa CASH-3A. HTTP CASH-3B serializa este shape; Home ainda não consome. */
+/** Composição D8 de caixa realizado (CASH-4C-CAT). Null quando split unavailable. */
+export type MonthlyCashFlowRealizedCategoryComposition = {
+  readonly total: Prisma.Decimal;
+  readonly classified: Prisma.Decimal;
+  readonly uncategorized: Prisma.Decimal;
+  readonly imprecise: Prisma.Decimal;
+  readonly coverageRate: Prisma.Decimal | null;
+  readonly items: readonly {
+    readonly kind: 'category' | 'other' | 'uncategorized' | 'imprecise';
+    readonly key: string;
+    readonly name: string;
+    readonly amount: Prisma.Decimal;
+    readonly percentage: Prisma.Decimal;
+  }[];
+};
+
+/** Read model de caixa CASH-3A. HTTP CASH-3B serializa este shape. */
 export type MonthlyCashFlow = {
   readonly tenantId: string;
   readonly today: Date;
@@ -189,6 +205,15 @@ export type MonthlyCashFlow = {
   readonly to: Date;
   readonly costCenterCashSplit: boolean;
   readonly realized: MonthlyCashFlowTotals;
+  /**
+   * Composição dos RECEIPTs / DISBURSEMENTs realizados (netAmount / share CC).
+   * Fecha com realized.inflows / realized.outflows. Previsto e transferências fora.
+   * Null nos lados quando costCenterCashSplit=false.
+   */
+  readonly realizedByCategory: {
+    readonly inflows: MonthlyCashFlowRealizedCategoryComposition | null;
+    readonly outflows: MonthlyCashFlowRealizedCategoryComposition | null;
+  };
   readonly expected: MonthlyCashFlowExpected;
   readonly overdue: MonthlyCashFlowOverdue;
   /**

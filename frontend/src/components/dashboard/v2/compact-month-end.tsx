@@ -21,7 +21,7 @@ function remainingDaysLabel(days: number): string {
   return days === 1 ? 'Falta 1 dia no mês' : `Faltam ${days} dias no mês`;
 }
 
-/** Pressão de caixa até o fim do mês em lista compacta — competência, não saldo. */
+/** Pressão de caixa até o fim do mês em lista compacta — previsto, não saldo. */
 export function CompactMonthEnd({ summary, remainingDays, className }: CompactMonthEndProps) {
   return (
     <div className={cx(styles.root, className)}>

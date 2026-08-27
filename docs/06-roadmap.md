@@ -74,7 +74,8 @@ L1-A / CASH-2 (financial_transactions): IMPLEMENTADA no HEAD (persistência).
   Stash L1 histórico NÃO aplicar.
 L1-B / CASH-3A: read model `MonthlyCashFlow` IMPLEMENTADO (domínio + loader + testes).
 CASH-3B: `GET /dashboard/monthly-cash-flow` IMPLEMENTADO (DTO + tipos frontend).
-CASH-4A: infra Home IMPLEMENTADA. CASH-4B: KPIs de caixa na Home IMPLEMENTADA (local; homologação humana pendente).
+CASH-4A: infra Home IMPLEMENTADA. CASH-4B: KPIs de caixa na Home HOMOLOGADA (HEAD).
+CASH-4C: visualizações da Home em caixa IMPLEMENTADA (local; aguarda homologação humana).
 CASH-7: bootstrap/backfill LOCAL do ledger IMPLEMENTADO (Clínica Life).
   Discovery = AR/AP local `paid > 0` + GET `/baixa` nas não cobertas.
   Idempotente; skip se Σ gross ACTIVE = paid (DELETED não impede skip).
@@ -90,12 +91,14 @@ CASH-8A: lifecycle R3/R4 IMPLEMENTADO no código (flag default false).
   Despesas oficiais: `realized.outflows + expected.payables`. Vencido AP fora.
   Resultado da Home: `billing − monthlyExpenses`. `realized.result` não substitui.
   Vencido não compõe. Pagamento tardio no mês da baixa. Competência não define.
-  Meta: `actual = billing` (CASH-4B). Gráficos complexos = CASH-4C.
+  Meta: `actual = billing` (CASH-4B). Gráficos / leitura / diário / comparativo = CASH-4C.
 CASH-9C: transferências internas IMPLEMENTADAS (código + migration + testes).
   Fonte `GET /v1/financeiro/transferencias`. Tabela `financial_transfers`.
   Fora de faturamento/despesas/resultado. Ghost settlement permanece ACTIVE.
   Match conservador 1:1; AMBIGUOUS não exclui. Ingestão local explícita.
-  CASH-4B IMPLEMENTADA localmente (sem commit/prod). Relatórios/PDF/XLSX intactos. CASH-4C pendente.
+  CASH-4B HOMOLOGADA. CASH-4C IMPLEMENTADA localmente (sem commit/prod).
+  CASH-4C-CAT: donuts = caixa realizado (fecha com realized.inflows/outflows).
+  Relatórios/PDF/XLSX intactos (CASH-6).
 Faturamento Gerencial (F1-G): SUPERSEDED na Home (CASH-4B = caixa / MonthlyCashFlow)
   (fórmula de produto SUPERSEDED pela decisão Felipe acima).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
@@ -615,7 +618,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-9C: transferências internas IMPLEMENTADAS (local). CASH-4B: IMPLEMENTADA (local). CASH-4C: NÃO INICIADO.
+Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-9C: transferências internas IMPLEMENTADAS (local). CASH-4B: HOMOLOGADA. CASH-4C: IMPLEMENTADA (local; aguarda homologação humana).
 
 ⸻
 
@@ -628,7 +631,8 @@ Status: EM ANDAMENTO (recorte).
 E1 (Pressão de caixa 7/15/30): HOMOLOGADA VISUALMENTE.
 E2 (Composição das despesas, D8): HOMOLOGADA.
 Receitas do mês por competência (M1): HOMOLOGADA.
-E3 (Leitura executiva): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
+E3 (Leitura executiva): SUPERSEDED na Home pelo CASH-4C
+  (`buildCashExecutiveSignals` a partir do MonthlyCashFlow).
 
 Homologação humana (19/08/2026): Dashboard `/` em Support Mode — quatro
 cards Grupo A com números persistidos, freshness visível, estados

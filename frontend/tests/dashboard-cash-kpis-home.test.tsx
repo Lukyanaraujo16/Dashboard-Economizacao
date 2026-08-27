@@ -8,15 +8,9 @@ import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/mont
 import type { DashboardMonthEndCashPressureResponse } from '../src/services/dashboard/month-end-cash-pressure.types';
 import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
 import type { DashboardCashFlowForecastResponse } from '../src/services/dashboard/forecast.types';
-import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
-import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { DashboardMonthlyCashFlowRequestError } from '../src/services/dashboard/monthly-cash-flow.types';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
-import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
-import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
-import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
-import type { DashboardExecutiveInsightsResponse } from '../src/services/dashboard/executive-insights.types';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -51,17 +45,8 @@ vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
 vi.mock('../src/services/dashboard/forecast', () => ({
   getDashboardCashFlowForecast: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/monthly-expenses', () => ({
-  getDashboardMonthlyExpenses: vi.fn(),
-}));
-vi.mock('../src/services/dashboard/monthly-revenue', () => ({
-  getDashboardMonthlyRevenue: vi.fn(),
-}));
 vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
   getDashboardMonthlyCashFlow: vi.fn(),
-}));
-vi.mock('../src/services/dashboard/executive-insights', () => ({
-  getDashboardExecutiveInsights: vi.fn(),
 }));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
@@ -77,10 +62,7 @@ vi.mock('../src/services/dashboard/categories', () => ({
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
-const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
-const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
-const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -112,58 +94,22 @@ const lifeCashFlow: DashboardMonthlyCashFlowResponse = {
     ofMonth: { receivables: '0', payables: '0' },
   },
   coverage: '0.95',
+  realizedByCategory: {
+    inflows: {
+      total: '224790.30', classified: '224790.30', uncategorized: '0', imprecise: '0', coverageRate: '100',
+      items: [{ kind: 'category', name: 'Consultas', amount: '224790.30', percentage: '100' }],
+    },
+    outflows: {
+      total: '98941.52', classified: '98941.52', uncategorized: '0', imprecise: '0', coverageRate: '100',
+      items: [{ kind: 'category', name: 'Operacional', amount: '98941.52', percentage: '100' }],
+    },
+  },
   daily: {
     realized: [{ date: '2026-08-05', inflows: '224790.30', outflows: '0', result: '224790.30' }],
     expected: [
       { date: '2026-08-31', receivables: '10511.20', payables: '28289.80', result: '-17778.60' },
     ],
   },
-};
-
-const competenceRevenue: DashboardMonthlyRevenueResponse = {
-  today: '2026-08-19',
-  monthKey: '2026-08',
-  from: '2026-08-01',
-  to: '2026-08-31',
-  receivables: {
-    total: '10000',
-    received: '4000',
-    outstanding: '6000',
-    overdue: '900',
-    classified: '10000',
-    uncategorized: '0',
-    imprecise: '0',
-    coverageRate: '100',
-    items: [],
-    daily: [],
-  },
-};
-
-const competenceExpenses: DashboardMonthlyExpenseResponse = {
-  today: '2026-08-19',
-  monthKey: '2026-08',
-  from: '2026-08-01',
-  to: '2026-08-31',
-  payables: {
-    total: '100',
-    paid: '20',
-    outstanding: '80',
-    overdue: '0',
-    classified: '80',
-    uncategorized: '20',
-    imprecise: '0',
-    coverageRate: '80',
-    items: [],
-    daily: [],
-  },
-};
-
-const emptyInsights: DashboardExecutiveInsightsResponse = {
-  today: '2026-08-19',
-  monthKey: '2026-08',
-  from: '2026-08-01',
-  to: '2026-08-31',
-  insights: [],
 };
 
 const billingGoal: RevenueGoalSnapshot = {
@@ -226,10 +172,7 @@ beforeEach(() => {
   getOverview.mockResolvedValue(syncedOverview);
   getMonthEnd.mockResolvedValue(monthEnd);
   getForecast.mockResolvedValue(forecast);
-  getMonthlyExpenses.mockResolvedValue(competenceExpenses);
-  getMonthlyRevenue.mockResolvedValue(competenceRevenue);
   getMonthlyCashFlow.mockResolvedValue(lifeCashFlow);
-  getInsights.mockResolvedValue(emptyInsights);
   getRevenueGoal.mockResolvedValue(billingGoal);
   getCostCenters.mockResolvedValue({
     items: [{ id: CENTER, name: 'Operações', code: 'OP', active: true }],
@@ -293,13 +236,11 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('H14 — endpoints de competência ainda são chamados (legado)', async () => {
+  it('H14 — Home cash-only carrega apenas MonthlyCashFlow', async () => {
     await renderReadyDashboard();
     await waitFor(() => {
       expect(getMonthlyCashFlow).toHaveBeenCalled();
     });
-    expect(getMonthlyRevenue).toHaveBeenCalled();
-    expect(getMonthlyExpenses).toHaveBeenCalled();
   });
 
   it('H15 — situation não é enviada nem exibida como filtro', async () => {
@@ -309,7 +250,6 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
       expect(getMonthlyCashFlow).toHaveBeenCalled();
     });
     expect(document.querySelector('[data-situation-selector]')).toBeNull();
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
     for (const args of getMonthlyCashFlow.mock.calls) {
       expect(args).not.toContain('open');
@@ -318,11 +258,14 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
 
   it('H16 — inadimplência D1 (vencido agora + taxa global)', async () => {
     await renderReadyDashboard();
+    const scope = within(
+      document.querySelector('[data-financial-section="inadimplencia"]') as HTMLElement,
+    );
     await waitFor(() => {
-      expect(screen.getByText('Vencido agora')).toBeTruthy();
+      expect(scope.getByText('Vencido agora')).toBeTruthy();
     });
-    expect(screen.getByText('Taxa global (D1)')).toBeTruthy();
-    expect(screen.getByText(/R\$\s*4\.200,00/)).toBeTruthy();
+    expect(scope.getByText('Taxa global (D1)')).toBeTruthy();
+    expect(scope.getByText(/R\$\s*4\.200,00/)).toBeTruthy();
     expect(screen.queryByText('Taxa da competência')).toBeNull();
   });
 

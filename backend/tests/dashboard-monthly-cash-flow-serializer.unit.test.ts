@@ -24,6 +24,32 @@ function flow(overrides: Partial<MonthlyCashFlow> = {}): MonthlyCashFlow {
       ofMonth: { receivables: dec('0'), payables: dec('0') },
     },
     coverage: dec('0.8'),
+    realizedByCategory: {
+      inflows: {
+        total: dec('80000'),
+        classified: dec('80000'),
+        uncategorized: dec('0'),
+        imprecise: dec('0'),
+        coverageRate: dec('100'),
+        items: [
+          {
+            kind: 'category',
+            key: 'cat-rev',
+            name: 'Serviços',
+            amount: dec('80000'),
+            percentage: dec('100'),
+          },
+        ],
+      },
+      outflows: {
+        total: dec('0'),
+        classified: dec('0'),
+        uncategorized: dec('0'),
+        imprecise: dec('0'),
+        coverageRate: null,
+        items: [],
+      },
+    },
     daily: {
       realized: [
         {
@@ -107,6 +133,7 @@ describe('dashboard monthly cash flow serializer', () => {
           ofMonth: { receivables: dec('0'), payables: dec('0') },
         },
         coverage: null,
+        realizedByCategory: { inflows: null, outflows: null },
         daily: {
           realized: [
             {

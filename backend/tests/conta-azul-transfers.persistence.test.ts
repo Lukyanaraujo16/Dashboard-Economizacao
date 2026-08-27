@@ -7,6 +7,7 @@ import { Prisma } from '../src/generated/prisma/client.js';
 import { createMonthlyCashFlowService } from '../src/modules/analytics/services/monthly-cash-flow.service.js';
 import { monthlyBilling } from '../src/modules/analytics/domain/monthly-cash-flow.js';
 import { createLedgerReadRepository } from '../src/modules/finance/repositories/ledger-read.repository.js';
+import { createFinancialCategoryReadRepository } from '../src/modules/finance/repositories/financial-category-read.repository.js';
 import { createPayableReadRepository } from '../src/modules/finance/repositories/payable-read.repository.js';
 import { createReceivableReadRepository } from '../src/modules/finance/repositories/receivable-read.repository.js';
 import { mapSettlement } from '../src/modules/integrations/conta-azul/domain/conta-azul-settlement-mappers.js';
@@ -31,6 +32,7 @@ const cashFlow = createMonthlyCashFlowService({
   ledger: createLedgerReadRepository(prisma),
   receivables: createReceivableReadRepository(prisma),
   payables: createPayableReadRepository(prisma),
+  categories: createFinancialCategoryReadRepository(prisma),
 });
 
 const SRC = '11111111-1111-4111-8111-111111111111';

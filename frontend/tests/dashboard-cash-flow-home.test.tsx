@@ -14,8 +14,6 @@ import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-c
 import { DashboardMonthlyCashFlowRequestError } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
-import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
-import type { DashboardExecutiveInsightsResponse } from '../src/services/dashboard/executive-insights.types';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -60,9 +58,6 @@ vi.mock('../src/services/dashboard/monthly-revenue', () => ({
 vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
   getDashboardMonthlyCashFlow: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/executive-insights', () => ({
-  getDashboardExecutiveInsights: vi.fn(),
-}));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -80,7 +75,6 @@ const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
-const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -156,14 +150,6 @@ const loadedExpenses: DashboardMonthlyExpenseResponse = {
   },
 };
 
-const emptyInsights: DashboardExecutiveInsightsResponse = {
-  today: '2026-08-19',
-  monthKey: '2026-08',
-  from: '2026-08-01',
-  to: '2026-08-31',
-  insights: [],
-};
-
 const emptyGoal: RevenueGoalSnapshot = {
   monthKey: '2026-08',
   target: null,
@@ -227,7 +213,6 @@ beforeEach(() => {
   getMonthlyExpenses.mockResolvedValue(loadedExpenses);
   getMonthlyRevenue.mockResolvedValue(loadedRevenue);
   getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
-  getInsights.mockResolvedValue(emptyInsights);
   getRevenueGoal.mockResolvedValue(emptyGoal);
   getCostCenters.mockResolvedValue({
     items: [{ id: CENTER, name: 'Operações', code: 'OP', active: true }],
@@ -260,8 +245,8 @@ describe('CASH-4A/4B — Home carrega MonthlyCashFlow e exibe KPIs de caixa', ()
       expect(args).not.toContain('open');
       expect(args).not.toContain('settled');
     }
-    expect(getMonthlyRevenue).toHaveBeenCalled();
-    expect(getMonthlyExpenses).toHaveBeenCalled();
+    expect(getMonthlyRevenue).not.toHaveBeenCalled();
+    expect(getMonthlyExpenses).not.toHaveBeenCalled();
   });
 
   it('envia month, costCenter e category quando presentes', async () => {
@@ -272,17 +257,18 @@ describe('CASH-4A/4B — Home carrega MonthlyCashFlow e exibe KPIs de caixa', ()
     await waitFor(() => {
       expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', CENTER, CATEGORY);
     });
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', CENTER, null, CATEGORY);
+    expect(getMonthlyRevenue).not.toHaveBeenCalled();
+    expect(getMonthlyExpenses).not.toHaveBeenCalled();
   });
 
-  it('não envia situation ao cash-flow nem aos endpoints de competência na Home', async () => {
+  it('não envia situation ao cash-flow; Home não chama endpoints de competência', async () => {
     dashboardSearchParams = new URLSearchParams('situation=open');
     await renderReadyDashboard();
     await waitFor(() => {
       expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
     });
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null, null, null);
+    expect(getMonthlyRevenue).not.toHaveBeenCalled();
+    expect(getMonthlyExpenses).not.toHaveBeenCalled();
     for (const args of getMonthlyCashFlow.mock.calls) {
       expect(args).not.toContain('open');
     }

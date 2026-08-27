@@ -31,14 +31,25 @@ export type CompetenceComparisonChartProps = {
   readonly revenueDaily: readonly DailyPoint[];
   readonly expenseDaily: readonly DailyPoint[];
   readonly monthKey: string;
+  /** Rótulos das séries; sobrescreva quando a leitura não for competência. */
+  readonly revenueLabel?: string;
+  readonly expenseLabel?: string;
+  readonly ariaLabel?: string;
+  readonly caption?: string;
+  readonly emptyMessage?: string;
   readonly className?: string;
 };
 
-/** Receitas × despesas acumuladas na competência do mês — apresentação, não caixa. */
+/** Duas séries acumuladas no mês — competência por padrão, caixa quando rotulado. */
 export function CompetenceComparisonChart({
   revenueDaily,
   expenseDaily,
   monthKey,
+  revenueLabel = 'Receitas',
+  expenseLabel = 'Despesas',
+  ariaLabel,
+  caption,
+  emptyMessage,
   className,
 }: CompetenceComparisonChartProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -100,7 +111,9 @@ export function CompetenceComparisonChart({
   if (isFlatSeries(revenueDaily) && isFlatSeries(expenseDaily)) {
     return (
       <div className={cx(styles.root, className)}>
-        <p className={styles.empty}>Sem receitas ou despesas na competência de {monthLabel}.</p>
+        <p className={styles.empty}>
+          {emptyMessage ?? `Sem receitas ou despesas na competência de ${monthLabel}.`}
+        </p>
       </div>
     );
   }
@@ -116,11 +129,11 @@ export function CompetenceComparisonChart({
       <ul className={styles.legend}>
         <li className={styles.legendItem}>
           <span className={cx(styles.swatch, styles.revenueSwatch)} aria-hidden="true" />
-          Receitas
+          {revenueLabel}
         </li>
         <li className={styles.legendItem}>
           <span className={cx(styles.swatch, styles.expenseSwatch)} aria-hidden="true" />
-          Despesas
+          {expenseLabel}
         </li>
       </ul>
 
@@ -136,7 +149,9 @@ export function CompetenceComparisonChart({
         <div
           className={styles.plot}
           role="img"
-          aria-label={`Receitas e despesas acumuladas por competência em ${monthLabel}`}
+          aria-label={
+            ariaLabel ?? `Receitas e despesas acumuladas por competência em ${monthLabel}`
+          }
           tabIndex={0}
           onMouseMove={handleMove}
           onMouseLeave={() => setActiveIndex(-1)}
@@ -222,12 +237,12 @@ export function CompetenceComparisonChart({
               <p className={styles.tooltipDay}>{formatDayPt(activeRevenue.date)}</p>
               <p className={styles.tooltipRow}>
                 <span className={cx(styles.swatch, styles.revenueSwatch)} />
-                Receitas
+                {revenueLabel}
                 <span className={styles.tooltipValue}>{formatMoneyBrl(activeRevenue.amount)}</span>
               </p>
               <p className={styles.tooltipRow}>
                 <span className={cx(styles.swatch, styles.expenseSwatch)} />
-                Despesas
+                {expenseLabel}
                 <span className={styles.tooltipValue}>{formatMoneyBrl(activeExpense.amount)}</span>
               </p>
             </div>
@@ -241,12 +256,12 @@ export function CompetenceComparisonChart({
       </div>
 
       <p className={styles.caption}>
-        Acumulado por competência no mês selecionado. Não representa saldo bancário.
+        {caption ?? 'Acumulado por competência no mês selecionado. Não representa saldo bancário.'}
       </p>
 
       <span className={styles.liveRegion} aria-live="polite">
         {activeRevenue && activeExpense
-          ? `${formatDayPt(activeRevenue.date)}: receitas ${formatMoneyBrl(activeRevenue.amount)}, despesas ${formatMoneyBrl(activeExpense.amount)}`
+          ? `${formatDayPt(activeRevenue.date)}: ${revenueLabel.toLowerCase()} ${formatMoneyBrl(activeRevenue.amount)}, ${expenseLabel.toLowerCase()} ${formatMoneyBrl(activeExpense.amount)}`
           : ''}
       </span>
     </div>

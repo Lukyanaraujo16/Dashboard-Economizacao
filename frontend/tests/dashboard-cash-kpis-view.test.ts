@@ -27,6 +27,16 @@ function lifeAugust(): DashboardMonthlyCashFlowResponse {
       ofMonth: { receivables: '0', payables: '0' },
     },
     coverage: '0.95',
+  realizedByCategory: {
+    inflows: {
+      total: '224790.30', classified: '224790.30', uncategorized: '0', imprecise: '0', coverageRate: '100',
+      items: [{ kind: 'category', name: 'Consultas', amount: '224790.30', percentage: '100' }],
+    },
+    outflows: {
+      total: '98941.52', classified: '98941.52', uncategorized: '0', imprecise: '0', coverageRate: '100',
+      items: [{ kind: 'category', name: 'Operacional', amount: '98941.52', percentage: '100' }],
+    },
+  },
     daily: { realized: [], expected: [] },
   };
 }

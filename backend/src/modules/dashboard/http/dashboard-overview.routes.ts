@@ -45,6 +45,7 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       ledger: createLedgerReadRepository(prisma),
       receivables,
       payables,
+      categories,
       costCenterAllocations,
     }),
     integrations: createContaAzulIntegrationRepository(prisma),

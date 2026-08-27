@@ -23,7 +23,6 @@ import {
 import {
   buildDashboardSituationSearchParams,
   isDashboardSituation,
-  type DashboardSituation,
 } from '../../lib/dashboard-situation';
 import {
   buildDashboardCategorySearchParams,
@@ -34,32 +33,16 @@ import {
   createDashboardFilterCache,
   dashboardCashFlowCacheKey,
   dashboardCashWindowCacheKey,
-  dashboardFilterCacheKey,
 } from '../../lib/dashboard-filter-cache';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
 import { getDashboardCategories } from '../../services/dashboard/categories';
 import type { DashboardCategoryItem } from '../../services/dashboard/categories.types';
-import { getDashboardMonthlyExpenses } from '../../services/dashboard/monthly-expenses';
-import {
-  DashboardMonthlyExpenseRequestError,
-  type DashboardMonthlyExpenseResponse,
-} from '../../services/dashboard/monthly-expenses.types';
-import { getDashboardMonthlyRevenue } from '../../services/dashboard/monthly-revenue';
-import {
-  DashboardMonthlyRevenueRequestError,
-  type DashboardMonthlyRevenueResponse,
-} from '../../services/dashboard/monthly-revenue.types';
 import { getDashboardMonthlyCashFlow } from '../../services/dashboard/monthly-cash-flow';
 import {
   DashboardMonthlyCashFlowRequestError,
   type DashboardMonthlyCashFlowResponse,
 } from '../../services/dashboard/monthly-cash-flow.types';
-import { getDashboardExecutiveInsights } from '../../services/dashboard/executive-insights';
-import {
-  DashboardExecutiveInsightsRequestError,
-  type DashboardExecutiveInsightsResponse,
-} from '../../services/dashboard/executive-insights.types';
 import { getDashboardCashFlowForecast } from '../../services/dashboard/forecast';
 import {
   DashboardForecastRequestError,
@@ -86,8 +69,9 @@ import {
 import { StateWrapper } from '../financial';
 import { Badge, Button, Typography } from '../ui';
 import { UI_ICON_STROKE } from '../ui/icons';
-import { CategoryDonutChart } from './category-donut-chart';
-import { presentTopCategoryDonutSlices, type CategoryDonutSlice } from './category-donut-view';
+import { buildCashExecutiveReading } from './dashboard-cash-executive-reading';
+import { CashExecutiveReading } from './cash-executive-reading';
+import { CashRealizedCategoryPanel } from './cash-realized-category-panel';
 import {
   CASH_RECEIVABLE_SPARKLINE_CAPTION,
   CASH_RECEIVED_SPARKLINE_CAPTION,
@@ -103,18 +87,27 @@ import {
   toOverviewDelinquencyRateKpi,
 } from './dashboard-cash-kpis-view';
 import {
+  CASH_DAILY_EXPECTED_CAPTION,
+  CASH_DAILY_REALIZED_CAPTION,
+  CASH_EXPENSES_SPARKLINE_CAPTION,
+  CASH_REALIZED_COMPARISON_CAPTION,
+  CASH_RESULT_SPARKLINE_CAPTION,
+  cashBillingCoverageRatio,
+  cashExpectedPayablesSeries,
+  cashExpectedReceivablesSeries,
+  cashExpensesComposedSeries,
+  cashManagerialResultComposedSeries,
+  cashRealizedInflowsSeries,
+  cashRealizedOutflowsSeries,
+} from './dashboard-cash-series-view';
+import {
   toMonthlyCashFlowView,
   type MonthlyCashFlowView,
 } from './dashboard-monthly-cash-flow-view';
-import {
-  isMonthlyExpenseEmpty,
-  type MonthlyContextKpiView,
-} from './dashboard-monthly-kpis-view';
-import { isMonthlyRevenueEmpty } from './dashboard-monthly-revenue-view';
+import { type MonthlyContextKpiView } from './dashboard-monthly-kpis-view';
 import { DashboardCostCenterSelector } from './dashboard-cost-center-selector';
 import { DashboardMonthSelector } from './dashboard-month-selector';
 import { DashboardCategorySelector } from './dashboard-category-selector';
-import { executiveInsightRows } from './dashboard-executive-insights-view';
 import { formatMonthKeyPtBr } from './dashboard-forecast-view';
 import {
   formatSyncTimestamp,
@@ -123,28 +116,19 @@ import {
   shouldSkipOverviewFetch,
 } from './dashboard-overview-view';
 import {
-  CategoryRanking,
   CompactMonthEnd,
   CompetenceComparisonChart,
   CompetenceDailyBars,
   ExecutiveKpiCard,
-  ExecutiveSignals,
   ForecastPanel,
   MonthlyCompare,
   RevenueGoalCard,
   RevenueGoalEditDialog,
   RevenueGoalHistoryList,
-  Sparkline,
   WidgetExpandDialog,
   WidgetShell,
-  accumulate,
-  formatCompactBrl,
-  parseAmount,
   revenueGoalStatusLabel,
   signedSharePercent,
-  subtractDecimalStrings,
-  summarizeActiveDays,
-  type CategoryRankingItem,
   type ExecutiveKpiState,
   type MonthlyComparePeriod,
   type MonthlyCompareRow,
@@ -154,6 +138,12 @@ import styles from './dashboard-page.module.css';
 const FIRST_SYNC_EMPTY = 'Aguardando a primeira sincronização';
 const BLOCKED_EMPTY = 'Disponível junto com os indicadores da empresa.';
 const PREVIOUS_MONTH_ERROR = 'Não foi possível carregar o mês anterior para comparação.';
+/** Split de caixa ausente (filtro por centro de custo) — nunca cair para R$ 0. */
+const CASH_SERIES_UNAVAILABLE =
+  'Séries diárias de caixa indisponíveis para os filtros selecionados.';
+const CASH_CATEGORY_EMPTY = 'Sem movimentação de caixa realizada neste mês.';
+const CASH_CATEGORY_UNAVAILABLE =
+  'Composição por categoria indisponível para os filtros selecionados.';
 const DAY_MS = 86_400_000;
 
 type OverviewView =
@@ -175,21 +165,7 @@ type ForecastView =
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly data: DashboardCashFlowForecastResponse };
 
-type MonthlyExpenseView =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'empty'; readonly data: DashboardMonthlyExpenseResponse }
-  | { readonly kind: 'ready'; readonly data: DashboardMonthlyExpenseResponse };
-
-type MonthlyRevenueView =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'empty'; readonly data: DashboardMonthlyRevenueResponse }
-  | { readonly kind: 'ready'; readonly data: DashboardMonthlyRevenueResponse };
-
-/** CASH-4A: carregado em paralelo; ainda não alimenta KPIs visíveis. */
+/** Fonte única dos KPIs (CASH-4B) e dos gráficos da Home (CASH-4C). */
 type MonthlyCashFlowLoadView =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
@@ -206,22 +182,15 @@ type RevenueGoalView =
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly data: RevenueGoalSnapshot };
 
-type InsightsView =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'empty'; readonly data: DashboardExecutiveInsightsResponse }
-  | { readonly kind: 'ready'; readonly data: DashboardExecutiveInsightsResponse };
-
-/** Competência anterior — usada apenas no comparativo mensal. */
+/** Mês civil anterior em regime de caixa — usado apenas no comparativo mensal. */
 type PreviousMonthView =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
   | {
       readonly kind: 'ready';
-      readonly revenue: DashboardMonthlyRevenueResponse;
-      readonly expense: DashboardMonthlyExpenseResponse;
+      readonly data: DashboardMonthlyCashFlowResponse;
+      readonly model: MonthlyCashFlowView;
     };
 
 /** Estado do overview aplicado a cada widget antes dos dados locais. */
@@ -234,24 +203,20 @@ type KpiSlot = {
   readonly emptyMessage?: string;
 };
 
-type ExpandKind =
-  | 'billing'
-  | 'expense'
-  | 'comparison'
-  | 'categories-revenue'
-  | 'categories-expense'
-  | 'compare'
-  | 'daily'
-  | 'goal';
+type ExpandKind = 'compare' | 'daily' | 'goal';
+
+/** Recorte das barras diárias de caixa: baixas realizadas ou vencimentos previstos. */
+type DailyCashMode = 'realized' | 'expected';
+
+const DAILY_MODES: readonly { readonly id: DailyCashMode; readonly label: string }[] = [
+  { id: 'realized', label: 'Realizado' },
+  { id: 'expected', label: 'Previsto' },
+];
 
 /** Mantém dados anteriores / cache enquanto busca (troca de filtro CC1.3.1). */
 type SoftLoadOptions = {
   readonly soft?: boolean;
 };
-
-function canKeepWidgetData(kind: string): boolean {
-  return kind === 'ready' || kind === 'empty';
-}
 
 function widgetGate(view: OverviewView): WidgetGate {
   if (view.kind === 'loading') {
@@ -301,7 +266,7 @@ function cashKpiSlot(
   return kpiViewSlot(build(cashFlow.model));
 }
 
-/** Dias restantes da competência corrente, incluindo hoje. */
+/** Dias restantes do mês corrente, incluindo hoje. */
 function remainingDaysInMonth(today: string, monthEnd: string): number | undefined {
   const from = Date.parse(`${today}T00:00:00Z`);
   const to = Date.parse(`${monthEnd}T00:00:00Z`);
@@ -310,14 +275,6 @@ function remainingDaysInMonth(today: string, monthEnd: string): number | undefin
   }
   const days = Math.round((to - from) / DAY_MS) + 1;
   return days >= 0 ? days : undefined;
-}
-
-function toRankingItems(slices: readonly CategoryDonutSlice[]): readonly CategoryRankingItem[] {
-  return slices.map((slice) => ({
-    name: slice.name,
-    amount: slice.amount,
-    percentage: slice.percentage,
-  }));
 }
 
 /** AGO — rótulo curto do mês para o comparativo. */
@@ -334,19 +291,9 @@ function shareLabel(part: string | null, total: string | null): string | undefin
   return share === null ? undefined : `${formatDelinquencyRate(share)} do faturamento`;
 }
 
-/** Decimal-string ou "—" quando o cash split não está disponível. */
-function moneyOrDash(value: string | null | undefined): string {
-  return value === null || value === undefined ? '—' : formatMoneyBrl(value);
-}
-
-/** Total da competência em rótulo curto — cabe no furo do anel sem quebrar. */
-function compactTotalLabel(total: string): string {
-  return formatCompactBrl(parseAmount(total));
-}
-
 /**
- * Margem gerencial = resultado ÷ receitas da competência, com sinal preservado.
- * `undefined` quando não há receita na competência — não existe margem a declarar.
+ * Margem = resultado ÷ faturamento de caixa do mês, com sinal preservado.
+ * `undefined` quando não há faturamento — não existe margem a declarar.
  */
 function managerialMarginLabel(result: string, revenueTotal: string): string | undefined {
   if (isDecimalZero(revenueTotal)) {
@@ -358,7 +305,7 @@ function managerialMarginLabel(result: string, revenueTotal: string): string | u
 
 type KpiFooterItem = { readonly label: string; readonly value: string };
 
-/** Quebra do total da competência no pé do card de KPI. */
+/** Quebra do total do mês no pé do card de KPI. */
 function KpiFooter({ items }: { readonly items: readonly KpiFooterItem[] }) {
   return (
     <dl className={styles.kpiFooter}>
@@ -406,8 +353,8 @@ function WidgetBody({
 }
 
 /**
- * Dashboard da empresa cliente — KPIs principais por regime de caixa (CASH-4B).
- * Fonte dos cards: MonthlyCashFlow. Gráficos de competência ficam CASH-4C.
+ * Dashboard da empresa cliente — KPIs e gráficos por regime de caixa (CASH-4C).
+ * Fonte única de números e séries: MonthlyCashFlow do mês selecionado.
  */
 export function DashboardPage() {
   const { user, support, status } = useAuth();
@@ -417,16 +364,9 @@ export function DashboardPage() {
   const [view, setView] = useState<OverviewView>({ kind: 'loading' });
   const [monthEndView, setMonthEndView] = useState<MonthEndView>({ kind: 'idle' });
   const [forecastView, setForecastView] = useState<ForecastView>({ kind: 'idle' });
-  const [monthlyExpenseView, setMonthlyExpenseView] = useState<MonthlyExpenseView>({
-    kind: 'idle',
-  });
-  const [monthlyRevenueView, setMonthlyRevenueView] = useState<MonthlyRevenueView>({
-    kind: 'idle',
-  });
   const [monthlyCashFlowView, setMonthlyCashFlowView] = useState<MonthlyCashFlowLoadView>({
     kind: 'idle',
   });
-  const [insightsView, setInsightsView] = useState<InsightsView>({ kind: 'idle' });
   const [previousMonthView, setPreviousMonthView] = useState<PreviousMonthView>({ kind: 'idle' });
   const [revenueGoalView, setRevenueGoalView] = useState<RevenueGoalView>({ kind: 'idle' });
   const [costCenters, setCostCenters] = useState<readonly DashboardCostCenterItem[]>([]);
@@ -438,6 +378,7 @@ export function DashboardPage() {
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaveError, setGoalSaveError] = useState<string | null>(null);
   const [expandKind, setExpandKind] = useState<ExpandKind | null>(null);
+  const [dailyMode, setDailyMode] = useState<DailyCashMode>('realized');
 
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -445,27 +386,15 @@ export function DashboardPage() {
   monthEndViewRef.current = monthEndView;
   const forecastViewRef = useRef(forecastView);
   forecastViewRef.current = forecastView;
-  const monthlyExpenseViewRef = useRef(monthlyExpenseView);
-  monthlyExpenseViewRef.current = monthlyExpenseView;
-  const monthlyRevenueViewRef = useRef(monthlyRevenueView);
-  monthlyRevenueViewRef.current = monthlyRevenueView;
   const monthlyCashFlowViewRef = useRef(monthlyCashFlowView);
   monthlyCashFlowViewRef.current = monthlyCashFlowView;
-  const insightsViewRef = useRef(insightsView);
-  insightsViewRef.current = insightsView;
   const previousMonthViewRef = useRef(previousMonthView);
   previousMonthViewRef.current = previousMonthView;
 
   const overviewCacheRef = useRef(createDashboardFilterCache<DashboardOverviewResponse>());
-  const revenueCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyRevenueResponse>());
   const cashFlowCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyCashFlowResponse>());
-  const expenseCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyExpenseResponse>());
-  const insightsCacheRef = useRef(createDashboardFilterCache<DashboardExecutiveInsightsResponse>());
   const previousMonthCacheRef = useRef(
-    createDashboardFilterCache<{
-      readonly revenue: DashboardMonthlyRevenueResponse;
-      readonly expense: DashboardMonthlyExpenseResponse;
-    }>(),
+    createDashboardFilterCache<DashboardMonthlyCashFlowResponse>(),
   );
   const monthEndCacheRef = useRef(createDashboardFilterCache<DashboardMonthEndCashPressureResponse>());
   const forecastCacheRef = useRef(createDashboardFilterCache<DashboardCashFlowForecastResponse>());
@@ -476,10 +405,7 @@ export function DashboardPage() {
         setView({ kind: 'forbidden' });
         setMonthEndView({ kind: 'idle' });
         setForecastView({ kind: 'idle' });
-        setMonthlyExpenseView({ kind: 'idle' });
-        setMonthlyRevenueView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
-        setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
         setCostCenters([]);
@@ -489,10 +415,7 @@ export function DashboardPage() {
         setView({ kind: 'forbidden' });
         setMonthEndView({ kind: 'idle' });
         setForecastView({ kind: 'idle' });
-        setMonthlyExpenseView({ kind: 'idle' });
-        setMonthlyRevenueView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
-        setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
         setCostCenters([]);
@@ -518,11 +441,8 @@ export function DashboardPage() {
           setView({ kind: 'never-sync' });
           setMonthEndView({ kind: 'idle' });
           setForecastView({ kind: 'idle' });
-          setMonthlyExpenseView({ kind: 'idle' });
-          setMonthlyRevenueView({ kind: 'idle' });
           setMonthlyCashFlowView({ kind: 'idle' });
-          setInsightsView({ kind: 'idle' });
-          setPreviousMonthView({ kind: 'idle' });
+            setPreviousMonthView({ kind: 'idle' });
           setRevenueGoalView({ kind: 'idle' });
           return;
         }
@@ -536,11 +456,8 @@ export function DashboardPage() {
           setView({ kind: 'forbidden' });
           setMonthEndView({ kind: 'idle' });
           setForecastView({ kind: 'idle' });
-          setMonthlyExpenseView({ kind: 'idle' });
-          setMonthlyRevenueView({ kind: 'idle' });
           setMonthlyCashFlowView({ kind: 'idle' });
-          setInsightsView({ kind: 'idle' });
-          setPreviousMonthView({ kind: 'idle' });
+            setPreviousMonthView({ kind: 'idle' });
           setRevenueGoalView({ kind: 'idle' });
           return;
         }
@@ -554,10 +471,7 @@ export function DashboardPage() {
         setView({ kind: 'error', message });
         setMonthEndView({ kind: 'idle' });
         setForecastView({ kind: 'idle' });
-        setMonthlyExpenseView({ kind: 'idle' });
-        setMonthlyRevenueView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
-        setInsightsView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
       }
@@ -685,116 +599,6 @@ export function DashboardPage() {
     [],
   );
 
-  const loadMonthlyExpenses = useCallback(
-    async (
-      signal: AbortSignal,
-      monthKey: string,
-      todayMonthKey: string,
-      costCenterId: string | null,
-      situation: DashboardSituation | null,
-      categoryId: string | null,
-      options?: SoftLoadOptions,
-    ) => {
-      const soft = options?.soft === true;
-      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId, situation, categoryId);
-      const cached = expenseCacheRef.current.get(cacheKey);
-      if (soft && cached) {
-        setMonthlyExpenseView(
-          isMonthlyExpenseEmpty(cached)
-            ? { kind: 'empty', data: cached }
-            : { kind: 'ready', data: cached },
-        );
-      } else if (!(soft && canKeepWidgetData(monthlyExpenseViewRef.current.kind))) {
-        setMonthlyExpenseView({ kind: 'loading' });
-      }
-      try {
-        const data = await getDashboardMonthlyExpenses(
-          monthKey === todayMonthKey ? null : monthKey,
-          costCenterId,
-          situation,
-          categoryId,
-        );
-        if (signal.aborted) {
-          return;
-        }
-        expenseCacheRef.current.set(cacheKey, data);
-        if (isMonthlyExpenseEmpty(data)) {
-          setMonthlyExpenseView({ kind: 'empty', data });
-          return;
-        }
-        setMonthlyExpenseView({ kind: 'ready', data });
-      } catch (error) {
-        if (signal.aborted) {
-          return;
-        }
-        if (soft && canKeepWidgetData(monthlyExpenseViewRef.current.kind)) {
-          return;
-        }
-        const message =
-          error instanceof DashboardMonthlyExpenseRequestError
-            ? error.message
-            : 'Não foi possível carregar as despesas do mês.';
-        setMonthlyExpenseView({ kind: 'error', message });
-      }
-    },
-    [],
-  );
-
-  const loadMonthlyRevenue = useCallback(
-    async (
-      signal: AbortSignal,
-      monthKey: string,
-      todayMonthKey: string,
-      costCenterId: string | null,
-      situation: DashboardSituation | null,
-      categoryId: string | null,
-      options?: SoftLoadOptions,
-    ) => {
-      const soft = options?.soft === true;
-      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId, situation, categoryId);
-      const cached = revenueCacheRef.current.get(cacheKey);
-      if (soft && cached) {
-        setMonthlyRevenueView(
-          isMonthlyRevenueEmpty(cached)
-            ? { kind: 'empty', data: cached }
-            : { kind: 'ready', data: cached },
-        );
-      } else if (!(soft && canKeepWidgetData(monthlyRevenueViewRef.current.kind))) {
-        setMonthlyRevenueView({ kind: 'loading' });
-      }
-      try {
-        const data = await getDashboardMonthlyRevenue(
-          monthKey === todayMonthKey ? null : monthKey,
-          costCenterId,
-          situation,
-          categoryId,
-        );
-        if (signal.aborted) {
-          return;
-        }
-        revenueCacheRef.current.set(cacheKey, data);
-        if (isMonthlyRevenueEmpty(data)) {
-          setMonthlyRevenueView({ kind: 'empty', data });
-          return;
-        }
-        setMonthlyRevenueView({ kind: 'ready', data });
-      } catch (error) {
-        if (signal.aborted) {
-          return;
-        }
-        if (soft && canKeepWidgetData(monthlyRevenueViewRef.current.kind)) {
-          return;
-        }
-        const message =
-          error instanceof DashboardMonthlyRevenueRequestError
-            ? error.message
-            : 'Não foi possível carregar as receitas do mês.';
-        setMonthlyRevenueView({ kind: 'error', message });
-      }
-    },
-    [],
-  );
-
   const loadMonthlyCashFlow = useCallback(
     async (
       signal: AbortSignal,
@@ -848,91 +652,39 @@ export function DashboardPage() {
     [],
   );
 
-  const loadInsights = useCallback(
-    async (
-      signal: AbortSignal,
-      monthKey: string,
-      todayMonthKey: string,
-      costCenterId: string | null,
-      situation: DashboardSituation | null,
-      categoryId: string | null,
-      options?: SoftLoadOptions,
-    ) => {
-      const soft = options?.soft === true;
-      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId, situation, categoryId);
-      const cached = insightsCacheRef.current.get(cacheKey);
-      if (soft && cached) {
-        setInsightsView(
-          cached.insights.length === 0
-            ? { kind: 'empty', data: cached }
-            : { kind: 'ready', data: cached },
-        );
-      } else if (!(soft && canKeepWidgetData(insightsViewRef.current.kind))) {
-        setInsightsView({ kind: 'loading' });
-      }
-      try {
-        const data = await getDashboardExecutiveInsights(
-          monthKey === todayMonthKey ? null : monthKey,
-          costCenterId,
-          situation,
-          categoryId,
-        );
-        if (signal.aborted) {
-          return;
-        }
-        insightsCacheRef.current.set(cacheKey, data);
-        if (data.insights.length === 0) {
-          setInsightsView({ kind: 'empty', data });
-          return;
-        }
-        setInsightsView({ kind: 'ready', data });
-      } catch (error) {
-        if (signal.aborted) {
-          return;
-        }
-        if (soft && canKeepWidgetData(insightsViewRef.current.kind)) {
-          return;
-        }
-        const message =
-          error instanceof DashboardExecutiveInsightsRequestError
-            ? error.message
-            : 'Não foi possível carregar a leitura executiva.';
-        setInsightsView({ kind: 'error', message });
-      }
-    },
-    [],
-  );
-
-  /** Competência anterior em paralelo — mesmos filtros da Home, mês civil anterior. */
+  /** Mês civil anterior em caixa — mesmos filtros da Home, sem situação. */
   const loadPreviousMonth = useCallback(
     async (
       signal: AbortSignal,
       monthKey: string,
       todayMonthKey: string,
       costCenterId: string | null,
-      situation: DashboardSituation | null,
       categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
       const soft = options?.soft === true;
-      const cacheKey = dashboardFilterCacheKey(monthKey, costCenterId, situation, categoryId);
+      const cacheKey = dashboardCashFlowCacheKey(monthKey, costCenterId, categoryId);
       const cached = previousMonthCacheRef.current.get(cacheKey);
       if (soft && cached) {
-        setPreviousMonthView({ kind: 'ready', revenue: cached.revenue, expense: cached.expense });
+        setPreviousMonthView({
+          kind: 'ready',
+          data: cached,
+          model: toMonthlyCashFlowView(cached),
+        });
       } else if (!(soft && previousMonthViewRef.current.kind === 'ready')) {
         setPreviousMonthView({ kind: 'loading' });
       }
-      const param = monthKey === todayMonthKey ? null : monthKey;
       try {
-        const [revenue, expense] = await Promise.all([
-          getDashboardMonthlyRevenue(param, costCenterId, situation, categoryId),
-          getDashboardMonthlyExpenses(param, costCenterId, situation, categoryId),
-        ]);
+        const data = await getDashboardMonthlyCashFlow(
+          monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
+          categoryId,
+        );
         if (signal.aborted) {
           return;
         }
-        previousMonthCacheRef.current.set(cacheKey, { revenue, expense });
-        setPreviousMonthView({ kind: 'ready', revenue, expense });
+        previousMonthCacheRef.current.set(cacheKey, data);
+        setPreviousMonthView({ kind: 'ready', data, model: toMonthlyCashFlowView(data) });
       } catch {
         if (signal.aborted) {
           return;
@@ -1049,68 +801,6 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (view.kind !== 'ready') {
-      setInsightsView({ kind: 'idle' });
-      return;
-    }
-    const controller = new AbortController();
-    const soft = canKeepWidgetData(insightsViewRef.current.kind);
-    void loadInsights(
-      controller.signal,
-      selectedMonthKey,
-      todayMonthKey,
-      selectedCostCenterId,
-      null,
-      selectedCategoryId,
-      { soft },
-    );
-    return () => controller.abort();
-  }, [
-    loadInsights,
-    selectedCategoryId,
-    selectedCostCenterId,
-    selectedMonthKey,
-    todayMonthKey,
-    view.kind,
-  ]);
-
-  useEffect(() => {
-    if (view.kind !== 'ready') {
-      return;
-    }
-    const controller = new AbortController();
-    const softRevenue = canKeepWidgetData(monthlyRevenueViewRef.current.kind);
-    const softExpense = canKeepWidgetData(monthlyExpenseViewRef.current.kind);
-    void loadMonthlyRevenue(
-      controller.signal,
-      selectedMonthKey,
-      todayMonthKey,
-      selectedCostCenterId,
-      null,
-      selectedCategoryId,
-      { soft: softRevenue },
-    );
-    void loadMonthlyExpenses(
-      controller.signal,
-      selectedMonthKey,
-      todayMonthKey,
-      selectedCostCenterId,
-      null,
-      selectedCategoryId,
-      { soft: softExpense },
-    );
-    return () => controller.abort();
-  }, [
-    loadMonthlyExpenses,
-    loadMonthlyRevenue,
-    selectedCategoryId,
-    selectedCostCenterId,
-    selectedMonthKey,
-    todayMonthKey,
-    view.kind,
-  ]);
-
-  useEffect(() => {
-    if (view.kind !== 'ready') {
       setMonthlyCashFlowView({ kind: 'idle' });
       return;
     }
@@ -1156,7 +846,6 @@ export function DashboardPage() {
       previousMonthKey,
       todayMonthKey,
       selectedCostCenterId,
-      null,
       selectedCategoryId,
       { soft },
     );
@@ -1246,16 +935,6 @@ export function DashboardPage() {
   const retryForecast = () => {
     void loadForecast(new AbortController().signal, selectedCostCenterId, selectedCategoryId);
   };
-  const retryRevenue = () => {
-    void loadMonthlyRevenue(
-      new AbortController().signal,
-      selectedMonthKey,
-      todayMonthKey,
-      selectedCostCenterId,
-      null,
-      selectedCategoryId,
-    );
-  };
   const retryCashFlow = () => {
     void loadMonthlyCashFlow(
       new AbortController().signal,
@@ -1265,23 +944,12 @@ export function DashboardPage() {
       selectedCategoryId,
     );
   };
-  const retryExpenses = () => {
-    void loadMonthlyExpenses(
+  const retryPreviousMonth = () => {
+    void loadPreviousMonth(
       new AbortController().signal,
-      selectedMonthKey,
+      previousMonthKey,
       todayMonthKey,
       selectedCostCenterId,
-      null,
-      selectedCategoryId,
-    );
-  };
-  const retryInsights = () => {
-    void loadInsights(
-      new AbortController().signal,
-      selectedMonthKey,
-      todayMonthKey,
-      selectedCostCenterId,
-      null,
       selectedCategoryId,
     );
   };
@@ -1333,58 +1001,19 @@ export function DashboardPage() {
   const sliceFilterActive =
     selectedCostCenterId !== null || selectedCategoryId !== null;
 
-  const revenueData =
-    monthlyRevenueView.kind === 'ready' || monthlyRevenueView.kind === 'empty'
-      ? monthlyRevenueView.data
-      : null;
-  const expenseData =
-    monthlyExpenseView.kind === 'ready' || monthlyExpenseView.kind === 'empty'
-      ? monthlyExpenseView.data
-      : null;
-  const insightsData =
-    insightsView.kind === 'ready' || insightsView.kind === 'empty' ? insightsView.data : null;
   const cashFlowModel =
     monthlyCashFlowView.kind === 'ready' ? monthlyCashFlowView.model : null;
   const cashFlowError =
     monthlyCashFlowView.kind === 'error' ? monthlyCashFlowView.message : null;
+  const cashFlowPending = cashFlowModel === null && cashFlowError === null;
 
-  const revenueError = monthlyRevenueView.kind === 'error' ? monthlyRevenueView.message : null;
-  const expenseError = monthlyExpenseView.kind === 'error' ? monthlyExpenseView.message : null;
-  const insightsError = insightsView.kind === 'error' ? insightsView.message : null;
+  const previousMonthError =
+    previousMonthView.kind === 'error' ? previousMonthView.message : null;
   const revenueGoalData = revenueGoalView.kind === 'ready' ? revenueGoalView.data : null;
   const revenueGoalError = revenueGoalView.kind === 'error' ? revenueGoalView.message : null;
   const canExpandGoal = gate === 'ready' && revenueGoalData !== null;
   const monthEndError = monthEndView.kind === 'error' ? monthEndView.message : null;
   const forecastError = forecastView.kind === 'error' ? forecastView.message : null;
-
-  const expenseSlices = useMemo(
-    () => (expenseData ? presentTopCategoryDonutSlices(expenseData.payables.items) : []),
-    [expenseData],
-  );
-  const allExpenseSlices = useMemo(
-    () =>
-      expenseData
-        ? presentTopCategoryDonutSlices(
-            expenseData.payables.items,
-            expenseData.payables.items.length,
-          )
-        : [],
-    [expenseData],
-  );
-  const revenueSlices = useMemo(
-    () => (revenueData ? presentTopCategoryDonutSlices(revenueData.receivables.items) : []),
-    [revenueData],
-  );
-  const allRevenueSlices = useMemo(
-    () =>
-      revenueData
-        ? presentTopCategoryDonutSlices(
-            revenueData.receivables.items,
-            revenueData.receivables.items.length,
-          )
-        : [],
-    [revenueData],
-  );
 
   const billingKpi = cashFlowModel
     ? toCashBillingKpi(cashFlowModel, selectedMonthPhase)
@@ -1427,6 +1056,46 @@ export function DashboardPage() {
     () => (cashFlowModel ? cashReceivableDailySeries(cashFlowModel) : undefined),
     [cashFlowModel],
   );
+  const expensesComposed = useMemo(
+    () => (cashFlowModel ? cashExpensesComposedSeries(cashFlowModel) : undefined),
+    [cashFlowModel],
+  );
+  const resultComposed = useMemo(
+    () => (cashFlowModel ? cashManagerialResultComposedSeries(cashFlowModel) : undefined),
+    [cashFlowModel],
+  );
+  const billingCoverage = useMemo(
+    () => (cashFlowModel ? cashBillingCoverageRatio(cashFlowModel) : undefined),
+    [cashFlowModel],
+  );
+
+  const realizedInflows = useMemo(
+    () => (cashFlowModel ? cashRealizedInflowsSeries(cashFlowModel) : undefined),
+    [cashFlowModel],
+  );
+  const realizedOutflows = useMemo(
+    () => (cashFlowModel ? cashRealizedOutflowsSeries(cashFlowModel) : undefined),
+    [cashFlowModel],
+  );
+  const expectedReceivables = useMemo(
+    () => (cashFlowModel ? cashExpectedReceivablesSeries(cashFlowModel) : undefined),
+    [cashFlowModel],
+  );
+  const expectedPayables = useMemo(
+    () => (cashFlowModel ? cashExpectedPayablesSeries(cashFlowModel) : undefined),
+    [cashFlowModel],
+  );
+  const cashReading = useMemo(
+    () => (cashFlowModel ? buildCashExecutiveReading(cashFlowModel) : null),
+    [cashFlowModel],
+  );
+
+  const dailySeries =
+    dailyMode === 'realized'
+      ? { inflows: realizedInflows, outflows: realizedOutflows }
+      : { inflows: expectedReceivables, outflows: expectedPayables };
+  const dailySeriesReady =
+    dailySeries.inflows !== undefined && dailySeries.outflows !== undefined;
 
   const managerialMargin =
     cashFlowModel &&
@@ -1435,46 +1104,11 @@ export function DashboardPage() {
       ? managerialMarginLabel(cashFlowModel.managerialResult, cashFlowModel.billing)
       : undefined;
 
-  const canExpandRevenueComposition =
-    gate === 'ready' && monthlyRevenueView.kind === 'ready';
-  const canExpandExpenseComposition =
-    gate === 'ready' && monthlyExpenseView.kind === 'ready';
-
   const monthEndSummary = monthEndView.kind === 'ready' ? monthEndView.data.summary : null;
   const monthEndRemainingDays =
     view.kind === 'ready' && monthEndView.kind === 'ready'
       ? remainingDaysInMonth(view.data.today, monthEndView.data.to)
       : undefined;
-
-  /** Composição por categoria — widgets independentes (Receitas | Despesas). */
-  const revenueComposition = {
-    slices: revenueSlices,
-    allSlices: allRevenueSlices,
-    total: revenueData?.receivables.total ?? null,
-    emptyMessage: 'Nenhuma receita com competência neste mês.',
-    ariaLabel: 'Receitas por categoria do mês selecionado',
-    allAriaLabel: 'Todas as receitas por categoria do mês selecionado',
-    colorVar: '--color-series-revenue',
-    expandTitle: 'Receitas por categoria',
-    canExpand: canExpandRevenueComposition,
-  };
-  const expenseComposition = {
-    slices: expenseSlices,
-    allSlices: allExpenseSlices,
-    total: expenseData?.payables.total ?? null,
-    emptyMessage: 'Nenhuma despesa com competência neste mês.',
-    ariaLabel: 'Despesas por categoria do mês selecionado',
-    allAriaLabel: 'Todas as despesas por categoria do mês selecionado',
-    colorVar: '--color-series-expense',
-    expandTitle: 'Despesas por categoria',
-    canExpand: canExpandExpenseComposition,
-  };
-  const compositionExpandSide =
-    expandKind === 'categories-revenue'
-      ? revenueComposition
-      : expandKind === 'categories-expense'
-        ? expenseComposition
-        : null;
 
   const comparePeriods = useMemo<readonly MonthlyComparePeriod[]>(
     () => [
@@ -1484,48 +1118,59 @@ export function DashboardPage() {
     [previousMonthKey, selectedMonthKey],
   );
 
+  /**
+   * Comparativo em caixa realizado: só entra o par de meses cujo split de caixa
+   * está disponível nos dois lados. Null em qualquer perna vira vazio, não R$ 0.
+   */
   const compareRows = useMemo<readonly MonthlyCompareRow[]>(() => {
-    if (previousMonthView.kind !== 'ready' || !revenueData || !expenseData) {
+    if (previousMonthView.kind !== 'ready' || cashFlowModel === null) {
       return [];
     }
-    const previous = previousMonthView;
-    if (
-      isMonthlyRevenueEmpty(previous.revenue) &&
-      isMonthlyExpenseEmpty(previous.expense) &&
-      isMonthlyRevenueEmpty(revenueData) &&
-      isMonthlyExpenseEmpty(expenseData)
-    ) {
-      return [];
-    }
-    return [
+    const previous = previousMonthView.model;
+    const pairs: readonly {
+      readonly id: string;
+      readonly label: string;
+      readonly tone: MonthlyCompareRow['tone'];
+      readonly previous: string | null;
+      readonly current: string | null;
+    }[] = [
       {
-        id: 'billing',
-        label: 'Faturamento',
+        id: 'cash-inflows',
+        label: 'Entradas realizadas',
         tone: 'revenue',
-        amounts: [previous.revenue.receivables.total, revenueData.receivables.total],
+        previous: previous.realizedInflows,
+        current: cashFlowModel.realizedInflows,
       },
       {
-        id: 'expenses',
-        label: 'Despesas',
+        id: 'cash-outflows',
+        label: 'Saídas realizadas',
         tone: 'expense',
-        amounts: [previous.expense.payables.total, expenseData.payables.total],
+        previous: previous.realizedOutflows,
+        current: cashFlowModel.realizedOutflows,
       },
       {
-        id: 'result',
-        label: 'Resultado gerencial',
+        id: 'cash-result',
+        label: 'Resultado realizado',
         tone: 'result',
-        amounts: [
-          subtractDecimalStrings(
-            previous.revenue.receivables.total,
-            previous.expense.payables.total,
-          ),
-          subtractDecimalStrings(revenueData.receivables.total, expenseData.payables.total),
-        ],
+        previous: previous.realizedResult,
+        current: cashFlowModel.realizedResult,
       },
     ];
-  }, [expenseData, previousMonthView, revenueData]);
+    if (pairs.some((pair) => pair.previous === null || pair.current === null)) {
+      return [];
+    }
+    return pairs.map((pair) => ({
+      id: pair.id,
+      label: pair.label,
+      tone: pair.tone,
+      amounts: [pair.previous as string, pair.current as string],
+    }));
+  }, [cashFlowModel, previousMonthView]);
 
-  const billingDays = revenueData ? summarizeActiveDays(revenueData.receivables.daily) : null;
+  const comparePending =
+    cashFlowPending || previousMonthView.kind === 'idle' || previousMonthView.kind === 'loading';
+  const canExpandCompare = gate === 'ready' && compareRows.length > 0;
+  const canExpandDaily = gate === 'ready' && dailySeriesReady;
 
   return (
     <div
@@ -1543,7 +1188,7 @@ export function DashboardPage() {
           <h1 className={styles.pageTitle}>Dashboard financeiro</h1>
           <p className={styles.pageSubtitle}>{pageSubtitle}</p>
         </div>
-        <div className={styles.controlsCluster} data-v2-section="competencia">
+        <div className={styles.controlsCluster} data-v2-section="periodo">
           <DashboardMonthSelector
             selectedMonthKey={selectedMonthKey}
             todayMonthKey={todayMonthKey}
@@ -1616,6 +1261,8 @@ export function DashboardPage() {
             value={billingSlot.value}
             meta={billingSlot.meta}
             emptyMessage={billingSlot.emptyMessage}
+            ratioValue={billingCoverage?.ratio}
+            ratioLabel={billingCoverage?.label}
             footer={
               cashFlowModel && billingSlot.state === 'ready' && cashHasSplit ? (
                 <KpiFooter
@@ -1666,6 +1313,9 @@ export function DashboardPage() {
             value={expensesSlot.value}
             meta={expensesSlot.meta}
             emptyMessage={expensesSlot.emptyMessage}
+            sparklinePoints={expensesComposed}
+            sparklineAriaLabel={CASH_EXPENSES_SPARKLINE_CAPTION}
+            sparklineCaption={CASH_EXPENSES_SPARKLINE_CAPTION}
             footer={
               cashFlowModel && expensesSlot.state === 'ready' && cashHasSplit ? (
                 <KpiFooter
@@ -1687,6 +1337,9 @@ export function DashboardPage() {
             value={managerialResultSlot.value}
             meta={managerialResultSlot.meta}
             emptyMessage={managerialResultSlot.emptyMessage}
+            sparklinePoints={resultComposed}
+            sparklineAriaLabel={CASH_RESULT_SPARKLINE_CAPTION}
+            sparklineCaption={CASH_RESULT_SPARKLINE_CAPTION}
             sparklineSigned
             footer={
               managerialMargin && managerialResultSlot.state === 'ready' ? (
@@ -1724,43 +1377,70 @@ export function DashboardPage() {
       </section>
 
       <div className={styles.mainGrid}>
-        {/* CASH-4B: gráficos de competência ocultos — redesenho em CASH-4C. */}
+        <WidgetShell
+          id="entradas-saidas"
+          sectionId="entradas-saidas"
+          title="Entradas × Saídas"
+          subtitle="Entradas e saídas realizadas no mês"
+        >
+          <WidgetBody
+            gate={gate}
+            loadingLabel="Carregando entradas e saídas do caixa"
+            error={cashFlowError}
+            onRetry={retryCashFlow}
+            pending={cashFlowPending}
+          >
+            {realizedInflows && realizedOutflows ? (
+              <CompetenceComparisonChart
+                revenueDaily={realizedInflows}
+                expenseDaily={realizedOutflows}
+                monthKey={selectedMonthKey}
+                revenueLabel="Entradas"
+                expenseLabel="Saídas"
+                ariaLabel={`Entradas e saídas de caixa acumuladas em ${monthLabel}`}
+                caption={CASH_REALIZED_COMPARISON_CAPTION}
+                emptyMessage={`Sem entradas ou saídas de caixa em ${monthLabel}.`}
+              />
+            ) : (
+              <StateWrapper
+                state="empty"
+                emptyMessage={CASH_SERIES_UNAVAILABLE}
+                align="start"
+              />
+            )}
+          </WidgetBody>
+        </WidgetShell>
+      </div>
+
+      <div className={styles.categoryGrid}>
         <WidgetShell
           id="despesas-categoria"
-          sectionId="despesas-mes"
+          sectionId="despesas-categoria"
           title="Despesas por categoria"
-          subtitle={`Competência de ${monthLabel}`}
-          expandable={expenseComposition.canExpand}
-          onExpand={
-            expenseComposition.canExpand ? () => setExpandKind('categories-expense') : undefined
-          }
+          subtitle={`Pagamentos realizados em ${monthLabel}`}
         >
           <WidgetBody
             gate={gate}
             loadingLabel="Carregando despesas por categoria"
-            error={expenseError}
-            onRetry={retryExpenses}
-            pending={expenseData === null}
+            error={cashFlowError}
+            onRetry={retryCashFlow}
+            pending={cashFlowPending}
           >
-            {expenseComposition.slices.length === 0 ? (
+            {!cashHasSplit ? (
               <StateWrapper
                 state="empty"
-                emptyMessage={expenseComposition.emptyMessage}
+                emptyMessage={CASH_CATEGORY_UNAVAILABLE}
                 align="start"
               />
-            ) : (
-              <CategoryDonutChart
-                slices={expenseComposition.slices}
-                ariaLabel={expenseComposition.ariaLabel}
-                centerLabel={
-                  expenseComposition.total !== null
-                    ? compactTotalLabel(expenseComposition.total)
-                    : undefined
-                }
-                centerCaption="competência"
-                interactive
-                size="md"
+            ) : cashFlowModel?.realizedOutflowsByCategory &&
+              cashFlowModel.realizedOutflowsByCategory.items.length > 0 ? (
+              <CashRealizedCategoryPanel
+                composition={cashFlowModel.realizedOutflowsByCategory}
+                ariaLabel={`Despesas de caixa realizadas por categoria em ${monthLabel}`}
+                centerCaption="Pago"
               />
+            ) : (
+              <StateWrapper state="empty" emptyMessage={CASH_CATEGORY_EMPTY} align="start" />
             )}
           </WidgetBody>
         </WidgetShell>
@@ -1769,46 +1449,39 @@ export function DashboardPage() {
           id="receitas-categoria"
           sectionId="receitas-categoria"
           title="Receitas por categoria"
-          subtitle={`Competência de ${monthLabel}`}
-          expandable={revenueComposition.canExpand}
-          onExpand={
-            revenueComposition.canExpand ? () => setExpandKind('categories-revenue') : undefined
-          }
+          subtitle={`Recebimentos realizados em ${monthLabel}`}
         >
           <WidgetBody
             gate={gate}
             loadingLabel="Carregando receitas por categoria"
-            error={revenueError}
-            onRetry={retryRevenue}
-            pending={revenueData === null}
+            error={cashFlowError}
+            onRetry={retryCashFlow}
+            pending={cashFlowPending}
           >
-            {revenueComposition.slices.length === 0 ? (
+            {!cashHasSplit ? (
               <StateWrapper
                 state="empty"
-                emptyMessage={revenueComposition.emptyMessage}
+                emptyMessage={CASH_CATEGORY_UNAVAILABLE}
                 align="start"
               />
-            ) : (
-              <CategoryDonutChart
-                slices={revenueComposition.slices}
-                ariaLabel={revenueComposition.ariaLabel}
-                centerLabel={
-                  revenueComposition.total !== null
-                    ? compactTotalLabel(revenueComposition.total)
-                    : undefined
-                }
-                centerCaption="competência"
-                interactive
-                size="md"
+            ) : cashFlowModel?.realizedInflowsByCategory &&
+              cashFlowModel.realizedInflowsByCategory.items.length > 0 ? (
+              <CashRealizedCategoryPanel
+                composition={cashFlowModel.realizedInflowsByCategory}
+                ariaLabel={`Receitas de caixa realizadas por categoria em ${monthLabel}`}
+                centerCaption="Recebido"
               />
+            ) : (
+              <StateWrapper state="empty" emptyMessage={CASH_CATEGORY_EMPTY} align="start" />
             )}
           </WidgetBody>
         </WidgetShell>
       </div>
 
       <div
-        className={styles.secondaryGrid}
-        data-cols={cashWindowsApply ? '4' : '3'}
+        className={styles.compactSecondaryGrid}
+        data-cols={cashWindowsApply ? '3' : '2'}
+        data-home-band="compact-kpis"
       >
         <WidgetShell
           id="meta-faturamento"
@@ -1843,7 +1516,7 @@ export function DashboardPage() {
             id="fim-do-mes"
             sectionId="ate-fim-do-mes"
             title="Até o fim do mês"
-            subtitle="Compromissos previstos para o restante da competência"
+            subtitle="Previsto até o fim do mês"
           >
             <WidgetBody
               gate={gate}
@@ -1860,28 +1533,6 @@ export function DashboardPage() {
         ) : null}
 
         <WidgetShell
-          id="leitura-executiva"
-          sectionId="leitura-executiva"
-          title="Leitura executiva"
-          subtitle="Sinais da competência selecionada"
-        >
-          <WidgetBody
-            gate={gate}
-            loadingLabel="Carregando leitura executiva"
-            error={insightsError}
-            onRetry={retryInsights}
-            pending={insightsData === null}
-          >
-            {insightsData ? (
-              <ExecutiveSignals
-                signals={executiveInsightRows(insightsData.insights)}
-                emptyMessage="Sem dados de competência para leitura neste mês."
-              />
-            ) : null}
-          </WidgetBody>
-        </WidgetShell>
-
-        <WidgetShell
           id="inadimplencia"
           sectionId="inadimplencia"
           title="Inadimplência"
@@ -1892,7 +1543,7 @@ export function DashboardPage() {
             loadingLabel="Carregando inadimplência"
             error={cashFlowError}
             onRetry={retryCashFlow}
-            pending={cashFlowModel === null && monthlyCashFlowView.kind !== 'error'}
+            pending={cashFlowPending}
           >
             {delinquencySlot.state === 'ready' || overdueSlot.state === 'ready' ? (
               <dl className={styles.factList}>
@@ -1924,7 +1575,120 @@ export function DashboardPage() {
         </WidgetShell>
       </div>
 
-      {/* CASH-4B: comparativo e barras diárias de competência ocultos — CASH-4C. */}
+      <div className={styles.executiveRow} data-home-band="executive-reading">
+        <WidgetShell
+          id="leitura-executiva"
+          sectionId="leitura-executiva"
+          title="Leitura executiva"
+          subtitle="Sinais do fluxo de caixa do mês"
+        >
+          <WidgetBody
+            gate={gate}
+            loadingLabel="Carregando leitura executiva"
+            error={cashFlowError}
+            onRetry={retryCashFlow}
+            pending={cashFlowPending}
+          >
+            {cashReading ? (
+              <CashExecutiveReading
+                model={cashReading}
+                emptyMessage="Sem movimentação de caixa para leitura neste mês."
+              />
+            ) : null}
+          </WidgetBody>
+        </WidgetShell>
+      </div>
+
+      <div className={styles.tertiaryGrid}>
+        <WidgetShell
+          id="comparativo-mensal"
+          sectionId="comparativo-mensal"
+          title="Comparativo mensal"
+          subtitle={`${compactMonthLabel(selectedMonthKey)} × ${compactMonthLabel(previousMonthKey)}`}
+          expandable={canExpandCompare}
+          onExpand={canExpandCompare ? () => setExpandKind('compare') : undefined}
+        >
+          <WidgetBody
+            gate={gate}
+            loadingLabel="Carregando comparativo mensal"
+            error={previousMonthError ?? cashFlowError}
+            onRetry={previousMonthError ? retryPreviousMonth : retryCashFlow}
+            pending={comparePending}
+          >
+            <MonthlyCompare
+              periods={comparePeriods}
+              rows={compareRows}
+              emptyMessage={`Sem caixa realizado em ${previousMonthLabel} para comparar.`}
+            />
+          </WidgetBody>
+        </WidgetShell>
+
+        <WidgetShell
+          id="movimentacao-diaria"
+          sectionId="movimentacao-diaria"
+          title="Movimentação diária"
+          subtitle={
+            dailyMode === 'realized'
+              ? `Entradas e saídas por dia · ${monthLabel}`
+              : `A receber e a pagar por dia · ${monthLabel}`
+          }
+          expandable={canExpandDaily}
+          onExpand={canExpandDaily ? () => setExpandKind('daily') : undefined}
+        >
+          <div
+            className={styles.segmented}
+            role="group"
+            aria-label="Recorte da movimentação diária"
+            data-stop-expand
+          >
+            {DAILY_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                className={styles.segmentedOption}
+                aria-pressed={dailyMode === mode.id}
+                onClick={() => setDailyMode(mode.id)}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+          <WidgetBody
+            gate={gate}
+            loadingLabel="Carregando movimentação diária"
+            error={cashFlowError}
+            onRetry={retryCashFlow}
+            pending={cashFlowPending}
+          >
+            {dailySeries.inflows && dailySeries.outflows ? (
+              <CompetenceDailyBars
+                revenueDaily={dailySeries.inflows}
+                expenseDaily={dailySeries.outflows}
+                monthKey={selectedMonthKey}
+                revenueLabel={dailyMode === 'realized' ? 'Entradas' : 'A receber'}
+                expenseLabel={dailyMode === 'realized' ? 'Saídas' : 'A pagar'}
+                ariaLabel={
+                  dailyMode === 'realized'
+                    ? `Entradas e saídas de caixa por dia de baixa em ${monthLabel}`
+                    : `A receber e a pagar por dia de vencimento em ${monthLabel}`
+                }
+                caption={
+                  dailyMode === 'realized'
+                    ? CASH_DAILY_REALIZED_CAPTION
+                    : CASH_DAILY_EXPECTED_CAPTION
+                }
+                emptyMessage={
+                  dailyMode === 'realized'
+                    ? `Sem baixas de caixa em ${monthLabel}.`
+                    : `Sem vencimentos previstos no prazo em ${monthLabel}.`
+                }
+              />
+            ) : (
+              <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
+            )}
+          </WidgetBody>
+        </WidgetShell>
+      </div>
 
       {cashWindowsApply ? (
         <WidgetShell
@@ -1947,160 +1711,9 @@ export function DashboardPage() {
         </WidgetShell>
       ) : null}
 
-      <p className={styles.hint}>KPIs principais por regime de caixa do mês selecionado.</p>
-
-      {expandKind === 'billing' && revenueData ? (
-        <WidgetExpandDialog
-          open
-          title={billingKpi.title}
-          subtitle={`Competência de ${monthLabel}`}
-          onClose={() => setExpandKind(null)}
-        >
-          <div className={styles.expandBody}>
-            <dl className={styles.statsRow}>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Já recebido</dt>
-                <dd className={styles.statsValue}>
-                  {moneyOrDash(revenueData.receivables.received)}
-                </dd>
-              </div>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Em aberto</dt>
-                <dd className={styles.statsValue}>
-                  {moneyOrDash(revenueData.receivables.outstanding)}
-                </dd>
-              </div>
-              {billingDays ? (
-                <div className={styles.statsItem}>
-                  <dt className={styles.statsLabel}>
-                    Média por dia com lançamento ({billingDays.days})
-                  </dt>
-                  <dd className={styles.statsValue}>{formatMoneyBrl(billingDays.average)}</dd>
-                </div>
-              ) : null}
-            </dl>
-            <p className={styles.expandLabel}>Receitas por dia de competência</p>
-            <div className={styles.expandChart}>
-              <Sparkline
-                points={revenueData.receivables.daily}
-                colorVar="--color-series-revenue"
-                interactive
-                ariaLabel="Receitas por dia de competência"
-              />
-            </div>
-            <p className={styles.expandLabel}>Acumulado da competência</p>
-            <div className={styles.expandChart}>
-              <Sparkline
-                points={accumulate(revenueData.receivables.daily)}
-                colorVar="--color-series-revenue"
-                interactive
-                ariaLabel="Receitas acumuladas na competência"
-              />
-            </div>
-            <p className={styles.expandLabel}>Maiores categorias de receita</p>
-            <CategoryRanking
-              items={toRankingItems(revenueSlices)}
-              colorVar="--color-series-revenue"
-              emptyMessage="Nenhuma receita com competência neste mês."
-            />
-          </div>
-        </WidgetExpandDialog>
-      ) : null}
-
-      {expandKind === 'expense' && expenseData ? (
-        <WidgetExpandDialog
-          open
-          title="Despesas"
-          subtitle={`Competência de ${monthLabel}`}
-          onClose={() => setExpandKind(null)}
-        >
-          <div className={styles.expandBody}>
-            <p className={styles.expandLabel}>Despesas por dia de competência</p>
-            <div className={styles.expandChart}>
-              <Sparkline
-                points={expenseData.payables.daily}
-                colorVar="--color-series-expense"
-                interactive
-                ariaLabel="Despesas por dia de competência"
-              />
-            </div>
-            <p className={styles.expandLabel}>Acumulado da competência</p>
-            <div className={styles.expandChart}>
-              <Sparkline
-                points={accumulate(expenseData.payables.daily)}
-                colorVar="--color-series-expense"
-                interactive
-                ariaLabel="Despesas acumuladas na competência"
-              />
-            </div>
-            <p className={styles.expandLabel}>Maiores categorias de despesa</p>
-            <CategoryRanking
-              items={toRankingItems(expenseSlices)}
-              emptyMessage="Nenhuma despesa com competência neste mês."
-            />
-          </div>
-        </WidgetExpandDialog>
-      ) : null}
-
-      {expandKind === 'comparison' && revenueData && expenseData ? (
-        <WidgetExpandDialog
-          open
-          title="Receitas × Despesas"
-          subtitle={`Competência de ${monthLabel}`}
-          onClose={() => setExpandKind(null)}
-        >
-          <div className={styles.expandBody}>
-            <CompetenceComparisonChart
-              revenueDaily={revenueData.receivables.daily}
-              expenseDaily={expenseData.payables.daily}
-              monthKey={selectedMonthKey}
-            />
-            <div className={styles.expandColumns}>
-              <div>
-                <p className={styles.expandLabel}>Receitas por categoria</p>
-                <CategoryRanking
-                  items={toRankingItems(revenueSlices)}
-                  colorVar="--color-series-revenue"
-                  emptyMessage="Nenhuma receita com competência neste mês."
-                />
-              </div>
-              <div>
-                <p className={styles.expandLabel}>Despesas por categoria</p>
-                <CategoryRanking
-                  items={toRankingItems(expenseSlices)}
-                  emptyMessage="Nenhuma despesa com competência neste mês."
-                />
-              </div>
-            </div>
-          </div>
-        </WidgetExpandDialog>
-      ) : null}
-
-      {compositionExpandSide && compositionExpandSide.total !== null ? (
-        <WidgetExpandDialog
-          open
-          title={compositionExpandSide.expandTitle}
-          subtitle={`Competência de ${monthLabel}`}
-          onClose={() => setExpandKind(null)}
-        >
-          <div className={styles.expandBody}>
-            <CategoryDonutChart
-              slices={compositionExpandSide.allSlices}
-              ariaLabel={compositionExpandSide.allAriaLabel}
-              centerLabel={compactTotalLabel(compositionExpandSide.total)}
-              centerCaption="competência"
-              interactive
-              size="md"
-            />
-            <CategoryRanking
-              items={toRankingItems(compositionExpandSide.allSlices)}
-              maxItems={compositionExpandSide.allSlices.length}
-              colorVar={compositionExpandSide.colorVar}
-              emptyMessage={compositionExpandSide.emptyMessage}
-            />
-          </div>
-        </WidgetExpandDialog>
-      ) : null}
+      <p className={styles.hint}>
+        Indicadores e séries por regime de caixa do mês selecionado.
+      </p>
 
       {expandKind === 'compare' && compareRows.length > 0 ? (
         <WidgetExpandDialog
@@ -2119,7 +1732,7 @@ export function DashboardPage() {
         <WidgetExpandDialog
           open
           title="Meta de faturamento"
-          subtitle={`Competência de ${monthLabel}`}
+          subtitle={monthLabel}
           onClose={() => setExpandKind(null)}
         >
           <div className={styles.expandBody}>
@@ -2147,7 +1760,7 @@ export function DashboardPage() {
                 </dd>
               </div>
             </dl>
-            <p className={styles.expandLabel}>Histórico por competência</p>
+            <p className={styles.expandLabel}>Histórico mensal</p>
             <RevenueGoalHistoryList points={revenueGoalData.history} />
             <div>
               <Button variant="secondary" size="sm" onClick={openGoalEditor}>
@@ -2168,18 +1781,32 @@ export function DashboardPage() {
         onClose={() => setGoalEditOpen(false)}
       />
 
-      {expandKind === 'daily' && revenueData && expenseData ? (
+      {expandKind === 'daily' && dailySeries.inflows && dailySeries.outflows ? (
         <WidgetExpandDialog
           open
-          title="Movimentação diária da competência"
-          subtitle={`Competência de ${monthLabel}`}
+          title="Movimentação diária"
+          subtitle={`${monthLabel} · ${
+            dailyMode === 'realized' ? CASH_DAILY_REALIZED_CAPTION : CASH_DAILY_EXPECTED_CAPTION
+          }`}
           onClose={() => setExpandKind(null)}
         >
           <div className={styles.expandBody}>
             <CompetenceDailyBars
-              revenueDaily={revenueData.receivables.daily}
-              expenseDaily={expenseData.payables.daily}
+              revenueDaily={dailySeries.inflows}
+              expenseDaily={dailySeries.outflows}
               monthKey={selectedMonthKey}
+              revenueLabel={dailyMode === 'realized' ? 'Entradas' : 'A receber'}
+              expenseLabel={dailyMode === 'realized' ? 'Saídas' : 'A pagar'}
+              ariaLabel={
+                dailyMode === 'realized'
+                  ? `Entradas e saídas de caixa por dia de baixa em ${monthLabel}`
+                  : `A receber e a pagar por dia de vencimento em ${monthLabel}`
+              }
+              caption={
+                dailyMode === 'realized'
+                  ? CASH_DAILY_REALIZED_CAPTION
+                  : CASH_DAILY_EXPECTED_CAPTION
+              }
             />
           </div>
         </WidgetExpandDialog>

@@ -852,7 +852,7 @@ F12-A: CONTRATO CONGELADO (docs/09.6 §17). F12-B: IMPLEMENTADA / HOMOLOGADA TEC
 E1 Pressão de caixa: HOMOLOGADA VISUALMENTE.
 E2 composição das despesas: HOMOLOGADA.
 Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
-E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO.
+E3 leitura executiva: SUPERSEDED na Home pelo CASH-4C (MonthlyCashFlow).
 E4: ADIADA.
 Fase 8: CONCLUÍDA. 8B: DESNECESSÁRIA.
 9A: CONCLUÍDA. 9B: CONCLUÍDA. 9C: CONCLUÍDA. Grupo A: CONCLUÍDO.
@@ -877,7 +877,8 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 13 (Consultor). F12-D Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-C PDF/Excel da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. Fase 12 recorte V1 (Receita+Despesas+export) entregue; Fase 12 completa: NÃO. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
+Próxima fase: Fase 13 (Consultor). F12-D Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-C PDF/Excel da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. Fase 12 recorte V1 (Receita+Despesas+export) entregue; Fase 12 completa: NÃO. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: SUPERSEDED na Home pelo CASH-4C (MonthlyCashFlow).
+E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
 Regras financeiras e recorte: docs/11-regras-analiticas.md
@@ -1108,15 +1109,23 @@ CASH-9C — Transferências internas: IMPLEMENTADO (código + migration + testes
      Um objeto origem/destino. Não entra em billing/despesas/resultado.
      Ghost settlement ACTIVE; associação 1:1 conservadora.
      AMBIGUOUS = não exclui. CLI local `scripts/cash9c-transfers-backfill.ts`.
-     Fora do worker. CASH-4B IMPLEMENTADA localmente; CASH-4C pendente; produção ainda bloqueada.
+     Fora do worker. CASH-4B HOMOLOGADA; CASH-4C IMPLEMENTADA localmente;
+     produção ainda bloqueada.
 CASH-3A — Read model mensal de caixa (`MonthlyCashFlow`): IMPLEMENTADA no domínio.
 CASH-3B — `GET /dashboard/monthly-cash-flow`: IMPLEMENTADA (facade + DTO + tipos frontend).
      Sem Home visual. `billing` = monthlyBilling = inflows + expected.receivables.
      `situation` se presente é validada e ignorada (realizado histórico).
 CASH-4A — Infra Home para MonthlyCashFlow: IMPLEMENTADA.
      Fetch + cache (month × centro × categoria, sem situation) + view-model.
-     KPIs / Meta / gráficos visíveis ainda competência. Falha do cash-flow
-     não derruba o overview legado. CASH-4B trocou os números dos KPIs. Relatórios/PDF/XLSX intactos. CASH-4C = gráficos.
+CASH-4B — KPIs da Home = caixa: HOMOLOGADA (fórmulas congeladas).
+CASH-4C — Visualizações da Home em caixa: IMPLEMENTADA (local; aguarda
+     homologação humana). Sparklines Despesas/Resultado; Entradas×Saídas
+     realizado; diário Realizado|Previsto; comparativo realized mês×mês−1;
+     leitura executiva via MonthlyCashFlow; Até fim do mês = previsto.
+CASH-4C-CAT — Donuts de categoria em caixa realizado: IMPLEMENTADA (local).
+     `realizedByCategory.inflows/outflows` no MonthlyCashFlow; D8 sobre
+     netAmount/share; fecha com realized.inflows/outflows; previsto fora;
+     transferências fora. Zoom/expansão = dívida futura. Relatórios = CASH-6.
      HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES
      DO BACKFILL DE PRODUÇÃO + CASH-8B (R3 no gap de over-coverage).
 CC1 — Centros de custo + alocação + filtro Home:
@@ -1197,12 +1206,12 @@ L1-B — Semântica oficial do caixa + read model mensal:
      reconciliação do título, NÃO o valor de caixa bancário.
      NÃO inventar fórmula. gross/net/componentes permanecem separados.
      API GET /dashboard/monthly-cash-flow: IMPLEMENTADA (CASH-3B).
-     Home CASH-4B: KPIs = MonthlyCashFlow; competência só em legado/relatórios/CASH-4C.
+     Home CASH-4B+CASH-4C: KPIs e visualizações = MonthlyCashFlow; competência
+     só em Relatórios/PDF/XLSX (CASH-6).
      UI / Previsto×Realizado: NÃO.
 Faturamento Fiscal / meta / fixa×variável / D1 drill-down: NÃO IMPLEMENTADOS.
 E4: ADIADA.
-E3 — Leitura executiva (insights determinísticos 30d / D8 / 90d):
-     IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO
+E3 — Leitura executiva (insights de competência): SUPERSEDED na Home pelo CASH-4C.
 E4: ADIADA
 
 Backlog (não 10B/10C/E1/E2): a mesma Integration CONTA_AZUL do tenant deverá
@@ -1247,7 +1256,7 @@ desacoplados de backend/API, orientados por props, reutilizáveis por módulos f
 
 KPIs — Fase 9 CONCLUÍDA NO RECORTE DO GRUPO A.
 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE.
-E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Valores a receber por categoria IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA.
+E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Valores a receber por categoria IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva SUPERSEDED na Home pelo CASH-4C. E4 ADIADA.
 
 Recorte do primeiro Dashboard aprovado (19/08/2026):
 

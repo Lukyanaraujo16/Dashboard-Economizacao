@@ -1,4 +1,5 @@
 import type {
+  DashboardCashRealizedCategoryComposition,
   DashboardMonthlyCashFlowDailyExpectedPoint,
   DashboardMonthlyCashFlowDailyRealizedPoint,
   DashboardMonthlyCashFlowResponse,
@@ -6,7 +7,7 @@ import type {
 import { subtractDecimalStrings } from './v2/chart-math';
 
 /**
- * View-model CASH-4A: DTO de caixa → valores seguros para a Home (CASH-4B).
+ * View-model CASH-4A/4B/4C: DTO de caixa → valores seguros para a Home.
  *
  * Não é um segundo motor. `billing` vem do DTO. Composições simples
  * (despesas / resultado) somam as peças do mesmo aggregate.
@@ -37,6 +38,8 @@ export type MonthlyCashFlowView = {
   readonly overdueReceivablesOfMonth: string | null;
   readonly overduePayablesOfMonth: string | null;
   readonly coverage: string | null;
+  readonly realizedInflowsByCategory: DashboardCashRealizedCategoryComposition | null;
+  readonly realizedOutflowsByCategory: DashboardCashRealizedCategoryComposition | null;
   readonly dailyRealized: readonly DashboardMonthlyCashFlowDailyRealizedPoint[];
   readonly dailyExpected: readonly DashboardMonthlyCashFlowDailyExpectedPoint[];
 };
@@ -89,6 +92,8 @@ export function toMonthlyCashFlowView(data: DashboardMonthlyCashFlowResponse): M
     overdueReceivablesOfMonth: data.overdue.ofMonth.receivables,
     overduePayablesOfMonth: data.overdue.ofMonth.payables,
     coverage: data.coverage,
+    realizedInflowsByCategory: data.realizedByCategory.inflows,
+    realizedOutflowsByCategory: data.realizedByCategory.outflows,
     dailyRealized: data.daily.realized,
     dailyExpected: data.daily.expected,
   };

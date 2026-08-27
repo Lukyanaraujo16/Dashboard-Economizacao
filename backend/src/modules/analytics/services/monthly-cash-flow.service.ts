@@ -1,10 +1,12 @@
 import { assertTenantId } from '../../finance/repositories/read-query.js';
 import type { CostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
+import type { FinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import type { LedgerReadRepository } from '../../finance/repositories/ledger-read.repository.js';
 import type { PayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
 import type { ReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import type { FinancialInstallmentReadRecord } from '../../finance/domain/types.js';
 import { civilTodayInSaoPaulo } from '../domain/analytical-timezone.js';
+import { collectCashCategoryExternalIds } from '../domain/cash-realized-category-composition.js';
 import { civilMonthBounds, civilMonthBoundsFromKey } from '../domain/civil-calendar.js';
 import { calculateMonthlyCashFlow } from '../domain/monthly-cash-flow.js';
 import type { GetMonthlyCashFlowInput, MonthlyCashFlow } from '../domain/types.js';
@@ -17,6 +19,7 @@ export type MonthlyCashFlowServiceDependencies = {
   readonly ledger: LedgerReadRepository;
   readonly receivables: ReceivableReadRepository;
   readonly payables: PayableReadRepository;
+  readonly categories: FinancialCategoryReadRepository;
   readonly costCenterAllocations?: CostCenterAllocationReadRepository;
 };
 
@@ -95,13 +98,11 @@ export function createMonthlyCashFlowService(
         ),
       ];
 
-      const needsRealizedJoin = categoryFilter !== undefined || costCenterId !== undefined;
-      const [realizedReceivables, realizedPayables] = needsRealizedJoin
-        ? await Promise.all([
-            deps.receivables.findByExternalIds(scope, receivableIds),
-            deps.payables.findByExternalIds(scope, payableIds),
-          ])
-        : [[], []];
+      // CASH-4C-CAT: join sempre — composição D8 precisa de PAID e de parcelas filtradas.
+      const [realizedReceivables, realizedPayables] = await Promise.all([
+        deps.receivables.findByExternalIds(scope, receivableIds),
+        deps.payables.findByExternalIds(scope, payableIds),
+      ]);
 
       const realizedInstallments = new Map<string, FinancialInstallmentReadRecord>([
         ...installmentMap('RECEIVABLE', realizedReceivables),
@@ -110,18 +111,34 @@ export function createMonthlyCashFlowService(
         ...installmentMap('PAYABLE', payables),
       ]);
 
+      const categoryIds = collectCashCategoryExternalIds(
+        [...realizedInstallments.values()].map((row) => ({
+          categoryExternalIds: row.categoryExternalIds,
+        })),
+      );
+      const categories =
+        categoryIds.length === 0
+          ? []
+          : await deps.categories.findByTenantAndExternalIds({
+              ...scope,
+              externalIds: categoryIds,
+            });
+
+      const base = {
+        tenantId,
+        today,
+        from,
+        to,
+        settlements,
+        receivables,
+        payables,
+        realizedInstallments,
+        categories,
+        categoryFilter: categoryFilter ?? null,
+      };
+
       if (costCenterId === undefined) {
-        return calculateMonthlyCashFlow({
-          tenantId,
-          today,
-          from,
-          to,
-          settlements,
-          receivables,
-          payables,
-          realizedInstallments,
-          categoryFilter: categoryFilter ?? null,
-        });
+        return calculateMonthlyCashFlow(base);
       }
 
       const allocations = requireAllocations(deps);
@@ -146,15 +163,7 @@ export function createMonthlyCashFlowService(
       ]);
 
       return calculateMonthlyCashFlow({
-        tenantId,
-        today,
-        from,
-        to,
-        settlements,
-        receivables,
-        payables,
-        realizedInstallments,
-        categoryFilter: categoryFilter ?? null,
+        ...base,
         costCenter: {
           expectedReceivables,
           expectedPayables,

@@ -1,6 +1,13 @@
 import { Prisma } from '../../../generated/prisma/client.js';
 import { ACTIVE_INSTALLMENT_STATUSES } from '../../finance/domain/active-installment-status.js';
-import type { FinancialInstallmentReadRecord } from '../../finance/domain/types.js';
+import type {
+  FinancialCategoryReadRecord,
+  FinancialInstallmentReadRecord,
+} from '../../finance/domain/types.js';
+import {
+  classifyCashAmountsByCategory,
+  type CashAttributedCategorySource,
+} from './cash-realized-category-composition.js';
 import { addCivilDays, civilMonthKey, isCivilDateInInclusiveRange } from './civil-calendar.js';
 import { deriveInstallmentCostCenterCashSplit } from './cost-center-cash-split.js';
 import {
@@ -40,6 +47,11 @@ export type CalculateMonthlyCashFlowInput = {
   readonly payables: readonly FinancialInstallmentReadRecord[];
   /** Parcelas de qualquer status, para join de categoria/CC no realizado. */
   readonly realizedInstallments?: ReadonlyMap<string, FinancialInstallmentReadRecord>;
+  /** Catálogo D8 para composição de caixa realizado (CASH-4C-CAT). */
+  readonly categories?: readonly Pick<
+    FinancialCategoryReadRecord,
+    'externalId' | 'name' | 'type'
+  >[];
   readonly categoryFilter?: DashboardCategoryFilter | null;
   /**
    * Presente somente com filtro por centro: allocations já restritas ao CC.
@@ -203,6 +215,7 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
   const monthKey = civilMonthKey(input.from);
   const categoryFilter = input.categoryFilter ?? null;
   const realizedLookup = input.realizedInstallments;
+  const categories = input.categories ?? [];
 
   const receivables = input.receivables.filter(
     (row) =>
@@ -217,8 +230,17 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
   let expectedAvailable = true;
   let inflows = ZERO;
   let outflows = ZERO;
+  const inflowRows: CashAttributedCategorySource[] = [];
+  const outflowRows: CashAttributedCategorySource[] = [];
   const realizedByDay = new Map<number, { inflows: Prisma.Decimal; outflows: Prisma.Decimal }>();
   const expectedByDay = new Map<number, { receivables: Prisma.Decimal; payables: Prisma.Decimal }>();
+
+  const categoryIdsFor = (settlement: CashSettlementSource): readonly string[] => {
+    const installment = realizedLookup?.get(
+      installmentKey(settlement.installmentKind, settlement.installmentExternalId),
+    );
+    return installment?.categoryExternalIds ?? [];
+  };
 
   const addRealizedDay = (occurredOn: Date, field: 'inflows' | 'outflows', amount: Prisma.Decimal) => {
     if (!isCivilDateInInclusiveRange(occurredOn, input.from, input.to)) {
@@ -227,6 +249,22 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
     const current = realizedByDay.get(occurredOn.getTime()) ?? { inflows: ZERO, outflows: ZERO };
     current[field] = current[field].plus(amount);
     realizedByDay.set(occurredOn.getTime(), current);
+  };
+
+  const addAttributed = (
+    settlement: CashSettlementSource,
+    amount: Prisma.Decimal,
+  ) => {
+    const row = { amount, categoryExternalIds: categoryIdsFor(settlement) };
+    if (settlement.transactionType === 'RECEIPT') {
+      inflows = inflows.plus(amount);
+      inflowRows.push(row);
+      addRealizedDay(settlement.occurredOn, 'inflows', amount);
+    } else {
+      outflows = outflows.plus(amount);
+      outflowRows.push(row);
+      addRealizedDay(settlement.occurredOn, 'outflows', amount);
+    }
   };
 
   if (input.costCenter) {
@@ -258,13 +296,7 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
         realizedAvailable = false;
         continue;
       }
-      if (settlement.transactionType === 'RECEIPT') {
-        inflows = inflows.plus(share);
-        addRealizedDay(settlement.occurredOn, 'inflows', share);
-      } else {
-        outflows = outflows.plus(share);
-        addRealizedDay(settlement.occurredOn, 'outflows', share);
-      }
+      addAttributed(settlement, share);
     }
   } else {
     for (const settlement of input.settlements) {
@@ -274,13 +306,7 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
       if (!matchesSettlementCategory(settlement, categoryFilter, realizedLookup)) {
         continue;
       }
-      if (settlement.transactionType === 'RECEIPT') {
-        inflows = inflows.plus(settlement.netAmount);
-        addRealizedDay(settlement.occurredOn, 'inflows', settlement.netAmount);
-      } else {
-        outflows = outflows.plus(settlement.netAmount);
-        addRealizedDay(settlement.occurredOn, 'outflows', settlement.netAmount);
-      }
+      addAttributed(settlement, settlement.netAmount);
     }
   }
 
@@ -434,6 +460,13 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
 
   const costCenterCashSplit = realizedAvailable && expectedAvailable;
 
+  const realizedByCategory = realizedAvailable
+    ? {
+        inflows: classifyCashAmountsByCategory(inflowRows, categories, 'REVENUE'),
+        outflows: classifyCashAmountsByCategory(outflowRows, categories, 'EXPENSE'),
+      }
+    : { inflows: null, outflows: null };
+
   return {
     tenantId: input.tenantId,
     today: input.today,
@@ -446,6 +479,7 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
       outflows: realized.outflows,
       result: realized.result,
     },
+    realizedByCategory,
     expected: {
       receivables: expected.inflows,
       payables: expected.outflows,

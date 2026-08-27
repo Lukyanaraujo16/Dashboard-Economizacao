@@ -48,6 +48,42 @@ function flow(
       ...overrides.overdue,
     },
     coverage: overrides.coverage === undefined ? '0.8' : overrides.coverage,
+    realizedByCategory:
+      overrides.realizedByCategory ??
+      (overrides.costCenterCashSplit === false
+        ? { inflows: null, outflows: null }
+        : {
+            inflows: {
+              total: overrides.realized?.inflows ?? '80000',
+              classified: overrides.realized?.inflows ?? '80000',
+              uncategorized: '0',
+              imprecise: '0',
+              coverageRate: '100',
+              items: [
+                {
+                  kind: 'category',
+                  name: 'Serviços',
+                  amount: overrides.realized?.inflows ?? '80000',
+                  percentage: '100',
+                },
+              ],
+            },
+            outflows: {
+              total: overrides.realized?.outflows ?? '40000',
+              classified: overrides.realized?.outflows ?? '40000',
+              uncategorized: '0',
+              imprecise: '0',
+              coverageRate: '100',
+              items: [
+                {
+                  kind: 'category',
+                  name: 'Operacional',
+                  amount: overrides.realized?.outflows ?? '40000',
+                  percentage: '100',
+                },
+              ],
+            },
+          }),
     daily: {
       realized:
         overrides.daily?.realized ?? [

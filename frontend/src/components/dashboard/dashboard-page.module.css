@@ -138,6 +138,7 @@
   }
 }
 
+/* CASH-4C: Entradas × Saídas em largura cheia. */
 .mainGrid {
   display: grid;
   gap: var(--space-3);
@@ -145,10 +146,17 @@
   min-width: 0;
 }
 
-/* Linha 2: RxD | Despesas por categoria | Receitas por categoria */
-@media (min-width: 1100px) {
-  .mainGrid {
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+/* CASH-4C-CAT: donuts lado a lado abaixo do gráfico grande. */
+.categoryGrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .categoryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
   }
 }
@@ -178,6 +186,41 @@
   }
 }
 
+/*
+ * CASH-4C-CAT-FINAL: Meta / Até fim do mês / Inadimplência em altura natural.
+ * Leitura executiva fica em faixa própria abaixo (executiveRow).
+ */
+.compactSecondaryGrid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+  min-width: 0;
+  align-items: start;
+}
+
+@media (min-width: 700px) {
+  .compactSecondaryGrid[data-cols='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compactSecondaryGrid[data-cols='3'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .compactSecondaryGrid[data-cols='3'] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.executiveRow {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+  min-width: 0;
+}
+
 .tertiaryGrid {
   display: grid;
   gap: var(--space-3);
@@ -193,6 +236,55 @@
 }
 
 /* dualDonuts removido na V2.3 — composição virou dois widgets independentes. */
+
+.segmented {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.segmentedOption {
+  min-height: 1.625rem;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+
+.segmentedOption:hover {
+  background: color-mix(in srgb, var(--color-border) 45%, transparent);
+  color: var(--color-text-primary);
+}
+
+.segmentedOption:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
+}
+
+.segmentedOption[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--color-text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segmentedOption {
+    transition: none;
+  }
+}
 
 
 .kpiFooter {

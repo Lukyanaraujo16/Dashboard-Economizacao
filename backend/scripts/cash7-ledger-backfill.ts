@@ -33,6 +33,7 @@ import {
 import { isInstallmentLedgerCovered } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-coverage.js';
 import { Prisma } from '../src/generated/prisma/client.js';
 import { createLedgerReadRepository } from '../src/modules/finance/repositories/ledger-read.repository.js';
+import { createFinancialCategoryReadRepository } from '../src/modules/finance/repositories/financial-category-read.repository.js';
 import { createReceivableReadRepository } from '../src/modules/finance/repositories/receivable-read.repository.js';
 import { createPayableReadRepository } from '../src/modules/finance/repositories/payable-read.repository.js';
 import { createMonthlyCashFlowService } from '../src/modules/analytics/services/monthly-cash-flow.service.js';
@@ -172,6 +173,7 @@ async function coverageReport(
     ledger: createLedgerReadRepository(prisma),
     receivables: createReceivableReadRepository(prisma),
     payables: createPayableReadRepository(prisma),
+    categories: createFinancialCategoryReadRepository(prisma),
   });
   const months: Record<string, unknown> = {};
   for (const monthKey of monthKeysAround(new Date())) {

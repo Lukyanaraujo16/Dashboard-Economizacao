@@ -28,6 +28,12 @@ export type CompetenceDailyBarsProps = {
   readonly revenueDaily: readonly DailyPoint[];
   readonly expenseDaily: readonly DailyPoint[];
   readonly monthKey: string;
+  /** Rótulos das séries; sobrescreva quando a leitura não for competência. */
+  readonly revenueLabel?: string;
+  readonly expenseLabel?: string;
+  readonly ariaLabel?: string;
+  readonly caption?: string;
+  readonly emptyMessage?: string;
   readonly className?: string;
 };
 
@@ -44,13 +50,18 @@ function barHeight(value: number, scale: number): number {
 }
 
 /**
- * Movimentação diária da competência — receitas acima do eixo, despesas abaixo.
- * Cada dia é o Σ total lançado na competência; não é entrada nem saída de caixa.
+ * Movimentação diária em barras espelhadas — primeira série acima do eixo,
+ * segunda abaixo. Rotulagem padrão é competência; caixa sobrescreve os rótulos.
  */
 export function CompetenceDailyBars({
   revenueDaily,
   expenseDaily,
   monthKey,
+  revenueLabel = 'Receitas',
+  expenseLabel = 'Despesas',
+  ariaLabel,
+  caption,
+  emptyMessage,
   className,
 }: CompetenceDailyBarsProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -105,7 +116,9 @@ export function CompetenceDailyBars({
   if (isFlatSeries(revenueDaily) && isFlatSeries(expenseDaily)) {
     return (
       <div className={cx(styles.root, className)}>
-        <p className={styles.empty}>Sem lançamentos diários na competência de {monthLabel}.</p>
+        <p className={styles.empty}>
+          {emptyMessage ?? `Sem lançamentos diários na competência de ${monthLabel}.`}
+        </p>
       </div>
     );
   }
@@ -123,11 +136,11 @@ export function CompetenceDailyBars({
       <ul className={styles.legend}>
         <li className={styles.legendItem}>
           <span className={cx(styles.swatch, styles.revenueSwatch)} aria-hidden="true" />
-          Receitas
+          {revenueLabel}
         </li>
         <li className={styles.legendItem}>
           <span className={cx(styles.swatch, styles.expenseSwatch)} aria-hidden="true" />
-          Despesas
+          {expenseLabel}
         </li>
       </ul>
 
@@ -141,7 +154,7 @@ export function CompetenceDailyBars({
         <div
           className={styles.plot}
           role="img"
-          aria-label={`Receitas e despesas por dia de competência em ${monthLabel}`}
+          aria-label={ariaLabel ?? `Receitas e despesas por dia de competência em ${monthLabel}`}
           tabIndex={0}
           onMouseMove={handleMove}
           onMouseLeave={() => setActiveIndex(-1)}
@@ -204,12 +217,12 @@ export function CompetenceDailyBars({
               <p className={styles.tooltipDay}>{formatDayPt(activeRevenue.date)}</p>
               <p className={styles.tooltipRow}>
                 <span className={cx(styles.swatch, styles.revenueSwatch)} />
-                Receitas
+                {revenueLabel}
                 <span className={styles.tooltipValue}>{formatMoneyBrl(activeRevenue.amount)}</span>
               </p>
               <p className={styles.tooltipRow}>
                 <span className={cx(styles.swatch, styles.expenseSwatch)} />
-                Despesas
+                {expenseLabel}
                 <span className={styles.tooltipValue}>{formatMoneyBrl(activeExpense.amount)}</span>
               </p>
             </div>
@@ -222,11 +235,11 @@ export function CompetenceDailyBars({
         <span>{lastDate ? formatDayPt(lastDate) : ''}</span>
       </div>
 
-      <p className={styles.caption}>Competência · não é caixa.</p>
+      <p className={styles.caption}>{caption ?? 'Competência · não é caixa.'}</p>
 
       <span className={styles.liveRegion} aria-live="polite">
         {activeRevenue && activeExpense
-          ? `${formatDayPt(activeRevenue.date)}: receitas ${formatMoneyBrl(activeRevenue.amount)}, despesas ${formatMoneyBrl(activeExpense.amount)}`
+          ? `${formatDayPt(activeRevenue.date)}: ${revenueLabel.toLowerCase()} ${formatMoneyBrl(activeRevenue.amount)}, ${expenseLabel.toLowerCase()} ${formatMoneyBrl(activeExpense.amount)}`
           : ''}
       </span>
     </div>

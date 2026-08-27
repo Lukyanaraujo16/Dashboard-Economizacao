@@ -263,7 +263,7 @@ export function MonthlyCompare({
       </ul>
 
       <p className={styles.caption}>
-        Comparação entre competências; a variação não representa movimento de caixa.
+        Comparação dos movimentos realizados entre os meses.
       </p>
       <span id={liveId} className={styles.liveRegion} aria-live="polite">
         {liveText}

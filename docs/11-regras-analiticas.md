@@ -30,6 +30,7 @@ F12-A (24/08/2026): CONTRATO CONGELADO. Paridade com monthly-revenue /
 monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
 De/Até. Ledger CASH-2 persistido no HEAD (`financial_transactions`).
 KPI de caixa / Home: CASH-4B — cards principais = MonthlyCashFlow (caixa).
+CASH-4C — visualizações / leitura / gráficos da Home = caixa (sem competência).
 CASH-4A = infra fetch/view-model. CASH-3A: domínio `MonthlyCashFlow`. CASH-3B:
 `GET /dashboard/monthly-cash-flow`. CASH-7: backfill LOCAL do ledger
 (Clínica Life) executado; produção NÃO. CASH-8A: R3/R4 no código;
@@ -393,14 +394,18 @@ A Home apresenta despesa mensal por competência (`GET /dashboard/monthly-expens
 AP com competenceDate no mês civil selecionado, incluindo PAID; D8 sobre o
 total do mês. `paid` HTTP = Σ paid do snapshot, não caixa do mês.
 Título: “Despesas por categoria”. Não é estoque até 2028.
-CASH-4B (IMPLEMENTADA local): Despesas da Home =
-`realized.outflows + expected.payables` (vencido AP fora). CASH-4C = gráficos.
+CASH-4B (HOMOLOGADA): Despesas da Home =
+`realized.outflows + expected.payables` (vencido AP fora). CASH-4C =
+séries/gráficos/leitura em caixa (Home sem monthly-expenses).
 
 A Home apresenta receita mensal por competência (`GET /dashboard/monthly-revenue`):
 AR com competenceDate no mês civil corrente, incluindo PAID; D8 sobre o
 total do mês. `received` = Σ paid do snapshot, não caixa do mês.
 F1-G: o card Faturamento Gerencial usa o mesmo `total` (§12).
-A composição de receitas do painel permanece mensal por competência.
+A composição de receitas/despesas por categoria na Home (CASH-4C-CAT) é
+caixa realizado: D8 sobre settlements elegíveis (ACTIVE, sem transferência).
+SUM(items) = realized.inflows / realized.outflows. Previsto e vencidos fora.
+Relatórios permanecem competência até CASH-6.
 
 ⸻
 
@@ -620,8 +625,8 @@ utilizável (Grupo A):
 * janela N de "próximos vencimentos" além da regra dueDate >= hoje
   (detalhe de apresentação; horizonte de 90 dias já define o fluxo);
 * Faturamento (§12) — fórmula oficial homologada (caixa: inflows + previsto no prazo).
-  Home KPIs = caixa (CASH-4B). CASH-4A = infra. Meta = billing; CASH-4C = gráficos;
-  UI da Meta ainda competência. Fiscal futuro separado;
+  Home = caixa (CASH-4B KPIs + CASH-4C visualizações). CASH-4A = infra.
+  Meta = billing. Relatórios/PDF/XLSX = CASH-6. Fiscal futuro separado;
 * ledger / data efetiva de baixa (§8) — `paid` acumulado ≠ ledger;
 * saldo de conta (§13);
 * fixas/variáveis (§14);
@@ -764,8 +769,14 @@ oferecem essa taxa como métrica do intervalo De/Até.
 Ledger (`financial_transactions`): CASH-2 persiste baixas; CASH-3A calcula
 `MonthlyCashFlow` no domínio. CASH-3B expõe `GET /dashboard/monthly-cash-flow`
 (`billing` = `monthlyBilling`; vencido fora). CASH-4A: Home carrega o DTO
-(view-model); F12 V1 / PDF / XLSX continuam competência até CASH-6. Home KPIs = CASH-4B.
-Meta futura = billing; UI da Meta ainda competência.
+(view-model); F12 V1 / PDF / XLSX continuam competência até CASH-6.
+Home = caixa integral (CASH-4B KPIs + CASH-4C visualizações + CASH-4C-CAT
+donuts realizados). Séries realizadas por `occurredOn`; previsto por
+`dueDate`/unpaid no prazo; comparativo histórico só realized; leitura
+executiva = MonthlyCashFlow; competência não alimenta a Home.
+`realizedByCategory` = D8 sobre RECEIPT/DISBURSEMENT elegíveis; SUM =
+realized.inflows/outflows; previsto e transferências fora. Meta `actual` =
+billing. Zoom/expansão = dívida UX futura.
 CASH-7 (26/08/2026): bootstrap local idempotente por tenant; cobertura
 segura = Σ gross ACTIVE = `paid` (DELETED não entra na soma nem bloqueia skip).
 CASH-8A: R3 stale confirmado pode ir a DELETED (flag default false).
@@ -773,7 +784,7 @@ R4 `/baixa = []` ou parcela 404 = HOLD; não tombstona. Sem delete físico.
 Reativação: upsert força ACTIVE. CASH-8B pendente. Produção ainda não executada.
 CASH-9C: transferências internas fora de faturamento/despesas/resultado.
 Ghost ACTIVE pode ser excluído do analytics sem virar DELETED.
-CASH-4B IMPLEMENTADA localmente (homologação humana pendente). CASH-4C pendente.
+CASH-4B HOMOLOGADA. CASH-4C IMPLEMENTADA localmente (aguarda homologação humana).
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
 BACKFILL DE PRODUÇÃO + CASH-8B. Sem as-of.
 

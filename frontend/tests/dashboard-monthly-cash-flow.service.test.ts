@@ -23,6 +23,10 @@ const body = {
     ofMonth: { receivables: '0', payables: '0' },
   },
   coverage: '0.8',
+  realizedByCategory: {
+    inflows: { total: '80000', classified: '80000', uncategorized: '0', imprecise: '0', coverageRate: '100', items: [{ kind: 'category', name: 'Serviços', amount: '80000', percentage: '100' }] },
+    outflows: { total: '0', classified: '0', uncategorized: '0', imprecise: '0', coverageRate: null, items: [] },
+  },
   daily: {
     realized: [{ date: '2026-08-05', inflows: '80000', outflows: '0', result: '80000' }],
     expected: [{ date: '2026-08-31', receivables: '20000', payables: '0', result: '20000' }],

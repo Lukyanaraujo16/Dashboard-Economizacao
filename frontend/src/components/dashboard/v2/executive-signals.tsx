@@ -20,6 +20,8 @@ export type ExecutiveSignalsProps = {
   readonly signals: readonly ExecutiveSignal[];
   readonly emptyMessage?: string;
   readonly className?: string;
+  /** `wide` = multi-coluna em faixas largas (Home CASH-4C-FINAL). */
+  readonly layout?: 'stack' | 'wide';
 };
 
 /**
@@ -97,13 +99,14 @@ export function ExecutiveSignals({
   signals,
   emptyMessage = 'Sem sinais para a competência do mês.',
   className,
+  layout = 'stack',
 }: ExecutiveSignalsProps) {
   if (signals.length === 0) {
     return <p className={cx(styles.empty, className)}>{emptyMessage}</p>;
   }
 
   return (
-    <ul className={cx(styles.list, className)}>
+    <ul className={cx(styles.list, className)} data-layout={layout}>
       {signals.map((signal) => {
         const Icon = SIGNAL_ICONS[signal.id] ?? BarChart3;
         const tone = signalTone(signal);

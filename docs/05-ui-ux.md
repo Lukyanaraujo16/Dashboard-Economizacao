@@ -319,8 +319,8 @@ V2.3.1 — Final Home Polish (HOMOLOGADA): baseline visual/funcional **congelado
 da Home (copy comercial da Meta, ícones semânticos da Leitura, Comparativo sem
 colisão de labels + hover/tooltip). Não redesenhar a Home sem nova fase.
 
-CASH-4B (KPIs de caixa na Home): IMPLEMENTADA (local, aguarda homologação humana).
-KPIs principais = `MonthlyCashFlow` (regime de caixa):
+CASH-4B (KPIs de caixa na Home): HOMOLOGADA (HEAD `605ac85`).
+KPIs principais = `MonthlyCashFlow` (regime de caixa) — fórmulas congeladas:
 * Faturamento = `billing` = realized.inflows + expected.receivables;
 * Já recebido = realized.inflows; A receber = expected.receivables;
 * Despesas = realized.outflows + expected.payables (Pago / A pagar no rodapé);
@@ -330,10 +330,35 @@ KPIs principais = `MonthlyCashFlow` (regime de caixa):
 * Vencidos fora de Faturamento/Despesas; transferências neutras na API;
 * `costCenterCashSplit=false` → “—” (nunca R$ 0,00); erro de cash-flow
   sem fallback silencioso para competência;
-* Filtro Situação oculto na Home (sem semântica coerente no realizado);
-* Sparklines honestas só em Já recebido / A receber; gráficos de competência
-  (Receitas×Despesas, comparativo, barras diárias) ocultos até CASH-4C.
-Competência permanece em Relatórios/PDF/XLSX e endpoints legados (CASH-6).
+* Filtro Situação oculto na Home (sem semântica coerente no realizado).
+
+CASH-4C (visualizações da Home em caixa): IMPLEMENTADA (local; aguarda
+homologação humana do complemento CAT). A Home conta uma única história de caixa:
+* Sparklines: Já recebido = `daily.realized.inflows` (`occurredOn`);
+  A receber = `daily.expected.receivables` (`dueDate`, no prazo);
+  Despesas = acumulado outflows + estoque `payable` (último ponto =
+  `monthlyExpenses`); Resultado = acumulado (in−out) + expectedNet
+  (último ponto = `managerialResult`); Faturamento = coverage ratio
+  (mês corrente) quando disponível — não inventa “faturamento diário”;
+* Grade principal: Entradas × Saídas = realizado acumulado
+  (`occurredOn`; copy “Entradas e saídas realizadas no mês”);
+* CASH-4C-CAT: Despesas/Receitas por categoria = **somente caixa realizado**
+  (`realizedByCategory.outflows` / `.inflows`); fecham com
+  `realized.outflows` / `realized.inflows`; previsto e vencidos fora;
+  transferências fora; subtítulos “Pagamentos/Recebimentos realizados”;
+  lado a lado abaixo de Entradas × Saídas (empilhados no mobile);
+* Movimentação diária: toggle Realizado | Previsto (não misturar as
+  naturezas numa só série);
+* Comparativo mensal: apenas realized (entradas/saídas/resultado) vs
+  mês anterior via segundo fetch de `monthly-cash-flow`;
+* Até o fim do mês: subtítulo “Previsto até o fim do mês”; vencidos fora;
+* Leitura executiva: `buildCashExecutiveSignals` a partir do
+  MonthlyCashFlow (sem `executive-insights` / competência);
+* Home não chama mais `monthly-revenue` / `monthly-expenses`.
+* CASH-4C-CAT-FINAL: faixa Meta / Até fim do mês / Inadimplência em altura
+  natural; Leitura executiva em linha própria (largura total, sinais em
+  multi-coluna no desktop). Copy do Comparativo sem “competência”.
+  Zoom/expansão permanece dívida futura.
 
 CASH-4A (infra Home / caixa): a Home **carrega** `GET /dashboard/monthly-cash-flow`
 (`month`, `costCenter`, `category`). Infra mantida; números oficiais = CASH-4B.
@@ -344,29 +369,32 @@ Meta: `actual = billing`. `costCenterCashSplit=false` → métricas null
 (“—”), nunca R$ 0,00.
 
 Grade principal (`mainGrid`):
-* Despesas por categoria (`sectionId` `despesas-mes`, `id` `despesas-categoria`)
-  — ainda competência (CASH-4C);
-* Receitas por categoria (`sectionId` `receitas-categoria`, `id` `receitas-categoria`)
-  — ainda competência (CASH-4C).
-* Receitas × Despesas: oculto temporariamente (CASH-4C).
+* Entradas × Saídas (`sectionId` `entradas-saidas`) — caixa realizado
+  acumulado (CASH-4C).
+
+Grade de categorias (`categoryGrid`, abaixo do gráfico grande):
+* Despesas por categoria (`sectionId` `despesas-categoria`) — caixa
+  realizado (CASH-4C-CAT); fecha com `realized.outflows`;
+* Receitas por categoria (`sectionId` `receitas-categoria`) — caixa
+  realizado (CASH-4C-CAT); fecha com `realized.inflows`.
 
 Removidos da Home:
+* donuts de competência;
 * widget independente “Top 5 despesas”;
 * card dual “Composição por categoria” (dois anéis no mesmo card);
 * diálogo dual `categories`; botões “Abrir receitas/despesas por categoria”
-  no donut.
+  no donut. Zoom/expansão dos gráficos permanece dívida futura.
 
-Interação: `CategoryDonutChart` sem `onActivate`/botão próprio — o card
-inteiro (`WidgetShell`) é clicável (e Enter/Espaço) e abre
-`categories-expense` ou `categories-revenue` com ranking de TODAS as categorias.
+Interação legada de donuts de competência: removida. Donuts atuais =
+caixa realizado (CASH-4C-CAT), sem zoom/modal nesta fase.
 
 Grade secundária (`secondaryGrid`):
 * Meta de faturamento (`sectionId` `meta-faturamento`) — empty comercial
   V2.3.1 (título “Meta ainda não definida” + apoio “Defina uma meta mensal
   para acompanhar o desempenho do faturamento.”) enquanto sem meta; com meta,
   card funcional F2/F2.0.1 (status temporal por competência);
-* Até o fim do mês (só mês civil atual);
-* Leitura executiva;
+* Até o fim do mês (só mês civil atual) — subtítulo “Previsto até o fim do mês”;
+* Leitura executiva (caixa / MonthlyCashFlow);
 * Inadimplência.
 
 Composição V2.2 — Visual Fidelity Pass (IMPLEMENTADA / SUPERSEDED pela V2.3.1 como baseline da Home):

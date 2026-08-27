@@ -24,22 +24,12 @@ import {
 import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
 import type { DashboardCashFlowForecastResponse } from '../src/services/dashboard/forecast.types';
 import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
-import {
-  DashboardMonthlyRevenueRequestError,
-  type DashboardMonthlyRevenueResponse,
-} from '../src/services/dashboard/monthly-revenue.types';
+import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
+import { DashboardMonthlyCashFlowRequestError } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
-import {
-  DashboardMonthlyExpenseRequestError,
-  type DashboardMonthlyExpenseResponse,
-} from '../src/services/dashboard/monthly-expenses.types';
-import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
-import {
-  DashboardExecutiveInsightsRequestError,
-  type DashboardExecutiveInsightsResponse,
-} from '../src/services/dashboard/executive-insights.types';
+import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -87,10 +77,6 @@ vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
   getDashboardMonthlyCashFlow: vi.fn(),
 }));
 
-vi.mock('../src/services/dashboard/executive-insights', () => ({
-  getDashboardExecutiveInsights: vi.fn(),
-}));
-
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -110,7 +96,6 @@ const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
-const getInsights = vi.mocked(getDashboardExecutiveInsights);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -183,85 +168,6 @@ const emptyMonthlyRevenue: DashboardMonthlyRevenueResponse = {
   },
 };
 
-/** Receitas de competência com série diária — habilita gráficos e expansão. */
-const loadedMonthlyRevenue: DashboardMonthlyRevenueResponse = {
-  today: '2026-08-19',
-  monthKey: '2026-08',
-  from: '2026-08-01',
-  to: '2026-08-31',
-  receivables: {
-    total: '10000',
-    received: '4000',
-    outstanding: '6000',
-    overdue: '0',
-    classified: '10000',
-    uncategorized: '0',
-    imprecise: '0',
-    coverageRate: '100',
-    items: [
-      {
-        kind: 'category',
-        name: 'Serviços',
-        amount: '10000',
-        received: '4000',
-        outstanding: '6000',
-        percentage: '100',
-      },
-    ],
-    daily: [
-      { date: '2026-08-05', amount: '4000', received: '4000', outstanding: '0' },
-      { date: '2026-08-12', amount: '6000', received: '0', outstanding: '6000' },
-    ],
-  },
-};
-
-const loadedMonthlyExpenses: DashboardMonthlyExpenseResponse = {
-  today: '2026-08-19',
-  monthKey: '2026-08',
-  from: '2026-08-01',
-  to: '2026-08-31',
-  payables: {
-    total: '100',
-    paid: '20',
-    outstanding: '80',
-    overdue: '0',
-    classified: '80',
-    uncategorized: '20',
-    imprecise: '0',
-    coverageRate: '80',
-    items: [
-      {
-        kind: 'category',
-        name: 'Salários',
-        amount: '80',
-        paid: '0',
-        outstanding: '80',
-        percentage: '99',
-      },
-      {
-        kind: 'uncategorized',
-        name: 'Sem categoria',
-        amount: '20',
-        paid: '20',
-        outstanding: '0',
-        percentage: '1',
-      },
-    ],
-    daily: [
-      { date: '2026-08-03', amount: '20', received: '20', outstanding: '0' },
-      { date: '2026-08-18', amount: '80', received: '0', outstanding: '80' },
-    ],
-  },
-};
-
-const emptyInsights: DashboardExecutiveInsightsResponse = {
-  today: '2026-08-19',
-  monthKey: '2026-08',
-  from: '2026-08-01',
-  to: '2026-08-31',
-  insights: [],
-};
-
 /** Caixa zerado — KPIs CASH-4B ficam empty com copy de regime de caixa. */
 const emptyCashFlow: DashboardMonthlyCashFlowResponse = {
   today: '2026-08-19',
@@ -278,6 +184,10 @@ const emptyCashFlow: DashboardMonthlyCashFlowResponse = {
     ofMonth: { receivables: '0', payables: '0' },
   },
   coverage: '0',
+  realizedByCategory: {
+    inflows: { total: '0', classified: '0', uncategorized: '0', imprecise: '0', coverageRate: null, items: [] },
+    outflows: { total: '0', classified: '0', uncategorized: '0', imprecise: '0', coverageRate: null, items: [] },
+  },
   daily: { realized: [], expected: [] },
 };
 
@@ -347,7 +257,6 @@ beforeEach(() => {
   getMonthlyExpenses.mockResolvedValue(emptyMonthlyExpenses);
   getMonthlyRevenue.mockResolvedValue(emptyMonthlyRevenue);
   getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
-  getInsights.mockResolvedValue(emptyInsights);
   getRevenueGoal.mockResolvedValue(emptyRevenueGoal);
   getCostCenters.mockResolvedValue({
     items: [
@@ -408,29 +317,42 @@ describe('Dashboard V2 structure', () => {
     }
 
     for (const title of [
+      'Entradas × Saídas',
       'Despesas por categoria',
       'Receitas por categoria',
       'Meta de faturamento',
       'Até o fim do mês',
       'Leitura executiva',
       'Inadimplência',
+      'Comparativo mensal',
+      'Movimentação diária',
       'Fluxo previsto',
     ]) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy();
     }
 
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Comparativo mensal' })).toBeNull();
     expect(
       screen.queryByRole('heading', { name: 'Movimentação diária da competência' }),
     ).toBeNull();
+    expect(screen.queryByText(/Competência de/i)).toBeNull();
+
+    expect(screen.getByText('Previsto até o fim do mês')).toBeTruthy();
+    expect(screen.getByText('Sinais do fluxo de caixa do mês')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Realizado' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Previsto' })).toBeTruthy();
 
     expect(screen.queryByRole('heading', { name: 'Top 5 despesas' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Composição por categoria' })).toBeNull();
     expect(screen.getByText('Meta ainda não definida')).toBeTruthy();
     expect(document.querySelector('[data-financial-section="top-despesas"]')).toBeNull();
-    expect(document.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="despesas-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="receitas-categoria"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="despesas-categoria"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="entradas-saidas"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeTruthy();
 
     expect(screen.getByText('Última atualização')).toBeTruthy();
     expect(document.querySelector('[data-cost-center-selector="true"]')).toBeTruthy();
@@ -447,16 +369,9 @@ describe('Dashboard V2 structure', () => {
     expect(screen.queryByText('15 dias')).toBeNull();
     expect(document.querySelector('[data-kpi-card]')).toBeNull();
 
-    expect(getMonthEnd).toHaveBeenCalledTimes(1);
-    expect(getForecast).toHaveBeenCalledTimes(1);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null, null, null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
-    expect(getInsights).toHaveBeenCalledWith(null, null, null, null);
     expect(getOverview).toHaveBeenCalledWith(null);
-    // Comparativo mensal também busca a competência anterior.
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', null, null, null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null, null, null);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
   });
 
   it('exibe nota de meta consolidada quando centro de custo está selecionado', async () => {
@@ -481,12 +396,6 @@ describe('Dashboard V2 structure', () => {
     expect(await screen.findByText('Visão executiva · Operações')).toBeTruthy();
     expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
     expect(getOverview).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(
-      null,
-      '11111111-1111-4111-8111-111111111111',
-      null,
-      null,
-    );
     expect(getRevenueGoal).toHaveBeenCalledWith(null);
   });
 
@@ -517,12 +426,8 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-situation-selector]')).toBeNull();
     expect(screen.getByRole('button', { name: /Categoria: Serviços/ })).toBeTruthy();
     expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, centerId, null, categoryId);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', centerId, null, categoryId);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, centerId, null, categoryId);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', centerId, null, categoryId);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, centerId, categoryId);
-    expect(getInsights).toHaveBeenCalledWith(null, centerId, null, categoryId);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', centerId, categoryId);
     expect(getForecast).toHaveBeenCalledWith(centerId, categoryId);
     expect(getMonthEnd).toHaveBeenCalledWith(centerId, categoryId);
     expect(getOverview).toHaveBeenCalledWith(centerId);
@@ -550,7 +455,6 @@ describe('Dashboard V2 structure', () => {
     renderDashboard();
     expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
     expect(getRevenueGoal).toHaveBeenCalledWith(null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, categoryId);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, categoryId);
   });
 
@@ -569,12 +473,10 @@ describe('Dashboard V2 structure', () => {
     expect(sectionScope('inadimplencia').getByText('Taxa global (D1)')).toBeTruthy();
 
     expect(
-      (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
-    ).toBeGreaterThan(0);
-    expect(
-      await screen.findByText('Sem dados de competência para leitura neste mês.'),
+      await screen.findByText(/Nenhum valor a receber vencido no momento/i),
     ).toBeTruthy();
-    expect(document.querySelector('[data-financial-section="receitas-mes"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="despesas-mes"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="receitas-categoria"]')).toBeTruthy();
     expect(
       sectionScope('fluxo-previsto').getByText('Sem lançamentos previstos no horizonte.'),
     ).toBeTruthy();
@@ -605,7 +507,6 @@ describe('Dashboard V2 structure', () => {
     expect(getForecast).not.toHaveBeenCalled();
     expect(getMonthlyExpenses).not.toHaveBeenCalled();
     expect(getMonthlyRevenue).not.toHaveBeenCalled();
-    expect(getInsights).not.toHaveBeenCalled();
   });
 
   it('rate zero exato aparece como 0%', async () => {
@@ -638,13 +539,10 @@ describe('Dashboard V2 structure', () => {
     await waitFor(() => {
       expect(sectionScope('ate-fim-do-mes').getByText('Diferença prevista')).toBeTruthy();
     });
-    for (const id of ['ate-fim-do-mes', 'despesas-mes', 'receitas-categoria', 'meta-faturamento', 'leitura-executiva']) {
+    for (const id of ['ate-fim-do-mes', 'entradas-saidas', 'meta-faturamento', 'leitura-executiva']) {
       expect(sectionScope(id).queryByText(/Integração desconectada/)).toBeNull();
     }
     expect(getMonthEnd).toHaveBeenCalledTimes(1);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null, null, null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
-    expect(getInsights).toHaveBeenCalledWith(null, null, null, null);
   });
 
   it('ERROR de integração não é fetch error e não mostra código cru', async () => {
@@ -713,7 +611,6 @@ describe('Dashboard V2 structure', () => {
     expect(getForecast).not.toHaveBeenCalled();
     expect(getMonthlyExpenses).not.toHaveBeenCalled();
     expect(getMonthlyRevenue).not.toHaveBeenCalled();
-    expect(getInsights).not.toHaveBeenCalled();
   });
 
   it('Até o fim do mês usa summary do backend sem recalcular net', async () => {
@@ -794,16 +691,18 @@ describe('Dashboard V2 structure', () => {
     renderDashboard();
 
     await waitFor(() => {
-      expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null, null, null);
+      expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
     });
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getForecast).not.toHaveBeenCalled();
-    expect(getInsights).toHaveBeenCalledWith('2026-07', null, null, null);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-06', null, null);
     expect(screen.getByRole('heading', { name: 'Leitura executiva' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Comparativo mensal' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
-    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
   });
 
   it('fluxo previsto usa o líquido do backend e resume os picos do horizonte', async () => {
@@ -837,8 +736,6 @@ describe('Dashboard V2 structure', () => {
 
   it('KPIs de caixa usam MonthlyCashFlow e não totais de competência', async () => {
     getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyRevenue.mockResolvedValue(loadedMonthlyRevenue);
-    getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
     renderDashboard();
 
     await waitFor(() => {
@@ -851,129 +748,56 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-financial-section="receitas-mes"]')).toBeNull();
   });
 
-  it('erro das receitas do mês não derruba KPIs de caixa nem o fluxo previsto', async () => {
+  it('erro de cash-flow não derruba KPIs nem o fluxo previsto', async () => {
     getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyRevenue.mockRejectedValue(
-      new DashboardMonthlyRevenueRequestError(
+    getMonthlyCashFlow.mockRejectedValue(
+      new DashboardMonthlyCashFlowRequestError(
         'unavailable',
-        'Não foi possível carregar as receitas do mês.',
-      ),
-    );
-    renderDashboard();
-
-    expect(
-      (await screen.findAllByText('Não foi possível carregar as receitas do mês.')).length,
-    ).toBeGreaterThan(0);
-    expect(
-      (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
-    ).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
-    expect(kpiScope('Resultado').getByText(/R\$\s*866\.666,66/)).toBeTruthy();
-  });
-
-  it('Despesas e Receitas por categoria usam percentuais do backend', async () => {
-    getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
-    getMonthlyRevenue.mockResolvedValue(loadedMonthlyRevenue);
-    renderDashboard();
-
-    expect((await screen.findAllByText('Salários')).length).toBeGreaterThan(0);
-    const expenses = sectionScope('despesas-mes');
-    expect(expenses.getAllByText(/R\$\s*80,00/).length).toBeGreaterThan(0);
-    expect(expenses.getByText('99,0%')).toBeTruthy();
-    expect(expenses.queryByText('80,0%')).toBeNull();
-    expect(
-      expenses.getByRole('img', { name: 'Despesas por categoria do mês selecionado' }),
-    ).toBeTruthy();
-    expect(expenses.getByText('Sem categoria')).toBeTruthy();
-
-    const revenues = sectionScope('receitas-categoria');
-    expect(revenues.getByText('Serviços')).toBeTruthy();
-    expect(
-      revenues.getByRole('img', { name: 'Receitas por categoria do mês selecionado' }),
-    ).toBeTruthy();
-
-    expect(screen.queryByRole('heading', { name: 'Top 5 despesas' })).toBeNull();
-    expect(document.querySelector('[data-financial-section="top-despesas"]')).toBeNull();
-    expect(section('despesas-mes').textContent?.toLowerCase()).not.toMatch(/saldo|realizado/);
-    expect(screen.queryByRole('heading', { name: 'Próximos vencimentos' })).toBeNull();
-  });
-
-  it('erro da composição não derruba KPIs nem o fluxo previsto', async () => {
-    getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyExpenses.mockRejectedValue(
-      new DashboardMonthlyExpenseRequestError(
-        'unavailable',
-        'Não foi possível carregar as despesas do mês.',
+        'Não foi possível carregar o fluxo de caixa do mês.',
       ),
     );
     renderDashboard();
 
     await waitFor(() => {
-      expect(kpiCard('Faturamento')).toBeTruthy();
+      expect(
+        screen.getAllByText('Não foi possível carregar o fluxo de caixa do mês.').length,
+      ).toBeGreaterThan(0);
     });
-    expect(
-      (await screen.findAllByText('Não foi possível carregar as despesas do mês.')).length,
-    ).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
-    getMonthlyExpenses.mockResolvedValue(emptyMonthlyExpenses);
-    fireEvent.click(sectionScope('despesas-mes').getByRole('button', { name: 'Tentar novamente' }));
-    expect(
-      (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
-    ).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
   });
 
-  it('Leitura executiva usa fatos mensais do backend', async () => {
+  it('Leitura executiva usa sinais de caixa do MonthlyCashFlow', async () => {
     getOverview.mockResolvedValue(syncedOverview);
-    getInsights.mockResolvedValue({
-      ...emptyInsights,
-      insights: [
-        {
-          id: 'revenue-expense-total',
-          body: 'Agosto de 2026 gerou R$ 100,00 em receitas de competência e R$ 150,00 em despesas de competência.',
-        },
-        {
-          id: 'revenue-expense-balance',
-          body: 'As despesas da competência superam as receitas em R$ 50,00.',
-        },
-        {
-          id: 'top-expense-category',
-          body: 'A categoria Salário Colaboradores representa 49,0% das despesas classificadas do mês.',
-        },
-      ],
-    });
     renderDashboard();
 
     const scope = await waitFor(() => {
       const node = sectionScope('leitura-executiva');
-      expect(node.getByText(/R\$\s*50,00/)).toBeTruthy();
+      expect(node.getByText(/888\.888,88/)).toBeTruthy();
       return node;
     });
-    expect(scope.getByText(/superam as receitas/)).toBeTruthy();
-    expect(scope.getByText(/Salário Colaboradores/)).toBeTruthy();
-    expect(scope.getByText(/49,0%/)).toBeTruthy();
-    expect(section('leitura-executiva').querySelectorAll('[data-signal]').length).toBe(3);
-    expect(section('leitura-executiva').textContent?.toLowerCase()).not.toMatch(
-      /saldo|déficit|prejuízo|inteligência/,
-    );
+    expect(scope.getByText('Entrou no caixa')).toBeTruthy();
+    expect(scope.getByText('Ainda a receber')).toBeTruthy();
+    expect(scope.getByText('Resultado projetado')).toBeTruthy();
+    expect(section('leitura-executiva').textContent?.toLowerCase()).not.toMatch(/competência/);
+    expect(section('leitura-executiva').querySelectorAll('[data-signal]').length).toBeGreaterThan(0);
   });
 
-  it('erro da leitura executiva não derruba os demais widgets', async () => {
+  it('erro de cash-flow na leitura executiva não derruba os demais widgets', async () => {
     getOverview.mockResolvedValue(syncedOverview);
-    getInsights.mockRejectedValue(
-      new DashboardExecutiveInsightsRequestError(
+    getMonthlyCashFlow.mockRejectedValue(
+      new DashboardMonthlyCashFlowRequestError(
         'unavailable',
-        'Não foi possível carregar a leitura executiva.',
+        'Não foi possível carregar o fluxo de caixa do mês.',
       ),
     );
     renderDashboard();
 
     await waitFor(() => {
-      expect(kpiCard('Faturamento')).toBeTruthy();
+      expect(kpiScope('Faturamento').getByText(/Não foi possível carregar o fluxo de caixa/)).toBeTruthy();
     });
-    expect(await screen.findByText('Não foi possível carregar a leitura executiva.')).toBeTruthy();
     expect(
-      (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
+      (await screen.findAllByText('Não foi possível carregar o fluxo de caixa do mês.')).length,
     ).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
   });
@@ -995,42 +819,10 @@ describe('Dashboard V2 structure', () => {
 
   it('KPI de faturamento não expande na Home CASH-4B', async () => {
     getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyRevenue.mockResolvedValue(loadedMonthlyRevenue);
-    getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
     renderDashboard();
 
     await waitFor(() => {
       expect(kpiScope('Faturamento').queryByRole('button', { name: 'Expandir' })).toBeNull();
-    });
-  });
-
-  it('clique no card de despesas abre o detalhe com todas as categorias', async () => {
-    getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
-    renderDashboard();
-
-    const card = await waitFor(() => {
-      const node = section('despesas-mes');
-      expect(node.getAttribute('role')).toBe('button');
-      return node;
-    });
-    fireEvent.click(card);
-
-    const dialog = await screen.findByRole('dialog');
-    const dialogScope = within(dialog);
-    expect(dialogScope.getByRole('heading', { name: 'Despesas por categoria' })).toBeTruthy();
-    expect(
-      dialogScope.getByRole('img', {
-        name: 'Todas as despesas por categoria do mês selecionado',
-      }),
-    ).toBeTruthy();
-    expect(dialogScope.getAllByText('Sem categoria').length).toBeGreaterThan(0);
-    expect(dialogScope.getAllByText('Salários').length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: 'Abrir receitas por categoria' })).toBeNull();
-
-    fireEvent.click(dialogScope.getByRole('button', { name: 'Fechar' }));
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
 
@@ -1040,17 +832,12 @@ describe('Dashboard V2 structure', () => {
 
     expect(await screen.findByLabelText('Visão mensal por competência')).toBeTruthy();
     await waitFor(() => {
-      expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
+      expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
     });
     expect(getOverview).toHaveBeenCalledTimes(1);
     expect(getMonthEnd).toHaveBeenCalledTimes(1);
     expect(getForecast).toHaveBeenCalledTimes(1);
-    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
-    // Competência selecionada + competência anterior do comparativo.
-    expect(getMonthlyExpenses).toHaveBeenCalledTimes(2);
-    expect(getMonthlyRevenue).toHaveBeenCalledTimes(2);
-    expect(getInsights).toHaveBeenCalledTimes(1);
-    expect(getInsights).toHaveBeenCalledWith(null, null, null, null);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
   });
 
   it('EmptyState e EmptyPanel renderizam descrição', () => {

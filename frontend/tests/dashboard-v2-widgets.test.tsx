@@ -241,9 +241,7 @@ describe('MonthlyCompare', () => {
       }),
     ).toBeTruthy();
     expect(
-      screen.getByText(
-        'Comparação entre competências; a variação não representa movimento de caixa.',
-      ),
+      screen.getByText('Comparação dos movimentos realizados entre os meses.'),
     ).toBeTruthy();
   });
 

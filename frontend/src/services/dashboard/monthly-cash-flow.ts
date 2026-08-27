@@ -67,6 +67,40 @@ function isExpectedPoint(value: unknown): boolean {
   );
 }
 
+function isCategoryItem(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.kind === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.amount === 'string' &&
+    typeof value.percentage === 'string'
+  );
+}
+
+function isCategoryComposition(value: unknown): boolean {
+  if (value === null) {
+    return true;
+  }
+  return (
+    isRecord(value) &&
+    typeof value.total === 'string' &&
+    typeof value.classified === 'string' &&
+    typeof value.uncategorized === 'string' &&
+    typeof value.imprecise === 'string' &&
+    isNullableDecimal(value.coverageRate) &&
+    Array.isArray(value.items) &&
+    value.items.every(isCategoryItem)
+  );
+}
+
+function isRealizedByCategory(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isCategoryComposition(value.inflows) &&
+    isCategoryComposition(value.outflows)
+  );
+}
+
 function isMonthlyCashFlow(value: unknown): value is DashboardMonthlyCashFlowResponse {
   if (!isRecord(value) || !isRecord(value.daily)) {
     return false;
@@ -83,6 +117,7 @@ function isMonthlyCashFlow(value: unknown): value is DashboardMonthlyCashFlowRes
     typeof value.costCenterCashSplit === 'boolean' &&
     isNullableDecimal(value.billing) &&
     isMoney(value.realized) &&
+    isRealizedByCategory(value.realizedByCategory) &&
     isExpected(value.expected) &&
     isOverdue(value.overdue) &&
     isNullableDecimal(value.coverage) &&

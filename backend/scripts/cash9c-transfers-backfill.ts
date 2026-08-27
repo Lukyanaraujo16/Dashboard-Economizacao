@@ -31,6 +31,7 @@ import {
   CONTA_AZUL_SYNC_LOOKBACK_YEARS,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-sync.js';
 import { createLedgerReadRepository } from '../src/modules/finance/repositories/ledger-read.repository.js';
+import { createFinancialCategoryReadRepository } from '../src/modules/finance/repositories/financial-category-read.repository.js';
 import { createReceivableReadRepository } from '../src/modules/finance/repositories/receivable-read.repository.js';
 import { createPayableReadRepository } from '../src/modules/finance/repositories/payable-read.repository.js';
 import { createMonthlyCashFlowService } from '../src/modules/analytics/services/monthly-cash-flow.service.js';
@@ -248,6 +249,7 @@ async function main(): Promise<void> {
       ledger: createLedgerReadRepository(prisma),
       receivables: createReceivableReadRepository(prisma),
       payables: createPayableReadRepository(prisma),
+      categories: createFinancialCategoryReadRepository(prisma),
     });
     const flow = await cashFlow.getMonthlyCashFlow({
       tenantId: tenant.id,

@@ -301,7 +301,24 @@ export type DashboardMonthlyCashFlowDailyExpectedPoint = {
  * GET /dashboard/monthly-cash-flow (CASH-3B).
  * `billing` = monthlyBilling(flow) = realized.inflows + expected.receivables.
  * Vencido não entra. Monetário em string, como os demais GETs da Dashboard.
+ * CASH-4C-CAT: `realizedByCategory` = composição D8 do caixa realizado.
  */
+export type DashboardCashRealizedCategoryItem = {
+  readonly kind: 'category' | 'other' | 'uncategorized' | 'imprecise';
+  readonly name: string;
+  readonly amount: string;
+  readonly percentage: string;
+};
+
+export type DashboardCashRealizedCategoryComposition = {
+  readonly total: string;
+  readonly classified: string;
+  readonly uncategorized: string;
+  readonly imprecise: string;
+  readonly coverageRate: string | null;
+  readonly items: readonly DashboardCashRealizedCategoryItem[];
+};
+
 export type DashboardMonthlyCashFlowResponse = {
   readonly today: string;
   readonly monthKey: string;
@@ -310,6 +327,10 @@ export type DashboardMonthlyCashFlowResponse = {
   readonly costCenterCashSplit: boolean;
   readonly billing: string | null;
   readonly realized: DashboardMonthlyCashFlowMoney;
+  readonly realizedByCategory: {
+    readonly inflows: DashboardCashRealizedCategoryComposition | null;
+    readonly outflows: DashboardCashRealizedCategoryComposition | null;
+  };
   readonly expected: DashboardMonthlyCashFlowExpected;
   readonly overdue: DashboardMonthlyCashFlowOverdue;
   readonly coverage: string | null;
