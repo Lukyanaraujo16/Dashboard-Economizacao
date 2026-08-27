@@ -1031,7 +1031,7 @@ Receitas do mês por competência (AR / competenceDate / inclui PAID):
      Já recebido = snapshot de paid das receitas do mês, não caixa.
 F1-G — Faturamento Gerencial (`monthly-revenue.total`):
      Home visual até CASH-4B. Fórmula de produto SUPERSEDED (ver CASH-3A / §12).
-     CASH-4A: infra de caixa na Home sem troca dos cards.
+     CASH-4A: infra. CASH-4B: KPIs de caixa na Home IMPLEMENTADA (local).
 P1-UX — Semântica estoque × mês na Home: SUPERSEDED (rejeitada na homologação humana)
 P1.1 — Monthly context: IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
      A receber/pagar/categorias/inadimplência da Home seguem a competência.
@@ -1108,7 +1108,7 @@ CASH-9C — Transferências internas: IMPLEMENTADO (código + migration + testes
      Um objeto origem/destino. Não entra em billing/despesas/resultado.
      Ghost settlement ACTIVE; associação 1:1 conservadora.
      AMBIGUOUS = não exclui. CLI local `scripts/cash9c-transfers-backfill.ts`.
-     Fora do worker. CASH-4B continua bloqueado até homologação.
+     Fora do worker. CASH-4B IMPLEMENTADA localmente; CASH-4C pendente; produção ainda bloqueada.
 CASH-3A — Read model mensal de caixa (`MonthlyCashFlow`): IMPLEMENTADA no domínio.
 CASH-3B — `GET /dashboard/monthly-cash-flow`: IMPLEMENTADA (facade + DTO + tipos frontend).
      Sem Home visual. `billing` = monthlyBilling = inflows + expected.receivables.
@@ -1116,7 +1116,7 @@ CASH-3B — `GET /dashboard/monthly-cash-flow`: IMPLEMENTADA (facade + DTO + tip
 CASH-4A — Infra Home para MonthlyCashFlow: IMPLEMENTADA.
      Fetch + cache (month × centro × categoria, sem situation) + view-model.
      KPIs / Meta / gráficos visíveis ainda competência. Falha do cash-flow
-     não derruba o overview legado. CASH-4B troca os números. Relatórios/PDF/XLSX intactos.
+     não derruba o overview legado. CASH-4B trocou os números dos KPIs. Relatórios/PDF/XLSX intactos. CASH-4C = gráficos.
      HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES
      DO BACKFILL DE PRODUÇÃO + CASH-8B (R3 no gap de over-coverage).
 CC1 — Centros de custo + alocação + filtro Home:
@@ -1197,7 +1197,7 @@ L1-B — Semântica oficial do caixa + read model mensal:
      reconciliação do título, NÃO o valor de caixa bancário.
      NÃO inventar fórmula. gross/net/componentes permanecem separados.
      API GET /dashboard/monthly-cash-flow: IMPLEMENTADA (CASH-3B).
-     Home CASH-4A: fetch/view-model prontos; KPIs visíveis ainda competência.
+     Home CASH-4B: KPIs = MonthlyCashFlow; competência só em legado/relatórios/CASH-4C.
      UI / Previsto×Realizado: NÃO.
 Faturamento Fiscal / meta / fixa×variável / D1 drill-down: NÃO IMPLEMENTADOS.
 E4: ADIADA.
@@ -1265,7 +1265,7 @@ GRUPO B — Extensão analítica (dados parciais; D8). NÃO bloqueia Fase 10:
 
 GRUPO C/D — Adiados; NÃO bloqueiam Fase 10:
 - Receita × Despesa (D7; docs/11 §11)
-- Faturamento (docs/11 §12) — fórmula oficial homologada (caixa); Home F1-G até CASH-4B
+- Faturamento (docs/11 §12) — fórmula oficial homologada (caixa); Home = CASH-4B
 - Fluxo de caixa realizado / ledger (docs/11 §8)
 - Saldo (docs/11 §13)
 - Despesas fixas/variáveis (docs/11 §14)

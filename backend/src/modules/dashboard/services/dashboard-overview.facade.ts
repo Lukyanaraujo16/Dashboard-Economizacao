@@ -2,6 +2,7 @@ import type { Prisma } from '../../../generated/prisma/client.js';
 import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
 import { civilMonthKey, listInclusiveMonthKeysFromKeys } from '../../analytics/domain/civil-calendar.js';
 import type { AnalyticsService } from '../../analytics/services/analytics.service.js';
+import { monthlyBilling } from '../../analytics/domain/monthly-cash-flow.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import type { ContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
@@ -380,17 +381,23 @@ export function createDashboardOverviewFacade(
   };
 }
 
-/** Realizado da competência — mesma fórmula de `monthly-revenue`, sem duplicação. */
-async function loadCompetenceActual(
+/** Realizado da Meta = MonthlyCashFlow.billing (caixa), company-level — sem filtro CC. */
+async function loadBillingActual(
   deps: DashboardOverviewFacadeDependencies,
   tenantId: string,
   monthKey: string | null,
 ): Promise<{ readonly monthKey: string; readonly actual: Prisma.Decimal }> {
-  const revenue = await deps.analytics.getMonthlyCompetenceRevenue({
+  const flow = await requireCashFlow(deps).getMonthlyCashFlow({
     tenantId,
     ...(monthKey === null ? {} : { monthKey }),
   });
-  return { monthKey: revenue.monthKey, actual: revenue.total };
+  const billing = monthlyBilling(flow);
+  if (billing === null) {
+    // Sem costCenterId o split company-level não deveria anular billing.
+    // Não converter null → progresso 0%: falha explícita.
+    throw new Error('Faturamento de caixa indisponível para a meta (billing null).');
+  }
+  return { monthKey: flow.monthKey, actual: billing };
 }
 
 async function loadRevenueGoal(
@@ -399,7 +406,7 @@ async function loadRevenueGoal(
   monthKey: string | null,
   historyMonths: number,
 ): Promise<DashboardRevenueGoalResponse> {
-  const selectedActual = await loadCompetenceActual(deps, tenantId, monthKey);
+  const selectedActual = await loadBillingActual(deps, tenantId, monthKey);
   const referenceMonthKey = civilMonthKey(civilTodayInSaoPaulo(new Date()));
   const historyKeys = listRevenueGoalHistoryMonthKeys(selectedActual.monthKey, historyMonths);
   const goals = await deps.revenueGoals.listByTenantMonths(tenantId, historyKeys);
@@ -407,7 +414,7 @@ async function loadRevenueGoal(
 
   const actuals = await Promise.all(
     historyKeys.map(async (key) =>
-      key === selectedActual.monthKey ? selectedActual : loadCompetenceActual(deps, tenantId, key),
+      key === selectedActual.monthKey ? selectedActual : loadBillingActual(deps, tenantId, key),
     ),
   );
 

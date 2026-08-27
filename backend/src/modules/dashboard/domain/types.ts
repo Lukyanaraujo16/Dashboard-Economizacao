@@ -235,8 +235,8 @@ export type DashboardRevenueGoalHistoryPoint = {
 };
 
 /**
- * Meta mensal de faturamento (F2). `actual` é o total por competência de
- * `monthly-revenue`; `achievementRate` já vem × 100, como as demais taxas.
+ * Meta mensal de faturamento (F2 / CASH-4B). `actual` = MonthlyCashFlow.billing
+ * (caixa, company-level); `achievementRate` já vem × 100.
  */
 export type DashboardRevenueGoalResponse = {
   readonly monthKey: string;

@@ -334,7 +334,7 @@ describe('Dashboard V2.3 fidelidade', () => {
       name: 'Dashboard financeiro',
     });
     expect(title).toBeTruthy();
-    expect(screen.getByText('Visão executiva · Competência selecionada')).toBeTruthy();
+    expect(screen.getByText('Visão executiva · Fluxo de caixa do mês')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: /(bom dia|boa tarde|boa noite)/i })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Resumo Financeiro' })).toBeNull();
   });
@@ -363,15 +363,12 @@ describe('Dashboard V2.3 fidelidade', () => {
     await renderReadyDashboard();
 
     const widgets: readonly (readonly [string, string])[] = [
-      ['receitas-mes', 'Receitas × Despesas'],
       ['despesas-mes', 'Despesas por categoria'],
       ['receitas-categoria', 'Receitas por categoria'],
       ['meta-faturamento', 'Meta de faturamento'],
       ['ate-fim-do-mes', 'Até o fim do mês'],
       ['leitura-executiva', 'Leitura executiva'],
       ['inadimplencia', 'Inadimplência'],
-      ['comparativo-mensal', 'Comparativo mensal'],
-      ['movimentacao-diaria', 'Movimentação diária da competência'],
       ['fluxo-previsto', 'Fluxo previsto'],
     ];
 
@@ -381,30 +378,13 @@ describe('Dashboard V2.3 fidelidade', () => {
       expect(within(card).getByRole('heading', { level: 3, name: title })).toBeTruthy();
     }
 
+    expect(document.querySelector('[data-financial-section="receitas-mes"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeNull();
+
     expect(screen.queryByRole('heading', { name: 'Top 5 despesas' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Composição por categoria' })).toBeNull();
     expect(document.querySelector('[data-financial-section="top-despesas"]')).toBeNull();
-  });
-
-  it('clique no card expansível abre o detalhe da competência', async () => {
-    await renderReadyDashboard();
-
-    const card = await waitFor(() => {
-      const node = widget('receitas-mes');
-      expect(node.getAttribute('role')).toBe('button');
-      return node;
-    });
-    fireEvent.click(card);
-
-    const dialog = await screen.findByRole('dialog');
-    const dialogScope = within(dialog);
-    expect(dialogScope.getByRole('heading', { name: 'Receitas × Despesas' })).toBeTruthy();
-    expect(dialogScope.getByText('Competência de ago/2026')).toBeTruthy();
-
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).toBeNull();
-    });
   });
 
   it('Despesas e Receitas por categoria são widgets independentes', async () => {
@@ -539,23 +519,18 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(putRevenueGoal).not.toHaveBeenCalled();
   });
 
-  it('os cinco KPIs executivos têm microvisualização diária', async () => {
+  it('KPIs de caixa com sparkline exibem séries de entrada e a receber', async () => {
     await renderReadyDashboard();
 
     const scope = widgetScope('resumo-financeiro');
-    for (const name of [
-      'Faturamento — série diária por competência',
-      'Valor atualmente recebido dos títulos com competência neste dia',
-      'Valor ainda em aberto dos títulos com competência neste dia',
-      'Despesas — série diária por competência',
-      'Resultado gerencial da competência no dia',
-    ]) {
-      expect(scope.getByRole('img', { name })).toBeTruthy();
-    }
-    expect(scope.queryByRole('img', { name: /recebido neste dia/i })).toBeNull();
+    expect(scope.getByRole('img', { name: 'Entradas no caixa por dia de baixa' })).toBeTruthy();
+    expect(
+      scope.getByRole('img', { name: 'A receber no prazo por dia de vencimento' }),
+    ).toBeTruthy();
+    expect(scope.queryByRole('img', { name: /série diária por competência/i })).toBeNull();
   });
 
-  it('rodapés dos KPIs abrem o total da competência sem prometer caixa', async () => {
+  it('rodapés dos KPIs refletem totais de caixa', async () => {
     await renderReadyDashboard();
 
     const billing = within(
@@ -576,12 +551,11 @@ describe('Dashboard V2.3 fidelidade', () => {
 
     const result = within(
       widgetScope('resumo-financeiro')
-        .getByRole('heading', { name: 'Resultado gerencial' })
+        .getByRole('heading', { name: 'Resultado' })
         .closest('[data-tone]') as HTMLElement,
     );
-    // 9.900,00 sobre 10.000,00 de receitas na competência.
     expect(result.getByText('Margem')).toBeTruthy();
-    expect(result.getByText('99,0%')).toBeTruthy();
+    expect(result.getByText('86,6%')).toBeTruthy();
   });
 
   it('freshness é uma pílula ao lado do seletor de competência', async () => {
@@ -591,7 +565,7 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(cluster).toBeTruthy();
     const scope = within(cluster as HTMLElement);
     expect(scope.getByLabelText('Visão mensal por competência')).toBeTruthy();
-    expect(scope.getByLabelText('Situação')).toBeTruthy();
+    expect(document.querySelector('[data-situation-selector]')).toBeNull();
     expect(scope.getByText('Última atualização')).toBeTruthy();
     expect(document.querySelector('[data-cost-center-row]')).toBeTruthy();
     expect(screen.getByLabelText('Centro de custo')).toBeTruthy();
@@ -601,39 +575,17 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(time?.getAttribute('datetime')).toBe('2026-08-10T09:00:00.000Z');
   });
 
-  it('comparativo mensal compara a competência selecionada com a anterior', async () => {
+  it('widgets CASH-4C ocultos não aparecem na grade', async () => {
     await renderReadyDashboard();
 
-    const scope = await waitFor(() => {
-      const node = widgetScope('comparativo-mensal');
-      expect(node.getByText('Faturamento')).toBeTruthy();
-      return node;
-    });
-    expect(scope.getByText('AGO × JUL')).toBeTruthy();
-    expect(scope.getByText('Despesas')).toBeTruthy();
-    expect(scope.getByText('Resultado gerencial')).toBeTruthy();
-    expect(scope.getAllByText('AGO').length).toBe(3);
-    expect(scope.getAllByText('JUL').length).toBe(3);
+    expect(document.querySelector('[data-financial-section="receitas-mes"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Comparativo mensal' })).toBeNull();
     expect(
-      scope.getByText('Comparação entre competências; a variação não representa movimento de caixa.'),
-    ).toBeTruthy();
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null, null, null);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', null, null, null);
-  });
-
-  it('movimentação diária da competência declara que não é caixa', async () => {
-    await renderReadyDashboard();
-
-    const scope = await waitFor(() => {
-      const node = widgetScope('movimentacao-diaria');
-      expect(
-        node.getByRole('img', { name: 'Receitas e despesas por dia de competência em ago/2026' }),
-      ).toBeTruthy();
-      return node;
-    });
-    expect(scope.getByText('Competência · não é caixa')).toBeTruthy();
-    expect(scope.getByText('Competência · não é caixa.')).toBeTruthy();
+      screen.queryByRole('heading', { name: 'Movimentação diária da competência' }),
+    ).toBeNull();
   });
 
   it('não há bloco de próximos vencimentos nem régua de dias', async () => {
@@ -647,7 +599,7 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(screen.queryByRole('columnheader')).toBeNull();
   });
 
-  it('mês passado esconde fluxo previsto e fim do mês, mas mantém o comparativo', async () => {
+  it('mês passado esconde fluxo previsto e fim do mês', async () => {
     dashboardSearchParams = new URLSearchParams('month=2026-07');
     renderDashboard();
 
@@ -660,8 +612,7 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(getForecast).not.toHaveBeenCalled();
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
-    expect(widget('comparativo-mensal')).toBeTruthy();
-    expect(widgetScope('comparativo-mensal').getByText('JUL × JUN')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
     expect(screen.getByRole('button', { name: 'JUL 2026' })).toBeTruthy();
   });
 });

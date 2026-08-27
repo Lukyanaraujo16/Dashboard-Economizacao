@@ -319,19 +319,36 @@ V2.3.1 — Final Home Polish (HOMOLOGADA): baseline visual/funcional **congelado
 da Home (copy comercial da Meta, ícones semânticos da Leitura, Comparativo sem
 colisão de labels + hover/tooltip). Não redesenhar a Home sem nova fase.
 
+CASH-4B (KPIs de caixa na Home): IMPLEMENTADA (local, aguarda homologação humana).
+KPIs principais = `MonthlyCashFlow` (regime de caixa):
+* Faturamento = `billing` = realized.inflows + expected.receivables;
+* Já recebido = realized.inflows; A receber = expected.receivables;
+* Despesas = realized.outflows + expected.payables (Pago / A pagar no rodapé);
+* Resultado = billing − monthlyExpenses (não `realized.result`);
+* Meta `actual` = billing (company-level); Inadimplência = D1 global
+  (`overdue.receivables` + taxa do overview);
+* Vencidos fora de Faturamento/Despesas; transferências neutras na API;
+* `costCenterCashSplit=false` → “—” (nunca R$ 0,00); erro de cash-flow
+  sem fallback silencioso para competência;
+* Filtro Situação oculto na Home (sem semântica coerente no realizado);
+* Sparklines honestas só em Já recebido / A receber; gráficos de competência
+  (Receitas×Despesas, comparativo, barras diárias) ocultos até CASH-4C.
+Competência permanece em Relatórios/PDF/XLSX e endpoints legados (CASH-6).
+
 CASH-4A (infra Home / caixa): a Home **carrega** `GET /dashboard/monthly-cash-flow`
-(`month`, `costCenter`, `category`; `situation` não filtra o realizado).
-KPIs visíveis, Meta e gráficos permanecem competência até CASH-4B.
-Faturamento futuro = `realized.inflows + expected.receivables`.
-Despesas futuras = `realized.outflows + expected.payables`.
-Resultado futuro = Faturamento − Despesas. Vencidos AR/AP fora dos totais.
-Meta futura: `actual = billing`. `costCenterCashSplit=false` → métricas null
-(“—”), nunca R$ 0,00. Números reais de caixa **não** homologar antes de CASH-7.
+(`month`, `costCenter`, `category`). Infra mantida; números oficiais = CASH-4B.
+Faturamento = `realized.inflows + expected.receivables`.
+Despesas = `realized.outflows + expected.payables`.
+Resultado = Faturamento − Despesas. Vencidos AR/AP fora dos totais.
+Meta: `actual = billing`. `costCenterCashSplit=false` → métricas null
+(“—”), nunca R$ 0,00.
 
 Grade principal (`mainGrid`):
-* Receitas × Despesas (`sectionId` `receitas-mes`);
-* Despesas por categoria (`sectionId` `despesas-mes`, `id` `despesas-categoria`);
-* Receitas por categoria (`sectionId` `receitas-categoria`, `id` `receitas-categoria`).
+* Despesas por categoria (`sectionId` `despesas-mes`, `id` `despesas-categoria`)
+  — ainda competência (CASH-4C);
+* Receitas por categoria (`sectionId` `receitas-categoria`, `id` `receitas-categoria`)
+  — ainda competência (CASH-4C).
+* Receitas × Despesas: oculto temporariamente (CASH-4C).
 
 Removidos da Home:
 * widget independente “Top 5 despesas”;

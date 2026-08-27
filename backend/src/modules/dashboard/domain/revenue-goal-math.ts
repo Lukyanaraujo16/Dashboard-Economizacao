@@ -55,9 +55,9 @@ export function revenueGoalMonthPhase(
 }
 
 /**
- * Meta × realizado da competência. `actual` nunca é persistido: vem da mesma
- * fórmula de `monthly-revenue` (competência), sem duplicar cálculo.
- * `referenceMonthKey` = competência civil corrente (America/Sao_Paulo).
+ * Meta × realizado de caixa (`MonthlyCashFlow.billing`). `actual` nunca é
+ * persistido: vem de `monthlyBilling(flow)`, sem duplicar cálculo.
+ * `referenceMonthKey` = mês civil corrente (America/Sao_Paulo).
  */
 export function calculateRevenueGoalProgress(input: {
   readonly monthKey: string;

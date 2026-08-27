@@ -16,8 +16,10 @@ import {
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
 import { shiftRevenueGoalMonthKey } from '../src/modules/dashboard/domain/revenue-goal-math.js';
 import { createRevenueGoalRepository } from '../src/modules/dashboard/repositories/revenue-goal.repository.js';
+import { mapSettlement } from '../src/modules/integrations/conta-azul/domain/conta-azul-settlement-mappers.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
+import { createContaAzulLedgerRepository } from '../src/modules/integrations/conta-azul/repositories/ledger.repository.js';
 import { createTenantRepository } from '../src/modules/tenant/repositories/tenant.repository.js';
 import { cleanTestDatabase } from './helpers/test-database.js';
 
@@ -30,6 +32,7 @@ const prisma = getPrismaClient();
 const tenants = createTenantRepository(prisma);
 const integrations = createContaAzulIntegrationRepository(prisma);
 const financial = createContaAzulFinancialRepository(prisma);
+const ledgerWrite = createContaAzulLedgerRepository(prisma);
 const users = createUserRepository(prisma);
 const credentials = createUserCredentialRepository(prisma);
 const goals = createRevenueGoalRepository(prisma);
@@ -139,6 +142,12 @@ async function seedConnected(name: string) {
   return { tenant, integration };
 }
 
+function iso(date: Date): string {
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${month}-${day}`;
+}
+
 function installment(input: {
   readonly externalId: string;
   readonly status: FinancialInstallmentStatus;
@@ -146,15 +155,16 @@ function installment(input: {
   readonly paid?: string;
   readonly unpaid?: string;
   readonly competenceDate: Date | null;
+  readonly dueDate?: Date;
 }) {
   const total = new Prisma.Decimal(input.total);
   const paid = new Prisma.Decimal(input.paid ?? '0');
   const unpaid = new Prisma.Decimal(input.unpaid ?? total.minus(paid).toString());
-  const today = civilTodayInSaoPaulo(new Date());
+  const dueDate = input.dueDate ?? civilTodayInSaoPaulo(new Date());
   return {
     externalId: input.externalId,
     description: 'descricao-secreta-nao-vazar',
-    dueDate: today,
+    dueDate,
     competenceDate: input.competenceDate,
     upstreamCreatedAt: null,
     upstreamUpdatedAt: null,
@@ -166,6 +176,53 @@ function installment(input: {
     externalPartyId: null,
     categoryExternalIds: [] as string[],
   };
+}
+
+function baixa(input: {
+  readonly id: string;
+  readonly installmentId: string;
+  readonly data: string;
+  readonly bruto: string;
+  readonly liquido: string;
+}) {
+  return mapSettlement({
+    id: input.id,
+    id_parcela: input.installmentId,
+    data_pagamento: input.data,
+    tipo_evento_financeiro: 'RECEITA',
+    valor_composicao: {
+      valor_bruto: input.bruto,
+      valor_liquido: input.liquido,
+      juros: '0',
+      multa: '0',
+      desconto: '0',
+      taxa: '0',
+    },
+  });
+}
+
+async function seedReceipt(input: {
+  readonly tenantId: string;
+  readonly integrationId: string;
+  readonly installmentExternalId: string;
+  readonly amount: string;
+  readonly occurredOn: Date;
+  readonly settlementId?: string;
+}) {
+  const scope = {
+    tenantId: input.tenantId,
+    integrationId: input.integrationId,
+    syncedAt: new Date(),
+  };
+  await ledgerWrite.upsertSettlements(scope, 'RECEIVABLE', [
+    baixa({
+      id: input.settlementId ?? `s-${input.installmentExternalId}`,
+      installmentId: input.installmentExternalId,
+      data: iso(input.occurredOn),
+      bruto: input.amount,
+      liquido: input.amount,
+    }),
+  ]);
 }
 
 const today = () => civilTodayInSaoPaulo(new Date());
@@ -190,7 +247,7 @@ describe('GET /dashboard/revenue-goal', () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it('sem meta cadastrada retorna NO_TARGET com realizado da competência', async () => {
+  it('sem meta cadastrada retorna NO_TARGET com realizado de caixa (billing)', async () => {
     const { from, monthKey } = currentBounds();
     const seeded = await seedConnected('goal-no-target');
     await financial.upsertReceivables(
@@ -206,6 +263,13 @@ describe('GET /dashboard/revenue-goal', () => {
         }),
       ],
     );
+    await seedReceipt({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      installmentExternalId: 'r1',
+      amount: '1500',
+      occurredOn: from,
+    });
     await createUser({ email: 'user@goal.test', role: 'USER', tenantId: seeded.tenant.id });
     const app = await buildTestApp();
     const cookie = await loginAs(app, 'user@goal.test');
@@ -267,7 +331,7 @@ describe('GET /dashboard/revenue-goal', () => {
     expect(invalid.statusCode).toBe(400);
   });
 
-  it('histórico traz metas das competências anteriores', async () => {
+  it('histórico traz metas anteriores com actual de caixa', async () => {
     const { from, monthKey } = currentBounds();
     const previousKey = shiftRevenueGoalMonthKey(monthKey, -1);
     const previousDate = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() - 1, 10));
@@ -293,6 +357,21 @@ describe('GET /dashboard/revenue-goal', () => {
         }),
       ],
     );
+    await seedReceipt({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      installmentExternalId: 'curr',
+      amount: '400',
+      occurredOn: from,
+    });
+    await seedReceipt({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      installmentExternalId: 'prev',
+      amount: '250',
+      occurredOn: previousDate,
+      settlementId: 's-prev',
+    });
     await goals.upsert(seeded.tenant.id, previousKey, new Prisma.Decimal('200'));
     await createUser({ email: 'hist@goal.test', role: 'USER', tenantId: seeded.tenant.id });
     const app = await buildTestApp();
@@ -337,6 +416,13 @@ describe('GET /dashboard/revenue-goal', () => {
         }),
       ],
     );
+    await seedReceipt({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      installmentExternalId: 'past-miss',
+      amount: '76',
+      occurredOn: previousDate,
+    });
     await goals.upsert(seeded.tenant.id, previousKey, new Prisma.Decimal('100'));
     await createUser({ email: 'past-miss@goal.test', role: 'USER', tenantId: seeded.tenant.id });
     const app = await buildTestApp();
@@ -370,6 +456,7 @@ describe('GET /dashboard/revenue-goal', () => {
           paid: '0',
           unpaid: '200',
           competenceDate: futureDate,
+          dueDate: futureDate,
         }),
       ],
     );
@@ -394,7 +481,7 @@ describe('GET /dashboard/revenue-goal', () => {
 });
 
 describe('PUT /dashboard/revenue-goal', () => {
-  it('cria e depois atualiza a meta da competência', async () => {
+  it('cria e depois atualiza a meta com actual de caixa (billing)', async () => {
     const { from, monthKey } = currentBounds();
     const seeded = await seedConnected('goal-write');
     await financial.upsertReceivables(
@@ -410,6 +497,13 @@ describe('PUT /dashboard/revenue-goal', () => {
         }),
       ],
     );
+    await seedReceipt({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      installmentExternalId: 'w1',
+      amount: '76000',
+      occurredOn: from,
+    });
     await createUser({ email: 'write@goal.test', role: 'USER', tenantId: seeded.tenant.id });
     const app = await buildTestApp();
     const cookie = await loginAs(app, 'write@goal.test');
@@ -527,6 +621,13 @@ describe('PUT /dashboard/revenue-goal', () => {
         }),
       ],
     );
+    await seedReceipt({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      installmentExternalId: 's1',
+      amount: '300',
+      occurredOn: from,
+    });
     await createUser({ email: 'super@goal.test', role: 'SUPER_ADMIN' });
     const app = await buildTestApp();
     const cookie = await loginAs(app, 'super@goal.test');

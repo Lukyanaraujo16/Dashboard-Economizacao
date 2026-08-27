@@ -1,8 +1,7 @@
 /**
- * Contrato de Meta de Faturamento (F2 / F2.0.1).
+ * Contrato de Meta de Faturamento (F2 / CASH-4B).
  *
- * `actual` é o total por competência do mesmo cálculo de
- * `GET /dashboard/monthly-revenue` — o backend é a única fonte da composição.
+ * `actual` = MonthlyCashFlow.billing (caixa, company-level).
  * `achievementRate` já vem × 100, como as demais taxas da Dashboard.
  *
  * Status temporal (F2.0.1):

@@ -383,7 +383,7 @@ describe('CC1.3.1 soft filter refresh', () => {
     expect(document.querySelector('[data-overview-state="loading"]')).toBeNull();
   });
 
-  it('troca de situação e categoria atualiza URL sem reload e propaga aos fetches', async () => {
+  it('troca de categoria atualiza URL sem reload e propaga aos fetches', async () => {
     const categoryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     getCategories.mockResolvedValue({
       items: [{ id: categoryId, name: 'Serviços', type: 'REVENUE' }],
@@ -392,23 +392,19 @@ describe('CC1.3.1 soft filter refresh', () => {
     await waitFor(() => {
       expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
     });
-
-    fireEvent.change(screen.getByLabelText('Situação'), { target: { value: 'overdue' } });
-    await waitFor(() => {
-      expect(paramsStore.get('situation')).toBe('overdue');
-    });
+    expect(document.querySelector('[data-situation-selector]')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /Categoria:/ }));
     fireEvent.click(screen.getByRole('option', { name: 'Serviços' }));
     await waitFor(() => {
       expect(paramsStore.get('category')).toBe(categoryId);
-      expect(paramsStore.get('situation')).toBe('overdue');
     });
 
     await waitFor(() => {
-      expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, 'overdue', categoryId);
-      expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null, 'overdue', categoryId);
-      expect(getInsights).toHaveBeenCalledWith(null, null, 'overdue', categoryId);
+      expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, categoryId);
+      expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null, null, categoryId);
+      expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, categoryId);
+      expect(getInsights).toHaveBeenCalledWith(null, null, null, categoryId);
       expect(getForecast).toHaveBeenCalledWith(null, categoryId);
       expect(getMonthEnd).toHaveBeenCalledWith(null, categoryId);
     });

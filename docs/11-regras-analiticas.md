@@ -29,8 +29,8 @@ Fase 11 Home: CONCLUÍDA no recorte mensal.
 F12-A (24/08/2026): CONTRATO CONGELADO. Paridade com monthly-revenue /
 monthly-expenses. Taxa de inadimplência de estoque (D2) não varia com
 De/Até. Ledger CASH-2 persistido no HEAD (`financial_transactions`).
-KPI de caixa / Home: CASH-4A carrega MonthlyCashFlow; cards visíveis ainda
-competência até CASH-4B. CASH-3A: domínio `MonthlyCashFlow`. CASH-3B:
+KPI de caixa / Home: CASH-4B — cards principais = MonthlyCashFlow (caixa).
+CASH-4A = infra fetch/view-model. CASH-3A: domínio `MonthlyCashFlow`. CASH-3B:
 `GET /dashboard/monthly-cash-flow`. CASH-7: backfill LOCAL do ledger
 (Clínica Life) executado; produção NÃO. CASH-8A: R3/R4 no código;
 flag default false; CASH-8B não aplicado.
@@ -38,7 +38,7 @@ Semântica: `netAmount` / `occurredOn`.
 Faturamento oficial (Felipe, 26/08/2026): `realized.inflows + expected.receivables`.
 Despesas oficiais (Felipe, simétrico): `realized.outflows + expected.payables`.
 Resultado da Home: `billing − monthlyExpenses`. Vencidos AR/AP fora dos totais.
-Meta futura (opção A): `actual = billing`. UI da Meta ainda competência (CASH-4B).
+Meta (opção A): `actual = billing` (CASH-4B).
 Pagamento tardio no mês da baixa. Competência não define Faturamento/Despesas.
 F12-B (24/08/2026): IMPLEMENTADA / HOMOLOGADA TECNICAMENTE — Relatório de
 Receita reutiliza o motor mensal (D1/D8/D9/CC1). F12-C (25/08/2026):
@@ -393,8 +393,8 @@ A Home apresenta despesa mensal por competência (`GET /dashboard/monthly-expens
 AP com competenceDate no mês civil selecionado, incluindo PAID; D8 sobre o
 total do mês. `paid` HTTP = Σ paid do snapshot, não caixa do mês.
 Título: “Despesas por categoria”. Não é estoque até 2028.
-CASH-4B (ainda não iniciado): Despesas da Home =
-`realized.outflows + expected.payables` (vencido AP fora). CASH-4A só infra.
+CASH-4B (IMPLEMENTADA local): Despesas da Home =
+`realized.outflows + expected.payables` (vencido AP fora). CASH-4C = gráficos.
 
 A Home apresenta receita mensal por competência (`GET /dashboard/monthly-revenue`):
 AR com competenceDate no mês civil corrente, incluindo PAID; D8 sobre o
@@ -447,8 +447,8 @@ Se a baixa ocorrer ainda no mês do vencimento: volta ao Faturamento via realiza
 (sem duplicar título: expected/overdue usam unpaid atual; realizado usa ledger).
 Helper de domínio: `monthlyBilling(flow)` — composição das peças; não é motor paralelo.
 HTTP CASH-3B: `GET /dashboard/monthly-cash-flow` serializa `billing` a partir do helper.
-CASH-4A: Home carrega o DTO e o view-model (`toMonthlyCashFlowView`); cards ainda F1-G.
-Home visual permanece F1-G (competência / monthly-revenue) até CASH-4B.
+CASH-4A: Home carrega o DTO e o view-model (`toMonthlyCashFlowView`).
+CASH-4B: Home visual = caixa / MonthlyCashFlow (F1-G SUPERSEDED nos KPIs).
 
 Despesas oficiais (Felipe, simétrico ao Faturamento):
 
@@ -479,11 +479,11 @@ Não usar competência / monthly-revenue.total / somente realized.inflows.
 Vencidos são estoque separado (D1). PROIBIDO somar billing + overdue.receivables
 ou monthlyExpenses + overdue.payables.
 
-Meta permanece na UI atual (`loadCompetenceActual`) até CASH-4B — não ligar agora.
+Meta usa `loadBillingActual` / `monthlyBilling` (CASH-4B).
 
 Faturamento fiscal (NF-e/NFS-e): capacidade futura separada — NÃO IMPLEMENTADO.
 
-Home atual (F1-G, até CASH-4B) — NÃO é a fórmula oficial de produto:
+Home legado F1-G — SUPERSEDED nos KPIs (CASH-4B). Endpoints competência para CASH-6:
 
   Faturamento Gerencial mensal (legado da Home) =
     Σ total dos AR com competenceDate no mês civil selecionado
@@ -620,7 +620,7 @@ utilizável (Grupo A):
 * janela N de "próximos vencimentos" além da regra dueDate >= hoje
   (detalhe de apresentação; horizonte de 90 dias já define o fluxo);
 * Faturamento (§12) — fórmula oficial homologada (caixa: inflows + previsto no prazo).
-  Home visual ainda F1-G competência até CASH-4B. CASH-4A = infra. Meta futura = billing;
+  Home KPIs = caixa (CASH-4B). CASH-4A = infra. Meta = billing; CASH-4C = gráficos;
   UI da Meta ainda competência. Fiscal futuro separado;
 * ledger / data efetiva de baixa (§8) — `paid` acumulado ≠ ledger;
 * saldo de conta (§13);
@@ -642,8 +642,8 @@ A — Faturamento:
 * Faturamento oficial (§12) — HOMOLOGADO Felipe (CASH-3A): inflows + expected.receivables
 * Despesas oficiais — HOMOLOGADO Felipe: outflows + expected.payables; vencido AP fora
 * Resultado da Home — billing − monthlyExpenses (`realized.result` não substitui)
-* Home F1-G competência — SUPERSEDED como fórmula de produto; permanece na UI até CASH-4B
-* Meta — decisão A: futuro actual = billing; UI ainda competência (CASH-4B)
+* Home KPIs = caixa (CASH-4B); F1-G SUPERSEDED na UI dos cards
+* Meta — decisão A: actual = billing (CASH-4B)
 * Faturamento fiscal (NF-e/NFS-e) — futuro separado (F0 preservado)
 
 B — Extensão analítica com dados parcialmente disponíveis:
@@ -764,7 +764,7 @@ oferecem essa taxa como métrica do intervalo De/Até.
 Ledger (`financial_transactions`): CASH-2 persiste baixas; CASH-3A calcula
 `MonthlyCashFlow` no domínio. CASH-3B expõe `GET /dashboard/monthly-cash-flow`
 (`billing` = `monthlyBilling`; vencido fora). CASH-4A: Home carrega o DTO
-(view-model); cards e F12 V1 continuam competência até CASH-4B/CASH-6.
+(view-model); F12 V1 / PDF / XLSX continuam competência até CASH-6. Home KPIs = CASH-4B.
 Meta futura = billing; UI da Meta ainda competência.
 CASH-7 (26/08/2026): bootstrap local idempotente por tenant; cobertura
 segura = Σ gross ACTIVE = `paid` (DELETED não entra na soma nem bloqueia skip).
@@ -773,7 +773,7 @@ R4 `/baixa = []` ou parcela 404 = HOLD; não tombstona. Sem delete físico.
 Reativação: upsert força ACTIVE. CASH-8B pendente. Produção ainda não executada.
 CASH-9C: transferências internas fora de faturamento/despesas/resultado.
 Ghost ACTIVE pode ser excluído do analytics sem virar DELETED.
-CASH-4B continua bloqueado até homologação.
+CASH-4B IMPLEMENTADA localmente (homologação humana pendente). CASH-4C pendente.
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
 BACKFILL DE PRODUÇÃO + CASH-8B. Sem as-of.
 

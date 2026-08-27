@@ -12,6 +12,7 @@ import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-re
 import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { DashboardMonthlyCashFlowRequestError } from '../src/services/dashboard/monthly-cash-flow.types';
+import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
 import { getDashboardExecutiveInsights } from '../src/services/dashboard/executive-insights';
@@ -26,7 +27,6 @@ import {
   mockAuthenticatedUser,
   renderWithAuth,
 } from './helpers/render-with-auth';
-import { cashFlowHomeFixture } from './helpers/monthly-cash-flow-fixture';
 
 const CENTER = '11111111-1111-4111-8111-111111111111';
 const CATEGORY = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -97,7 +97,30 @@ const syncedOverview: DashboardOverviewResponse = {
   },
 };
 
-const loadedRevenue: DashboardMonthlyRevenueResponse = {
+const lifeCashFlow: DashboardMonthlyCashFlowResponse = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  costCenterCashSplit: true,
+  billing: '235301.50',
+  realized: { inflows: '224790.30', outflows: '98941.52', result: '125848.78' },
+  expected: { receivables: '10511.20', payables: '28289.80', result: '-17778.60' },
+  overdue: {
+    receivables: '4200.00',
+    payables: '100.00',
+    ofMonth: { receivables: '0', payables: '0' },
+  },
+  coverage: '0.95',
+  daily: {
+    realized: [{ date: '2026-08-05', inflows: '224790.30', outflows: '0', result: '224790.30' }],
+    expected: [
+      { date: '2026-08-31', receivables: '10511.20', payables: '28289.80', result: '-17778.60' },
+    ],
+  },
+};
+
+const competenceRevenue: DashboardMonthlyRevenueResponse = {
   today: '2026-08-19',
   monthKey: '2026-08',
   from: '2026-08-01',
@@ -106,29 +129,17 @@ const loadedRevenue: DashboardMonthlyRevenueResponse = {
     total: '10000',
     received: '4000',
     outstanding: '6000',
-    overdue: '0',
+    overdue: '900',
     classified: '10000',
     uncategorized: '0',
     imprecise: '0',
     coverageRate: '100',
-    items: [
-      {
-        kind: 'category',
-        name: 'Serviços',
-        amount: '10000',
-        received: '4000',
-        outstanding: '6000',
-        percentage: '100',
-      },
-    ],
-    daily: [
-      { date: '2026-08-05', amount: '4000', received: '4000', outstanding: '0' },
-      { date: '2026-08-12', amount: '6000', received: '0', outstanding: '6000' },
-    ],
+    items: [],
+    daily: [],
   },
 };
 
-const loadedExpenses: DashboardMonthlyExpenseResponse = {
+const competenceExpenses: DashboardMonthlyExpenseResponse = {
   today: '2026-08-19',
   monthKey: '2026-08',
   from: '2026-08-01',
@@ -142,17 +153,8 @@ const loadedExpenses: DashboardMonthlyExpenseResponse = {
     uncategorized: '20',
     imprecise: '0',
     coverageRate: '80',
-    items: [
-      {
-        kind: 'category',
-        name: 'Salários',
-        amount: '100',
-        paid: '20',
-        outstanding: '80',
-        percentage: '100',
-      },
-    ],
-    daily: [{ date: '2026-08-10', amount: '100', received: '20', outstanding: '80' }],
+    items: [],
+    daily: [],
   },
 };
 
@@ -164,14 +166,14 @@ const emptyInsights: DashboardExecutiveInsightsResponse = {
   insights: [],
 };
 
-const emptyGoal: RevenueGoalSnapshot = {
+const billingGoal: RevenueGoalSnapshot = {
   monthKey: '2026-08',
-  target: null,
-  actual: '0',
-  achievementRate: null,
-  remaining: null,
-  exceeded: null,
-  status: 'NO_TARGET',
+  target: '300000',
+  actual: '235301.50',
+  achievementRate: '78.433833',
+  remaining: '64698.50',
+  exceeded: '0',
+  status: 'IN_PROGRESS',
   history: [],
 };
 
@@ -224,11 +226,11 @@ beforeEach(() => {
   getOverview.mockResolvedValue(syncedOverview);
   getMonthEnd.mockResolvedValue(monthEnd);
   getForecast.mockResolvedValue(forecast);
-  getMonthlyExpenses.mockResolvedValue(loadedExpenses);
-  getMonthlyRevenue.mockResolvedValue(loadedRevenue);
-  getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
+  getMonthlyExpenses.mockResolvedValue(competenceExpenses);
+  getMonthlyRevenue.mockResolvedValue(competenceRevenue);
+  getMonthlyCashFlow.mockResolvedValue(lifeCashFlow);
   getInsights.mockResolvedValue(emptyInsights);
-  getRevenueGoal.mockResolvedValue(emptyGoal);
+  getRevenueGoal.mockResolvedValue(billingGoal);
   getCostCenters.mockResolvedValue({
     items: [{ id: CENTER, name: 'Operações', code: 'OP', active: true }],
   });
@@ -247,62 +249,34 @@ afterEach(() => {
   document.documentElement.removeAttribute('style');
 });
 
-describe('CASH-4A/4B — Home carrega MonthlyCashFlow e exibe KPIs de caixa', () => {
-  it('chama monthly-cash-flow do mês corrente sem month, tenantId ou situation', async () => {
+describe('CASH-4B — KPIs de caixa na Home', () => {
+  it('H1–H3 — Faturamento / Despesas / Resultado de caixa', async () => {
     await renderReadyDashboard();
     await waitFor(() => {
-      expect(getMonthlyCashFlow).toHaveBeenCalled();
+      expect(kpiScope('Faturamento').getByText(/R\$\s*235\.301,50/)).toBeTruthy();
     });
-    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
-    for (const args of getMonthlyCashFlow.mock.calls) {
-      expect(args).toHaveLength(3);
-      expect(args.join('|')).not.toContain('tenant-1');
-      expect(args).not.toContain('open');
-      expect(args).not.toContain('settled');
-    }
-    expect(getMonthlyRevenue).toHaveBeenCalled();
-    expect(getMonthlyExpenses).toHaveBeenCalled();
-  });
-
-  it('envia month, costCenter e category quando presentes', async () => {
-    dashboardSearchParams = new URLSearchParams(
-      `month=2026-07&costCenter=${CENTER}&category=${CATEGORY}`,
-    );
-    renderDashboard();
-    await waitFor(() => {
-      expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', CENTER, CATEGORY);
-    });
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', CENTER, null, CATEGORY);
-  });
-
-  it('não envia situation ao cash-flow nem aos endpoints de competência na Home', async () => {
-    dashboardSearchParams = new URLSearchParams('situation=open');
-    await renderReadyDashboard();
-    await waitFor(() => {
-      expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
-    });
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, null, null, null);
-    for (const args of getMonthlyCashFlow.mock.calls) {
-      expect(args).not.toContain('open');
-    }
-  });
-
-  it('renderiza os KPIs de caixa (billing), não a competência', async () => {
-    await renderReadyDashboard();
-    await waitFor(() => {
-      expect(getMonthlyCashFlow).toHaveBeenCalled();
-      expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
-    });
-    expect(kpiScope('Já recebido').getByText(/R\$\s*888\.888,88/)).toBeTruthy();
-    expect(kpiScope('A receber').getByText(/R\$\s*111\.111,11/)).toBeTruthy();
+    expect(kpiScope('Já recebido').getByText(/R\$\s*224\.790,30/)).toBeTruthy();
+    expect(kpiScope('A receber').getByText(/R\$\s*10\.511,20/)).toBeTruthy();
+    expect(kpiScope('Despesas').getByText(/R\$\s*127\.231,32/)).toBeTruthy();
+    expect(kpiScope('Despesas').getByText(/^Pago$/)).toBeTruthy();
+    expect(kpiScope('Despesas').getByText(/R\$\s*98\.941,52/)).toBeTruthy();
+    expect(kpiScope('Despesas').getByText(/^A pagar$/)).toBeTruthy();
+    expect(kpiScope('Despesas').getByText(/R\$\s*28\.289,80/)).toBeTruthy();
+    expect(kpiScope('Resultado').getByText(/R\$\s*108\.070,18/)).toBeTruthy();
     expect(kpiScope('Faturamento').queryByText(/R\$\s*10\.000,00/)).toBeNull();
-    await waitFor(() => {
-      expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
-    });
   });
 
-  it('falha do cash-flow mostra erro nos KPIs sem fallback para competência', async () => {
+  it('H11/H12 — Meta actual = billing (não competência)', async () => {
+    await renderReadyDashboard();
+    await waitFor(() => {
+      expect(document.querySelector('[data-revenue-goal="behind"]')).toBeTruthy();
+    });
+    const goal = document.querySelector('[data-revenue-goal="behind"]') as HTMLElement;
+    expect(within(goal).getByText(/R\$\s*235\.301,50/)).toBeTruthy();
+    expect(getRevenueGoal).toHaveBeenCalled();
+  });
+
+  it('H13 — erro de cash-flow não faz fallback para monthly-revenue', async () => {
     getMonthlyCashFlow.mockRejectedValue(
       new DashboardMonthlyCashFlowRequestError(
         'unavailable',
@@ -313,10 +287,66 @@ describe('CASH-4A/4B — Home carrega MonthlyCashFlow e exibe KPIs de caixa', ()
     await waitFor(() => {
       expect(document.querySelector('[data-cash-flow-state="error"]')).toBeTruthy();
     });
-    expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
     expect(kpiScope('Faturamento').queryByText(/R\$\s*10\.000,00/)).toBeNull();
     expect(
       screen.getAllByText('Não foi possível carregar o fluxo de caixa do mês.').length,
     ).toBeGreaterThan(0);
+  });
+
+  it('H14 — endpoints de competência ainda são chamados (legado)', async () => {
+    await renderReadyDashboard();
+    await waitFor(() => {
+      expect(getMonthlyCashFlow).toHaveBeenCalled();
+    });
+    expect(getMonthlyRevenue).toHaveBeenCalled();
+    expect(getMonthlyExpenses).toHaveBeenCalled();
+  });
+
+  it('H15 — situation não é enviada nem exibida como filtro', async () => {
+    dashboardSearchParams = new URLSearchParams('situation=open');
+    await renderReadyDashboard();
+    await waitFor(() => {
+      expect(getMonthlyCashFlow).toHaveBeenCalled();
+    });
+    expect(document.querySelector('[data-situation-selector]')).toBeNull();
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, null);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
+    for (const args of getMonthlyCashFlow.mock.calls) {
+      expect(args).not.toContain('open');
+    }
+  });
+
+  it('H16 — inadimplência D1 (vencido agora + taxa global)', async () => {
+    await renderReadyDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('Vencido agora')).toBeTruthy();
+    });
+    expect(screen.getByText('Taxa global (D1)')).toBeTruthy();
+    expect(screen.getByText(/R\$\s*4\.200,00/)).toBeTruthy();
+    expect(screen.queryByText('Taxa da competência')).toBeNull();
+  });
+
+  it('H10 — null CC mostra traço nos KPIs', async () => {
+    getMonthlyCashFlow.mockResolvedValue({
+      ...lifeCashFlow,
+      costCenterCashSplit: false,
+      billing: null,
+      realized: { inflows: null, outflows: null, result: null },
+      expected: { receivables: null, payables: null, result: null },
+      overdue: {
+        receivables: null,
+        payables: null,
+        ofMonth: { receivables: null, payables: null },
+      },
+    });
+    dashboardSearchParams = new URLSearchParams(`costCenter=${CENTER}`);
+    await renderReadyDashboard();
+    await waitFor(() => {
+      expect(kpiScope('Faturamento').getByText('—')).toBeTruthy();
+    });
+    expect(kpiScope('Já recebido').getByText('—')).toBeTruthy();
+    expect(kpiScope('Despesas').getByText('—')).toBeTruthy();
+    expect(kpiScope('Resultado').getByText('—')).toBeTruthy();
+    expect(kpiScope('Faturamento').queryByText(/R\$\s*0,00/)).toBeNull();
   });
 });

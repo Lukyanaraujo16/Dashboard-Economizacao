@@ -29,6 +29,7 @@ import {
   type DashboardMonthlyRevenueResponse,
 } from '../src/services/dashboard/monthly-revenue.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
+import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import {
   DashboardMonthlyExpenseRequestError,
@@ -261,6 +262,25 @@ const emptyInsights: DashboardExecutiveInsightsResponse = {
   insights: [],
 };
 
+/** Caixa zerado — KPIs CASH-4B ficam empty com copy de regime de caixa. */
+const emptyCashFlow: DashboardMonthlyCashFlowResponse = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  costCenterCashSplit: true,
+  billing: '0',
+  realized: { inflows: '0', outflows: '0', result: '0' },
+  expected: { receivables: '0', payables: '0', result: '0' },
+  overdue: {
+    receivables: '0',
+    payables: '0',
+    ofMonth: { receivables: '0', payables: '0' },
+  },
+  coverage: '0',
+  daily: { realized: [], expected: [] },
+};
+
 const syncedOverview: DashboardOverviewResponse = {
   today: '2026-08-19',
   receivables: { open: '8.5', overdue: '3', upcoming: '5.5' },
@@ -373,33 +393,37 @@ describe('Dashboard V2 structure', () => {
     ).toBeTruthy();
     await waitFor(() => {
       expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
+      expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
     });
-    expect((await screen.findAllByText(/Sem saldo na competência/)).length).toBeGreaterThan(0);
+    expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
 
     for (const title of [
       'Faturamento',
       'Já recebido',
       'A receber',
       'Despesas',
-      'Resultado gerencial',
+      'Resultado',
     ]) {
       expect(kpiCard(title)).toBeTruthy();
     }
 
     for (const title of [
-      'Receitas × Despesas',
       'Despesas por categoria',
       'Receitas por categoria',
       'Meta de faturamento',
       'Até o fim do mês',
       'Leitura executiva',
       'Inadimplência',
-      'Comparativo mensal',
-      'Movimentação diária da competência',
       'Fluxo previsto',
     ]) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy();
     }
+
+    expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Comparativo mensal' })).toBeNull();
+    expect(
+      screen.queryByRole('heading', { name: 'Movimentação diária da competência' }),
+    ).toBeNull();
 
     expect(screen.queryByRole('heading', { name: 'Top 5 despesas' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Composição por categoria' })).toBeNull();
@@ -410,6 +434,7 @@ describe('Dashboard V2 structure', () => {
 
     expect(screen.getByText('Última atualização')).toBeTruthy();
     expect(document.querySelector('[data-cost-center-selector="true"]')).toBeTruthy();
+    expect(document.querySelector('[data-situation-selector]')).toBeNull();
     expect(screen.getByRole('tablist', { name: 'Centros de custo' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Todos' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Próximos vencimentos' })).toBeNull();
@@ -431,6 +456,7 @@ describe('Dashboard V2 structure', () => {
     // Comparativo mensal também busca a competência anterior.
     expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', null, null, null);
     expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', null, null, null);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
   });
 
   it('exibe nota de meta consolidada quando centro de custo está selecionado', async () => {
@@ -464,7 +490,7 @@ describe('Dashboard V2 structure', () => {
     expect(getRevenueGoal).toHaveBeenCalledWith(null);
   });
 
-  it('propaga situation e category aos widgets mensais e preserva meta consolidada', async () => {
+  it('propaga category aos widgets mensais e preserva meta consolidada', async () => {
     const categoryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     const centerId = '11111111-1111-4111-8111-111111111111';
     dashboardSearchParams = new URLSearchParams(
@@ -488,14 +514,15 @@ describe('Dashboard V2 structure', () => {
     await waitFor(() => {
       expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
     });
-    expect((screen.getByLabelText('Situação') as HTMLSelectElement).value).toBe('settled');
+    expect(document.querySelector('[data-situation-selector]')).toBeNull();
     expect(screen.getByRole('button', { name: /Categoria: Serviços/ })).toBeTruthy();
     expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, centerId, 'settled', categoryId);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', centerId, 'settled', categoryId);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, centerId, 'settled', categoryId);
-    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', centerId, 'settled', categoryId);
-    expect(getInsights).toHaveBeenCalledWith(null, centerId, 'settled', categoryId);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, centerId, null, categoryId);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith('2026-07', centerId, null, categoryId);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith(null, centerId, null, categoryId);
+    expect(getMonthlyExpenses).toHaveBeenCalledWith('2026-07', centerId, null, categoryId);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, centerId, categoryId);
+    expect(getInsights).toHaveBeenCalledWith(null, centerId, null, categoryId);
     expect(getForecast).toHaveBeenCalledWith(centerId, categoryId);
     expect(getMonthEnd).toHaveBeenCalledWith(centerId, categoryId);
     expect(getOverview).toHaveBeenCalledWith(centerId);
@@ -504,9 +531,13 @@ describe('Dashboard V2 structure', () => {
     expect(getMonthEnd.mock.calls.every((call) => call.length === 2)).toBe(true);
   });
 
-  it('nota de meta consolidada também aparece só com situação ou categoria', async () => {
-    dashboardSearchParams = new URLSearchParams('situation=open');
+  it('nota de meta consolidada aparece com categoria selecionada', async () => {
+    const categoryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    dashboardSearchParams = new URLSearchParams(`category=${categoryId}`);
     getOverview.mockResolvedValue(syncedOverview);
+    getCategories.mockResolvedValue({
+      items: [{ id: categoryId, name: 'Serviços', type: 'REVENUE' }],
+    });
     getRevenueGoal.mockResolvedValue({
       ...emptyRevenueGoal,
       target: '10000',
@@ -519,23 +550,23 @@ describe('Dashboard V2 structure', () => {
     renderDashboard();
     expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
     expect(getRevenueGoal).toHaveBeenCalledWith(null);
-    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, 'open', null);
+    expect(getMonthlyRevenue).toHaveBeenCalledWith(null, null, null, categoryId);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, categoryId);
   });
 
-  it('sem competência os KPIs ficam vazios com copy honesta', async () => {
+  it('sem caixa no mês os KPIs ficam vazios com copy honesta', async () => {
     getOverview.mockResolvedValue(syncedOverview);
+    getMonthlyCashFlow.mockResolvedValue(emptyCashFlow);
     renderDashboard();
 
     await waitFor(() => {
       expect(kpiCard('Faturamento').dataset.state).toBe('empty');
     });
-    expect(kpiScope('Faturamento').getByText('Sem receitas na competência')).toBeTruthy();
-    expect(kpiScope('A receber').getByText('Sem saldo na competência')).toBeTruthy();
-    expect(kpiScope('Despesas').getByText('Sem despesas na competência')).toBeTruthy();
-    expect(
-      kpiScope('Resultado gerencial').getByText('Sem receitas ou despesas na competência'),
-    ).toBeTruthy();
-    expect(sectionScope('inadimplencia').getByText('Sem títulos na competência')).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText('Sem faturamento de caixa no mês')).toBeTruthy();
+    expect(kpiScope('A receber').getByText('Sem valores a receber no prazo')).toBeTruthy();
+    expect(kpiScope('Despesas').getByText('Sem despesas de caixa no mês')).toBeTruthy();
+    expect(kpiScope('Resultado').getByText('Sem resultado de caixa no mês')).toBeTruthy();
+    expect(sectionScope('inadimplencia').getByText('Taxa global (D1)')).toBeTruthy();
 
     expect(
       (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
@@ -543,9 +574,7 @@ describe('Dashboard V2 structure', () => {
     expect(
       await screen.findByText('Sem dados de competência para leitura neste mês.'),
     ).toBeTruthy();
-    expect(
-      sectionScope('receitas-mes').getByText(/Sem receitas ou despesas na competência de ago\/2026/),
-    ).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="receitas-mes"]')).toBeNull();
     expect(
       sectionScope('fluxo-previsto').getByText('Sem lançamentos previstos no horizonte.'),
     ).toBeTruthy();
@@ -580,27 +609,9 @@ describe('Dashboard V2 structure', () => {
   });
 
   it('rate zero exato aparece como 0%', async () => {
-    getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyRevenue.mockResolvedValue({
-      ...loadedMonthlyRevenue,
-      receivables: {
-        ...loadedMonthlyRevenue.receivables,
-        total: '10',
-        received: '0',
-        outstanding: '10',
-        overdue: '0',
-        classified: '10',
-        items: [
-          {
-            kind: 'category',
-            name: 'Serviços',
-            amount: '10',
-            received: '0',
-            outstanding: '10',
-            percentage: '100',
-          },
-        ],
-      },
+    getOverview.mockResolvedValue({
+      ...syncedOverview,
+      delinquency: { overdueUnpaid: '0', openUnpaid: '10', rate: '0' },
     });
     renderDashboard();
 
@@ -791,7 +802,8 @@ describe('Dashboard V2 structure', () => {
     expect(getForecast).not.toHaveBeenCalled();
     expect(getInsights).toHaveBeenCalledWith('2026-07', null, null, null);
     expect(screen.getByRole('heading', { name: 'Leitura executiva' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Receitas × Despesas' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
   });
 
   it('fluxo previsto usa o líquido do backend e resume os picos do horizonte', async () => {
@@ -823,34 +835,23 @@ describe('Dashboard V2 structure', () => {
     expect(screen.queryByText(/saldo projetado/i)).toBeNull();
   });
 
-  it('Receitas × Despesas usa a série diária de competência de ambos os lados', async () => {
+  it('KPIs de caixa usam MonthlyCashFlow e não totais de competência', async () => {
     getOverview.mockResolvedValue(syncedOverview);
     getMonthlyRevenue.mockResolvedValue(loadedMonthlyRevenue);
     getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
     renderDashboard();
 
-    const scope = await waitFor(() => {
-      const node = sectionScope('receitas-mes');
-      expect(
-        node.getByRole('img', {
-          name: 'Receitas e despesas acumuladas por competência em ago/2026',
-        }),
-      ).toBeTruthy();
-      return node;
+    await waitFor(() => {
+      expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
     });
-    expect(scope.getAllByText('Receitas').length).toBeGreaterThan(0);
-    expect(scope.getAllByText('Despesas').length).toBeGreaterThan(0);
-    expect(
-      scope.getByText('Acumulado por competência no mês selecionado. Não representa saldo bancário.'),
-    ).toBeTruthy();
-    expect(kpiScope('Faturamento').getByText(/R\$\s*10.000,00/)).toBeTruthy();
-    expect(kpiScope('Já recebido').getByText(/R\$\s*4.000,00/)).toBeTruthy();
-    expect(kpiScope('Já recebido').getByText('40,0% do total da competência')).toBeTruthy();
-    expect(kpiScope('Resultado gerencial').getByText(/R\$\s*9.900,00/)).toBeTruthy();
-    expect(section('receitas-mes').textContent?.toLowerCase()).not.toMatch(/recebido no mês/);
+    expect(kpiScope('Já recebido').getByText(/R\$\s*888\.888,88/)).toBeTruthy();
+    expect(kpiScope('Já recebido').getByText('88,8% do faturamento')).toBeTruthy();
+    expect(kpiScope('Resultado').getByText(/R\$\s*866\.666,66/)).toBeTruthy();
+    expect(kpiScope('Faturamento').queryByText(/R\$\s*10\.000,00/)).toBeNull();
+    expect(document.querySelector('[data-financial-section="receitas-mes"]')).toBeNull();
   });
 
-  it('erro das receitas do mês não derruba as despesas nem o fluxo previsto', async () => {
+  it('erro das receitas do mês não derruba KPIs de caixa nem o fluxo previsto', async () => {
     getOverview.mockResolvedValue(syncedOverview);
     getMonthlyRevenue.mockRejectedValue(
       new DashboardMonthlyRevenueRequestError(
@@ -867,9 +868,7 @@ describe('Dashboard V2 structure', () => {
       (await screen.findAllByText('Nenhuma despesa com competência neste mês.')).length,
     ).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
-    expect(
-      kpiScope('Resultado gerencial').getByText('Depende das receitas e despesas da competência.'),
-    ).toBeTruthy();
+    expect(kpiScope('Resultado').getByText(/R\$\s*866\.666,66/)).toBeTruthy();
   });
 
   it('Despesas e Receitas por categoria usam percentuais do backend', async () => {
@@ -979,51 +978,29 @@ describe('Dashboard V2 structure', () => {
     expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
   });
 
-  it('Inadimplência mostra vencido e taxa da competência', async () => {
+  it('Inadimplência mostra vencido agora e taxa global D1', async () => {
     getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyRevenue.mockResolvedValue({
-      ...loadedMonthlyRevenue,
-      receivables: {
-        ...loadedMonthlyRevenue.receivables,
-        overdue: '3000',
-        outstanding: '6000',
-      },
-    });
     renderDashboard();
 
     const scope = await waitFor(() => {
       const node = sectionScope('inadimplencia');
-      expect(node.getByText('Vencido')).toBeTruthy();
+      expect(node.getByText('Vencido agora')).toBeTruthy();
       return node;
     });
-    expect(scope.getByText(/R\$\s*3.000,00/)).toBeTruthy();
-    expect(scope.getByText('Taxa da competência')).toBeTruthy();
-    expect(scope.getByText('50,0%')).toBeTruthy();
+    expect(scope.getByText(/R\$\s*1,00/)).toBeTruthy();
+    expect(scope.getByText('Taxa global (D1)')).toBeTruthy();
+    expect(scope.getByText('35,3%')).toBeTruthy();
     expect(document.querySelector('[data-financial-section="qualidade-recebiveis"]')).toBeNull();
   });
 
-  it('expande o KPI de faturamento e fecha o diálogo com ESC', async () => {
+  it('KPI de faturamento não expande na Home CASH-4B', async () => {
     getOverview.mockResolvedValue(syncedOverview);
     getMonthlyRevenue.mockResolvedValue(loadedMonthlyRevenue);
     getMonthlyExpenses.mockResolvedValue(loadedMonthlyExpenses);
     renderDashboard();
 
     await waitFor(() => {
-      expect(kpiScope('Faturamento').getByRole('button', { name: 'Expandir' })).toBeTruthy();
-    });
-    fireEvent.click(kpiScope('Faturamento').getByRole('button', { name: 'Expandir' }));
-
-    const dialog = await screen.findByRole('dialog');
-    const dialogScope = within(dialog);
-    expect(dialogScope.getByRole('heading', { name: 'Faturamento' })).toBeTruthy();
-    expect(dialogScope.getByText('Competência de ago/2026')).toBeTruthy();
-    expect(dialogScope.getByText('Receitas por dia de competência')).toBeTruthy();
-    expect(dialogScope.getByText('Acumulado da competência')).toBeTruthy();
-    expect(dialogScope.getByText('Serviços')).toBeTruthy();
-
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(kpiScope('Faturamento').queryByRole('button', { name: 'Expandir' })).toBeNull();
     });
   });
 
@@ -1068,6 +1045,7 @@ describe('Dashboard V2 structure', () => {
     expect(getOverview).toHaveBeenCalledTimes(1);
     expect(getMonthEnd).toHaveBeenCalledTimes(1);
     expect(getForecast).toHaveBeenCalledTimes(1);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
     // Competência selecionada + competência anterior do comparativo.
     expect(getMonthlyExpenses).toHaveBeenCalledTimes(2);
     expect(getMonthlyRevenue).toHaveBeenCalledTimes(2);
