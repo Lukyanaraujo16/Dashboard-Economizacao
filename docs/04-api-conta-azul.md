@@ -444,6 +444,13 @@ Fase 2.3 (leitura somente; homologada com conta ERP real em 2026-08-18):
 * `GET /v1/financeiro/eventos-financeiros/contas-a-receber/buscar` — `pagina`, `tamanho_pagina`, `data_vencimento_de` e `data_vencimento_ate` **obrigatórios**;
 * `GET /v1/financeiro/eventos-financeiros/contas-a-pagar/buscar` — o mesmo contrato de janela.
 
+CASH-9C (26/08/2026): `GET /v1/financeiro/transferencias` — transferências
+entre contas próprias. Query: `pagina`, `tamanho_pagina`, `data_inicio`,
+`data_fim`, `ids_conta_financeira[]` (origem ou destino). Um objeto com
+`id`, `valor`, `data`, `origem.conta_financeira`, `destino.conta_financeira`.
+Não é o Extrato da UI. Não cria RECEIPT+DISBURSEMENT. Ingestão local
+explícita (`scripts/cash9c-transfers-backfill.ts`); fora do worker.
+
 `GET /v1/pessoas` em conta sem cadastro de pessoas retornou `items: null`
 (não `[]`). A 2.3 trata **somente** `items === null` como lista vazia.
 Fail-fast permanece para `items` de outro tipo, item inválido, `id` inválido
@@ -1074,7 +1081,10 @@ PENDENTE — necessidade condicional ao recorte de produto:
     R3: missing + GET-por-id 404 + parcela viva + remaining = valor_pago
     → DELETED só com flag true. R4 `[]` = HOLD. Flag default false.
     Não inventa endpoint de estorno. Produção ainda não executada.
-    KPI Home visual: CASH-4B;
+    KPI Home visual: CASH-4B.
+    CASH-9C: `GET /v1/financeiro/transferencias` persistido em
+    `financial_transfers`; ghost ACTIVE excluído do realizado só com
+    match 1:1. Ambíguo não exclui. CASH-4B continua bloqueado.
 8.  rateios valorados (`categorias` com percentual/valor por parcela)
     — endpoint de detalhe `/parcelas/{id}` documentado; não consumido;
     necessário para KPI de receita/despesa por categoria precisa;

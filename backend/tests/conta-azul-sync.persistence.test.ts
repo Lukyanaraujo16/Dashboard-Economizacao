@@ -113,6 +113,7 @@ function pageClient(options?: { readonly failReceivablesOnPage?: number }): Cont
     getInstallmentDetail: async () => ({ id: 'r-1', evento: { rateio: [] } }),
     getInstallmentSettlements: async () => [],
     getSettlementById: async () => ({ kind: 'not_found' as const }),
+    searchTransfers: async () => ({ itens_totais: 0, itens: [] }),
   };
 }
 

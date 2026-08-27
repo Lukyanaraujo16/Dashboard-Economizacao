@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Prisma } from '../src/generated/prisma/client.js';
 import { isInstallmentLedgerCovered } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-coverage.js';
-import { assertLedgerBackfillAllowed } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-backfill-guard.js';
+import { assertLedgerBackfillAllowed, assertTransferBackfillAllowed } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-backfill-guard.js';
 
 describe('isInstallmentLedgerCovered', () => {
   it('cobre quando Σ gross ACTIVE = paid', () => {
@@ -75,6 +75,23 @@ describe('assertLedgerBackfillAllowed', () => {
   it('permite development + LOCAL + _dev', () => {
     expect(() =>
       assertLedgerBackfillAllowed({
+        nodeEnv: 'development',
+        confirm: 'LOCAL',
+        databaseName: 'dashboard_economizacao_dev',
+      }),
+    ).not.toThrow();
+  });
+
+  it('CASH-9C recusa produção e permite development + LOCAL + _dev', () => {
+    expect(() =>
+      assertTransferBackfillAllowed({
+        nodeEnv: 'production',
+        confirm: 'LOCAL',
+        databaseName: 'dashboard_economizacao_dev',
+      }),
+    ).toThrow(/CASH-9C/);
+    expect(() =>
+      assertTransferBackfillAllowed({
         nodeEnv: 'development',
         confirm: 'LOCAL',
         databaseName: 'dashboard_economizacao_dev',

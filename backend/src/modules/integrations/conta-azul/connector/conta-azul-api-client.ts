@@ -9,6 +9,7 @@ import {
   CONTA_AZUL_PAYABLES_SEARCH_URL,
   CONTA_AZUL_PEOPLE_URL,
   CONTA_AZUL_RECEIVABLES_SEARCH_URL,
+  CONTA_AZUL_TRANSFERS_URL,
 } from '../domain/conta-azul-oauth.js';
 import {
   CONTA_AZUL_CATEGORIES_ONLY_CHILDREN,
@@ -63,6 +64,12 @@ export type ContaAzulCostCentersQuery = ContaAzulPageQuery & {
   readonly filtroRapido?: 'TODOS' | 'ATIVO' | 'INATIVO';
 };
 
+export type ContaAzulTransfersQuery = ContaAzulPageQuery & {
+  readonly dataInicio?: string;
+  readonly dataFim?: string;
+  readonly idsContaFinanceira?: readonly string[];
+};
+
 export type ContaAzulSettlementLookup =
   | { readonly kind: 'found'; readonly payload: unknown }
   | { readonly kind: 'not_found' };
@@ -78,6 +85,7 @@ export type ContaAzulApiClient = {
   getInstallmentDetail(accessToken: string, installmentExternalId: string): Promise<unknown>;
   getInstallmentSettlements(accessToken: string, installmentExternalId: string): Promise<unknown>;
   getSettlementById(accessToken: string, settlementExternalId: string): Promise<ContaAzulSettlementLookup>;
+  searchTransfers(accessToken: string, query: ContaAzulTransfersQuery): Promise<unknown>;
 };
 
 export type ContaAzulApiClientConfig = {
@@ -193,11 +201,17 @@ async function getJsonOnce(
 
 function withQuery(
   url: string,
-  params: Record<string, string | number | boolean | undefined>,
+  params: Record<string, string | number | boolean | readonly string[] | undefined>,
 ): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        search.append(key, String(item));
+      }
       continue;
     }
     search.set(key, String(value));
@@ -338,6 +352,19 @@ export function createContaAzulApiClient(
     getSettlementById(accessToken, settlementExternalId) {
       return getSettlementLookup(
         `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/baixa/${encodeURIComponent(settlementExternalId)}`,
+        accessToken,
+      );
+    },
+
+    searchTransfers(accessToken, query) {
+      return getJson(
+        withQuery(CONTA_AZUL_TRANSFERS_URL, {
+          pagina: query.pagina,
+          tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
+          data_inicio: query.dataInicio,
+          data_fim: query.dataFim,
+          ids_conta_financeira: query.idsContaFinanceira,
+        }),
         accessToken,
       );
     },

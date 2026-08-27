@@ -55,6 +55,7 @@ model Tenant {
   installmentCostCenterAllocations InstallmentCostCenterAllocation[]
   revenueGoals        RevenueGoal[]
   financialTransactions FinancialTransaction[]
+  financialTransfers    FinancialTransfer[]
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
 
@@ -213,6 +214,7 @@ model Integration {
   payables              Payable[]
   costCenters           CostCenter[]
   financialTransactions FinancialTransaction[]
+  financialTransfers    FinancialTransfer[]
   syncRuns              SyncRun[]
   syncCursors           IntegrationSyncCursor[]
 
@@ -313,6 +315,15 @@ enum FinancialTransactionInstallmentKind {
   PAYABLE
 
   @@map("financial_transaction_installment_kind")
+}
+
+/// Projeção conservadora transferência ↔ settlement. Nunca lifecycle.
+enum FinancialTransferMatchStatus {
+  UNMATCHED
+  MATCHED
+  AMBIGUOUS
+
+  @@map("financial_transfer_match_status")
 }
 
 enum SyncRunTriggerType {
@@ -565,11 +576,13 @@ model FinancialTransaction {
   upstreamVersion            Int?                                @map("upstream_version")
   upstreamUpdatedAt          DateTime?                           @map("upstream_updated_at") @db.Timestamptz(3)
   lifecycleStatus            FinancialTransactionLifecycle       @map("lifecycle_status")
+  financialTransferId        String?                             @unique(map: "uq_financial_transactions_financial_transfer_id") @map("financial_transfer_id") @db.Uuid
   syncedAt                   DateTime                            @map("synced_at") @db.Timestamptz(3)
   createdAt                  DateTime                            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt                  DateTime                            @updatedAt @map("updated_at") @db.Timestamptz(3)
   tenant                     Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   integration                Integration                         @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  financialTransfer          FinancialTransfer?                  @relation(fields: [financialTransferId], references: [id], onDelete: SetNull)
 
   @@unique([integrationId, externalId], map: "uq_financial_transactions_integration_external_id")
   @@index([tenantId], map: "idx_financial_transactions_tenant_id")
@@ -577,6 +590,34 @@ model FinancialTransaction {
   @@index([tenantId, installmentExternalId], map: "idx_financial_transactions_tenant_installment")
   @@index([tenantId, transactionType, occurredOn], map: "idx_financial_transactions_tenant_type_occurred_on")
   @@map("financial_transactions")
+}
+
+/// CASH-9C: um objeto origem/destino = uma transferência entre contas próprias.
+/// Não é RECEIPT/DISBURSEMENT. Não entra em faturamento/despesas/resultado.
+model FinancialTransfer {
+  id                                       String                       @id @default(uuid()) @db.Uuid
+  tenantId                                 String                       @map("tenant_id") @db.Uuid
+  integrationId                            String                       @map("integration_id") @db.Uuid
+  externalId                               String                       @map("external_id")
+  occurredOn                               DateTime                     @map("occurred_on") @db.Date
+  amount                                   Decimal                      @db.Decimal(19, 4)
+  sourceFinancialAccountExternalId         String                       @map("source_financial_account_external_id")
+  destinationFinancialAccountExternalId    String                       @map("destination_financial_account_external_id")
+  description                              String?
+  matchStatus                              FinancialTransferMatchStatus @map("match_status")
+  syncedAt                                 DateTime                     @map("synced_at") @db.Timestamptz(3)
+  createdAt                                DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                                DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                                   Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  integration                              Integration                  @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  projectedTransaction                     FinancialTransaction?
+
+  @@unique([integrationId, externalId], map: "uq_financial_transfers_integration_external_id")
+  @@index([tenantId], map: "idx_financial_transfers_tenant_id")
+  @@index([tenantId, occurredOn], map: "idx_financial_transfers_tenant_occurred_on")
+  @@index([tenantId, sourceFinancialAccountExternalId], map: "idx_financial_transfers_tenant_source_account")
+  @@index([tenantId, destinationFinancialAccountExternalId], map: "idx_financial_transfers_tenant_destination_account")
+  @@map("financial_transfers")
 }
 
 /// Execução técnica da sync (2.3 manual / 2.4 scheduled). Não é o produto de histórico da 2.5.

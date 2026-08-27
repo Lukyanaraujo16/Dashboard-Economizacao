@@ -30,6 +30,8 @@ export function createLedgerReadRepository(prisma: PrismaClient): LedgerReadRepo
       const where: Prisma.FinancialTransactionWhereInput = {
         tenantId: query.tenantId,
         lifecycleStatus: 'ACTIVE',
+        // CASH-9C: ghost de transferência interna fica ACTIVE, mas fora do realizado.
+        financialTransferId: null,
         occurredOn: { gte: query.from, lte: query.to },
       };
       if (query.integrationId !== undefined && query.integrationId.trim() !== '') {

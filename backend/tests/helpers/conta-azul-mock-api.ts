@@ -158,5 +158,9 @@ export function createMockContaAzulApiClient(
       options.onCall?.('settlementById');
       return { kind: 'not_found' as const };
     },
+    searchTransfers: async () => {
+      options.onCall?.('transfers');
+      return { itens_totais: 0, itens: [] };
+    },
   };
 }

@@ -433,8 +433,13 @@ nomenclatura permanece FATURAMENTO; NÃO é mais competência.
 
   realized.inflows = Σ financial_transactions.netAmount
     WHERE transactionType = RECEIPT, lifecycleStatus = ACTIVE, occurredOn ∈ mês
+    AND financial_transfer_id IS NULL
   expected.receivables = Σ receivables.unpaid
     WHERE status ativo, unpaid > 0, dueDate ∈ mês, dueDate >= today (civil SP)
+
+CASH-9C: transferência interna (`financial_transfers`) não entra na soma.
+Settlement ghost ACTIVE associado 1:1 é excluído do realizado; não vira DELETED.
+AMBIGUOUS não exclui. Não fabricar ponta oposta como despesa.
 
 Vencido (`overdue.receivables`, dueDate < today) NÃO entra.
 Pagamento tardio: mês da baixa (`occurredOn`), nunca competenceDate.
@@ -452,7 +457,8 @@ Despesas oficiais (Felipe, simétrico ao Faturamento):
     + MonthlyCashFlow.expected.payables
 
   realized.outflows = Σ financial_transactions.netAmount
-    WHERE transactionType = PAYMENT, lifecycleStatus = ACTIVE, occurredOn ∈ mês
+    WHERE transactionType = DISBURSEMENT, lifecycleStatus = ACTIVE, occurredOn ∈ mês
+    AND financial_transfer_id IS NULL
   expected.payables = Σ payables.unpaid
     WHERE status ativo, unpaid > 0, dueDate ∈ mês, dueDate >= today (civil SP)
 
@@ -765,6 +771,9 @@ segura = Σ gross ACTIVE = `paid` (DELETED não entra na soma nem bloqueia skip)
 CASH-8A: R3 stale confirmado pode ir a DELETED (flag default false).
 R4 `/baixa = []` ou parcela 404 = HOLD; não tombstona. Sem delete físico.
 Reativação: upsert força ACTIVE. CASH-8B pendente. Produção ainda não executada.
+CASH-9C: transferências internas fora de faturamento/despesas/resultado.
+Ghost ACTIVE pode ser excluído do analytics sem virar DELETED.
+CASH-4B continua bloqueado até homologação.
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
 BACKFILL DE PRODUÇÃO + CASH-8B. Sem as-of.
 

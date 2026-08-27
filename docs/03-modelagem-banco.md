@@ -682,6 +682,33 @@ tabela de revisões da meta — apenas o último valor por competência é guard
 
 ⸻
 
+7.7.4 financial_transfers (CASH-9C)
+
+Transferência entre contas próprias da Conta Azul. Um objeto origem/destino.
+Não é RECEIPT nem DISBURSEMENT. Não entra em faturamento, despesas ou resultado.
+
+Fonte: `GET /v1/financeiro/transferencias`. Unique `(integration_id, external_id)`.
+
+Campos físicos:
+
+* id; tenant_id; integration_id; external_id;
+* occurred_on; amount;
+* source_financial_account_external_id;
+* destination_financial_account_external_id;
+* description opcional (auditoria; não é identidade);
+* match_status UNMATCHED | MATCHED | AMBIGUOUS;
+* synced_at; created_at / updated_at.
+
+Associação conservadora 1:1 com settlement ghost:
+`financial_transactions.financial_transfer_id` (unique, nullable, ON DELETE SET NULL).
+Zero candidatos = UNMATCHED; um inequívoco = MATCHED (analytics exclui o ghost);
+mais de um = AMBIGUOUS (não exclui ninguém). Lifecycle do ghost permanece ACTIVE.
+Não usa descrição, categoria, cliente nem UUID hardcoded.
+
+CASH-4B continua bloqueado até homologação.
+
+⸻
+
 7.8 revenue_records
 
 Representação normalizada de receitas quando necessária para cálculo analítico.
@@ -1319,6 +1346,7 @@ As entidades com maior potencial de crescimento são:
 * receivables;
 * payables;
 * financial_transactions;
+* financial_transfers;
 * sync_runs;
 * ai_messages;
 * ai_runs;

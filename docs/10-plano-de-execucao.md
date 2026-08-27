@@ -1103,6 +1103,12 @@ CASH-7 — Backfill/bootstrap explícito do ledger: IMPLEMENTADO LOCALMENTE
      CASH-8B (aplicar R3 na Clínica Life) NÃO iniciado.
      Produção: NÃO executar nesta fase (backup → migrate ledger → deploy
      API/worker → backfill por tenant → cobertura → CASH-8B → CASH-4B).
+CASH-9C — Transferências internas: IMPLEMENTADO (código + migration + testes).
+     `GET /v1/financeiro/transferencias` → `financial_transfers`.
+     Um objeto origem/destino. Não entra em billing/despesas/resultado.
+     Ghost settlement ACTIVE; associação 1:1 conservadora.
+     AMBIGUOUS = não exclui. CLI local `scripts/cash9c-transfers-backfill.ts`.
+     Fora do worker. CASH-4B continua bloqueado até homologação.
 CASH-3A — Read model mensal de caixa (`MonthlyCashFlow`): IMPLEMENTADA no domínio.
 CASH-3B — `GET /dashboard/monthly-cash-flow`: IMPLEMENTADA (facade + DTO + tipos frontend).
      Sem Home visual. `billing` = monthlyBilling = inflows + expected.receivables.

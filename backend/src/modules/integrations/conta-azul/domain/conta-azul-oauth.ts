@@ -23,6 +23,8 @@ export const CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL = `${CONTA_AZUL_API_BASE_URL
 
 export const CONTA_AZUL_COST_CENTERS_URL = `${CONTA_AZUL_API_BASE_URL}/v1/centro-de-custo`;
 
+export const CONTA_AZUL_TRANSFERS_URL = `${CONTA_AZUL_API_BASE_URL}/v1/financeiro/transferencias`;
+
 export const CONTA_AZUL_IDENTITY_RETRY_BACKOFF_MS = 250;
 
 export const CONTA_AZUL_SCOPE = 'openid profile aws.cognito.signin.user.admin';

@@ -9,6 +9,7 @@ import {
   CONTA_AZUL_PAYABLES_SEARCH_URL,
   CONTA_AZUL_PEOPLE_URL,
   CONTA_AZUL_RECEIVABLES_SEARCH_URL,
+  CONTA_AZUL_TRANSFERS_URL,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-oauth.js';
 
 function jsonResponse(body: unknown, status = 200, headers?: HeadersInit): Response {
@@ -212,5 +213,24 @@ describe('Cliente HTTP financeiro Conta Azul', () => {
       dataVencimentoAte: '2026-03-31',
     });
     expect(String(fetchImpl.mock.calls[1]![0])).not.toContain('data_pagamento');
+  });
+
+  it('GET /v1/financeiro/transferencias pagina e filtra período', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ itens_totais: 0, itens: [] }));
+    const client = createContaAzulApiClient({ fetchImpl });
+    await client.searchTransfers('token', {
+      pagina: 1,
+      dataInicio: '2026-08-01',
+      dataFim: '2026-08-31',
+      idsContaFinanceira: ['acc-1', 'acc-2'],
+    });
+    const url = String(fetchImpl.mock.calls[0]![0]);
+    expect(url.startsWith(`${CONTA_AZUL_TRANSFERS_URL}?`)).toBe(true);
+    expect(url).toContain('pagina=1');
+    expect(url).toContain('tamanho_pagina=100');
+    expect(url).toContain('data_inicio=2026-08-01');
+    expect(url).toContain('data_fim=2026-08-31');
+    expect(url).toContain('ids_conta_financeira=acc-1');
+    expect(url).toContain('ids_conta_financeira=acc-2');
   });
 });
