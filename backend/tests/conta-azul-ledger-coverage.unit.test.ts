@@ -13,16 +13,19 @@ describe('isInstallmentLedgerCovered', () => {
     ).toBe(true);
   });
 
-  it('não cobre com DELETED, mismatch, vazio ou paid 0', () => {
+  it('cobre com sibling DELETED se ACTIVE = paid', () => {
     expect(
       isInstallmentLedgerCovered({
         paid: new Prisma.Decimal('100'),
         rows: [
           { lifecycleStatus: 'ACTIVE', grossAmount: new Prisma.Decimal('100') },
-          { lifecycleStatus: 'DELETED', grossAmount: new Prisma.Decimal('10') },
+          { lifecycleStatus: 'DELETED', grossAmount: new Prisma.Decimal('100') },
         ],
       }),
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it('não cobre com mismatch, vazio ou paid 0', () => {
     expect(
       isInstallmentLedgerCovered({
         paid: new Prisma.Decimal('100'),

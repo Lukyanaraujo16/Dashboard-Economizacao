@@ -6,6 +6,11 @@ import {
   mapSettlementList,
   type LedgerInstallmentCandidate,
 } from '../domain/conta-azul-settlement-mappers.js';
+import {
+  addLedgerLifecycleCounters,
+  emptyLedgerLifecycleCounters,
+  type LedgerLifecycleCounters,
+} from '../domain/conta-azul-ledger-lifecycle.js';
 import { CONTA_AZUL_SYNC_PAGE_SIZE } from '../domain/conta-azul-sync.js';
 import type { FinancialSyncScope } from '../repositories/financial.repository.js';
 import {
@@ -13,6 +18,7 @@ import {
   type ContaAzulLedgerRepository,
   type LedgerReconciliationRow,
 } from '../repositories/ledger.repository.js';
+import { createContaAzulLedgerLifecycleService } from './conta-azul-ledger-lifecycle.service.js';
 import type { PrismaClient } from '../../../../generated/prisma/client.js';
 
 export type LedgerSyncSummary = {
@@ -23,7 +29,8 @@ export type LedgerSyncSummary = {
   readonly skippedIdentityMismatch: number;
   readonly parcelFailures: number;
   readonly reconciliations: readonly LedgerReconciliationRow[];
-  readonly autoTombstone: false;
+  readonly autoTombstone: boolean;
+  readonly lifecycle: LedgerLifecycleCounters;
 };
 
 export type ContaAzulLedgerSyncService = {
@@ -56,6 +63,7 @@ function emptySummary(candidates: number): LedgerSyncSummary {
     parcelFailures: 0,
     reconciliations: [],
     autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+    lifecycle: emptyLedgerLifecycleCounters(),
   };
 }
 
@@ -116,9 +124,11 @@ export function createContaAzulLedgerSyncService(deps: {
 
   return {
     async sync(input) {
-      if (CONTA_AZUL_LEDGER_AUTO_TOMBSTONE) {
-        throw new Error('Tombstone automático não deve estar ligado nesta fase.');
-      }
+      const lifecycleService = createContaAzulLedgerLifecycleService({
+        prisma: deps.prisma,
+        ledger: deps.ledger,
+        apiClient: deps.apiClient,
+      });
 
       const candidates = new Map<string, LedgerInstallmentCandidate>();
       const remember = (item: LedgerInstallmentCandidate) => {
@@ -174,8 +184,13 @@ export function createContaAzulLedgerSyncService(deps: {
       let skippedIdentityMismatch = 0;
       let parcelFailures = 0;
       const reconciliations: LedgerReconciliationRow[] = [];
+      let lifecycle = emptyLedgerLifecycleCounters();
 
       for (const candidate of list) {
+        const previousRows = await deps.ledger.listByInstallment(
+          { tenantId: input.scope.tenantId, integrationId: input.scope.integrationId },
+          candidate.externalId,
+        );
         try {
           const payload = await input.requestWithAuth((accessToken) =>
             input.gatedGet(() =>
@@ -209,12 +224,44 @@ export function createContaAzulLedgerSyncService(deps: {
           if (row) {
             reconciliations.push(row);
           }
+          lifecycle = addLedgerLifecycleCounters(
+            lifecycle,
+            await lifecycleService.reconcileInstallment({
+              scope: input.scope,
+              installmentExternalId: candidate.externalId,
+              installmentKind: candidate.kind,
+              previousRows,
+              upstreamItems: forThisParcel,
+              listWasEmpty: Array.isArray(payload) && payload.length === 0,
+              listOk: true,
+              autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+              requestWithAuth: input.requestWithAuth,
+              gatedGet: input.gatedGet,
+            }),
+          );
         } catch (error) {
           if (isAbortingApiError(error)) {
             throw error;
           }
           if (error instanceof ContaAzulApiError || error instanceof ContaAzulMappingError) {
             parcelFailures += 1;
+            if (error instanceof ContaAzulApiError) {
+              lifecycle = addLedgerLifecycleCounters(
+                lifecycle,
+                await lifecycleService.reconcileInstallment({
+                  scope: input.scope,
+                  installmentExternalId: candidate.externalId,
+                  installmentKind: candidate.kind,
+                  previousRows,
+                  upstreamItems: [],
+                  listWasEmpty: false,
+                  listOk: false,
+                  autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+                  requestWithAuth: input.requestWithAuth,
+                  gatedGet: input.gatedGet,
+                }),
+              );
+            }
           } else {
             throw error;
           }
@@ -230,7 +277,8 @@ export function createContaAzulLedgerSyncService(deps: {
         skippedIdentityMismatch,
         parcelFailures,
         reconciliations,
-        autoTombstone: false,
+        autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+        lifecycle,
       };
     },
   };

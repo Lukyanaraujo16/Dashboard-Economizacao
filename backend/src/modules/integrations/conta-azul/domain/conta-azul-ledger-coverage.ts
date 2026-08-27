@@ -5,28 +5,44 @@ export type LedgerCoverageRow = {
   readonly grossAmount: Prisma.Decimal;
 };
 
+export type LedgerCoverageClass =
+  | 'covered'
+  | 'over_covered'
+  | 'under_covered'
+  | 'unpaid'
+  | 'empty';
+
 /**
- * Cobertura segura para skip do GET /baixa.
- * Só skip se paid > 0, não houver DELETED, e Σ gross ACTIVE = paid.
- * Mismatch, vazio, DELETED ou pago zero → buscar de novo.
+ * Cobertura para skip do GET /baixa.
+ * Σ gross ACTIVE = paid. DELETED não entra na soma e não impede skip.
  */
-export function isInstallmentLedgerCovered(input: {
+export function classifyInstallmentLedgerCoverage(input: {
   readonly paid: Prisma.Decimal;
   readonly rows: readonly LedgerCoverageRow[];
-}): boolean {
+}): LedgerCoverageClass {
   if (input.paid.lte(0)) {
-    return false;
-  }
-  if (input.rows.some((row) => row.lifecycleStatus === 'DELETED')) {
-    return false;
+    return 'unpaid';
   }
   const active = input.rows.filter((row) => row.lifecycleStatus === 'ACTIVE');
   if (active.length === 0) {
-    return false;
+    return 'empty';
   }
   const grossActive = active.reduce(
     (acc, row) => acc.add(row.grossAmount),
     new Prisma.Decimal(0),
   );
-  return grossActive.equals(input.paid);
+  if (grossActive.equals(input.paid)) {
+    return 'covered';
+  }
+  if (grossActive.greaterThan(input.paid)) {
+    return 'over_covered';
+  }
+  return 'under_covered';
+}
+
+export function isInstallmentLedgerCovered(input: {
+  readonly paid: Prisma.Decimal;
+  readonly rows: readonly LedgerCoverageRow[];
+}): boolean {
+  return classifyInstallmentLedgerCoverage(input) === 'covered';
 }

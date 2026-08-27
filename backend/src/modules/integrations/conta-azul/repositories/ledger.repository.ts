@@ -42,6 +42,10 @@ export type ContaAzulLedgerRepository = {
     installmentKind: 'RECEIVABLE' | 'PAYABLE',
     items: readonly MappedSettlement[],
   ): Promise<void>;
+  markDeleted(
+    scope: { readonly tenantId: string; readonly integrationId: string },
+    externalId: string,
+  ): Promise<boolean>;
 };
 
 export function createContaAzulLedgerRepository(prisma: PrismaClient): ContaAzulLedgerRepository {
@@ -144,6 +148,19 @@ export function createContaAzulLedgerRepository(prisma: PrismaClient): ContaAzul
           }),
         ),
       );
+    },
+
+    async markDeleted(scope, externalId) {
+      const result = await prisma.financialTransaction.updateMany({
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          externalId,
+          lifecycleStatus: 'ACTIVE',
+        },
+        data: { lifecycleStatus: 'DELETED' },
+      });
+      return result.count > 0;
     },
   };
 }

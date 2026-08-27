@@ -77,11 +77,15 @@ CASH-3B: `GET /dashboard/monthly-cash-flow` IMPLEMENTADO (DTO + tipos frontend).
 CASH-4A: infra Home (fetch + view-model) IMPLEMENTADA. KPIs visíveis ainda competência.
 CASH-7: bootstrap/backfill LOCAL do ledger IMPLEMENTADO (Clínica Life).
   Discovery = AR/AP local `paid > 0` + GET `/baixa` nas não cobertas.
-  Idempotente; skip se Σ gross ACTIVE = paid e sem DELETED.
-  Produção NÃO executada. Prune/estorno = CASH-8. Sem botão na UI.
+  Idempotente; skip se Σ gross ACTIVE = paid (DELETED não impede skip).
+  Produção NÃO executada. CASH-8A: política R3/R4 no código; flag default false.
+  CASH-8B: aplicar R3 local (e5a3). Sem botão na UI.
   Home visual NÃO liberada. Relatórios/PDF/XLSX intactos.
-CASH-4B: troca visual dos KPIs — NÃO INICIADO.
-  Não deployar CASH-4B antes do backfill de produção + CASH-8 do gap conhecido.
+CASH-8A: lifecycle R3/R4 IMPLEMENTADO no código (flag default false).
+  R3: lista 200 não vazia + GET baixa 404 + parcela viva QUITADO +
+  remaining gross = valor_pago → DELETED (sem delete físico; reativa no upsert).
+  R4: `/baixa []` HOLD, mesmo flag true. CASH-8B NÃO iniciado.
+  Não deployar CASH-4B antes do backfill de produção + CASH-8B.
   Faturamento oficial (Felipe): `realized.inflows + expected.receivables`.
   Despesas oficiais: `realized.outflows + expected.payables`. Vencido AP fora.
   Resultado da Home: `billing − monthlyExpenses`. `realized.result` não substitui.
@@ -607,7 +611,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-4B: NÃO INICIADO. CASH-8: prune ainda separado.
+Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-4B: NÃO INICIADO.
 
 ⸻
 

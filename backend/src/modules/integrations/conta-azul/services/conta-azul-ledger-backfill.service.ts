@@ -1,6 +1,11 @@
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
 import { CONTA_AZUL_LEDGER_AUTO_TOMBSTONE } from '../domain/conta-azul-ledger.js';
 import { isInstallmentLedgerCovered } from '../domain/conta-azul-ledger-coverage.js';
+import {
+  addLedgerLifecycleCounters,
+  emptyLedgerLifecycleCounters,
+  type LedgerLifecycleCounters,
+} from '../domain/conta-azul-ledger-lifecycle.js';
 import { ContaAzulMappingError } from '../domain/conta-azul-mapping.js';
 import { mapSettlementList } from '../domain/conta-azul-settlement-mappers.js';
 import type { FinancialSyncScope } from '../repositories/financial.repository.js';
@@ -8,6 +13,7 @@ import {
   reconcileInstallmentLedger,
   type ContaAzulLedgerRepository,
 } from '../repositories/ledger.repository.js';
+import { createContaAzulLedgerLifecycleService } from './conta-azul-ledger-lifecycle.service.js';
 import type { PrismaClient } from '../../../../generated/prisma/client.js';
 
 export type LedgerBackfillSummary = {
@@ -27,13 +33,16 @@ export type LedgerBackfillSummary = {
   readonly rateLimited: number;
   readonly retries: number;
   readonly durationMs: number;
-  readonly autoTombstone: false;
+  readonly autoTombstone: boolean;
+  readonly lifecycle: LedgerLifecycleCounters;
 };
 
 export type ContaAzulLedgerBackfillService = {
   run(input: {
     readonly scope: FinancialSyncScope;
     readonly dryRun?: boolean;
+    readonly forceReconcile?: boolean;
+    readonly autoTombstone?: boolean;
     readonly requestWithAuth: <T>(work: (accessToken: string) => Promise<T>) => Promise<T>;
     readonly gatedGet: <T>(work: () => Promise<T>) => Promise<T>;
     readonly heartbeat?: () => Promise<void>;
@@ -71,6 +80,7 @@ function emptySummary(
     retries: 0,
     durationMs,
     autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+    lifecycle: emptyLedgerLifecycleCounters(),
   };
 }
 
@@ -81,11 +91,14 @@ export function createContaAzulLedgerBackfillService(deps: {
 }): ContaAzulLedgerBackfillService {
   return {
     async run(input) {
-      if (CONTA_AZUL_LEDGER_AUTO_TOMBSTONE) {
-        throw new Error('Tombstone automático não deve estar ligado nesta fase.');
-      }
+      const autoTombstone = input.autoTombstone ?? CONTA_AZUL_LEDGER_AUTO_TOMBSTONE;
       const started = Date.now();
       const heartbeat = input.heartbeat ?? (async () => undefined);
+      const lifecycleService = createContaAzulLedgerLifecycleService({
+        prisma: deps.prisma,
+        ledger: deps.ledger,
+        apiClient: deps.apiClient,
+      });
       const paid = await deps.ledger.listPaidInstallments({
         tenantId: input.scope.tenantId,
         integrationId: input.scope.integrationId,
@@ -98,7 +111,7 @@ export function createContaAzulLedgerBackfillService(deps: {
           { tenantId: input.scope.tenantId, integrationId: input.scope.integrationId },
           row.externalId,
         );
-        if (isInstallmentLedgerCovered({ paid: row.paid, rows: existing })) {
+        if (!input.forceReconcile && isInstallmentLedgerCovered({ paid: row.paid, rows: existing })) {
           skippedCovered += 1;
         } else {
           uncovered.push(row);
@@ -119,8 +132,13 @@ export function createContaAzulLedgerBackfillService(deps: {
       let notFound = 0;
       let rateLimited = 0;
       let retries = 0;
+      let lifecycle = emptyLedgerLifecycleCounters();
 
       for (const candidate of uncovered) {
+        const previousRows = await deps.ledger.listByInstallment(
+          { tenantId: input.scope.tenantId, integrationId: input.scope.integrationId },
+          candidate.externalId,
+        );
         try {
           let payload: unknown;
           try {
@@ -152,6 +170,7 @@ export function createContaAzulLedgerBackfillService(deps: {
           );
           skippedInvalid += mapped.items.length - forThisParcel.length;
           fetchedSettlements += forThisParcel.length;
+          const listWasEmpty = Array.isArray(payload) && payload.length === 0;
           if (forThisParcel.length === 0) {
             empty += 1;
           }
@@ -164,6 +183,21 @@ export function createContaAzulLedgerBackfillService(deps: {
             installmentKind: candidate.kind,
             upstreamExternalIds: forThisParcel.map((item) => item.externalId),
           });
+          lifecycle = addLedgerLifecycleCounters(
+            lifecycle,
+            await lifecycleService.reconcileInstallment({
+              scope: input.scope,
+              installmentExternalId: candidate.externalId,
+              installmentKind: candidate.kind,
+              previousRows,
+              upstreamItems: forThisParcel,
+              listWasEmpty,
+              listOk: true,
+              autoTombstone,
+              requestWithAuth: input.requestWithAuth,
+              gatedGet: input.gatedGet,
+            }),
+          );
         } catch (error) {
           if (isAbortingApiError(error)) {
             throw error;
@@ -177,6 +211,21 @@ export function createContaAzulLedgerBackfillService(deps: {
             if (error.httpStatus === 404) {
               notFound += 1;
             }
+            lifecycle = addLedgerLifecycleCounters(
+              lifecycle,
+              await lifecycleService.reconcileInstallment({
+                scope: input.scope,
+                installmentExternalId: candidate.externalId,
+                installmentKind: candidate.kind,
+                previousRows,
+                upstreamItems: [],
+                listWasEmpty: false,
+                listOk: false,
+                autoTombstone,
+                requestWithAuth: input.requestWithAuth,
+                gatedGet: input.gatedGet,
+              }),
+            );
           } else if (error instanceof ContaAzulMappingError) {
             parcelFailures += 1;
           } else {
@@ -203,7 +252,8 @@ export function createContaAzulLedgerBackfillService(deps: {
         rateLimited,
         retries,
         durationMs: Date.now() - started,
-        autoTombstone: false,
+        autoTombstone,
+        lifecycle,
       };
     },
   };

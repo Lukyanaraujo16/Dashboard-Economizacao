@@ -154,5 +154,9 @@ export function createMockContaAzulApiClient(
       options.onCall?.('installmentSettlements');
       return [];
     },
+    getSettlementById: async () => {
+      options.onCall?.('settlementById');
+      return { kind: 'not_found' as const };
+    },
   };
 }

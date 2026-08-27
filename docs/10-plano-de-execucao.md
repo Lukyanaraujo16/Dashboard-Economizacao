@@ -1095,9 +1095,14 @@ CASH-7 — Backfill/bootstrap explícito do ledger: IMPLEMENTADO LOCALMENTE
      exige `--tenant` + `--confirm=LOCAL`; aborta `NODE_ENV=production`
      e banco que não seja `_dev`/`_test`. Não dispara no worker/login.
      Discovery: títulos locais `paid > 0`; skip se Σ gross ACTIVE = paid
-     e sem DELETED; senão GET `/baixa`. Idempotente; sem prune (CASH-8).
+     (DELETED não impede skip); senão GET `/baixa`. Idempotente.
+     CASH-8A — Lifecycle R3/R4: IMPLEMENTADO (código + testes). Flag
+     `CONTA_AZUL_LEDGER_AUTO_TOMBSTONE` default false (detecta, não muta).
+     R3 confirma stale com GET `/parcelas/baixa/{id}` 404 + parcela viva.
+     R4 `[]` / parcela 404 = HOLD. Sem delete físico. Reativação via upsert.
+     CASH-8B (aplicar R3 na Clínica Life) NÃO iniciado.
      Produção: NÃO executar nesta fase (backup → migrate ledger → deploy
-     API/worker → backfill por tenant → cobertura → reconciliar → CASH-4B).
+     API/worker → backfill por tenant → cobertura → CASH-8B → CASH-4B).
 CASH-3A — Read model mensal de caixa (`MonthlyCashFlow`): IMPLEMENTADA no domínio.
 CASH-3B — `GET /dashboard/monthly-cash-flow`: IMPLEMENTADA (facade + DTO + tipos frontend).
      Sem Home visual. `billing` = monthlyBilling = inflows + expected.receivables.
@@ -1107,7 +1112,7 @@ CASH-4A — Infra Home para MonthlyCashFlow: IMPLEMENTADA.
      KPIs / Meta / gráficos visíveis ainda competência. Falha do cash-flow
      não derruba o overview legado. CASH-4B troca os números. Relatórios/PDF/XLSX intactos.
      HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES
-     DO BACKFILL DE PRODUÇÃO + CASH-8 do gap de over-coverage.
+     DO BACKFILL DE PRODUÇÃO + CASH-8B (R3 no gap de over-coverage).
 CC1 — Centros de custo + alocação + filtro Home:
      HOMOLOGADA (CC1.1 incorporada)
      Sync `cost_centers` + `installment_cost_center_allocations`;

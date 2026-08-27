@@ -1069,8 +1069,12 @@ PENDENTE — necessidade condicional ao recorte de produto:
     `data_pagamento_de/ate` (CASH-2); NÃO usado no engine incremental
     (`paymentDiscoveryWindow: null`). CASH-7 backfill local descobre
     parcelas pelo AR/AP local com `paid > 0` e GET `/parcelas/{id}/baixa`
-    nas não cobertas (Σ gross ACTIVE = paid, sem DELETED). Não inventa
-    endpoint. Produção ainda não executada. KPI Home visual: CASH-4B;
+    nas não cobertas (Σ gross ACTIVE = paid; DELETED não impede skip).
+    GET `/parcelas/baixa/{id}` (CASH-8A) distingue 404 de erro operacional.
+    R3: missing + GET-por-id 404 + parcela viva + remaining = valor_pago
+    → DELETED só com flag true. R4 `[]` = HOLD. Flag default false.
+    Não inventa endpoint de estorno. Produção ainda não executada.
+    KPI Home visual: CASH-4B;
 8.  rateios valorados (`categorias` com percentual/valor por parcela)
     — endpoint de detalhe `/parcelas/{id}` documentado; não consumido;
     necessário para KPI de receita/despesa por categoria precisa;

@@ -63,6 +63,10 @@ export type ContaAzulCostCentersQuery = ContaAzulPageQuery & {
   readonly filtroRapido?: 'TODOS' | 'ATIVO' | 'INATIVO';
 };
 
+export type ContaAzulSettlementLookup =
+  | { readonly kind: 'found'; readonly payload: unknown }
+  | { readonly kind: 'not_found' };
+
 export type ContaAzulApiClient = {
   getConnectedCompany(accessToken: string): Promise<unknown>;
   getCategories(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
@@ -73,6 +77,7 @@ export type ContaAzulApiClient = {
   searchPayables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
   getInstallmentDetail(accessToken: string, installmentExternalId: string): Promise<unknown>;
   getInstallmentSettlements(accessToken: string, installmentExternalId: string): Promise<unknown>;
+  getSettlementById(accessToken: string, settlementExternalId: string): Promise<ContaAzulSettlementLookup>;
 };
 
 export type ContaAzulApiClientConfig = {
@@ -114,6 +119,7 @@ async function getJsonOnce(
   url: string,
   accessToken: string,
   config: ContaAzulApiClientConfig,
+  options?: { readonly notFoundAsLookup?: boolean },
 ): Promise<unknown> {
   const fetchImpl = config.fetchImpl ?? fetch;
   const timeoutMs = config.timeoutMs ?? CONTA_AZUL_HTTP_TIMEOUT_MS;
@@ -170,12 +176,18 @@ async function getJsonOnce(
       },
     );
   }
+  if (response.status === 404 && options?.notFoundAsLookup === true) {
+    return { kind: 'not_found' } satisfies ContaAzulSettlementLookup;
+  }
   if (!response.ok) {
     throw new ContaAzulApiError('unavailable', 'A Conta Azul está temporariamente indisponível.', {
       httpStatus: response.status,
     });
   }
 
+  if (options?.notFoundAsLookup === true) {
+    return { kind: 'found', payload: json } satisfies ContaAzulSettlementLookup;
+  }
   return json;
 }
 
@@ -206,6 +218,23 @@ export function createContaAzulApiClient(
       if (error instanceof ContaAzulApiError && isRetryable(error)) {
         await sleep(error.retryAfterMs ?? backoffMs);
         return getJsonOnce(url, accessToken, config);
+      }
+      throw error;
+    }
+  }
+
+  async function getSettlementLookup(
+    url: string,
+    accessToken: string,
+  ): Promise<ContaAzulSettlementLookup> {
+    try {
+      return (await getJsonOnce(url, accessToken, config, { notFoundAsLookup: true })) as ContaAzulSettlementLookup;
+    } catch (error) {
+      if (error instanceof ContaAzulApiError && isRetryable(error)) {
+        await sleep(error.retryAfterMs ?? backoffMs);
+        return (await getJsonOnce(url, accessToken, config, {
+          notFoundAsLookup: true,
+        })) as ContaAzulSettlementLookup;
       }
       throw error;
     }
@@ -302,6 +331,13 @@ export function createContaAzulApiClient(
     getInstallmentSettlements(accessToken, installmentExternalId) {
       return getJson(
         `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/${encodeURIComponent(installmentExternalId)}/baixa`,
+        accessToken,
+      );
+    },
+
+    getSettlementById(accessToken, settlementExternalId) {
+      return getSettlementLookup(
+        `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/baixa/${encodeURIComponent(settlementExternalId)}`,
         accessToken,
       );
     },

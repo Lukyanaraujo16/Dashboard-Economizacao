@@ -32,7 +32,8 @@ De/Até. Ledger CASH-2 persistido no HEAD (`financial_transactions`).
 KPI de caixa / Home: CASH-4A carrega MonthlyCashFlow; cards visíveis ainda
 competência até CASH-4B. CASH-3A: domínio `MonthlyCashFlow`. CASH-3B:
 `GET /dashboard/monthly-cash-flow`. CASH-7: backfill LOCAL do ledger
-(Clínica Life) executado; produção NÃO. Prune = CASH-8.
+(Clínica Life) executado; produção NÃO. CASH-8A: R3/R4 no código;
+flag default false; CASH-8B não aplicado.
 Semântica: `netAmount` / `occurredOn`.
 Faturamento oficial (Felipe, 26/08/2026): `realized.inflows + expected.receivables`.
 Despesas oficiais (Felipe, simétrico): `realized.outflows + expected.payables`.
@@ -760,10 +761,12 @@ Ledger (`financial_transactions`): CASH-2 persiste baixas; CASH-3A calcula
 (view-model); cards e F12 V1 continuam competência até CASH-4B/CASH-6.
 Meta futura = billing; UI da Meta ainda competência.
 CASH-7 (26/08/2026): bootstrap local idempotente por tenant; cobertura
-segura = Σ gross ACTIVE = `paid` e sem DELETED. `/baixa = []` ou 404
-não cria realizado e não apaga (CASH-8). Produção ainda não executada.
+segura = Σ gross ACTIVE = `paid` (DELETED não entra na soma nem bloqueia skip).
+CASH-8A: R3 stale confirmado pode ir a DELETED (flag default false).
+R4 `/baixa = []` ou parcela 404 = HOLD; não tombstona. Sem delete físico.
+Reativação: upsert força ACTIVE. CASH-8B pendente. Produção ainda não executada.
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
-BACKFILL DE PRODUÇÃO. Estorno/tombstone automático DESLIGADO. Sem as-of.
+BACKFILL DE PRODUÇÃO + CASH-8B. Sem as-of.
 
 Query params oficiais da Home: `month`, `costCenter`, `situation`, `category`.
 `costCenterId` não é query param. `period`, `comparison` e `status` não

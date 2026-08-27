@@ -166,6 +166,33 @@ describe('Cliente HTTP financeiro Conta Azul', () => {
     );
   });
 
+  it('GET baixa por id distingue found e 404 sem lançar', async () => {
+    const found = vi.fn().mockResolvedValue(jsonResponse({ id: 'baixa-1', versao: 1 }));
+    const clientFound = createContaAzulApiClient({ fetchImpl: found });
+    await expect(clientFound.getSettlementById('token', 'baixa-1')).resolves.toEqual({
+      kind: 'found',
+      payload: { id: 'baixa-1', versao: 1 },
+    });
+    expect(String(found.mock.calls[0]![0])).toBe(
+      `${CONTA_AZUL_INSTALLMENT_SETTLEMENTS_URL}/baixa/baixa-1`,
+    );
+
+    const missing = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
+    const clientMissing = createContaAzulApiClient({ fetchImpl: missing });
+    await expect(clientMissing.getSettlementById('token', 'stale-id')).resolves.toEqual({
+      kind: 'not_found',
+    });
+  });
+
+  it('GET baixa por id propaga 5xx como erro operacional', async () => {
+    const fetchImpl = vi.fn().mockImplementation(() => new Response('', { status: 500 }));
+    const client = createContaAzulApiClient({ fetchImpl, retryBackoffMs: 1, sleep: async () => undefined });
+    await expect(client.getSettlementById('token', 'x')).rejects.toMatchObject({
+      kind: 'unavailable',
+      httpStatus: 500,
+    });
+  });
+
   it('envia data_pagamento opcional na busca AR/AP e omite quando ausente', async () => {
     const fetchImpl = vi.fn().mockImplementation(() => jsonResponse({ itens: [] }));
     const client = createContaAzulApiClient({ fetchImpl });
