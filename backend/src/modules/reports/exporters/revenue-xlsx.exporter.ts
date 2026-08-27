@@ -41,16 +41,15 @@ function addSummarySheet(workbook: Workbook, context: RevenueExportContext): voi
     ['Período', revenueReportPeriodLabel(report.from, report.to)],
     ['Gerado em', formatGeneratedAtPtBr(generatedAt)],
     ['Centro de custo', filters.costCenter],
-    ['Situação', filters.situation],
     ['Categoria', filters.category],
-    ['Receita', parseDecimalNumber(report.receivables.total)],
-    ['Recebido', parseDecimalNumber(report.receivables.received)],
+    ['Faturamento', parseDecimalNumber(report.receivables.total)],
+    ['Entradas realizadas', parseDecimalNumber(report.receivables.received)],
     ['A receber', parseDecimalNumber(report.receivables.outstanding)],
     ['Vencido', parseDecimalNumber(report.receivables.overdue)],
     ['Cobertura (%)', parseDecimalNumber(report.receivables.coverageRate)],
   ];
   rows.forEach((row, index) => {
-    writeLabelValue(sheet, index + 1, row[0], row[1], index >= 7 && index <= 10);
+    writeLabelValue(sheet, index + 1, row[0], row[1], index >= 6 && index <= 9);
   });
   if (isRevenueReportEmpty(report)) {
     const notice = sheet.getCell('A14');
@@ -63,8 +62,8 @@ function addMonthlySheet(workbook: Workbook, context: RevenueExportContext): voi
   const sheet = workbook.addWorksheet('Mensal');
   sheet.columns = [
     { header: 'Mês', key: 'month', width: 14 },
-    { header: 'Receita', key: 'total', width: 16 },
-    { header: 'Recebido', key: 'received', width: 16 },
+    { header: 'Faturamento', key: 'total', width: 16 },
+    { header: 'Entradas realizadas', key: 'received', width: 20 },
     { header: 'A receber', key: 'outstanding', width: 16 },
     { header: 'Vencido', key: 'overdue', width: 16 },
     { header: 'Cobertura (%)', key: 'coverage', width: 16 },
@@ -88,9 +87,7 @@ function addCategoriesSheet(workbook: Workbook, context: RevenueExportContext): 
   sheet.columns = [
     { header: 'Categoria', key: 'name', width: 28 },
     { header: 'Tipo', key: 'kind', width: 16 },
-    { header: 'Total', key: 'total', width: 16 },
-    { header: 'Recebido', key: 'received', width: 16 },
-    { header: 'A receber', key: 'outstanding', width: 16 },
+    { header: 'Entradas realizadas', key: 'total', width: 20 },
     { header: 'Participação (%)', key: 'percentage', width: 18 },
   ];
   styleHeader(sheet);
@@ -99,11 +96,9 @@ function addCategoriesSheet(workbook: Workbook, context: RevenueExportContext): 
       name: sanitizeSpreadsheetText(item.name),
       kind: sanitizeSpreadsheetText(compositionKindLabel(item.kind)),
       total: parseDecimalNumber(item.amount),
-      received: parseDecimalNumber(item.received),
-      outstanding: parseDecimalNumber(item.outstanding),
       percentage: parseDecimalNumber(item.percentage),
     });
-    applyMoneyFormats(row, [3, 4, 5]);
+    applyMoneyFormats(row, [3]);
   }
 }
 

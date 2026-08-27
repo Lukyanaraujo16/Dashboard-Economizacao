@@ -63,7 +63,7 @@ function isIntervalReceivables(value: unknown): value is ReportsRevenueReceivabl
     return false;
   }
   return (
-    typeof value.total === 'string' &&
+    isNullableDecimal(value.total) &&
     isNullableDecimal(value.received) &&
     isNullableDecimal(value.outstanding) &&
     isNullableDecimal(value.overdue) &&
@@ -82,7 +82,7 @@ function isMonthReceivables(
     return false;
   }
   return (
-    typeof value.total === 'string' &&
+    isNullableDecimal(value.total) &&
     isNullableDecimal(value.received) &&
     isNullableDecimal(value.outstanding) &&
     isNullableDecimal(value.overdue) &&

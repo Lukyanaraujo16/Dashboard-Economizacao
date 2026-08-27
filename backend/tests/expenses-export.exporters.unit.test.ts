@@ -175,8 +175,9 @@ describe('exporters de despesas', () => {
     expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Resumo', 'Mensal', 'Categorias']);
 
     const summary = workbook.getWorksheet('Resumo');
-    expect(summary?.getCell('B8').value).toBe(15000);
-    expect(typeof summary?.getCell('B8').value).toBe('number');
+    expect(summary?.getCell('B7').value).toBe(15000);
+    expect(typeof summary?.getCell('B7').value).toBe('number');
+    expect(summary?.getCell('B8').value).toBe(9000);
     expect(summary?.getCell('B2').value).toBe("'+Empresa");
     expect(summary?.getCell('B3').value).toBe('jan/2026 — fev/2026');
 
@@ -208,6 +209,6 @@ describe('exporters de despesas', () => {
     await workbook.xlsx.load(await renderExpensesReportXlsx(context(empty)));
     const summary = workbook.getWorksheet('Resumo');
     expect(summary?.getCell('B13').value).toBeNull();
-    expect(String(summary?.getCell('A14').value)).toMatch(/Não há despesa/);
+    expect(String(summary?.getCell('A14').value)).toMatch(/Não há saídas de caixa/);
   });
 });

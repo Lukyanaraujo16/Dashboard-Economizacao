@@ -10,7 +10,7 @@ import {
 } from '../src/lib/reports-query';
 
 describe('reports-query', () => {
-  it('lê from/to/costCenter/situation/category e ignora tenantId', () => {
+  it('lê from/to/costCenter/category, ignora tenantId e força situation null', () => {
     const params = new URLSearchParams(
       'type=revenue&from=2026-01&to=2026-08&costCenter=11111111-1111-4111-8111-111111111111&situation=open&category=22222222-2222-4222-8222-222222222222&tenantId=nope',
     );
@@ -19,17 +19,16 @@ describe('reports-query', () => {
       from: '2026-01',
       to: '2026-08',
       costCenterId: '11111111-1111-4111-8111-111111111111',
-      situation: 'open',
+      situation: null,
       categoryId: '22222222-2222-4222-8222-222222222222',
     });
   });
 
-  it('buildReportsSearchParams não escreve tenantId nem costCenterId', () => {
+  it('buildReportsSearchParams não escreve tenantId, costCenterId nem situation', () => {
     const next = buildReportsSearchParams({
       from: '2026-01',
       to: '2026-08',
       costCenterId: null,
-      situation: null,
       categoryId: null,
     });
     expect(next.get('type')).toBe('revenue');
@@ -38,9 +37,10 @@ describe('reports-query', () => {
     expect(next.get('tenantId')).toBeNull();
     expect(next.get('costCenterId')).toBeNull();
     expect(next.get('status')).toBeNull();
+    expect(next.get('situation')).toBeNull();
   });
 
-  it('lê type=expenses e monta a query', () => {
+  it('lê type=expenses e monta a query sem situation', () => {
     const params = new URLSearchParams(
       'type=expenses&from=2026-01&to=2026-08&costCenter=11111111-1111-4111-8111-111111111111&situation=open&category=22222222-2222-4222-8222-222222222222',
     );
@@ -49,7 +49,7 @@ describe('reports-query', () => {
       from: '2026-01',
       to: '2026-08',
       costCenterId: '11111111-1111-4111-8111-111111111111',
-      situation: 'open',
+      situation: null,
       categoryId: '22222222-2222-4222-8222-222222222222',
     });
     const next = buildReportsSearchParams({
@@ -57,12 +57,12 @@ describe('reports-query', () => {
       from: '2026-01',
       to: '2026-08',
       costCenterId: null,
-      situation: null,
       categoryId: null,
     });
     expect(next.get('type')).toBe('expenses');
     expect(next.get('from')).toBe('2026-01');
     expect(next.get('to')).toBe('2026-08');
+    expect(next.get('situation')).toBeNull();
   });
 
   it('type inválido ou ausente cai em revenue', () => {

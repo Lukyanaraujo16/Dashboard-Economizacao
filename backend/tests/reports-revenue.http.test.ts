@@ -7,15 +7,20 @@ import type { FinancialInstallmentStatus } from '../src/generated/prisma/client.
 import { encryptSecret } from '../src/infrastructure/crypto/secret-box.js';
 import { disconnectPrisma, getPrismaClient } from '../src/infrastructure/database/prisma.js';
 import { civilTodayInSaoPaulo } from '../src/modules/analytics/domain/analytical-timezone.js';
-import { civilMonthBoundsFromKey } from '../src/modules/analytics/domain/civil-calendar.js';
+import {
+  civilMonthBounds,
+  civilMonthBoundsFromKey,
+} from '../src/modules/analytics/domain/civil-calendar.js';
 import {
   createArgon2idPasswordHasher,
   createUserCredentialRepository,
   createUserRepository,
 } from '../src/modules/auth/index.js';
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
+import { mapSettlement } from '../src/modules/integrations/conta-azul/domain/conta-azul-settlement-mappers.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
+import { createContaAzulLedgerRepository } from '../src/modules/integrations/conta-azul/repositories/ledger.repository.js';
 import { createTenantRepository } from '../src/modules/tenant/repositories/tenant.repository.js';
 import { cleanTestDatabase } from './helpers/test-database.js';
 
@@ -28,6 +33,7 @@ const prisma = getPrismaClient();
 const tenants = createTenantRepository(prisma);
 const integrations = createContaAzulIntegrationRepository(prisma);
 const financial = createContaAzulFinancialRepository(prisma);
+const ledgerWrite = createContaAzulLedgerRepository(prisma);
 const users = createUserRepository(prisma);
 const credentials = createUserCredentialRepository(prisma);
 const passwordHasher = createArgon2idPasswordHasher();
@@ -64,6 +70,12 @@ afterEach(async () => {
 afterAll(async () => {
   await disconnectPrisma();
 });
+
+function iso(date: Date): string {
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${month}-${day}`;
+}
 
 function readSessionCookie(setCookieHeader: string | string[] | undefined): string | undefined {
   const values = Array.isArray(setCookieHeader)
@@ -138,33 +150,55 @@ async function seedConnected(name: string) {
 
 function installment(input: {
   readonly externalId: string;
-  readonly status: FinancialInstallmentStatus;
-  readonly total: string;
-  readonly paid?: string;
+  readonly dueDate: Date;
   readonly unpaid?: string;
-  readonly competenceDate: Date | null;
-  readonly dueDate?: Date;
+  readonly paid?: string;
+  readonly total?: string;
+  readonly status?: FinancialInstallmentStatus;
+  readonly competenceDate?: Date | null;
   readonly categoryExternalIds?: readonly string[];
 }) {
-  const total = new Prisma.Decimal(input.total);
+  const unpaid = new Prisma.Decimal(input.unpaid ?? '0');
   const paid = new Prisma.Decimal(input.paid ?? '0');
-  const unpaid = new Prisma.Decimal(input.unpaid ?? total.minus(paid).toString());
-  const today = civilTodayInSaoPaulo(new Date());
+  const total = new Prisma.Decimal(input.total ?? unpaid.plus(paid).toString());
   return {
     externalId: input.externalId,
     description: 'descricao-secreta-nao-vazar',
-    dueDate: input.dueDate ?? today,
-    competenceDate: input.competenceDate,
+    dueDate: input.dueDate,
+    competenceDate: input.competenceDate === undefined ? input.dueDate : input.competenceDate,
     upstreamCreatedAt: null,
     upstreamUpdatedAt: null,
-    status: input.status,
-    upstreamStatus: input.status,
+    status: input.status ?? 'OPEN',
+    upstreamStatus: input.status ?? 'OPEN',
     total,
     paid,
     unpaid,
     externalPartyId: null,
     categoryExternalIds: [...(input.categoryExternalIds ?? [])],
   };
+}
+
+function baixa(input: {
+  readonly id: string;
+  readonly installmentId: string;
+  readonly data: string;
+  readonly bruto: string;
+  readonly liquido: string;
+}) {
+  return mapSettlement({
+    id: input.id,
+    id_parcela: input.installmentId,
+    data_pagamento: input.data,
+    tipo_evento_financeiro: 'RECEITA',
+    valor_composicao: {
+      valor_bruto: input.bruto,
+      valor_liquido: input.liquido,
+      juros: '0',
+      multa: '0',
+      desconto: '0',
+      taxa: '0',
+    },
+  });
 }
 
 async function categoryId(tenantId: string, externalId: string): Promise<string> {
@@ -175,6 +209,20 @@ async function categoryId(tenantId: string, externalId: string): Promise<string>
 
 function revenueUrl(query: string): string {
   return `/reports/revenue?${query}`;
+}
+
+function cashKpis(body: {
+  receivables: {
+    total: string | null;
+    received: string | null;
+    outstanding: string | null;
+  };
+}) {
+  return {
+    total: body.receivables.total,
+    received: body.receivables.received,
+    outstanding: body.receivables.outstanding,
+  };
 }
 
 describe('GET /reports/revenue', () => {
@@ -241,75 +289,92 @@ describe('GET /reports/revenue', () => {
     expect(tenantQuery.statusCode).toBe(400);
   });
 
-  it('agrega vários meses, isola tenant e bate com monthly-revenue no mesmo mês', async () => {
-    const jan = civilMonthBoundsFromKey('2026-01');
-    const feb = civilMonthBoundsFromKey('2026-02');
+  it('agrega vários meses, isola tenant e bate com monthly-cash-flow no mesmo mês', async () => {
+    const today = civilTodayInSaoPaulo(new Date());
+    const current = civilMonthBounds(today);
+    const prevFrom = new Date(Date.UTC(current.from.getUTCFullYear(), current.from.getUTCMonth() - 1, 1));
+    const prev = civilMonthBounds(prevFrom);
     const a = await seedConnected('rr-a');
     const b = await seedConnected('rr-b');
-    const syncedAt = new Date();
-    await financial.upsertCategories(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        {
-          externalId: 'serv',
-          name: 'Serviços',
-          type: 'REVENUE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-        {
-          externalId: 'prod',
-          name: 'Produtos',
-          type: 'REVENUE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-      ],
-    );
-    await financial.upsertReceivables(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'jan-open',
-          status: 'OPEN',
-          total: '10000',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv'],
-        }),
-        installment({
-          externalId: 'jan-paid',
-          status: 'PAID',
-          total: '4000',
-          paid: '4000',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['prod'],
-        }),
-        installment({
-          externalId: 'feb-paid',
-          status: 'PAID',
-          total: '5000',
-          paid: '5000',
-          unpaid: '0',
-          competenceDate: feb.from,
-          categoryExternalIds: ['serv'],
-        }),
-      ],
-    );
-    await financial.upsertReceivables(
-      { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'other-tenant',
-          status: 'PAID',
-          total: '333',
-          paid: '333',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv'],
-        }),
-      ],
-    );
+    const scopeA = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    const scopeB = { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt: new Date() };
+
+    await financial.upsertCategories(scopeA, [
+      {
+        externalId: 'serv',
+        name: 'Serviços',
+        type: 'REVENUE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+      {
+        externalId: 'prod',
+        name: 'Produtos',
+        type: 'REVENUE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertReceivables(scopeA, [
+      installment({
+        externalId: 'prev-open',
+        dueDate: current.to,
+        unpaid: '10000',
+        categoryExternalIds: ['serv'],
+      }),
+      installment({
+        externalId: 'prev-paid',
+        dueDate: prev.from,
+        unpaid: '0',
+        paid: '4000',
+        status: 'PAID',
+        categoryExternalIds: ['prod'],
+      }),
+      installment({
+        externalId: 'cur-paid',
+        dueDate: current.from,
+        unpaid: '0',
+        paid: '5000',
+        status: 'PAID',
+        categoryExternalIds: ['serv'],
+      }),
+    ]);
+    await financial.upsertReceivables(scopeB, [
+      installment({
+        externalId: 'other-tenant',
+        dueDate: current.from,
+        unpaid: '0',
+        paid: '333',
+        status: 'PAID',
+        categoryExternalIds: ['serv'],
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeA, 'RECEIVABLE', [
+      baixa({
+        id: 'prev-b',
+        installmentId: 'prev-paid',
+        data: iso(prev.from),
+        bruto: '4000',
+        liquido: '4000',
+      }),
+      baixa({
+        id: 'cur-b',
+        installmentId: 'cur-paid',
+        data: iso(current.from),
+        bruto: '5000',
+        liquido: '5000',
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeB, 'RECEIVABLE', [
+      baixa({
+        id: 'other-b',
+        installmentId: 'other-tenant',
+        data: iso(current.from),
+        bruto: '333',
+        liquido: '333',
+      }),
+    ]);
+
     await createUser({ email: 'user-a@rr.test', role: 'USER', tenantId: a.tenant.id });
     await createUser({ email: 'user-b@rr.test', role: 'USER', tenantId: b.tenant.id });
     const app = await buildTestApp();
@@ -324,13 +389,11 @@ describe('GET /reports/revenue', () => {
     expect(empty.statusCode).toBe(200);
     expect(empty.json().receivables.total).toBe('0');
     expect(empty.json().receivables.coverageRate).toBeNull();
-    expect(empty.json().months).toEqual([
-      expect.objectContaining({ monthKey: '2024-01' }),
-    ]);
+    expect(empty.json().months).toEqual([expect.objectContaining({ monthKey: '2024-01' })]);
 
     const range = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-02'),
+      url: revenueUrl(`from=${prev.monthKey}&to=${current.monthKey}`),
       headers: { cookie: cookieA },
     });
     expect(range.statusCode).toBe(200);
@@ -341,43 +404,46 @@ describe('GET /reports/revenue', () => {
       receivables: {
         total: string;
         received: string | null;
+        outstanding: string | null;
         items: ReadonlyArray<{ name: string; amount: string }>;
       };
       months: ReadonlyArray<{ monthKey: string; receivables: { total: string; daily: unknown[] } }>;
     };
-    expect(body.from).toBe('2026-01');
-    expect(body.to).toBe('2026-02');
-    expect(body.receivables.total).toBe('19000');
+    expect(body.from).toBe(prev.monthKey);
+    expect(body.to).toBe(current.monthKey);
     expect(body.receivables.received).toBe('9000');
-    expect(body.months.map((month) => month.monthKey)).toEqual(['2026-01', '2026-02']);
-    expect(body.months[0]?.receivables.total).toBe('14000');
-    expect(body.months[1]?.receivables.total).toBe('5000');
+    expect(body.receivables.outstanding).toBe('10000');
+    expect(body.receivables.total).toBe('19000');
+    expect(body.months.map((month) => month.monthKey)).toEqual([prev.monthKey, current.monthKey]);
+    expect(body.months[0]?.receivables.total).toBe('4000');
+    expect(body.months[1]?.receivables.total).toBe('15000');
     expect(Array.isArray(body.months[0]?.receivables.daily)).toBe(true);
-    expect(body.receivables.items.find((item) => item.name === 'Serviços')?.amount).toBe('15000');
+    expect(body.receivables.items.find((item) => item.name === 'Serviços')?.amount).toBe('5000');
+    expect(body.receivables.items.find((item) => item.name === 'Produtos')?.amount).toBe('4000');
     expect(JSON.stringify(body)).not.toContain('333');
     expect('daily' in body.receivables).toBe(false);
 
-    const monthly = await app.inject({
+    const cashFlow = await app.inject({
       method: 'GET',
-      url: '/dashboard/monthly-revenue?month=2026-01',
+      url: `/dashboard/monthly-cash-flow?month=${current.monthKey}`,
       headers: { cookie: cookieA },
     });
-    expect(monthly.statusCode).toBe(200);
+    expect(cashFlow.statusCode).toBe(200);
     const single = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-01'),
+      url: revenueUrl(`from=${current.monthKey}&to=${current.monthKey}`),
       headers: { cookie: cookieA },
     });
     expect(single.statusCode).toBe(200);
-    expect(single.json().receivables.total).toBe(monthly.json().receivables.total);
-    expect(single.json().receivables.received).toBe(monthly.json().receivables.received);
-    expect(single.json().receivables.outstanding).toBe(monthly.json().receivables.outstanding);
-    expect(single.json().receivables.items).toEqual(monthly.json().receivables.items);
-    expect(single.json().months[0].receivables.daily).toEqual(monthly.json().receivables.daily);
+    const cash = cashFlow.json();
+    expect(single.json().receivables.received).toBe(cash.realized.inflows);
+    expect(single.json().receivables.outstanding).toBe(cash.expected.receivables);
+    expect(single.json().receivables.total).toBe(cash.billing);
+    expect(Array.isArray(single.json().months[0].receivables.daily)).toBe(true);
 
     const other = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-02'),
+      url: revenueUrl(`from=${prev.monthKey}&to=${current.monthKey}`),
       headers: { cookie: cookieB },
     });
     expect(other.statusCode).toBe(200);
@@ -385,153 +451,170 @@ describe('GET /reports/revenue', () => {
     expect(JSON.stringify(other.json())).not.toContain('10000');
   });
 
-  it('aplica situation, category e a combinação AND', async () => {
-    const jan = civilMonthBoundsFromKey('2026-01');
+  it('ignora situation e aplica category no motor de caixa', async () => {
+    const today = civilTodayInSaoPaulo(new Date());
+    const { from, to, monthKey } = civilMonthBounds(today);
     const a = await seedConnected('rr-filters');
-    const syncedAt = new Date();
-    await financial.upsertCategories(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        {
-          externalId: 'serv',
-          name: 'Serviços',
-          type: 'REVENUE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-        {
-          externalId: 'prod',
-          name: 'Produtos',
-          type: 'REVENUE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-      ],
-    );
-    await financial.upsertReceivables(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'paid-serv',
-          status: 'PAID',
-          total: '100',
-          paid: '100',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv'],
-        }),
-        installment({
-          externalId: 'open-serv',
-          status: 'OPEN',
-          total: '40',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv'],
-        }),
-        installment({
-          externalId: 'paid-prod',
-          status: 'PAID',
-          total: '25',
-          paid: '25',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['prod'],
-        }),
-      ],
-    );
+    const scope = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    await financial.upsertCategories(scope, [
+      {
+        externalId: 'serv',
+        name: 'Serviços',
+        type: 'REVENUE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+      {
+        externalId: 'prod',
+        name: 'Produtos',
+        type: 'REVENUE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertReceivables(scope, [
+      installment({
+        externalId: 'paid-serv',
+        dueDate: from,
+        unpaid: '0',
+        paid: '100',
+        status: 'PAID',
+        categoryExternalIds: ['serv'],
+      }),
+      installment({
+        externalId: 'open-serv',
+        dueDate: to,
+        unpaid: '40',
+        categoryExternalIds: ['serv'],
+      }),
+      installment({
+        externalId: 'paid-prod',
+        dueDate: from,
+        unpaid: '0',
+        paid: '25',
+        status: 'PAID',
+        categoryExternalIds: ['prod'],
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scope, 'RECEIVABLE', [
+      baixa({
+        id: 'paid-serv-b',
+        installmentId: 'paid-serv',
+        data: iso(from),
+        bruto: '100',
+        liquido: '100',
+      }),
+      baixa({
+        id: 'paid-prod-b',
+        installmentId: 'paid-prod',
+        data: iso(from),
+        bruto: '25',
+        liquido: '25',
+      }),
+    ]);
     const servId = await categoryId(a.tenant.id, 'serv');
     await createUser({ email: 'user@rr-filters.test', role: 'USER', tenantId: a.tenant.id });
     const app = await buildTestApp();
     const cookie = await loginAs(app, 'user@rr-filters.test');
 
-    const settled = await app.inject({
+    const baseline = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-01&situation=settled'),
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}`),
       headers: { cookie },
     });
-    expect(settled.statusCode).toBe(200);
-    expect(settled.json().receivables.total).toBe('125');
+    expect(baseline.statusCode).toBe(200);
+    const baseKpis = cashKpis(baseline.json());
+    expect(baseKpis).toEqual({ total: '165', received: '125', outstanding: '40' });
 
-    const open = await app.inject({
-      method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-01&situation=open'),
-      headers: { cookie },
-    });
-    expect(open.statusCode).toBe(200);
-    expect(open.json().receivables.total).toBe('40');
+    for (const situation of ['settled', 'open', 'overdue'] as const) {
+      const filtered = await app.inject({
+        method: 'GET',
+        url: revenueUrl(`from=${monthKey}&to=${monthKey}&situation=${situation}`),
+        headers: { cookie },
+      });
+      expect(filtered.statusCode).toBe(200);
+      expect(cashKpis(filtered.json())).toEqual(baseKpis);
+    }
 
     const named = await app.inject({
       method: 'GET',
-      url: revenueUrl(`from=2026-01&to=2026-01&category=${servId}`),
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}&category=${servId}`),
       headers: { cookie },
     });
     expect(named.statusCode).toBe(200);
-    expect(named.json().receivables.total).toBe('140');
+    expect(cashKpis(named.json())).toEqual({
+      total: '140',
+      received: '100',
+      outstanding: '40',
+    });
 
     const combo = await app.inject({
       method: 'GET',
-      url: revenueUrl(`from=2026-01&to=2026-01&situation=settled&category=${servId}`),
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}&situation=settled&category=${servId}`),
       headers: { cookie },
     });
     expect(combo.statusCode).toBe(200);
-    expect(combo.json().receivables.total).toBe('100');
+    expect(cashKpis(combo.json())).toEqual(cashKpis(named.json()));
 
     const invalidSituation = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-01&situation=PAID'),
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}&situation=PAID`),
       headers: { cookie },
     });
     expect(invalidSituation.statusCode).toBe(400);
 
     const missingCategory = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-01&category=8cf7b841-7d8c-4166-b24b-5f350e0d5403'),
+      url: revenueUrl(
+        `from=${monthKey}&to=${monthKey}&category=8cf7b841-7d8c-4166-b24b-5f350e0d5403`,
+      ),
       headers: { cookie },
     });
     expect(missingCategory.statusCode).toBe(404);
   });
 
   it('respeita costCenter (CC1) e Support Mode', async () => {
-    const jan = civilMonthBoundsFromKey('2026-01');
+    const today = civilTodayInSaoPaulo(new Date());
+    const { to, monthKey } = civilMonthBounds(today);
     const a = await seedConnected('rr-cc');
     const b = await seedConnected('rr-cc-b');
-    const syncedAt = new Date();
-    await financial.upsertCategories(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        {
-          externalId: 'serv',
-          name: 'Serviços',
-          type: 'REVENUE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-      ],
-    );
-    await financial.upsertReceivables(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'r1',
-          status: 'OPEN',
-          total: '10000',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv'],
-        }),
-      ],
-    );
-    await financial.upsertReceivables(
-      { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'b1',
-          status: 'PAID',
-          total: '777',
-          paid: '777',
-          unpaid: '0',
-          competenceDate: jan.from,
-        }),
-      ],
-    );
+    const scopeA = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    const scopeB = { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt: new Date() };
+    await financial.upsertCategories(scopeA, [
+      {
+        externalId: 'serv',
+        name: 'Serviços',
+        type: 'REVENUE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertReceivables(scopeA, [
+      installment({
+        externalId: 'r1',
+        dueDate: to,
+        unpaid: '10000',
+        categoryExternalIds: ['serv'],
+      }),
+    ]);
+    await financial.upsertReceivables(scopeB, [
+      installment({
+        externalId: 'b1',
+        dueDate: to,
+        unpaid: '0',
+        paid: '777',
+        status: 'PAID',
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeB, 'RECEIVABLE', [
+      baixa({
+        id: 'b1-b',
+        installmentId: 'b1',
+        data: iso(civilMonthBoundsFromKey(monthKey).from),
+        bruto: '777',
+        liquido: '777',
+      }),
+    ]);
     const receivable = await prisma.receivable.findFirstOrThrow({
       where: { tenantId: a.tenant.id, externalId: 'r1' },
     });
@@ -543,7 +626,7 @@ describe('GET /reports/revenue', () => {
         code: 'A',
         name: 'Centro A',
         active: true,
-        syncedAt,
+        syncedAt: scopeA.syncedAt,
       },
     });
     await prisma.installmentCostCenterAllocation.create({
@@ -553,7 +636,7 @@ describe('GET /reports/revenue', () => {
         receivableId: receivable.id,
         payableId: null,
         amount: new Prisma.Decimal('3000'),
-        syncedAt,
+        syncedAt: scopeA.syncedAt,
       },
     });
 
@@ -563,24 +646,29 @@ describe('GET /reports/revenue', () => {
     const userCookie = await loginAs(app, 'user@rr-cc.test');
     const filtered = await app.inject({
       method: 'GET',
-      url: revenueUrl(`from=2026-01&to=2026-01&costCenter=${centerA.id}`),
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}&costCenter=${centerA.id}`),
       headers: { cookie: userCookie },
     });
     expect(filtered.statusCode).toBe(200);
-    const monthly = await app.inject({
+    const cashFlow = await app.inject({
       method: 'GET',
-      url: `/dashboard/monthly-revenue?month=2026-01&costCenter=${centerA.id}`,
+      url: `/dashboard/monthly-cash-flow?month=${monthKey}&costCenter=${centerA.id}`,
       headers: { cookie: userCookie },
     });
-    expect(monthly.statusCode).toBe(200);
+    expect(cashFlow.statusCode).toBe(200);
     expect(filtered.json().receivables.total).toBe('3000');
-    expect(filtered.json().receivables.total).toBe(monthly.json().receivables.total);
-    expect(filtered.json().receivables.received).toBe(monthly.json().receivables.received);
-    expect(filtered.json().costCenterCashSplit).toBe(monthly.json().costCenterCashSplit);
+    expect(filtered.json().receivables.outstanding).toBe('3000');
+    expect(filtered.json().receivables.received).toBe(cashFlow.json().realized.inflows);
+    expect(filtered.json().receivables.outstanding).toBe(cashFlow.json().expected.receivables);
+    expect(filtered.json().receivables.total).toBe(cashFlow.json().billing);
+    // Relatório omite o campo quando o split está disponível (true).
+    expect(filtered.json().costCenterCashSplit ?? true).toBe(cashFlow.json().costCenterCashSplit);
 
     const otherCenter = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-01&costCenter=8cf7b841-7d8c-4166-b24b-5f350e0d5403'),
+      url: revenueUrl(
+        `from=${monthKey}&to=${monthKey}&costCenter=8cf7b841-7d8c-4166-b24b-5f350e0d5403`,
+      ),
       headers: { cookie: userCookie },
     });
     expect(otherCenter.statusCode).toBe(404);
@@ -595,7 +683,7 @@ describe('GET /reports/revenue', () => {
     expect(enter.statusCode).toBe(200);
     const supported = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-01'),
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}`),
       headers: { cookie: adminCookie },
     });
     expect(supported.statusCode).toBe(200);
@@ -609,7 +697,7 @@ describe('GET /reports/revenue', () => {
     });
     const afterExit = await app.inject({
       method: 'GET',
-      url: revenueUrl('from=2026-01&to=2026-01'),
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}`),
       headers: { cookie: adminCookie },
     });
     expect(afterExit.statusCode).toBe(403);

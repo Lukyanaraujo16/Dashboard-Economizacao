@@ -1,9 +1,15 @@
-import { isExpenseCompositionEmpty } from '../dashboard/dashboard-expense-composition-view';
 import { formatMonthKeyPtBr } from '../dashboard/dashboard-forecast-view';
 import type { ReportsRevenueResponse } from '../../services/reports/revenue.types';
 
+const ZEROISH = /^-?0+(\.0+)?$/;
+
 export function isRevenueReportEmpty(data: ReportsRevenueResponse): boolean {
-  return isExpenseCompositionEmpty(data.receivables.items, data.receivables.total);
+  const received = data.receivables.received;
+  const outstanding = data.receivables.outstanding;
+  const hasMovement =
+    (received !== null && !ZEROISH.test(received)) ||
+    (outstanding !== null && !ZEROISH.test(outstanding));
+  return !hasMovement && data.receivables.items.length === 0;
 }
 
 export function revenueReportPeriodLabel(from: string, to: string): string {

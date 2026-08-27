@@ -7,15 +7,20 @@ import type { FinancialInstallmentStatus } from '../src/generated/prisma/client.
 import { encryptSecret } from '../src/infrastructure/crypto/secret-box.js';
 import { disconnectPrisma, getPrismaClient } from '../src/infrastructure/database/prisma.js';
 import { civilTodayInSaoPaulo } from '../src/modules/analytics/domain/analytical-timezone.js';
-import { addCivilDays, civilMonthBoundsFromKey } from '../src/modules/analytics/domain/civil-calendar.js';
+import {
+  civilMonthBounds,
+  civilMonthBoundsFromKey,
+} from '../src/modules/analytics/domain/civil-calendar.js';
 import {
   createArgon2idPasswordHasher,
   createUserCredentialRepository,
   createUserRepository,
 } from '../src/modules/auth/index.js';
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
+import { mapSettlement } from '../src/modules/integrations/conta-azul/domain/conta-azul-settlement-mappers.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
+import { createContaAzulLedgerRepository } from '../src/modules/integrations/conta-azul/repositories/ledger.repository.js';
 import { createTenantRepository } from '../src/modules/tenant/repositories/tenant.repository.js';
 import { cleanTestDatabase } from './helpers/test-database.js';
 
@@ -28,6 +33,7 @@ const prisma = getPrismaClient();
 const tenants = createTenantRepository(prisma);
 const integrations = createContaAzulIntegrationRepository(prisma);
 const financial = createContaAzulFinancialRepository(prisma);
+const ledgerWrite = createContaAzulLedgerRepository(prisma);
 const users = createUserRepository(prisma);
 const credentials = createUserCredentialRepository(prisma);
 const passwordHasher = createArgon2idPasswordHasher();
@@ -64,6 +70,12 @@ afterEach(async () => {
 afterAll(async () => {
   await disconnectPrisma();
 });
+
+function iso(date: Date): string {
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${month}-${day}`;
+}
 
 function readSessionCookie(setCookieHeader: string | string[] | undefined): string | undefined {
   const values = Array.isArray(setCookieHeader)
@@ -138,33 +150,55 @@ async function seedConnected(name: string) {
 
 function installment(input: {
   readonly externalId: string;
-  readonly status: FinancialInstallmentStatus;
-  readonly total: string;
-  readonly paid?: string;
+  readonly dueDate: Date;
   readonly unpaid?: string;
-  readonly competenceDate: Date | null;
-  readonly dueDate?: Date;
+  readonly paid?: string;
+  readonly total?: string;
+  readonly status?: FinancialInstallmentStatus;
+  readonly competenceDate?: Date | null;
   readonly categoryExternalIds?: readonly string[];
 }) {
-  const total = new Prisma.Decimal(input.total);
+  const unpaid = new Prisma.Decimal(input.unpaid ?? '0');
   const paid = new Prisma.Decimal(input.paid ?? '0');
-  const unpaid = new Prisma.Decimal(input.unpaid ?? total.minus(paid).toString());
-  const today = civilTodayInSaoPaulo(new Date());
+  const total = new Prisma.Decimal(input.total ?? unpaid.plus(paid).toString());
   return {
     externalId: input.externalId,
     description: 'descricao-secreta-nao-vazar',
-    dueDate: input.dueDate ?? today,
-    competenceDate: input.competenceDate,
+    dueDate: input.dueDate,
+    competenceDate: input.competenceDate === undefined ? input.dueDate : input.competenceDate,
     upstreamCreatedAt: null,
     upstreamUpdatedAt: null,
-    status: input.status,
-    upstreamStatus: input.status,
+    status: input.status ?? 'OPEN',
+    upstreamStatus: input.status ?? 'OPEN',
     total,
     paid,
     unpaid,
     externalPartyId: null,
     categoryExternalIds: [...(input.categoryExternalIds ?? [])],
   };
+}
+
+function baixa(input: {
+  readonly id: string;
+  readonly installmentId: string;
+  readonly data: string;
+  readonly bruto: string;
+  readonly liquido: string;
+}) {
+  return mapSettlement({
+    id: input.id,
+    id_parcela: input.installmentId,
+    data_pagamento: input.data,
+    tipo_evento_financeiro: 'DESPESA',
+    valor_composicao: {
+      valor_bruto: input.bruto,
+      valor_liquido: input.liquido,
+      juros: '0',
+      multa: '0',
+      desconto: '0',
+      taxa: '0',
+    },
+  });
 }
 
 async function categoryId(tenantId: string, externalId: string): Promise<string> {
@@ -175,6 +209,20 @@ async function categoryId(tenantId: string, externalId: string): Promise<string>
 
 function expensesUrl(query: string): string {
   return `/reports/expenses?${query}`;
+}
+
+function cashKpis(body: {
+  payables: {
+    total: string | null;
+    paid: string | null;
+    outstanding: string | null;
+  };
+}) {
+  return {
+    total: body.payables.total,
+    paid: body.payables.paid,
+    outstanding: body.payables.outstanding,
+  };
 }
 
 describe('GET /reports/expenses', () => {
@@ -249,75 +297,92 @@ describe('GET /reports/expenses', () => {
     expect(tenantQuery.statusCode).toBe(400);
   });
 
-  it('agrega vários meses, isola tenant e bate com monthly-expenses no mesmo mês', async () => {
-    const jan = civilMonthBoundsFromKey('2026-01');
-    const feb = civilMonthBoundsFromKey('2026-02');
+  it('agrega vários meses, isola tenant e bate com monthly-cash-flow no mesmo mês', async () => {
+    const today = civilTodayInSaoPaulo(new Date());
+    const current = civilMonthBounds(today);
+    const prevFrom = new Date(Date.UTC(current.from.getUTCFullYear(), current.from.getUTCMonth() - 1, 1));
+    const prev = civilMonthBounds(prevFrom);
     const a = await seedConnected('re-a');
     const b = await seedConnected('re-b');
-    const syncedAt = new Date();
-    await financial.upsertCategories(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        {
-          externalId: 'alug',
-          name: 'Aluguel',
-          type: 'EXPENSE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-        {
-          externalId: 'serv',
-          name: 'Serviços',
-          type: 'EXPENSE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-      ],
-    );
-    await financial.upsertPayables(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'jan-open',
-          status: 'OPEN',
-          total: '10000',
-          competenceDate: jan.from,
-          categoryExternalIds: ['alug'],
-        }),
-        installment({
-          externalId: 'jan-paid',
-          status: 'PAID',
-          total: '4000',
-          paid: '4000',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv'],
-        }),
-        installment({
-          externalId: 'feb-paid',
-          status: 'PAID',
-          total: '5000',
-          paid: '5000',
-          unpaid: '0',
-          competenceDate: feb.from,
-          categoryExternalIds: ['alug'],
-        }),
-      ],
-    );
-    await financial.upsertPayables(
-      { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'other-tenant',
-          status: 'PAID',
-          total: '333',
-          paid: '333',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['alug'],
-        }),
-      ],
-    );
+    const scopeA = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    const scopeB = { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt: new Date() };
+
+    await financial.upsertCategories(scopeA, [
+      {
+        externalId: 'alug',
+        name: 'Aluguel',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+      {
+        externalId: 'serv',
+        name: 'Serviços',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertPayables(scopeA, [
+      installment({
+        externalId: 'cur-open',
+        dueDate: current.to,
+        unpaid: '10000',
+        categoryExternalIds: ['alug'],
+      }),
+      installment({
+        externalId: 'prev-paid',
+        dueDate: prev.from,
+        unpaid: '0',
+        paid: '4000',
+        status: 'PAID',
+        categoryExternalIds: ['serv'],
+      }),
+      installment({
+        externalId: 'cur-paid',
+        dueDate: current.from,
+        unpaid: '0',
+        paid: '5000',
+        status: 'PAID',
+        categoryExternalIds: ['alug'],
+      }),
+    ]);
+    await financial.upsertPayables(scopeB, [
+      installment({
+        externalId: 'other-tenant',
+        dueDate: current.from,
+        unpaid: '0',
+        paid: '333',
+        status: 'PAID',
+        categoryExternalIds: ['alug'],
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeA, 'PAYABLE', [
+      baixa({
+        id: 'prev-b',
+        installmentId: 'prev-paid',
+        data: iso(prev.from),
+        bruto: '4000',
+        liquido: '4000',
+      }),
+      baixa({
+        id: 'cur-b',
+        installmentId: 'cur-paid',
+        data: iso(current.from),
+        bruto: '5000',
+        liquido: '5000',
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeB, 'PAYABLE', [
+      baixa({
+        id: 'other-b',
+        installmentId: 'other-tenant',
+        data: iso(current.from),
+        bruto: '333',
+        liquido: '333',
+      }),
+    ]);
+
     await createUser({ email: 'user-a@re.test', role: 'USER', tenantId: a.tenant.id });
     await createUser({ email: 'user-b@re.test', role: 'USER', tenantId: b.tenant.id });
     const app = await buildTestApp();
@@ -332,13 +397,11 @@ describe('GET /reports/expenses', () => {
     expect(empty.statusCode).toBe(200);
     expect(empty.json().payables.total).toBe('0');
     expect(empty.json().payables.coverageRate).toBeNull();
-    expect(empty.json().months).toEqual([
-      expect.objectContaining({ monthKey: '2024-01' }),
-    ]);
+    expect(empty.json().months).toEqual([expect.objectContaining({ monthKey: '2024-01' })]);
 
     const range = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-02'),
+      url: expensesUrl(`from=${prev.monthKey}&to=${current.monthKey}`),
       headers: { cookie: cookieA },
     });
     expect(range.statusCode).toBe(200);
@@ -349,43 +412,49 @@ describe('GET /reports/expenses', () => {
       payables: {
         total: string;
         paid: string | null;
+        outstanding: string | null;
         items: ReadonlyArray<{ name: string; amount: string; paid: string | null }>;
       };
       months: ReadonlyArray<{ monthKey: string; payables: { total: string; daily: unknown[] } }>;
     };
-    expect(body.from).toBe('2026-01');
-    expect(body.to).toBe('2026-02');
-    expect(body.payables.total).toBe('19000');
+    expect(body.from).toBe(prev.monthKey);
+    expect(body.to).toBe(current.monthKey);
     expect(body.payables.paid).toBe('9000');
-    expect(body.months.map((month) => month.monthKey)).toEqual(['2026-01', '2026-02']);
-    expect(body.months[0]?.payables.total).toBe('14000');
-    expect(body.months[1]?.payables.total).toBe('5000');
+    expect(body.payables.outstanding).toBe('10000');
+    expect(body.payables.total).toBe('19000');
+    expect(body.months.map((month) => month.monthKey)).toEqual([prev.monthKey, current.monthKey]);
+    expect(body.months[0]?.payables.total).toBe('4000');
+    expect(body.months[1]?.payables.total).toBe('15000');
     expect(Array.isArray(body.months[0]?.payables.daily)).toBe(true);
-    expect(body.payables.items.find((item) => item.name === 'Aluguel')?.amount).toBe('15000');
+    expect(body.payables.items.find((item) => item.name === 'Aluguel')?.amount).toBe('5000');
+    expect(body.payables.items.find((item) => item.name === 'Serviços')?.amount).toBe('4000');
     expect(JSON.stringify(body)).not.toContain('333');
     expect('daily' in body.payables).toBe(false);
 
-    const monthly = await app.inject({
+    const cashFlow = await app.inject({
       method: 'GET',
-      url: '/dashboard/monthly-expenses?month=2026-01',
+      url: `/dashboard/monthly-cash-flow?month=${current.monthKey}`,
       headers: { cookie: cookieA },
     });
-    expect(monthly.statusCode).toBe(200);
+    expect(cashFlow.statusCode).toBe(200);
     const single = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01'),
+      url: expensesUrl(`from=${current.monthKey}&to=${current.monthKey}`),
       headers: { cookie: cookieA },
     });
     expect(single.statusCode).toBe(200);
-    expect(single.json().payables.total).toBe(monthly.json().payables.total);
-    expect(single.json().payables.paid).toBe(monthly.json().payables.paid);
-    expect(single.json().payables.outstanding).toBe(monthly.json().payables.outstanding);
-    expect(single.json().payables.items).toEqual(monthly.json().payables.items);
-    expect(single.json().months[0].payables.daily).toEqual(monthly.json().payables.daily);
+    const cash = cashFlow.json();
+    const expectedTotal = new Prisma.Decimal(cash.realized.outflows)
+      .plus(cash.expected.payables)
+      .toString();
+    expect(single.json().payables.paid).toBe(cash.realized.outflows);
+    expect(single.json().payables.outstanding).toBe(cash.expected.payables);
+    expect(single.json().payables.total).toBe(expectedTotal);
+    expect(Array.isArray(single.json().months[0].payables.daily)).toBe(true);
 
     const other = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-02'),
+      url: expensesUrl(`from=${prev.monthKey}&to=${current.monthKey}`),
       headers: { cookie: cookieB },
     });
     expect(other.statusCode).toBe(200);
@@ -393,197 +462,190 @@ describe('GET /reports/expenses', () => {
     expect(JSON.stringify(other.json())).not.toContain('10000');
   });
 
-  it('aplica situation, overdue D1, category incompatível e a combinação AND', async () => {
-    const jan = civilMonthBoundsFromKey('2026-01');
+  it('ignora situation e aplica category no motor de caixa', async () => {
     const today = civilTodayInSaoPaulo(new Date());
-    const yesterday = addCivilDays(today, -1);
-    const tomorrow = addCivilDays(today, 1);
+    const { from, to, monthKey } = civilMonthBounds(today);
     const a = await seedConnected('re-filters');
-    const syncedAt = new Date();
-    await financial.upsertCategories(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        {
-          externalId: 'alug',
-          name: 'Aluguel',
-          type: 'EXPENSE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-        {
-          externalId: 'serv',
-          name: 'Serviços',
-          type: 'EXPENSE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-        {
-          externalId: 'vendas',
-          name: 'Vendas',
-          type: 'REVENUE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-      ],
-    );
-    await financial.upsertPayables(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'paid-alug',
-          status: 'PAID',
-          total: '100',
-          paid: '100',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['alug'],
-        }),
-        installment({
-          externalId: 'open-alug',
-          status: 'OPEN',
-          total: '40',
-          competenceDate: jan.from,
-          dueDate: tomorrow,
-          categoryExternalIds: ['alug'],
-        }),
-        installment({
-          externalId: 'overdue-alug',
-          status: 'OPEN',
-          total: '25',
-          competenceDate: jan.from,
-          dueDate: yesterday,
-          categoryExternalIds: ['alug'],
-        }),
-        installment({
-          externalId: 'persisted-overdue-future',
-          status: 'OVERDUE',
-          total: '15',
-          competenceDate: jan.from,
-          dueDate: tomorrow,
-          categoryExternalIds: ['alug'],
-        }),
-        installment({
-          externalId: 'paid-serv',
-          status: 'PAID',
-          total: '25',
-          paid: '25',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv'],
-        }),
-      ],
-    );
+    const scope = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    await financial.upsertCategories(scope, [
+      {
+        externalId: 'alug',
+        name: 'Aluguel',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+      {
+        externalId: 'serv',
+        name: 'Serviços',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+      {
+        externalId: 'vendas',
+        name: 'Vendas',
+        type: 'REVENUE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertPayables(scope, [
+      installment({
+        externalId: 'paid-alug',
+        dueDate: from,
+        unpaid: '0',
+        paid: '100',
+        status: 'PAID',
+        categoryExternalIds: ['alug'],
+      }),
+      installment({
+        externalId: 'open-alug',
+        dueDate: to,
+        unpaid: '40',
+        categoryExternalIds: ['alug'],
+      }),
+      installment({
+        externalId: 'paid-serv',
+        dueDate: from,
+        unpaid: '0',
+        paid: '25',
+        status: 'PAID',
+        categoryExternalIds: ['serv'],
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scope, 'PAYABLE', [
+      baixa({
+        id: 'paid-alug-b',
+        installmentId: 'paid-alug',
+        data: iso(from),
+        bruto: '100',
+        liquido: '100',
+      }),
+      baixa({
+        id: 'paid-serv-b',
+        installmentId: 'paid-serv',
+        data: iso(from),
+        bruto: '25',
+        liquido: '25',
+      }),
+    ]);
     const alugId = await categoryId(a.tenant.id, 'alug');
     const vendasId = await categoryId(a.tenant.id, 'vendas');
     await createUser({ email: 'user@re-filters.test', role: 'USER', tenantId: a.tenant.id });
     const app = await buildTestApp();
     const cookie = await loginAs(app, 'user@re-filters.test');
 
-    const settled = await app.inject({
+    const baseline = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01&situation=settled'),
+      url: expensesUrl(`from=${monthKey}&to=${monthKey}`),
       headers: { cookie },
     });
-    expect(settled.statusCode).toBe(200);
-    expect(settled.json().payables.total).toBe('125');
+    expect(baseline.statusCode).toBe(200);
+    const baseKpis = cashKpis(baseline.json());
+    expect(baseKpis).toEqual({ total: '165', paid: '125', outstanding: '40' });
 
-    const open = await app.inject({
-      method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01&situation=open'),
-      headers: { cookie },
-    });
-    expect(open.statusCode).toBe(200);
-    expect(open.json().payables.total).toBe('80');
-
-    const overdue = await app.inject({
-      method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01&situation=overdue'),
-      headers: { cookie },
-    });
-    expect(overdue.statusCode).toBe(200);
-    expect(overdue.json().payables.total).toBe('25');
+    for (const situation of ['settled', 'open', 'overdue'] as const) {
+      const filtered = await app.inject({
+        method: 'GET',
+        url: expensesUrl(`from=${monthKey}&to=${monthKey}&situation=${situation}`),
+        headers: { cookie },
+      });
+      expect(filtered.statusCode).toBe(200);
+      expect(cashKpis(filtered.json())).toEqual(baseKpis);
+    }
 
     const named = await app.inject({
       method: 'GET',
-      url: expensesUrl(`from=2026-01&to=2026-01&category=${alugId}`),
+      url: expensesUrl(`from=${monthKey}&to=${monthKey}&category=${alugId}`),
       headers: { cookie },
     });
     expect(named.statusCode).toBe(200);
-    expect(named.json().payables.total).toBe('180');
+    expect(cashKpis(named.json())).toEqual({
+      total: '140',
+      paid: '100',
+      outstanding: '40',
+    });
 
     const combo = await app.inject({
       method: 'GET',
-      url: expensesUrl(`from=2026-01&to=2026-01&situation=settled&category=${alugId}`),
+      url: expensesUrl(`from=${monthKey}&to=${monthKey}&situation=settled&category=${alugId}`),
       headers: { cookie },
     });
     expect(combo.statusCode).toBe(200);
-    expect(combo.json().payables.total).toBe('100');
+    expect(cashKpis(combo.json())).toEqual(cashKpis(named.json()));
 
     const revenueOnAp = await app.inject({
       method: 'GET',
-      url: expensesUrl(`from=2026-01&to=2026-01&category=${vendasId}`),
+      url: expensesUrl(`from=${monthKey}&to=${monthKey}&category=${vendasId}`),
       headers: { cookie },
     });
     expect(revenueOnAp.statusCode).toBe(200);
-    expect(revenueOnAp.json().payables.total).toBe('0');
+    expect(cashKpis(revenueOnAp.json())).toEqual({
+      total: '0',
+      paid: '0',
+      outstanding: '0',
+    });
 
     const invalidSituation = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01&situation=PAID'),
+      url: expensesUrl(`from=${monthKey}&to=${monthKey}&situation=PAID`),
       headers: { cookie },
     });
     expect(invalidSituation.statusCode).toBe(400);
 
     const missingCategory = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01&category=8cf7b841-7d8c-4166-b24b-5f350e0d5403'),
+      url: expensesUrl(
+        `from=${monthKey}&to=${monthKey}&category=8cf7b841-7d8c-4166-b24b-5f350e0d5403`,
+      ),
       headers: { cookie },
     });
     expect(missingCategory.statusCode).toBe(404);
   });
 
   it('respeita costCenter (CC1) e Support Mode', async () => {
-    const jan = civilMonthBoundsFromKey('2026-01');
+    const today = civilTodayInSaoPaulo(new Date());
+    const { to, monthKey } = civilMonthBounds(today);
     const a = await seedConnected('re-cc');
     const b = await seedConnected('re-cc-b');
-    const syncedAt = new Date();
-    await financial.upsertCategories(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        {
-          externalId: 'alug',
-          name: 'Aluguel',
-          type: 'EXPENSE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-      ],
-    );
-    await financial.upsertPayables(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'p1',
-          status: 'OPEN',
-          total: '10000',
-          competenceDate: jan.from,
-          categoryExternalIds: ['alug'],
-        }),
-      ],
-    );
-    await financial.upsertPayables(
-      { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'b1',
-          status: 'PAID',
-          total: '777',
-          paid: '777',
-          unpaid: '0',
-          competenceDate: jan.from,
-        }),
-      ],
-    );
+    const scopeA = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    const scopeB = { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt: new Date() };
+    await financial.upsertCategories(scopeA, [
+      {
+        externalId: 'alug',
+        name: 'Aluguel',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertPayables(scopeA, [
+      installment({
+        externalId: 'p1',
+        dueDate: to,
+        unpaid: '10000',
+        categoryExternalIds: ['alug'],
+      }),
+    ]);
+    await financial.upsertPayables(scopeB, [
+      installment({
+        externalId: 'b1',
+        dueDate: to,
+        unpaid: '0',
+        paid: '777',
+        status: 'PAID',
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeB, 'PAYABLE', [
+      baixa({
+        id: 'b1-b',
+        installmentId: 'b1',
+        data: iso(civilMonthBoundsFromKey(monthKey).from),
+        bruto: '777',
+        liquido: '777',
+      }),
+    ]);
     const payable = await prisma.payable.findFirstOrThrow({
       where: { tenantId: a.tenant.id, externalId: 'p1' },
     });
@@ -595,7 +657,7 @@ describe('GET /reports/expenses', () => {
         code: 'A',
         name: 'Centro A',
         active: true,
-        syncedAt,
+        syncedAt: scopeA.syncedAt,
       },
     });
     await prisma.installmentCostCenterAllocation.create({
@@ -605,7 +667,7 @@ describe('GET /reports/expenses', () => {
         receivableId: null,
         payableId: payable.id,
         amount: new Prisma.Decimal('3000'),
-        syncedAt,
+        syncedAt: scopeA.syncedAt,
       },
     });
 
@@ -615,24 +677,33 @@ describe('GET /reports/expenses', () => {
     const userCookie = await loginAs(app, 'user@re-cc.test');
     const filtered = await app.inject({
       method: 'GET',
-      url: expensesUrl(`from=2026-01&to=2026-01&costCenter=${centerA.id}`),
+      url: expensesUrl(`from=${monthKey}&to=${monthKey}&costCenter=${centerA.id}`),
       headers: { cookie: userCookie },
     });
     expect(filtered.statusCode).toBe(200);
-    const monthly = await app.inject({
+    const cashFlow = await app.inject({
       method: 'GET',
-      url: `/dashboard/monthly-expenses?month=2026-01&costCenter=${centerA.id}`,
+      url: `/dashboard/monthly-cash-flow?month=${monthKey}&costCenter=${centerA.id}`,
       headers: { cookie: userCookie },
     });
-    expect(monthly.statusCode).toBe(200);
+    expect(cashFlow.statusCode).toBe(200);
+    const cash = cashFlow.json();
+    const expectedTotal = new Prisma.Decimal(cash.realized.outflows ?? 0)
+      .plus(cash.expected.payables ?? 0)
+      .toString();
     expect(filtered.json().payables.total).toBe('3000');
-    expect(filtered.json().payables.total).toBe(monthly.json().payables.total);
-    expect(filtered.json().payables.paid).toBe(monthly.json().payables.paid);
-    expect(filtered.json().costCenterCashSplit).toBe(monthly.json().costCenterCashSplit);
+    expect(filtered.json().payables.outstanding).toBe('3000');
+    expect(filtered.json().payables.paid).toBe(cash.realized.outflows);
+    expect(filtered.json().payables.outstanding).toBe(cash.expected.payables);
+    expect(filtered.json().payables.total).toBe(expectedTotal);
+    // Relatório omite o campo quando o split está disponível (true).
+    expect(filtered.json().costCenterCashSplit ?? true).toBe(cash.costCenterCashSplit);
 
     const otherCenter = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01&costCenter=8cf7b841-7d8c-4166-b24b-5f350e0d5403'),
+      url: expensesUrl(
+        `from=${monthKey}&to=${monthKey}&costCenter=8cf7b841-7d8c-4166-b24b-5f350e0d5403`,
+      ),
       headers: { cookie: userCookie },
     });
     expect(otherCenter.statusCode).toBe(404);
@@ -647,7 +718,7 @@ describe('GET /reports/expenses', () => {
     expect(enter.statusCode).toBe(200);
     const supported = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01'),
+      url: expensesUrl(`from=${monthKey}&to=${monthKey}`),
       headers: { cookie: adminCookie },
     });
     expect(supported.statusCode).toBe(200);
@@ -661,7 +732,7 @@ describe('GET /reports/expenses', () => {
     });
     const afterExit = await app.inject({
       method: 'GET',
-      url: expensesUrl('from=2026-01&to=2026-01'),
+      url: expensesUrl(`from=${monthKey}&to=${monthKey}`),
       headers: { cookie: adminCookie },
     });
     expect(afterExit.statusCode).toBe(403);

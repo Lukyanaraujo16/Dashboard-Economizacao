@@ -150,10 +150,13 @@ function drawFilterChips(doc: PDFKit.PDFDocument, filters: readonly ReportPdfFil
   let x = MARGIN;
   let y = doc.y;
   const rowH = 16;
+  const padX = 8;
   doc.font('Helvetica').fontSize(8);
   for (const filter of filters) {
     const text = `${filter.label}: ${filter.value}`;
-    const width = Math.min(Math.ceil(doc.widthOfString(text) + 12), CONTENT_WIDTH);
+    // +2 evita subestimativa de widthOfString que quebrava "Todas" na 2ª linha.
+    const textW = doc.widthOfString(text) + 2;
+    const width = Math.min(Math.ceil(textW + padX * 2), CONTENT_WIDTH);
     if (x > MARGIN && x + width > MARGIN + CONTENT_WIDTH) {
       x = MARGIN;
       y += rowH + 4;
@@ -164,9 +167,10 @@ function drawFilterChips(doc: PDFKit.PDFDocument, filters: readonly ReportPdfFil
       y = doc.y;
     }
     doc.roundedRect(x, y, width, rowH, 3).fill(THEME.chipFill);
-    doc.fillColor(THEME.textSecondary).text(text, x + 6, y + 4, {
-      width: width - 12,
+    doc.fillColor(THEME.textSecondary).text(text, x + padX, y + 4, {
+      width: Math.max(textW, width - padX * 2),
       lineBreak: false,
+      ellipsis: false,
     });
     x += width + 6;
   }

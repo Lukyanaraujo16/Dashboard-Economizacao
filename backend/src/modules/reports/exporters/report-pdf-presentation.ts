@@ -29,10 +29,10 @@ const MONTHS_LONG_PT = [
 ] as const;
 
 export const EMPTY_REVENUE_PDF_NOTICE =
-  'Não há dados de receita para o período e filtros selecionados.';
+  'Não há entradas de caixa para o período e filtros selecionados.';
 
 export const EMPTY_EXPENSES_PDF_NOTICE =
-  'Não há dados de despesas para o período e filtros selecionados.';
+  'Não há saídas de caixa para o período e filtros selecionados.';
 
 export const EMPTY_COMPOSITION_PDF_NOTICE = 'Não há composição por categoria neste recorte.';
 

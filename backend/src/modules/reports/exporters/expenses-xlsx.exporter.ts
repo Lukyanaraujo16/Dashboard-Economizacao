@@ -41,16 +41,15 @@ function addSummarySheet(workbook: Workbook, context: ExpensesExportContext): vo
     ['Período', revenueReportPeriodLabel(report.from, report.to)],
     ['Gerado em', formatGeneratedAtPtBr(generatedAt)],
     ['Centro de custo', filters.costCenter],
-    ['Situação', filters.situation],
     ['Categoria', filters.category],
     ['Despesas', parseDecimalNumber(report.payables.total)],
-    ['Pago', parseDecimalNumber(report.payables.paid)],
+    ['Saídas realizadas', parseDecimalNumber(report.payables.paid)],
     ['A pagar', parseDecimalNumber(report.payables.outstanding)],
     ['Vencido', parseDecimalNumber(report.payables.overdue)],
     ['Cobertura (%)', parseDecimalNumber(report.payables.coverageRate)],
   ];
   rows.forEach((row, index) => {
-    writeLabelValue(sheet, index + 1, row[0], row[1], index >= 7 && index <= 10);
+    writeLabelValue(sheet, index + 1, row[0], row[1], index >= 6 && index <= 9);
   });
   if (isExpensesReportEmpty(report)) {
     const notice = sheet.getCell('A14');
@@ -64,7 +63,7 @@ function addMonthlySheet(workbook: Workbook, context: ExpensesExportContext): vo
   sheet.columns = [
     { header: 'Mês', key: 'month', width: 14 },
     { header: 'Despesas', key: 'total', width: 16 },
-    { header: 'Pago', key: 'paid', width: 16 },
+    { header: 'Saídas realizadas', key: 'paid', width: 20 },
     { header: 'A pagar', key: 'outstanding', width: 16 },
     { header: 'Vencido', key: 'overdue', width: 16 },
     { header: 'Cobertura (%)', key: 'coverage', width: 16 },
@@ -88,9 +87,7 @@ function addCategoriesSheet(workbook: Workbook, context: ExpensesExportContext):
   sheet.columns = [
     { header: 'Categoria', key: 'name', width: 28 },
     { header: 'Tipo', key: 'kind', width: 16 },
-    { header: 'Total', key: 'total', width: 16 },
-    { header: 'Pago', key: 'paid', width: 16 },
-    { header: 'A pagar', key: 'outstanding', width: 16 },
+    { header: 'Saídas realizadas', key: 'total', width: 20 },
     { header: 'Participação (%)', key: 'percentage', width: 18 },
   ];
   styleHeader(sheet);
@@ -99,11 +96,9 @@ function addCategoriesSheet(workbook: Workbook, context: ExpensesExportContext):
       name: sanitizeSpreadsheetText(item.name),
       kind: sanitizeSpreadsheetText(compositionKindLabel(item.kind)),
       total: parseDecimalNumber(item.amount),
-      paid: parseDecimalNumber(item.paid),
-      outstanding: parseDecimalNumber(item.outstanding),
       percentage: parseDecimalNumber(item.percentage),
     });
-    applyMoneyFormats(row, [3, 4, 5]);
+    applyMoneyFormats(row, [3]);
   }
 }
 

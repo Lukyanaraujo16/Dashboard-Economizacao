@@ -901,21 +901,22 @@ Relatórios
 ├── Receita
 └── Despesas
 
-Lista final = somente tipos implementados. Contas vencidas = filtro
-`situation=overdue`, não um terceiro tipo. Financeiro / Fluxo de caixa /
+Lista final = somente tipos implementados (Entradas / Saídas de caixa).
+Contas vencidas = KPI “Vencido” separado; filtro `situation` **não** se
+aplica ao realizado (CASH-6). Financeiro / Fluxo de caixa /
 Inadimplência de estoque: fora da V1.
 
 Área de seleção:
 
-* Tipo de relatório
-* De (YYYY-MM)
+* Tipo de relatório (Entradas | Saídas)
+* De (YYYY-MM) — mês civil de caixa
 * Até (YYYY-MM)
 * Centro de custo
-* Situação
 * Categoria
 
-URL: `from`, `to`, `costCenter`, `situation`, `category`, `type` (ou o tipo
-na rota). Não usar `tenantId`, `costCenterId`, `status`.
+URL: `from`, `to`, `costCenter`, `category`, `type`. `situation` é
+ignorado se presente (compatibilidade de bookmark). Não usar `tenantId`,
+`costCenterId`, `status`.
 
 Ações: Visualizar. Quando o relatório estiver visualizado (resultado ou
 vazio), Exportar PDF e Exportar Excel. Se o usuário alterar um filtro
@@ -935,16 +936,20 @@ Fluxo V1:
 
 Escolher relatório
 ↓
-Definir De / Até (meses de competência)
+Definir De / Até (meses civis de caixa)
 ↓
-Aplicar filtros (centro, situação, categoria)
+Aplicar filtros (centro, categoria)
 ↓
 Visualizar
 ↓
-Exportar PDF / Exportar Excel (F12-C: síncrono; mesmos filtros
-visualizados; sem job/202)
+Exportar PDF / Exportar Excel (mesmo DTO da tela; síncrono; sem job/202)
 
-Eixo: `competenceDate`, timezone `America/Sao_Paulo`. Inclusive.
+Eixo: **regime de caixa** (CASH-6). Realizado = `occurredOn` /
+`netAmount` (ACTIVE, sem transferência interna). Previsto = `unpaid` com
+`dueDate` no intervalo e ainda no prazo. Vencido separado. Sem as-of
+histórico — em meses passados o previsto tende a zero. Timezone
+`America/Sao_Paulo`. Inclusive. Competência **não** define totais;
+`competenceDate` pode existir só como coluna técnica futura no XLSX.
 
 Formatos da Fase 12:
 

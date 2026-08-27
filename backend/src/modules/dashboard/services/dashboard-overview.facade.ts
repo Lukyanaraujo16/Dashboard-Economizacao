@@ -253,17 +253,20 @@ export function createDashboardOverviewFacade(
       situation = null,
       categoryId = null,
     ) {
+      void situation; // CASH-6: situation não se aplica ao realizado
+      const cashFlow = requireCashFlow(deps);
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
       const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const monthKeys = listInclusiveMonthKeysFromKeys(fromKey, toKey);
+      // CASH-6: mesmo motor da Home. `situation` ignorado — não se aplica ao realizado.
       const months = await Promise.all(
         monthKeys.map((monthKey) =>
-          deps.analytics.getMonthlyCompetenceRevenue({
+          cashFlow.getMonthlyCashFlow({
             tenantId,
             monthKey,
             ...costCenterFilter(resolved),
-            ...homeFilterSpread(situation, categoryFilter),
+            ...categoryFilterSpread(categoryFilter),
           }),
         ),
       );
@@ -278,17 +281,19 @@ export function createDashboardOverviewFacade(
       situation = null,
       categoryId = null,
     ) {
+      void situation; // CASH-6: situation não se aplica ao realizado
+      const cashFlow = requireCashFlow(deps);
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
       const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const monthKeys = listInclusiveMonthKeysFromKeys(fromKey, toKey);
       const months = await Promise.all(
         monthKeys.map((monthKey) =>
-          deps.analytics.getMonthlyCompetenceExpenses({
+          cashFlow.getMonthlyCashFlow({
             tenantId,
             monthKey,
             ...costCenterFilter(resolved),
-            ...homeFilterSpread(situation, categoryFilter),
+            ...categoryFilterSpread(categoryFilter),
           }),
         ),
       );
@@ -494,7 +499,9 @@ function costCenterFilter(
 
 function requireCashFlow(deps: DashboardOverviewFacadeDependencies): MonthlyCashFlowService {
   if (!deps.cashFlow) {
-    throw new Error('MonthlyCashFlowService é obrigatório para GET /dashboard/monthly-cash-flow.');
+    throw new Error(
+      'MonthlyCashFlowService é obrigatório para monthly-cash-flow e relatórios de caixa.',
+    );
   }
   return deps.cashFlow;
 }

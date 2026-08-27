@@ -5,6 +5,7 @@ import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createFileStorage } from '../../../infrastructure/storage/index.js';
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
 import { createAnalyticsService } from '../../analytics/services/analytics.service.js';
+import { createMonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
 import { createPlatformBrandingRepository } from '../../branding/repositories/platform-branding.repository.js';
@@ -12,6 +13,7 @@ import { createTenantBrandingRepository } from '../../branding/repositories/tena
 import { createCostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
 import { createCostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import { createFinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
+import { createLedgerReadRepository } from '../../finance/repositories/ledger-read.repository.js';
 import { createPayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { createContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
@@ -52,12 +54,22 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const costCenters = createCostCenterReadRepository(prisma);
   const categories = createFinancialCategoryReadRepository(prisma);
+  const receivables = createReceivableReadRepository(prisma);
+  const payables = createPayableReadRepository(prisma);
+  const costCenterAllocations = createCostCenterAllocationReadRepository(prisma);
   const dashboard = createDashboardOverviewFacade({
     analytics: createAnalyticsService({
-      receivables: createReceivableReadRepository(prisma),
-      payables: createPayableReadRepository(prisma),
+      receivables,
+      payables,
       categories,
-      costCenterAllocations: createCostCenterAllocationReadRepository(prisma),
+      costCenterAllocations,
+    }),
+    cashFlow: createMonthlyCashFlowService({
+      ledger: createLedgerReadRepository(prisma),
+      receivables,
+      payables,
+      categories,
+      costCenterAllocations,
     }),
     integrations: createContaAzulIntegrationRepository(prisma),
     revenueGoals: createRevenueGoalRepository(prisma),

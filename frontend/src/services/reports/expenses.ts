@@ -63,7 +63,7 @@ function isIntervalPayables(value: unknown): value is ReportsExpensesPayables {
     return false;
   }
   return (
-    typeof value.total === 'string' &&
+    isNullableDecimal(value.total) &&
     isNullableDecimal(value.paid) &&
     isNullableDecimal(value.outstanding) &&
     isNullableDecimal(value.overdue) &&
@@ -82,7 +82,7 @@ function isMonthPayables(
     return false;
   }
   return (
-    typeof value.total === 'string' &&
+    isNullableDecimal(value.total) &&
     isNullableDecimal(value.paid) &&
     isNullableDecimal(value.outstanding) &&
     isNullableDecimal(value.overdue) &&

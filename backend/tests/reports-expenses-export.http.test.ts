@@ -8,15 +8,17 @@ import type { FinancialInstallmentStatus } from '../src/generated/prisma/client.
 import { encryptSecret } from '../src/infrastructure/crypto/secret-box.js';
 import { disconnectPrisma, getPrismaClient } from '../src/infrastructure/database/prisma.js';
 import { civilTodayInSaoPaulo } from '../src/modules/analytics/domain/analytical-timezone.js';
-import { civilMonthBoundsFromKey } from '../src/modules/analytics/domain/civil-calendar.js';
+import { civilMonthBounds } from '../src/modules/analytics/domain/civil-calendar.js';
 import {
   createArgon2idPasswordHasher,
   createUserCredentialRepository,
   createUserRepository,
 } from '../src/modules/auth/index.js';
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
+import { mapSettlement } from '../src/modules/integrations/conta-azul/domain/conta-azul-settlement-mappers.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
+import { createContaAzulLedgerRepository } from '../src/modules/integrations/conta-azul/repositories/ledger.repository.js';
 import { PDF_CONTENT_TYPE, XLSX_CONTENT_TYPE } from '../src/modules/reports/exporters/export-content-types.js';
 import { createTenantRepository } from '../src/modules/tenant/repositories/tenant.repository.js';
 import { decodedPdfStrings } from './helpers/readable-pdf.js';
@@ -31,6 +33,7 @@ const prisma = getPrismaClient();
 const tenants = createTenantRepository(prisma);
 const integrations = createContaAzulIntegrationRepository(prisma);
 const financial = createContaAzulFinancialRepository(prisma);
+const ledgerWrite = createContaAzulLedgerRepository(prisma);
 const users = createUserRepository(prisma);
 const credentials = createUserCredentialRepository(prisma);
 const passwordHasher = createArgon2idPasswordHasher();
@@ -67,6 +70,12 @@ afterEach(async () => {
 afterAll(async () => {
   await disconnectPrisma();
 });
+
+function iso(date: Date): string {
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${date.getUTCFullYear()}-${month}-${day}`;
+}
 
 function readSessionCookie(setCookieHeader: string | string[] | undefined): string | undefined {
   const values = Array.isArray(setCookieHeader)
@@ -141,27 +150,25 @@ async function seedConnected(name: string) {
 
 function installment(input: {
   readonly externalId: string;
-  readonly status: FinancialInstallmentStatus;
-  readonly total: string;
-  readonly paid?: string;
+  readonly dueDate: Date;
   readonly unpaid?: string;
-  readonly competenceDate: Date | null;
-  readonly dueDate?: Date;
+  readonly paid?: string;
+  readonly total?: string;
+  readonly status?: FinancialInstallmentStatus;
   readonly categoryExternalIds?: readonly string[];
 }) {
-  const total = new Prisma.Decimal(input.total);
+  const unpaid = new Prisma.Decimal(input.unpaid ?? '0');
   const paid = new Prisma.Decimal(input.paid ?? '0');
-  const unpaid = new Prisma.Decimal(input.unpaid ?? total.minus(paid).toString());
-  const today = civilTodayInSaoPaulo(new Date());
+  const total = new Prisma.Decimal(input.total ?? unpaid.plus(paid).toString());
   return {
     externalId: input.externalId,
     description: 'descricao-secreta-nao-vazar',
-    dueDate: input.dueDate ?? today,
-    competenceDate: input.competenceDate,
+    dueDate: input.dueDate,
+    competenceDate: input.dueDate,
     upstreamCreatedAt: null,
     upstreamUpdatedAt: null,
-    status: input.status,
-    upstreamStatus: input.status,
+    status: input.status ?? 'OPEN',
+    upstreamStatus: input.status ?? 'OPEN',
     total,
     paid,
     unpaid,
@@ -170,79 +177,119 @@ function installment(input: {
   };
 }
 
+function baixa(input: {
+  readonly id: string;
+  readonly installmentId: string;
+  readonly data: string;
+  readonly bruto: string;
+  readonly liquido: string;
+}) {
+  return mapSettlement({
+    id: input.id,
+    id_parcela: input.installmentId,
+    data_pagamento: input.data,
+    tipo_evento_financeiro: 'DESPESA',
+    valor_composicao: {
+      valor_bruto: input.bruto,
+      valor_liquido: input.liquido,
+      juros: '0',
+      multa: '0',
+      desconto: '0',
+      taxa: '0',
+    },
+  });
+}
+
 function exportUrl(query: string): string {
   return `/reports/expenses?${query}`;
 }
 
 describe('GET /reports/expenses export', () => {
   it('PDF e XLSX reutilizam o JSON oficial, isolam tenant e rejeitam tenantId', async () => {
-    const jan = civilMonthBoundsFromKey('2026-01');
-    const feb = civilMonthBoundsFromKey('2026-02');
+    const today = civilTodayInSaoPaulo(new Date());
+    const current = civilMonthBounds(today);
+    const prevFrom = new Date(Date.UTC(current.from.getUTCFullYear(), current.from.getUTCMonth() - 1, 1));
+    const prev = civilMonthBounds(prevFrom);
     const a = await seedConnected('re-export-a');
     const b = await seedConnected('re-export-b');
-    const syncedAt = new Date();
-    await financial.upsertCategories(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        {
-          externalId: 'serv-a',
-          name: 'Serviços',
-          type: 'EXPENSE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-        {
-          externalId: 'serv-b',
-          name: 'Serviços',
-          type: 'EXPENSE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-      ],
-    );
-    await financial.upsertPayables(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'jan-a',
-          status: 'OPEN',
-          total: '8000',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv-a'],
-        }),
-        installment({
-          externalId: 'jan-b',
-          status: 'PAID',
-          total: '7000',
-          paid: '7000',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['serv-b'],
-        }),
-        installment({
-          externalId: 'feb-a',
-          status: 'PAID',
-          total: '5000',
-          paid: '5000',
-          unpaid: '0',
-          competenceDate: feb.from,
-          categoryExternalIds: ['serv-a'],
-        }),
-      ],
-    );
-    await financial.upsertPayables(
-      { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'other-tenant',
-          status: 'PAID',
-          total: '333',
-          paid: '333',
-          unpaid: '0',
-          competenceDate: jan.from,
-        }),
-      ],
-    );
+    const scopeA = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    const scopeB = { tenantId: b.tenant.id, integrationId: b.integration.id, syncedAt: new Date() };
+
+    await financial.upsertCategories(scopeA, [
+      {
+        externalId: 'serv-a',
+        name: 'Serviços',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+      {
+        externalId: 'serv-b',
+        name: 'Serviços',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertPayables(scopeA, [
+      installment({
+        externalId: 'cur-open',
+        dueDate: current.to,
+        unpaid: '8000',
+        categoryExternalIds: ['serv-a'],
+      }),
+      installment({
+        externalId: 'prev-paid',
+        dueDate: prev.from,
+        unpaid: '0',
+        paid: '7000',
+        status: 'PAID',
+        categoryExternalIds: ['serv-b'],
+      }),
+      installment({
+        externalId: 'cur-paid',
+        dueDate: current.from,
+        unpaid: '0',
+        paid: '5000',
+        status: 'PAID',
+        categoryExternalIds: ['serv-a'],
+      }),
+    ]);
+    await financial.upsertPayables(scopeB, [
+      installment({
+        externalId: 'other-tenant',
+        dueDate: current.from,
+        unpaid: '0',
+        paid: '333',
+        status: 'PAID',
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeA, 'PAYABLE', [
+      baixa({
+        id: 'prev-b',
+        installmentId: 'prev-paid',
+        data: iso(prev.from),
+        bruto: '7000',
+        liquido: '7000',
+      }),
+      baixa({
+        id: 'cur-b',
+        installmentId: 'cur-paid',
+        data: iso(current.from),
+        bruto: '5000',
+        liquido: '5000',
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeB, 'PAYABLE', [
+      baixa({
+        id: 'other-b',
+        installmentId: 'other-tenant',
+        data: iso(current.from),
+        bruto: '333',
+        liquido: '333',
+      }),
+    ]);
+
     await createUser({ email: 'user-a@re-export.test', role: 'USER', tenantId: a.tenant.id });
     await createUser({ email: 'user-b@re-export.test', role: 'USER', tenantId: b.tenant.id });
     await createUser({ email: 'admin@re-export.test', role: 'ADMIN' });
@@ -252,33 +299,41 @@ describe('GET /reports/expenses export', () => {
 
     const json = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-02'),
+      url: exportUrl(`from=${prev.monthKey}&to=${current.monthKey}`),
       headers: { cookie: cookieA },
     });
     expect(json.statusCode).toBe(200);
     const body = json.json() as {
-      payables: { total: string; paid: string | null; coverageRate: string | null; items: Array<{ name: string; amount: string }> };
+      payables: {
+        total: string;
+        paid: string | null;
+        items: Array<{ name: string; amount: string }>;
+      };
     };
     expect(body.payables.total).toBe('20000');
+    expect(body.payables.paid).toBe('12000');
     expect(body.payables.items.filter((item) => item.name === 'Serviços')).toHaveLength(2);
 
     const pdf = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-02&format=pdf'),
+      url: exportUrl(`from=${prev.monthKey}&to=${current.monthKey}&format=pdf`),
       headers: { cookie: cookieA },
     });
     expect(pdf.statusCode).toBe(200);
     expect(pdf.headers['content-type']).toContain(PDF_CONTENT_TYPE);
     expect(pdf.headers['content-disposition']).toBe(
-      'attachment; filename="relatorio-despesas-2026-01-a-2026-02.pdf"',
+      `attachment; filename="relatorio-despesas-${prev.monthKey}-a-${current.monthKey}.pdf"`,
     );
     expect(pdf.headers['cache-control']).toBe('private, no-store');
     const pdfBytes = Buffer.from(pdf.rawPayload);
     expect(pdfBytes.subarray(0, 5).toString()).toBe('%PDF-');
     const pdfText = decodedPdfStrings(pdfBytes);
+    expect(pdfText.toUpperCase()).toContain('REGIME DE CAIXA');
+    expect(pdfText).toContain('Saídas realizadas');
     expect(pdfText).toContain('20.000,00');
     expect(pdfText).toContain('8.000,00');
     expect(pdfText).toContain('7.000,00');
+    expect(pdfText.toLowerCase()).not.toContain('competência');
     expect(pdfText).not.toContain('333');
     expect(pdfText).not.toContain(a.tenant.id);
     expect(pdfText).not.toContain('descricao-secreta-nao-vazar');
@@ -286,18 +341,20 @@ describe('GET /reports/expenses export', () => {
 
     const xlsx = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-02&format=xlsx'),
+      url: exportUrl(`from=${prev.monthKey}&to=${current.monthKey}&format=xlsx`),
       headers: { cookie: cookieA },
     });
     expect(xlsx.statusCode).toBe(200);
     expect(xlsx.headers['content-type']).toContain(XLSX_CONTENT_TYPE);
     expect(xlsx.headers['content-disposition']).toBe(
-      'attachment; filename="relatorio-despesas-2026-01-a-2026-02.xlsx"',
+      `attachment; filename="relatorio-despesas-${prev.monthKey}-a-${current.monthKey}.xlsx"`,
     );
     const workbook = new Workbook();
     await workbook.xlsx.load(Buffer.from(xlsx.rawPayload));
     expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Resumo', 'Mensal', 'Categorias']);
-    expect(workbook.getWorksheet('Resumo')?.getCell('B8').value).toBe(20000);
+    expect(String(workbook.getWorksheet('Resumo')?.getCell('B1').value)).toContain('Regime de caixa');
+    expect(workbook.getWorksheet('Resumo')?.getCell('B7').value).toBe(20000);
+    expect(workbook.getWorksheet('Resumo')?.getCell('B8').value).toBe(12000);
     expect(typeof workbook.getWorksheet('Mensal')?.getCell('B2').value).toBe('number');
     const categorySheet = workbook.getWorksheet('Categorias');
     expect(categorySheet?.getCell('A2').value).toBe('Serviços');
@@ -306,7 +363,7 @@ describe('GET /reports/expenses export', () => {
 
     const otherPdf = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-02&format=pdf'),
+      url: exportUrl(`from=${prev.monthKey}&to=${current.monthKey}&format=pdf`),
       headers: { cookie: cookieB },
     });
     expect(otherPdf.statusCode).toBe(200);
@@ -314,7 +371,9 @@ describe('GET /reports/expenses export', () => {
 
     const tenantQuery = await app.inject({
       method: 'GET',
-      url: exportUrl(`from=2026-01&to=2026-02&format=pdf&tenantId=${b.tenant.id}`),
+      url: exportUrl(
+        `from=${prev.monthKey}&to=${current.monthKey}&format=pdf&tenantId=${b.tenant.id}`,
+      ),
       headers: { cookie: cookieA },
     });
     expect(tenantQuery.statusCode).toBe(400);
@@ -338,28 +397,33 @@ describe('GET /reports/expenses export', () => {
     await emptyBook.xlsx.load(Buffer.from(emptyXlsx.rawPayload));
     expect(emptyBook.getWorksheet('Resumo')?.getCell('B13').value).toBeNull();
 
-    const monthly = await app.inject({
+    const cashFlow = await app.inject({
       method: 'GET',
-      url: '/dashboard/monthly-expenses?month=2026-01',
+      url: `/dashboard/monthly-cash-flow?month=${current.monthKey}`,
       headers: { cookie: cookieA },
     });
     const single = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-01'),
+      url: exportUrl(`from=${current.monthKey}&to=${current.monthKey}`),
       headers: { cookie: cookieA },
     });
-    expect(single.json().payables.total).toBe(monthly.json().payables.total);
+    const cash = cashFlow.json();
+    const expectedTotal = new Prisma.Decimal(cash.realized.outflows)
+      .plus(cash.expected.payables)
+      .toString();
+    expect(single.json().payables.total).toBe(expectedTotal);
+    expect(single.json().payables.paid).toBe(cash.realized.outflows);
 
     const unauthenticated = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-01&format=pdf'),
+      url: exportUrl(`from=${current.monthKey}&to=${current.monthKey}&format=pdf`),
     });
     expect(unauthenticated.statusCode).toBe(401);
 
     const adminCookie = await loginAs(app, 'admin@re-export.test');
     const forbidden = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-01&format=xlsx'),
+      url: exportUrl(`from=${current.monthKey}&to=${current.monthKey}&format=xlsx`),
       headers: { cookie: adminCookie },
     });
     expect(forbidden.statusCode).toBe(403);
@@ -373,7 +437,7 @@ describe('GET /reports/expenses export', () => {
     expect(enter.statusCode).toBe(200);
     const supported = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-02&format=pdf'),
+      url: exportUrl(`from=${prev.monthKey}&to=${current.monthKey}&format=pdf`),
       headers: { cookie: adminCookie },
     });
     expect(supported.statusCode).toBe(200);
@@ -387,42 +451,45 @@ describe('GET /reports/expenses export', () => {
     });
     const afterExit = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-01&format=pdf'),
+      url: exportUrl(`from=${current.monthKey}&to=${current.monthKey}&format=pdf`),
       headers: { cookie: adminCookie },
     });
     expect(afterExit.statusCode).toBe(403);
   });
 
-  it('rejeita as mesmas validações do JSON e aplica filtros AND', async () => {
-    const jan = civilMonthBoundsFromKey('2026-01');
+  it('rejeita as mesmas validações do JSON; situation ignorado; category filtra caixa', async () => {
+    const today = civilTodayInSaoPaulo(new Date());
+    const { from, monthKey } = civilMonthBounds(today);
     const a = await seedConnected('re-export-filters');
-    const syncedAt = new Date();
-    await financial.upsertCategories(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        {
-          externalId: 'formula',
-          name: '=1+1',
-          type: 'EXPENSE',
-          parentExternalId: null,
-          upstreamVersion: 1,
-        },
-      ],
-    );
-    await financial.upsertPayables(
-      { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt },
-      [
-        installment({
-          externalId: 'paid-formula',
-          status: 'PAID',
-          total: '100',
-          paid: '100',
-          unpaid: '0',
-          competenceDate: jan.from,
-          categoryExternalIds: ['formula'],
-        }),
-      ],
-    );
+    const scope = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    await financial.upsertCategories(scope, [
+      {
+        externalId: 'formula',
+        name: '=1+1',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertPayables(scope, [
+      installment({
+        externalId: 'paid-formula',
+        dueDate: from,
+        unpaid: '0',
+        paid: '100',
+        status: 'PAID',
+        categoryExternalIds: ['formula'],
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scope, 'PAYABLE', [
+      baixa({
+        id: 'paid-formula-b',
+        installmentId: 'paid-formula',
+        data: iso(from),
+        bruto: '100',
+        liquido: '100',
+      }),
+    ]);
     const category = await prisma.financialCategory.findFirstOrThrow({
       where: { tenantId: a.tenant.id, externalId: 'formula' },
     });
@@ -453,14 +520,14 @@ describe('GET /reports/expenses export', () => {
 
     const invalidFormat = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-01&format=csv'),
+      url: exportUrl(`from=${monthKey}&to=${monthKey}&format=csv`),
       headers: { cookie },
     });
     expect(invalidFormat.statusCode).toBe(400);
 
     const invalidSituation = await app.inject({
       method: 'GET',
-      url: exportUrl('from=2026-01&to=2026-01&format=pdf&situation=PAID'),
+      url: exportUrl(`from=${monthKey}&to=${monthKey}&format=pdf&situation=PAID`),
       headers: { cookie },
     });
     expect(invalidSituation.statusCode).toBe(400);
@@ -468,7 +535,7 @@ describe('GET /reports/expenses export', () => {
     const missingCategory = await app.inject({
       method: 'GET',
       url: exportUrl(
-        'from=2026-01&to=2026-01&format=xlsx&category=8cf7b841-7d8c-4166-b24b-5f350e0d5403',
+        `from=${monthKey}&to=${monthKey}&format=xlsx&category=8cf7b841-7d8c-4166-b24b-5f350e0d5403`,
       ),
       headers: { cookie },
     });
@@ -476,13 +543,15 @@ describe('GET /reports/expenses export', () => {
 
     const filtered = await app.inject({
       method: 'GET',
-      url: exportUrl(`from=2026-01&to=2026-01&format=xlsx&situation=settled&category=${category.id}`),
+      url: exportUrl(
+        `from=${monthKey}&to=${monthKey}&format=xlsx&situation=settled&category=${category.id}`,
+      ),
       headers: { cookie },
     });
     expect(filtered.statusCode).toBe(200);
     const workbook = new Workbook();
     await workbook.xlsx.load(Buffer.from(filtered.rawPayload));
-    expect(workbook.getWorksheet('Resumo')?.getCell('B8').value).toBe(100);
+    expect(workbook.getWorksheet('Resumo')?.getCell('B7').value).toBe(100);
     expect(workbook.getWorksheet('Categorias')?.getCell('A2').value).toBe("'=1+1");
     expect(workbook.getWorksheet('Categorias')?.getCell('A2').type).not.toBe(ValueType.Formula);
   });

@@ -11,9 +11,9 @@ const base: ReportsRevenueResponse = {
   from: '2026-01',
   to: '2026-02',
   receivables: {
-    total: '0',
-    received: '0',
-    outstanding: '0',
+    total: null,
+    received: null,
+    outstanding: null,
     overdue: '0',
     classified: '0',
     uncategorized: '0',
@@ -25,14 +25,48 @@ const base: ReportsRevenueResponse = {
 };
 
 describe('reports-revenue-view', () => {
-  it('considera vazio quando o total é zero', () => {
+  it('considera vazio sem movimento em received/outstanding e sem itens', () => {
     expect(isRevenueReportEmpty(base)).toBe(true);
     expect(
       isRevenueReportEmpty({
         ...base,
         receivables: {
           ...base.receivables,
-          total: '10',
+          total: '0',
+          received: '0',
+          outstanding: '0',
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isRevenueReportEmpty({
+        ...base,
+        receivables: {
+          ...base.receivables,
+          total: null,
+          received: '10',
+          outstanding: null,
+          items: [
+            {
+              kind: 'category',
+              name: 'Serviços',
+              amount: '10',
+              received: '10',
+              outstanding: '0',
+              percentage: '100',
+            },
+          ],
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isRevenueReportEmpty({
+        ...base,
+        receivables: {
+          ...base.receivables,
+          total: null,
+          received: null,
+          outstanding: null,
           items: [
             {
               kind: 'category',

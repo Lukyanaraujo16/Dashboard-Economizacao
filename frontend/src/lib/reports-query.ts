@@ -11,11 +11,7 @@ import {
   listInclusiveDashboardMonthKeys,
   REPORT_MAX_MONTH_SPAN,
 } from './dashboard-month';
-import {
-  parseDashboardSituationFromSearchParams,
-  buildDashboardSituationSearchParams,
-  type DashboardSituation,
-} from './dashboard-situation';
+import type { DashboardSituation } from './dashboard-situation';
 
 export const REPORT_TYPE_REVENUE = 'revenue' as const;
 export const REPORT_TYPE_EXPENSES = 'expenses' as const;
@@ -54,7 +50,7 @@ export function parseReportsQuery(params: Readonly<URLSearchParams>): ReportsQue
     from: parseReportMonthParam(params, 'from'),
     to: parseReportMonthParam(params, 'to'),
     costCenterId: parseDashboardCostCenterFromSearchParams(params),
-    situation: parseDashboardSituationFromSearchParams(params),
+    situation: null,
     categoryId: parseDashboardCategoryFromSearchParams(params),
   };
 }
@@ -64,7 +60,6 @@ export function buildReportsSearchParams(input: {
   readonly from: string;
   readonly to: string;
   readonly costCenterId: string | null;
-  readonly situation: DashboardSituation | null;
   readonly categoryId: string | null;
 }): URLSearchParams {
   let next = new URLSearchParams();
@@ -72,11 +67,11 @@ export function buildReportsSearchParams(input: {
   next.set('from', input.from);
   next.set('to', input.to);
   next = buildDashboardCostCenterSearchParams(next, input.costCenterId);
-  next = buildDashboardSituationSearchParams(next, input.situation);
   next = buildDashboardCategorySearchParams(next, input.categoryId);
   next.delete('tenantId');
   next.delete('costCenterId');
   next.delete('status');
+  next.delete('situation');
   return next;
 }
 

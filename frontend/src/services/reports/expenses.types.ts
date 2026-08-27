@@ -10,7 +10,7 @@ export type ReportsExpensesDailyPoint = {
 };
 
 export type ReportsExpensesPayables = {
-  readonly total: string;
+  readonly total: string | null;
   readonly paid: string | null;
   readonly outstanding: string | null;
   readonly overdue: string | null;

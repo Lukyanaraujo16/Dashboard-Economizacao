@@ -15,7 +15,6 @@ import {
   validateReportMonthRange,
   type ReportType,
 } from '../../lib/reports-query';
-import type { DashboardSituation } from '../../lib/dashboard-situation';
 import { getDashboardCategories } from '../../services/dashboard/categories';
 import type { DashboardCategoryItem } from '../../services/dashboard/categories.types';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
@@ -41,7 +40,6 @@ import { FinancialGrid, FinancialSection, KpiCard, StateWrapper } from '../finan
 import { DashboardCategorySelector } from '../dashboard/dashboard-category-selector';
 import { DashboardCostCenterSelector } from '../dashboard/dashboard-cost-center-selector';
 import { DashboardMonthSelector } from '../dashboard/dashboard-month-selector';
-import { DashboardSituationSelector } from '../dashboard/dashboard-situation-selector';
 import { hasOperationalDashboardTenant } from '../dashboard/dashboard-overview-view';
 import { formatMonthKeyPtBr } from '../dashboard/dashboard-forecast-view';
 import { Button, Typography } from '../ui';
@@ -56,19 +54,11 @@ type AppliedFilters = {
   readonly from: string;
   readonly to: string;
   readonly costCenterId: string | null;
-  readonly situation: DashboardSituation | null;
   readonly categoryId: string | null;
 };
 
 function moneyOrDash(value: string | null | undefined): string {
   return value === null || value === undefined ? '—' : formatMoneyBrl(value);
-}
-
-function situationLabel(situation: DashboardSituation | null): string {
-  if (situation === 'settled') return 'Quitado';
-  if (situation === 'open') return 'Em aberto';
-  if (situation === 'overdue') return 'Vencido';
-  return 'Todas';
 }
 
 function isReportRequestError(
@@ -94,7 +84,6 @@ export function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>(parsed.type);
   const [fromKey, setFromKey] = useState(parsed.from ?? todayMonthKey);
   const [toKey, setToKey] = useState(parsed.to ?? todayMonthKey);
-  const [situation, setSituation] = useState<DashboardSituation | null>(parsed.situation);
   const [categoryId, setCategoryId] = useState<string | null>(parsed.categoryId);
   const [costCenterId, setCostCenterId] = useState<string | null>(parsed.costCenterId);
   const [categories, setCategories] = useState<readonly DashboardCategoryItem[]>([]);
@@ -121,10 +110,9 @@ export function ReportsPage() {
       readonly from: string;
       readonly to: string;
       readonly costCenterId: string | null;
-      readonly situation: DashboardSituation | null;
       readonly categoryId: string | null;
     }) =>
-      `${next.type}|${next.from}|${next.to}|${next.costCenterId ?? ''}|${next.situation ?? ''}|${next.categoryId ?? ''}|${canQuery ? '1' : '0'}`,
+      `${next.type}|${next.from}|${next.to}|${next.costCenterId ?? ''}|${next.categoryId ?? ''}|${canQuery ? '1' : '0'}`,
     [canQuery],
   );
 
@@ -186,7 +174,7 @@ export function ReportsPage() {
             from: next.from,
             to: next.to,
             costCenterId: next.costCenterId,
-            situation: next.situation,
+            situation: null,
             categoryId: next.categoryId,
           });
           setExpensesData(result);
@@ -199,7 +187,7 @@ export function ReportsPage() {
           from: next.from,
           to: next.to,
           costCenterId: next.costCenterId,
-          situation: next.situation,
+          situation: null,
           categoryId: next.categoryId,
         });
         setRevenueData(result);
@@ -244,7 +232,6 @@ export function ReportsPage() {
     setReportType(parsed.type);
     setFromKey(parsed.from);
     setToKey(parsed.to);
-    setSituation(parsed.situation);
     setCategoryId(parsed.categoryId);
     setCostCenterId(parsed.costCenterId);
     const next = {
@@ -252,7 +239,6 @@ export function ReportsPage() {
       from: parsed.from,
       to: parsed.to,
       costCenterId: parsed.costCenterId,
-      situation: parsed.situation,
       categoryId: parsed.categoryId,
     };
     if (lastRequestKey.current === requestKeyOf(next)) {
@@ -264,7 +250,6 @@ export function ReportsPage() {
     parsed.from,
     parsed.to,
     parsed.costCenterId,
-    parsed.situation,
     parsed.categoryId,
     canQuery,
     fetchReport,
@@ -289,8 +274,8 @@ export function ReportsPage() {
         ? 'Todos'
         : (costCenters.find((item) => item.id === appliedFilters.costCenterId)?.name ??
           'Centro selecionado');
-    const typeLabel = appliedFilters.type === REPORT_TYPE_EXPENSES ? 'Despesas' : 'Receita';
-    return `${typeLabel} · ${revenueReportPeriodLabel(snapshotFrom, snapshotTo)} · Centro ${centerName} · Situação ${situationLabel(appliedFilters.situation)} · Categoria ${categoryName}`;
+    const typeLabel = appliedFilters.type === REPORT_TYPE_EXPENSES ? 'Saídas' : 'Entradas';
+    return `${typeLabel} · ${revenueReportPeriodLabel(snapshotFrom, snapshotTo)} · Centro ${centerName} · Categoria ${categoryName}`;
   }, [appliedFilters, categories, costCenters, snapshotFrom, snapshotTo]);
 
   const draftKey = requestKeyOf({
@@ -298,7 +283,6 @@ export function ReportsPage() {
     from: fromKey,
     to: toKey,
     costCenterId,
-    situation,
     categoryId,
   });
   const filtersInSync = appliedFilters !== null && requestKeyOf(appliedFilters) === draftKey;
@@ -320,7 +304,7 @@ export function ReportsPage() {
           from: appliedFilters.from,
           to: appliedFilters.to,
           costCenterId: appliedFilters.costCenterId,
-          situation: appliedFilters.situation,
+          situation: null,
           categoryId: appliedFilters.categoryId,
           format,
         };
@@ -356,7 +340,6 @@ export function ReportsPage() {
     from: fromKey,
     to: toKey,
     costCenterId,
-    situation,
     categoryId,
   };
 
@@ -366,8 +349,8 @@ export function ReportsPage() {
         <h1 className={styles.pageTitle}>Relatórios</h1>
         <p className={styles.pageSubtitle}>
           {reportType === REPORT_TYPE_EXPENSES
-            ? 'Despesas por competência no intervalo de meses.'
-            : 'Receita por competência no intervalo de meses.'}
+            ? 'Saídas de caixa no intervalo de meses.'
+            : 'Entradas de caixa no intervalo de meses.'}
         </p>
       </header>
 
@@ -397,8 +380,8 @@ export function ReportsPage() {
                 }
               }}
             >
-              <option value={REPORT_TYPE_REVENUE}>Receita</option>
-              <option value={REPORT_TYPE_EXPENSES}>Despesas</option>
+              <option value={REPORT_TYPE_REVENUE}>Entradas</option>
+              <option value={REPORT_TYPE_EXPENSES}>Saídas</option>
             </select>
           </div>
           <div className={styles.field}>
@@ -425,11 +408,6 @@ export function ReportsPage() {
               groupLabel="Até"
             />
           </div>
-          <DashboardSituationSelector
-            selected={situation}
-            onSelect={setSituation}
-            disabled={filtersDisabled}
-          />
           <DashboardCategorySelector
             items={categories}
             selectedId={categoryId}
@@ -518,8 +496,8 @@ export function ReportsPage() {
             loadingLabel="Gerando relatório"
             emptyMessage={
               copyType === REPORT_TYPE_EXPENSES
-                ? 'Não há despesa de competência no intervalo selecionado.'
-                : 'Não há receita de competência no intervalo selecionado.'
+                ? 'Não há saídas de caixa no intervalo selecionado.'
+                : 'Não há entradas de caixa no intervalo selecionado.'
             }
             errorMessage={
               errorMessage ??
@@ -540,16 +518,15 @@ export function ReportsPage() {
             <p className={styles.applied}>{appliedSummary}</p>
             <FinancialGrid minItemWidth="12rem">
               <KpiCard
-                title="Receita"
+                title="Faturamento"
                 state="ready"
-                value={formatMoneyBrl(revenueData.receivables.total)}
+                value={moneyOrDash(revenueData.receivables.total)}
                 meta={revenueReportPeriodLabel(revenueData.from, revenueData.to)}
               />
               <KpiCard
-                title="Recebido"
+                title="Entradas realizadas"
                 state="ready"
                 value={moneyOrDash(revenueData.receivables.received)}
-                meta="Snapshot atual dos títulos do intervalo"
               />
               <KpiCard
                 title="A receber"
@@ -565,14 +542,14 @@ export function ReportsPage() {
                 title="Cobertura"
                 state="ready"
                 value={formatDelinquencyRate(revenueData.receivables.coverageRate)}
-                meta="Classificados sobre o total (D9)"
+                meta="Classificados sobre entradas realizadas"
               />
             </FinancialGrid>
 
             <FinancialSection
               id="receita-composicao"
               title="Composição por categoria"
-              subtitle="Participação no total de competência do intervalo."
+              subtitle="Participação nas entradas realizadas do intervalo."
             >
               <ul className={styles.compositionList}>
                 {revenueData.receivables.items.map((item, index) => (
@@ -589,12 +566,12 @@ export function ReportsPage() {
 
             <div className={styles.tableWrap}>
               <table className={styles.table}>
-                <caption>Receita por mês de competência</caption>
+                <caption>Entradas por mês civil (caixa)</caption>
                 <thead>
                   <tr>
                     <th scope="col">Mês</th>
-                    <th scope="col">Receita</th>
-                    <th scope="col">Recebido</th>
+                    <th scope="col">Faturamento</th>
+                    <th scope="col">Entradas</th>
                     <th scope="col">A receber</th>
                     <th scope="col">Vencido</th>
                   </tr>
@@ -603,7 +580,7 @@ export function ReportsPage() {
                   {revenueData.months.map((month) => (
                     <tr key={month.monthKey}>
                       <th scope="row">{formatMonthKeyPtBr(month.monthKey)}</th>
-                      <td>{formatMoneyBrl(month.receivables.total)}</td>
+                      <td>{moneyOrDash(month.receivables.total)}</td>
                       <td>{moneyOrDash(month.receivables.received)}</td>
                       <td>{moneyOrDash(month.receivables.outstanding)}</td>
                       <td>{moneyOrDash(month.receivables.overdue)}</td>
@@ -622,14 +599,13 @@ export function ReportsPage() {
               <KpiCard
                 title="Despesas"
                 state="ready"
-                value={formatMoneyBrl(expensesData.payables.total)}
+                value={moneyOrDash(expensesData.payables.total)}
                 meta={revenueReportPeriodLabel(expensesData.from, expensesData.to)}
               />
               <KpiCard
-                title="Pago"
+                title="Saídas realizadas"
                 state="ready"
                 value={moneyOrDash(expensesData.payables.paid)}
-                meta="Snapshot atual dos títulos do intervalo"
               />
               <KpiCard
                 title="A pagar"
@@ -645,14 +621,14 @@ export function ReportsPage() {
                 title="Cobertura"
                 state="ready"
                 value={formatDelinquencyRate(expensesData.payables.coverageRate)}
-                meta="Classificados sobre o total (D9)"
+                meta="Classificados sobre saídas realizadas"
               />
             </FinancialGrid>
 
             <FinancialSection
               id="despesas-composicao"
               title="Composição por categoria"
-              subtitle="Participação no total de competência do intervalo."
+              subtitle="Participação nas saídas realizadas do intervalo."
             >
               <ul className={styles.compositionList}>
                 {expensesData.payables.items.map((item, index) => (
@@ -669,12 +645,12 @@ export function ReportsPage() {
 
             <div className={styles.tableWrap}>
               <table className={styles.table}>
-                <caption>Despesas por mês de competência</caption>
+                <caption>Saídas por mês civil (caixa)</caption>
                 <thead>
                   <tr>
                     <th scope="col">Mês</th>
                     <th scope="col">Despesas</th>
-                    <th scope="col">Pago</th>
+                    <th scope="col">Saídas</th>
                     <th scope="col">A pagar</th>
                     <th scope="col">Vencido</th>
                   </tr>
@@ -683,7 +659,7 @@ export function ReportsPage() {
                   {expensesData.months.map((month) => (
                     <tr key={month.monthKey}>
                       <th scope="row">{formatMonthKeyPtBr(month.monthKey)}</th>
-                      <td>{formatMoneyBrl(month.payables.total)}</td>
+                      <td>{moneyOrDash(month.payables.total)}</td>
                       <td>{moneyOrDash(month.payables.paid)}</td>
                       <td>{moneyOrDash(month.payables.outstanding)}</td>
                       <td>{moneyOrDash(month.payables.overdue)}</td>

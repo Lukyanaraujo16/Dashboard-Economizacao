@@ -259,7 +259,7 @@ describe('PRE-IA-4D apresentação PDF compartilhada', () => {
       expect(text).toContain('Relatório gerado em');
       expect(text).toContain('Página 1 de');
       expect(text).toContain('Centro de custo: Operações');
-      expect(text).toContain('Situação: Em aberto');
+      expect(text).not.toContain('Situação:');
       expect(text).toContain('Categoria: Materiais de consumo');
       expect(text).not.toContain('settled');
       expect(text).not.toContain('open');
@@ -270,8 +270,29 @@ describe('PRE-IA-4D apresentação PDF compartilhada', () => {
     }
     expect(revenueText).toContain('RELAT');
     expect(expensesText).toContain('RELAT');
-    expect(revenueText).toContain('Receita');
+    expect(revenueText).toContain('REGIME DE CAIXA');
+    expect(expensesText).toContain('REGIME DE CAIXA');
+    expect(revenueText).toContain('Faturamento');
+    expect(revenueText).toContain('Entradas');
     expect(expensesText).toContain('Despesas');
+    expect(expensesText).toContain('Sa');
+  });
+
+  it('CASH-6-CLOSE — chip Categoria: Todas permanece íntegro no PDF', async () => {
+    const filters = {
+      costCenter: 'Todos',
+      situation: '—',
+      category: 'Todas',
+    };
+    for (const text of [
+      decodedPdfStrings(await renderRevenueReportPdf(revenueContext(revenueReport(), { filters }))),
+      decodedPdfStrings(await renderExpensesReportPdf(expensesContext(expensesReport(), { filters }))),
+    ]) {
+      expect(text).toContain('Categoria: Todas');
+      expect(text).toContain('Centro de custo: Todos');
+      expect(text).toContain('REGIME DE CAIXA');
+      expect(text).not.toMatch(/Categoria:\s*\n\s*Todas/);
+    }
   });
 
   it('PDF de 1 mês usa rótulo longo e valores oficiais do DTO', async () => {

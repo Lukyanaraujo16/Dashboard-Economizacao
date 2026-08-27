@@ -11,9 +11,9 @@ const base: ReportsExpensesResponse = {
   from: '2026-01',
   to: '2026-02',
   payables: {
-    total: '0',
-    paid: '0',
-    outstanding: '0',
+    total: null,
+    paid: null,
+    outstanding: null,
     overdue: '0',
     classified: '0',
     uncategorized: '0',
@@ -25,14 +25,48 @@ const base: ReportsExpensesResponse = {
 };
 
 describe('reports-expenses-view', () => {
-  it('considera vazio quando o total é zero', () => {
+  it('considera vazio sem movimento em paid/outstanding e sem itens', () => {
     expect(isExpensesReportEmpty(base)).toBe(true);
     expect(
       isExpensesReportEmpty({
         ...base,
         payables: {
           ...base.payables,
-          total: '10',
+          total: '0',
+          paid: '0',
+          outstanding: '0',
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isExpensesReportEmpty({
+        ...base,
+        payables: {
+          ...base.payables,
+          total: null,
+          paid: '10',
+          outstanding: null,
+          items: [
+            {
+              kind: 'category',
+              name: 'Aluguel',
+              amount: '10',
+              paid: '10',
+              outstanding: '0',
+              percentage: '100',
+            },
+          ],
+        },
+      }),
+    ).toBe(false);
+    expect(
+      isExpensesReportEmpty({
+        ...base,
+        payables: {
+          ...base.payables,
+          total: null,
+          paid: null,
+          outstanding: null,
           items: [
             {
               kind: 'category',

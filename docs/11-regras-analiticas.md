@@ -405,7 +405,10 @@ F1-G: o card Faturamento Gerencial usa o mesmo `total` (§12).
 A composição de receitas/despesas por categoria na Home (CASH-4C-CAT) é
 caixa realizado: D8 sobre settlements elegíveis (ACTIVE, sem transferência).
 SUM(items) = realized.inflows / realized.outflows. Previsto e vencidos fora.
-Relatórios permanecem competência até CASH-6.
+Relatórios permanecem em regime de caixa (CASH-6): mesmo motor
+`MonthlyCashFlow` da Home. Realizado = `occurredOn`/`netAmount`; previsto =
+`dueDate`/`unpaid` no prazo; vencido separado (`ofMonth` no intervalo).
+Competência não define totais. PDF/XLSX formatam o mesmo DTO.
 
 ⸻
 

@@ -18,9 +18,10 @@ const MONTHS_PT = [
 ] as const;
 
 export const PRODUCT_NAME = 'Dashboard Economização';
-export const REVENUE_REPORT_TITLE = 'Relatório de Receita';
+export const REVENUE_REPORT_TITLE = 'Relatório financeiro — Regime de caixa';
+export const REVENUE_REPORT_SUBTITLE = 'Entradas';
 export const EMPTY_REVENUE_REPORT_NOTICE =
-  'Não há receita de competência no intervalo selecionado.';
+  'Não há entradas de caixa no intervalo selecionado.';
 
 export type RevenueExportFilters = {
   readonly costCenter: string;
@@ -122,7 +123,12 @@ export function situationFilterLabel(situation: string): string {
 }
 
 export function isRevenueReportEmpty(report: RevenueReportResponse): boolean {
-  return report.receivables.items.length === 0 || /^-?0+(\.0+)?$/.test(report.receivables.total);
+  const received = report.receivables.received;
+  const outstanding = report.receivables.outstanding;
+  const hasMovement =
+    (received !== null && !/^-?0+(\.0+)?$/.test(received)) ||
+    (outstanding !== null && !/^-?0+(\.0+)?$/.test(outstanding));
+  return !hasMovement && report.receivables.items.length === 0;
 }
 
 export function parseDecimalNumber(value: string | null): number | null {

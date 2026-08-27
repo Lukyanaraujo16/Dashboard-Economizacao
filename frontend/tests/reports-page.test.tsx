@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import RelatoriosPage from '../app/(authenticated)/relatorios/page';
@@ -251,13 +251,15 @@ describe('página /relatorios', () => {
     expect(await screen.findByRole('heading', { name: 'Relatórios', level: 1 })).toBeTruthy();
     expect(RelatoriosPage).toBeTypeOf('function');
     expect(screen.getByLabelText('Tipo de relatório')).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Receita' })).toBeTruthy();
-    expect(screen.getByRole('option', { name: 'Despesas' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Entradas' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Saídas' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'De' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Até' })).toBeTruthy();
-    expect(screen.getByLabelText('Situação')).toBeTruthy();
+    expect(screen.queryByLabelText('Situação')).toBeNull();
     expect(screen.getByRole('button', { name: 'Visualizar relatório' })).toBeTruthy();
     expect(screen.getByText('Selecione o intervalo e clique em Visualizar.')).toBeTruthy();
+    expect(screen.getByText('Entradas de caixa no intervalo de meses.')).toBeTruthy();
+    expect(screen.queryByText(/competência/i)).toBeNull();
     expect(getReportsRevenue).not.toHaveBeenCalled();
     expect(getReportsExpenses).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /pdf|excel/i })).toBeNull();
@@ -271,11 +273,19 @@ describe('página /relatorios', () => {
     await waitFor(() => {
       expect(getReportsRevenue).toHaveBeenCalled();
     });
+    expect(getReportsRevenue).toHaveBeenCalledWith(
+      expect.objectContaining({ situation: null }),
+    );
     expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/^\/relatorios\?type=revenue&from=/));
     expect(replaceMock.mock.calls[0]?.[0]).not.toContain('tenantId');
+    expect(replaceMock.mock.calls[0]?.[0]).not.toContain('situation=');
     expect(await screen.findByText('Serviços')).toBeTruthy();
-    expect(screen.getByText('Receita por mês de competência')).toBeTruthy();
+    expect(screen.getByText('Entradas por mês civil (caixa)')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Faturamento' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Entradas realizadas' })).toBeTruthy();
     expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.queryByText(/competência/i)).toBeNull();
+    expect(screen.queryByText(/Snapshot atual/i)).toBeNull();
   });
 
   it('consulta a partir da URL, mostra vazio, erro com retry e Support Mode', async () => {
@@ -313,7 +323,7 @@ describe('página /relatorios', () => {
     });
     renderReports();
     expect(
-      await screen.findByText('Não há receita de competência no intervalo selecionado.'),
+      await screen.findByText('Não há entradas de caixa no intervalo selecionado.'),
     ).toBeTruthy();
 
     cleanup();
@@ -395,18 +405,16 @@ describe('página /relatorios', () => {
     expect(css).toMatch(/@media \(max-width: 767px\) \{[\s\S]*\.resultActions > button/);
   });
 
-  it('filtra situação antes de visualizar', async () => {
+  it('ignora situation na URL e sempre consulta com situation null', async () => {
+    reportsSearchParams = new URLSearchParams('from=2026-01&to=2026-02&situation=overdue');
     vi.mocked(getReportsRevenue).mockResolvedValue(readyBody);
     renderReports();
-    const situation = await screen.findByLabelText('Situação');
-    fireEvent.change(situation, { target: { value: 'overdue' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Visualizar relatório' }));
     await waitFor(() => {
       expect(getReportsRevenue).toHaveBeenCalledWith(
-        expect.objectContaining({ situation: 'overdue' }),
+        expect.objectContaining({ situation: null }),
       );
     });
-    expect(replaceMock.mock.calls.at(-1)?.[0]).toContain('situation=overdue');
+    expect(screen.queryByLabelText('Situação')).toBeNull();
   });
 
   it('exporta o snapshot visualizado, invalida ao mudar filtro e protege clique duplo', async () => {
@@ -436,6 +444,7 @@ describe('página /relatorios', () => {
         from: expect.stringMatching(/^\d{4}-\d{2}$/),
         to: expect.stringMatching(/^\d{4}-\d{2}$/),
         format: 'pdf',
+        situation: null,
       }),
     );
     expect(pdf.getAttribute('aria-busy')).toBe('true');
@@ -445,7 +454,8 @@ describe('página /relatorios', () => {
       expect(screen.getByRole('button', { name: 'Exportar PDF' })).toHaveProperty('disabled', false);
     });
 
-    fireEvent.change(screen.getByLabelText('Situação'), { target: { value: 'overdue' } });
+    const fromRegion = screen.getByRole('region', { name: 'De' });
+    fireEvent.click(within(fromRegion).getByRole('button', { name: 'Mês anterior' }));
     expect(screen.getByRole('button', { name: 'Exportar PDF' })).toHaveProperty('disabled', true);
     expect(
       screen.getByText(/Filtros alterados — clique em Visualizar/),
@@ -466,7 +476,7 @@ describe('página /relatorios', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Exportar Excel' }));
     await waitFor(() => {
       expect(downloadReportsRevenueExport).toHaveBeenLastCalledWith(
-        expect.objectContaining({ format: 'xlsx', situation: 'overdue' }),
+        expect.objectContaining({ format: 'xlsx', situation: null }),
       );
     });
   });
@@ -476,6 +486,7 @@ describe('página /relatorios', () => {
     renderReports();
     await screen.findByRole('heading', { name: 'Relatórios', level: 1 });
     fireEvent.change(screen.getByLabelText('Tipo de relatório'), { target: { value: 'expenses' } });
+    expect(screen.getByText('Saídas de caixa no intervalo de meses.')).toBeTruthy();
     expect(getReportsExpenses).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Visualizar relatório' }));
     await waitFor(() => {
@@ -483,16 +494,18 @@ describe('página /relatorios', () => {
     });
     expect(getReportsRevenue).not.toHaveBeenCalled();
     expect(replaceMock).toHaveBeenCalledWith(expect.stringMatching(/^\/relatorios\?type=expenses&from=/));
+    expect(replaceMock.mock.calls.at(-1)?.[0]).not.toContain('situation=');
     expect(await screen.findByText('Aluguel')).toBeTruthy();
-    expect(screen.getByText('Despesas por mês de competência')).toBeTruthy();
+    expect(screen.getByText('Saídas por mês civil (caixa)')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Despesas' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Pago' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Saídas realizadas' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'A pagar' })).toBeTruthy();
+    expect(screen.queryByText(/competência/i)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Exportar PDF' }));
     await waitFor(() => {
       expect(downloadReportsExpensesExport).toHaveBeenCalledWith(
-        expect.objectContaining({ format: 'pdf' }),
+        expect.objectContaining({ format: 'pdf', situation: null }),
       );
     });
     expect(downloadReportsRevenueExport).not.toHaveBeenCalled();

@@ -1125,7 +1125,8 @@ CASH-4C — Visualizações da Home em caixa: IMPLEMENTADA (local; aguarda
 CASH-4C-CAT — Donuts de categoria em caixa realizado: IMPLEMENTADA (local).
      `realizedByCategory.inflows/outflows` no MonthlyCashFlow; D8 sobre
      netAmount/share; fecha com realized.inflows/outflows; previsto fora;
-     transferências fora. Zoom/expansão = dívida futura. Relatórios = CASH-6.
+     transferências fora. Zoom/expansão = dívida futura.
+     Relatórios = CASH-6 (IMPLEMENTADA localmente; mesmo MonthlyCashFlow).
      HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES
      DO BACKFILL DE PRODUÇÃO + CASH-8B (R3 no gap de over-coverage).
 CC1 — Centros de custo + alocação + filtro Home:
