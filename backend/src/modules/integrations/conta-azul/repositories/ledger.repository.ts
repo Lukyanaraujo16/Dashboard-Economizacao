@@ -31,7 +31,11 @@ export type ContaAzulLedgerRepository = {
     scope: { readonly tenantId: string; readonly integrationId: string },
     installmentExternalId: string,
   ): Promise<
-    Array<{ readonly externalId: string; readonly lifecycleStatus: 'ACTIVE' | 'DELETED' }>
+    Array<{
+      readonly externalId: string;
+      readonly lifecycleStatus: 'ACTIVE' | 'DELETED';
+      readonly grossAmount: Prisma.Decimal;
+    }>
   >;
   upsertSettlements(
     scope: FinancialSyncScope,
@@ -52,10 +56,12 @@ export function createContaAzulLedgerRepository(prisma: PrismaClient): ContaAzul
         prisma.receivable.findMany({
           where,
           select: { externalId: true, paid: true },
+          orderBy: { externalId: 'asc' },
         }),
         prisma.payable.findMany({
           where,
           select: { externalId: true, paid: true },
+          orderBy: { externalId: 'asc' },
         }),
       ]);
       return [
@@ -79,7 +85,7 @@ export function createContaAzulLedgerRepository(prisma: PrismaClient): ContaAzul
           integrationId: scope.integrationId,
           installmentExternalId,
         },
-        select: { externalId: true, lifecycleStatus: true },
+        select: { externalId: true, lifecycleStatus: true, grossAmount: true },
       });
     },
 

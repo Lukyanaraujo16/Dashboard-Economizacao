@@ -36,8 +36,8 @@ deste documento prevalece. Fases executadas até o momento:
   - V2.3.1 — Final Home Polish (copy Meta + Leitura semântica + Comparativo tooltip): HOMOLOGADA — baseline visual/funcional congelado da Home
   - F1-G — Faturamento Gerencial (monthly-revenue): IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO
   - L0 — Spike real de baixas Conta Azul: PARCIAL / SUFICIENTE PARA INFRA L1
-  - L1-A — Persistência/ingestão read-only do ledger: WIP em stash (fora do HEAD); não aplicar na F12
-  - L1-B — Semântica oficial do caixa + read model mensal: BLOCKED_BY_CASH_SEMANTICS
+  - L1-A / CASH-2 — Persistência/ingestão read-only do ledger: IMPLEMENTADA no HEAD. Stash L1 histórico NÃO aplicar.
+  - L1-B / CASH-3A — Semântica oficial do caixa + read model mensal: IMPLEMENTADA.
   - Dashboard Executiva V1 / E3 — Leitura executiva (insights determinísticos): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO
   - F2 — Meta de faturamento (persistência/API/CRUD): HOMOLOGADA (widget funcional na Home; F2.0.1 status temporal)
   - CC1 — Centros de custo + alocação + filtro Home: HOMOLOGADA (catálogo + allocations + filtro Home; CC1.1 normalização EVENT-scoped 1 centro incorporada; Meta F2 permanece company-level)
@@ -75,7 +75,13 @@ L1-A / CASH-2 (financial_transactions): IMPLEMENTADA no HEAD (persistência).
 L1-B / CASH-3A: read model `MonthlyCashFlow` IMPLEMENTADO (domínio + loader + testes).
 CASH-3B: `GET /dashboard/monthly-cash-flow` IMPLEMENTADO (DTO + tipos frontend).
 CASH-4A: infra Home (fetch + view-model) IMPLEMENTADA. KPIs visíveis ainda competência.
+CASH-7: bootstrap/backfill LOCAL do ledger IMPLEMENTADO (Clínica Life).
+  Discovery = AR/AP local `paid > 0` + GET `/baixa` nas não cobertas.
+  Idempotente; skip se Σ gross ACTIVE = paid e sem DELETED.
+  Produção NÃO executada. Prune/estorno = CASH-8. Sem botão na UI.
+  Home visual NÃO liberada. Relatórios/PDF/XLSX intactos.
 CASH-4B: troca visual dos KPIs — NÃO INICIADO.
+  Não deployar CASH-4B antes do backfill de produção + CASH-8 do gap conhecido.
   Faturamento oficial (Felipe): `realized.inflows + expected.receivables`.
   Despesas oficiais: `realized.outflows + expected.payables`. Vencido AP fora.
   Resultado da Home: `billing − monthlyExpenses`. `realized.result` não substitui.
@@ -601,7 +607,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A: stash (fora do HEAD). L1-B: BLOCKED_BY_CASH_SEMANTICS.
+Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-4B: NÃO INICIADO. CASH-8: prune ainda separado.
 
 ⸻
 

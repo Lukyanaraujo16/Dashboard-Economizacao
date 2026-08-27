@@ -602,7 +602,11 @@ Campos físicos:
 * interest/fine/discount/fee;
 * lifecycle_status ACTIVE|DELETED (tombstone automático DESLIGADO).
 
-KPI realizado / Home / Relatórios: ainda não usam esta tabela.
+CASH-7 (26/08/2026): bootstrap/backfill explícito e idempotente do ledger
+histórico (CLI local; tenant/integration obrigatórios; `--confirm=LOCAL`).
+Não dispara no worker nem no login. Não inventa baixa se `/baixa = []`.
+Não apaga ledger (prune = CASH-8). Produção ainda não executada.
+CASH-3A/3B leem esta tabela. Home visual e Relatórios/PDF/XLSX ainda não.
 
 ⸻
 
