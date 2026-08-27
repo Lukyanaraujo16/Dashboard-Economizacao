@@ -237,7 +237,10 @@ D. Recebido no período
    VENCIDO = D1 carteira atual (`dueDate < today`), independente do mês.
    FATURAMENTO homologado = realizado.inflows + expected.receivables
    (vencido fora; pagamento tardio no mês da baixa; competência não define).
-   Sem as-of. Fluxo ≠ estoque. Home/Relatórios ainda competência até CASH-4/CASH-6.
+   Sem as-of. Fluxo ≠ estoque.
+   CASH-4 (Home) e CASH-6 (Relatórios/PDF/XLSX) HOMOLOGADOS: superfícies
+   financeiras oficiais usam `MonthlyCashFlow` (regime de caixa).
+   Competência permanece apenas como dado técnico/legado de API.
 
 E. Próximos vencimentos
    AR WHERE status IN (OPEN, OVERDUE, PARTIALLY_PAID)
@@ -398,17 +401,19 @@ CASH-4B (HOMOLOGADA): Despesas da Home =
 `realized.outflows + expected.payables` (vencido AP fora). CASH-4C =
 séries/gráficos/leitura em caixa (Home sem monthly-expenses).
 
-A Home apresenta receita mensal por competência (`GET /dashboard/monthly-revenue`):
-AR com competenceDate no mês civil corrente, incluindo PAID; D8 sobre o
-total do mês. `received` = Σ paid do snapshot, não caixa do mês.
-F1-G: o card Faturamento Gerencial usa o mesmo `total` (§12).
+A Home oficial (CASH-4 homologada) usa `GET /dashboard/monthly-cash-flow`
+(regime de caixa). Endpoints de competência (`GET /dashboard/monthly-revenue`,
+`monthly-expenses`) **permanecem no backend** como legado/compatibilidade;
+**não** alimentam KPIs oficiais da Home.
+`received` no contrato legado = Σ paid do snapshot, não caixa do mês.
+F1-G (Faturamento Gerencial por competência): SUPERSEDED na Home (CASH-4B).
 A composição de receitas/despesas por categoria na Home (CASH-4C-CAT) é
 caixa realizado: D8 sobre settlements elegíveis (ACTIVE, sem transferência).
 SUM(items) = realized.inflows / realized.outflows. Previsto e vencidos fora.
-Relatórios permanecem em regime de caixa (CASH-6): mesmo motor
-`MonthlyCashFlow` da Home. Realizado = `occurredOn`/`netAmount`; previsto =
-`dueDate`/`unpaid` no prazo; vencido separado (`ofMonth` no intervalo).
-Competência não define totais. PDF/XLSX formatam o mesmo DTO.
+Relatórios (CASH-6 homologado): mesmo motor `MonthlyCashFlow` da Home.
+Realizado = `occurredOn`/`netAmount`; previsto = `dueDate`/`unpaid` no prazo;
+vencido separado (`ofMonth` no intervalo). Competência não define totais.
+PDF/XLSX formatam o mesmo DTO. PRE-F13-CASH-FINAL-AUDIT: PASS.
 
 ⸻
 
@@ -478,7 +483,7 @@ Resultado principal da Home (CASH-4B):
 
 `realized.result` permanece disponível e NÃO substitui o card principal.
 
-Meta futura (decisão Felipe = opção A; UI ainda competência neste CASH-4A):
+Meta (decisão Felipe = opção A; CASH-4B homologada):
 
   actual = billing = realized.inflows + expected.receivables
 
@@ -491,14 +496,16 @@ Meta usa `loadBillingActual` / `monthlyBilling` (CASH-4B).
 
 Faturamento fiscal (NF-e/NFS-e): capacidade futura separada — NÃO IMPLEMENTADO.
 
-Home legado F1-G — SUPERSEDED nos KPIs (CASH-4B). Endpoints competência para CASH-6:
+Home legado F1-G — SUPERSEDED nos KPIs (CASH-4B). Endpoints de competência
+permanecem no backend como legado/compatibilidade (não alimentam Home/Reports
+oficiais após CASH-4/CASH-6):
 
-  Faturamento Gerencial mensal (legado da Home) =
+  Faturamento Gerencial mensal (legado de API) =
     Σ total dos AR com competenceDate no mês civil selecionado
     status ∈ {OPEN, OVERDUE, PARTIALLY_PAID, PAID}
     fora: RENEGOTIATED, LOST, UNKNOWN
 
-Fonte: `GET /dashboard/monthly-revenue?month=YYYY-MM` (M1).
+Fonte legada: `GET /dashboard/monthly-revenue?month=YYYY-MM` (M1).
 Card Home: valor = `receivables.total` do mesmo contrato.
 
 Semântica temporal (America/Sao_Paulo):
@@ -787,7 +794,8 @@ R4 `/baixa = []` ou parcela 404 = HOLD; não tombstona. Sem delete físico.
 Reativação: upsert força ACTIVE. CASH-8B pendente. Produção ainda não executada.
 CASH-9C: transferências internas fora de faturamento/despesas/resultado.
 Ghost ACTIVE pode ser excluído do analytics sem virar DELETED.
-CASH-4B HOMOLOGADA. CASH-4C IMPLEMENTADA localmente (aguarda homologação humana).
+CASH-4B HOMOLOGADA. CASH-4C HOMOLOGADA. CASH-6 HOMOLOGADA.
+PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local DESBLOQUEADA; produção AINDA BLOQUEADA.
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
 BACKFILL DE PRODUÇÃO + CASH-8B. Sem as-of.
 

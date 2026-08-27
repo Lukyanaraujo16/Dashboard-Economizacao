@@ -75,15 +75,18 @@ L1-A / CASH-2 (financial_transactions): IMPLEMENTADA no HEAD (persistência).
 L1-B / CASH-3A: read model `MonthlyCashFlow` IMPLEMENTADO (domínio + loader + testes).
 CASH-3B: `GET /dashboard/monthly-cash-flow` IMPLEMENTADO (DTO + tipos frontend).
 CASH-4A: infra Home IMPLEMENTADA. CASH-4B: KPIs de caixa na Home HOMOLOGADA (HEAD).
-CASH-4C: visualizações da Home em caixa HOMOLOGADA / COMMIT LOCAL
-(`56269b1`). CASH-6: Relatórios/PDF/XLSX em regime de caixa IMPLEMENTADA
-(local; aguarda homologação humana).
+CASH-4C: visualizações da Home em caixa HOMOLOGADA (commit `56269b1`).
+CASH-6: Relatórios/PDF/XLSX em regime de caixa HOMOLOGADOS (commit `39e2ab3`).
+PRE-F13-CASH-FINAL-AUDIT: PASS — experiência financeira oficial coerente com caixa.
+F13 (desenvolvimento local): DESBLOQUEADA.
+Produção: AINDA BLOQUEADA (rollout operacional — ver pendências CASH-7/8B abaixo).
 CASH-7: bootstrap/backfill LOCAL do ledger IMPLEMENTADO (Clínica Life).
   Discovery = AR/AP local `paid > 0` + GET `/baixa` nas não cobertas.
   Idempotente; skip se Σ gross ACTIVE = paid (DELETED não impede skip).
   Produção NÃO executada. CASH-8A: política R3/R4 no código; flag default false.
   CASH-8B: aplicar R3 local (e5a3). Sem botão na UI.
-  Home visual NÃO liberada. Relatórios/PDF/XLSX intactos.
+  Home e Relatórios oficiais já em regime de caixa (CASH-4 / CASH-6 homologados).
+  Produção continua bloqueada até backfill + lifecycle controlado.
 CASH-8A: lifecycle R3/R4 IMPLEMENTADO no código (flag default false).
   R3: lista 200 não vazia + GET baixa 404 + parcela viva QUITADO +
   remaining gross = valor_pago → DELETED (sem delete físico; reativa no upsert).
@@ -98,15 +101,16 @@ CASH-9C: transferências internas IMPLEMENTADAS (código + migration + testes).
   Fonte `GET /v1/financeiro/transferencias`. Tabela `financial_transfers`.
   Fora de faturamento/despesas/resultado. Ghost settlement permanece ACTIVE.
   Match conservador 1:1; AMBIGUOUS não exclui. Ingestão local explícita.
-  CASH-4B HOMOLOGADA. CASH-4C HOMOLOGADA (commit local `56269b1`).
+  CASH-4B HOMOLOGADA. CASH-4C HOMOLOGADA (commit `56269b1`).
   CASH-4C-CAT: donuts = caixa realizado (fecha com realized.inflows/outflows).
-  CASH-6: Relatórios/PDF/XLSX = MonthlyCashFlow (local; aguarda homologação).
-  Relatórios/PDF/XLSX = CASH-6 (mesmo MonthlyCashFlow da Home; regime de caixa).
+  CASH-6 HOMOLOGADA (commit `39e2ab3`): Relatórios/PDF/XLSX = MonthlyCashFlow
+  (mesmo motor da Home; regime de caixa).
+  PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local DESBLOQUEADA; produção NÃO.
 Faturamento Gerencial (F1-G): SUPERSEDED na Home (CASH-4B = caixa / MonthlyCashFlow)
   (fórmula de produto SUPERSEDED pela decisão Felipe acima).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
 F2 meta de faturamento: CASH-4B migrou `actual = billing` (caixa, company-level)
-  (`revenue_goals` + `GET`/`PUT /dashboard/revenue-goal`; realizado = competência,
+  (`revenue_goals` + `GET`/`PUT /dashboard/revenue-goal`; realizado = billing,
   sem duplicar fórmula; sem histórico de revisões da meta).
   Persistência SIM · por tenant SIM · por competência SIM · cadastro/edição SIM ·
   histórico SIM · Meta × Realizado SIM · falta/excesso SIM · futuro = planejada.
@@ -621,7 +625,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-9C: transferências internas IMPLEMENTADAS (local). CASH-4B: HOMOLOGADA. CASH-4C: HOMOLOGADA (commit local). CASH-6: Relatórios em caixa IMPLEMENTADA (local; aguarda homologação humana).
+Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-9C: transferências internas IMPLEMENTADAS (local). CASH-4B: HOMOLOGADA. CASH-4C: HOMOLOGADA. CASH-6: HOMOLOGADA (Reports/PDF/XLSX caixa). PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local DESBLOQUEADA; produção AINDA BLOQUEADA.
 
 ⸻
 
@@ -1338,7 +1342,7 @@ O MVP estará pronto quando:
 * dashboard estiver funcional;
 * filtros e comparações estiverem funcionais
   (Home: competência mensal + F11-B situação/categoria;
-  Relatórios V1: intervalo De/Até YYYY-MM de competência — F12-A;
+  Relatórios V1: intervalo De/Até YYYY-MM de caixa (CASH-6; F12-A histórico);
   ranges diários FILTER-001/005 continuam fora da V1);
 * relatórios estiverem funcionais;
 * Consultor reativo estiver funcional;
