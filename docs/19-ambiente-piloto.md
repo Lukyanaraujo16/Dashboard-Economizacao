@@ -157,6 +157,18 @@ O menu “Atualizar aplicação” faz checkout do SHA, `pnpm install --frozen-l
 
 **Não** há backup automático nesta fase. O instalador avisa e pede confirmação.
 
+### Backfills CASH (manual, tenant por tenant)
+
+Após backup Postgres + `storage` e `prisma migrate deploy` (ledger + transfers):
+
+1. CASH-7 `--confirm=PRODUCTION --report-only` / `--dry-run` por tenant
+2. CASH-7 `--confirm=PRODUCTION` por tenant
+3. CASH-9C `--confirm=PRODUCTION` por tenant
+4. Validação numérica (ex.: Clínica Life) → lifecycle CASH-8B se necessário
+
+Nunca `--confirm=LOCAL` com `NODE_ENV=production`. Nunca renomear banco.
+Scripts: `backend/scripts/cash7-ledger-backfill.ts`, `cash9c-transfers-backfill.ts`.
+
 ## 10. O que isto não é
 
 - Não é a Fase 19 completa (`docs/06-roadmap.md`).  

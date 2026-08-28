@@ -1093,8 +1093,10 @@ L1-A / CASH-2 — Persistência/ingestão read-only (`financial_transactions`):
      Bootstrap/listPaid existe no ledger-sync; o engine incremental NÃO o chama.
 CASH-7 — Backfill/bootstrap explícito do ledger: IMPLEMENTADO LOCALMENTE
      (Clínica Life, 26/08/2026). CLI `scripts/cash7-ledger-backfill.ts`
-     exige `--tenant` + `--confirm=LOCAL`; aborta `NODE_ENV=production`
-     e banco que não seja `_dev`/`_test`. Não dispara no worker/login.
+     exige `--tenant` obrigatório (sem `--all`). LOCAL: `--confirm=LOCAL`
+     + banco `_dev`/`_test` + `NODE_ENV != production`. PRODUÇÃO:
+     `--confirm=PRODUCTION` + `NODE_ENV=production` + banco real (fail-closed).
+     `--report-only` e `--dry-run` preservados (não mutam). Não dispara no worker.
      Discovery: títulos locais `paid > 0`; skip se Σ gross ACTIVE = paid
      (DELETED não impede skip); senão GET `/baixa`. Idempotente.
      CASH-8A — Lifecycle R3/R4: IMPLEMENTADO (código + testes). Flag
@@ -1102,15 +1104,17 @@ CASH-7 — Backfill/bootstrap explícito do ledger: IMPLEMENTADO LOCALMENTE
      R3 confirma stale com GET `/parcelas/baixa/{id}` 404 + parcela viva.
      R4 `[]` / parcela 404 = HOLD. Sem delete físico. Reativação via upsert.
      CASH-8B (aplicar R3 na Clínica Life) NÃO iniciado.
-     Produção: NÃO executar nesta fase (backup → migrate ledger → deploy
-     API/worker → backfill por tenant → cobertura → CASH-8B → CASH-4B).
+     Produção: ordem operacional — backup manual → migrate ledger/transfers
+     → deploy API/worker → CASH-7 report-only/dry-run por tenant → CASH-7
+     → CASH-9C por tenant → validação → CASH-8B se necessário → CASH-4B.
+     Nunca `NODE_ENV` falso; nunca `--confirm=LOCAL` em produção.
 CASH-9C — Transferências internas: IMPLEMENTADO (código + migration + testes).
      `GET /v1/financeiro/transferencias` → `financial_transfers`.
      Um objeto origem/destino. Não entra em billing/despesas/resultado.
      Ghost settlement ACTIVE; associação 1:1 conservadora.
-     AMBIGUOUS = não exclui. CLI local `scripts/cash9c-transfers-backfill.ts`.
-     Fora do worker. CASH-4B HOMOLOGADA; CASH-4C IMPLEMENTADA localmente;
-     produção ainda bloqueada.
+     AMBIGUOUS = não exclui. CLI `scripts/cash9c-transfers-backfill.ts`
+     (LOCAL `--confirm=LOCAL`; produção `--confirm=PRODUCTION`; sem preview
+     não-mutável nesta fase). Fora do worker.
 CASH-3A — Read model mensal de caixa (`MonthlyCashFlow`): IMPLEMENTADA no domínio.
 CASH-3B — `GET /dashboard/monthly-cash-flow`: IMPLEMENTADA (facade + DTO + tipos frontend).
      Sem Home visual. `billing` = monthlyBilling = inflows + expected.receivables.

@@ -1,11 +1,16 @@
 /**
- * CASH-9C — ingestão local de transferências entre contas próprias.
+ * CASH-9C — ingestão de transferências entre contas próprias.
  *
- * Uso (somente LOCAL):
+ * LOCAL (banco _dev/_test, NODE_ENV != production):
  *   cd backend && pnpm exec tsx scripts/cash9c-transfers-backfill.ts --tenant=<uuid|name> --confirm=LOCAL
  *   cd backend && pnpm exec tsx scripts/cash9c-transfers-backfill.ts --tenant=<uuid|name> --confirm=LOCAL --from=2026-08-01 --to=2026-08-31
  *
- * Não dispara no worker. Não executa produção. Não imprime tokens.
+ * PRODUÇÃO (banco real, NODE_ENV=production, tenant por tenant):
+ *   cd backend && pnpm exec tsx scripts/cash9c-transfers-backfill.ts --tenant=<uuid|name> --confirm=PRODUCTION
+ *   cd backend && pnpm exec tsx scripts/cash9c-transfers-backfill.ts --tenant=<uuid|name> --confirm=PRODUCTION --from=2026-08-01 --to=2026-08-31
+ *
+ * Sem dry-run/report-only nesta fase — execução sempre mutável após o guard.
+ * Não dispara no worker. Não imprime tokens.
  */
 import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
@@ -23,6 +28,7 @@ import { createContaAzulRateLimiter } from '../src/modules/integrations/conta-az
 import { createContaAzulTransferSyncService } from '../src/modules/integrations/conta-azul/services/conta-azul-transfer-sync.service.js';
 import {
   assertTransferBackfillAllowed,
+  classifyDatabaseName,
   databaseNameFromUrl,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-backfill-guard.js';
 import { formatCivilDate, parseCivilDate, addCivilYears, utcCivilDate } from '../src/modules/integrations/conta-azul/domain/conta-azul-dates.js';
@@ -118,7 +124,7 @@ async function main(): Promise<void> {
       ) AS exists
     `;
     if (!table[0]?.exists) {
-      throw new Error('CASH-9C: tabela financial_transfers ausente. Aplique a migration no DEV local.');
+      throw new Error('CASH-9C: tabela financial_transfers ausente. Aplique a migration antes do backfill.');
     }
 
     const tenant = await resolveTenantId(prisma, tenantArg);
@@ -139,7 +145,8 @@ async function main(): Promise<void> {
       tenantName: tenant.name,
       integrationId: integration.id,
       integrationStatus: integration.status,
-      databaseSuffix: databaseName.endsWith('_dev') ? '_dev' : '_test',
+      confirmMode: confirm,
+      databaseClassification: classifyDatabaseName(databaseName),
       from: formatCivilDate(from),
       to: formatCivilDate(to),
       note: 'tokens omitidos',

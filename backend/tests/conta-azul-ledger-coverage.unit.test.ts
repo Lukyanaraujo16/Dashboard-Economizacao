@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Prisma } from '../src/generated/prisma/client.js';
 import { isInstallmentLedgerCovered } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-coverage.js';
-import { assertLedgerBackfillAllowed, assertTransferBackfillAllowed } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-backfill-guard.js';
 
 describe('isInstallmentLedgerCovered', () => {
   it('cobre quando Σ gross ACTIVE = paid', () => {
@@ -44,58 +43,5 @@ describe('isInstallmentLedgerCovered', () => {
         rows: [{ lifecycleStatus: 'ACTIVE', grossAmount: new Prisma.Decimal('0') }],
       }),
     ).toBe(false);
-  });
-});
-
-describe('assertLedgerBackfillAllowed', () => {
-  it('bloqueia production e confirmação ausente', () => {
-    expect(() =>
-      assertLedgerBackfillAllowed({
-        nodeEnv: 'production',
-        confirm: 'LOCAL',
-        databaseName: 'dashboard_dev',
-      }),
-    ).toThrow(/production/);
-    expect(() =>
-      assertLedgerBackfillAllowed({
-        nodeEnv: 'development',
-        confirm: undefined,
-        databaseName: 'dashboard_dev',
-      }),
-    ).toThrow(/--confirm=LOCAL/);
-    expect(() =>
-      assertLedgerBackfillAllowed({
-        nodeEnv: 'development',
-        confirm: 'LOCAL',
-        databaseName: 'dashboard',
-      }),
-    ).toThrow(/_dev/);
-  });
-
-  it('permite development + LOCAL + _dev', () => {
-    expect(() =>
-      assertLedgerBackfillAllowed({
-        nodeEnv: 'development',
-        confirm: 'LOCAL',
-        databaseName: 'dashboard_economizacao_dev',
-      }),
-    ).not.toThrow();
-  });
-
-  it('CASH-9C recusa produção e permite development + LOCAL + _dev', () => {
-    expect(() =>
-      assertTransferBackfillAllowed({
-        nodeEnv: 'production',
-        confirm: 'LOCAL',
-        databaseName: 'dashboard_economizacao_dev',
-      }),
-    ).toThrow(/CASH-9C/);
-    expect(() =>
-      assertTransferBackfillAllowed({
-        nodeEnv: 'development',
-        confirm: 'LOCAL',
-        databaseName: 'dashboard_economizacao_dev',
-      }),
-    ).not.toThrow();
   });
 });

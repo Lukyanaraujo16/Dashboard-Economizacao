@@ -1,13 +1,17 @@
 /**
  * CASH-7 — bootstrap/backfill explícito do ledger de baixas.
  *
- * Uso (somente LOCAL):
+ * LOCAL (banco _dev/_test, NODE_ENV != production):
  *   cd backend && pnpm exec tsx scripts/cash7-ledger-backfill.ts --tenant=<uuid|name> --confirm=LOCAL
  *   cd backend && pnpm exec tsx scripts/cash7-ledger-backfill.ts --tenant=<uuid|name> --confirm=LOCAL --dry-run
  *   cd backend && pnpm exec tsx scripts/cash7-ledger-backfill.ts --tenant=<uuid|name> --confirm=LOCAL --report-only
  *
- * NÃO dispara automaticamente. NÃO executa produção.
- * Não imprime tokens.
+ * PRODUÇÃO (banco real, NODE_ENV=production, tenant por tenant):
+ *   cd backend && pnpm exec tsx scripts/cash7-ledger-backfill.ts --tenant=<uuid|name> --confirm=PRODUCTION --report-only
+ *   cd backend && pnpm exec tsx scripts/cash7-ledger-backfill.ts --tenant=<uuid|name> --confirm=PRODUCTION --dry-run
+ *   cd backend && pnpm exec tsx scripts/cash7-ledger-backfill.ts --tenant=<uuid|name> --confirm=PRODUCTION
+ *
+ * NÃO dispara automaticamente no worker. Não imprime tokens.
  */
 import { existsSync } from 'node:fs';
 import { loadEnvFile } from 'node:process';
@@ -28,6 +32,7 @@ import { createContaAzulRateLimiter } from '../src/modules/integrations/conta-az
 import { createContaAzulLedgerBackfillService } from '../src/modules/integrations/conta-azul/services/conta-azul-ledger-backfill.service.js';
 import {
   assertLedgerBackfillAllowed,
+  classifyDatabaseName,
   databaseNameFromUrl,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-backfill-guard.js';
 import { isInstallmentLedgerCovered } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-coverage.js';
@@ -272,7 +277,7 @@ async function main(): Promise<void> {
       ) AS exists
     `;
     if (!table[0]?.exists) {
-      throw new Error('CASH-7: tabela financial_transactions ausente. Aplique a migration no DEV local.');
+      throw new Error('CASH-7: tabela financial_transactions ausente. Aplique a migration antes do backfill.');
     }
 
     const tenant = await resolveTenantId(prisma, tenantArg);
@@ -293,7 +298,8 @@ async function main(): Promise<void> {
       tenantName: tenant.name,
       integrationId: integration.id,
       integrationStatus: integration.status,
-      databaseSuffix: databaseName.endsWith('_dev') ? '_dev' : '_test',
+      confirmMode: confirm,
+      databaseClassification: classifyDatabaseName(databaseName),
       dryRun,
       reportOnly,
       note: 'tokens omitidos',

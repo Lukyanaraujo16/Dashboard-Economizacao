@@ -787,13 +787,18 @@ executiva = MonthlyCashFlow; competência não alimenta a Home.
 `realizedByCategory` = D8 sobre RECEIPT/DISBURSEMENT elegíveis; SUM =
 realized.inflows/outflows; previsto e transferências fora. Meta `actual` =
 billing. Zoom/expansão = dívida UX futura.
-CASH-7 (26/08/2026): bootstrap local idempotente por tenant; cobertura
+CASH-7 (26/08/2026): bootstrap idempotente por tenant; cobertura
 segura = Σ gross ACTIVE = `paid` (DELETED não entra na soma nem bloqueia skip).
+Guard fail-closed: LOCAL exige `_dev`/`_test`; produção exige
+`NODE_ENV=production` + `--confirm=PRODUCTION` + banco real.
 CASH-8A: R3 stale confirmado pode ir a DELETED (flag default false).
 R4 `/baixa = []` ou parcela 404 = HOLD; não tombstona. Sem delete físico.
-Reativação: upsert força ACTIVE. CASH-8B pendente. Produção ainda não executada.
+Reativação: upsert força ACTIVE. CASH-8B pendente. Rollout produção
+autorizado explicitamente (PRE-F13-PROD-BACKFILL-GUARD); execução manual
+tenant por tenant; homologação Felipe ainda pendente.
 CASH-9C: transferências internas fora de faturamento/despesas/resultado.
 Ghost ACTIVE pode ser excluído do analytics sem virar DELETED.
+Produção: `--confirm=PRODUCTION`; sem dry-run/report-only no CLI CASH-9C.
 CASH-4B HOMOLOGADA. CASH-4C HOMOLOGADA. CASH-6 HOMOLOGADA.
 PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local DESBLOQUEADA; produção AINDA BLOQUEADA.
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
