@@ -358,7 +358,20 @@ homologação humana do complemento CAT). A Home conta uma única história de c
 * CASH-4C-CAT-FINAL: faixa Meta / Até fim do mês / Inadimplência em altura
   natural; Leitura executiva em linha própria (largura total, sinais em
   multi-coluna no desktop). Copy do Comparativo sem “competência”.
-  Zoom/expansão permanece dívida futura.
+  Zoom/expansão dos KPIs e gráficos principais restaurada
+  (PRE-F13-HOME-POLISH-1): Faturamento, Já recebido, A receber,
+  Despesas, Resultado, Entradas × Saídas, donuts de categoria —
+  via `WidgetExpandDialog` existente; conteúdo somente do contrato
+  CASH (`MonthlyCashFlow`). Competência não volta nos modais.
+  Meta / Comparativo / Movimentação preservados.
+  PRE-F13-HOME-POLISH-2: Até o fim do mês, Inadimplência e Fluxo previsto
+  também expansíveis; Leitura executiva com navegação contextual dos
+  mini-blocos para os modais CASH (sem modal-geral).
+  PRE-F13-HOME-POLISH-3: modais enriquecidos com rankings de categorias
+  realizadas e composição explícita do Resultado; previsto sem categoria
+  inventada.
+  PRE-F13-HOME-POLISH-CLOSE (27/08/2026): homologação humana APROVADA no
+  localhost; pacote fechado localmente. F13 NÃO iniciada; produção NÃO.
 
 CASH-4A (infra Home / caixa): a Home **carrega** `GET /dashboard/monthly-cash-flow`
 (`month`, `costCenter`, `category`). Infra mantida; números oficiais = CASH-4B.
@@ -383,10 +396,11 @@ Removidos da Home:
 * widget independente “Top 5 despesas”;
 * card dual “Composição por categoria” (dois anéis no mesmo card);
 * diálogo dual `categories`; botões “Abrir receitas/despesas por categoria”
-  no donut. Zoom/expansão dos gráficos permanece dívida futura.
+  no donut.
 
 Interação legada de donuts de competência: removida. Donuts atuais =
-caixa realizado (CASH-4C-CAT), sem zoom/modal nesta fase.
+caixa realizado (CASH-4C-CAT). PRE-F13-HOME-POLISH-1 restaura zoom/modal
+com `realizedByCategory` (sem competência / sem previsto).
 
 Grade secundária (`secondaryGrid`):
 * Meta de faturamento (`sectionId` `meta-faturamento`) — empty comercial

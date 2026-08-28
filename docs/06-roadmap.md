@@ -78,7 +78,19 @@ CASH-4A: infra Home IMPLEMENTADA. CASH-4B: KPIs de caixa na Home HOMOLOGADA (HEA
 CASH-4C: visualizações da Home em caixa HOMOLOGADA (commit `56269b1`).
 CASH-6: Relatórios/PDF/XLSX em regime de caixa HOMOLOGADOS (commit `39e2ab3`).
 PRE-F13-CASH-FINAL-AUDIT: PASS — experiência financeira oficial coerente com caixa.
-F13 (desenvolvimento local): DESBLOQUEADA.
+PRE-F13-HOME-POLISH-1/2/3: FECHADO E HOMOLOGADO LOCALMENTE (27/08/2026).
+  Expansão, drill-down e detalhamento analítico da Home em regime de caixa;
+  homologação humana APROVADA. Produção ainda NÃO com esta versão.
+  Sem commit até homologação. F13 NÃO iniciada nesta fase.
+PRE-F13-HOME-POLISH-2: cobertura de expansão + drill-down analítico (local;
+  homologado). Até o fim do mês / Inadimplência / Fluxo previsto
+  expansíveis; Leitura executiva navega para modais CASH existentes (sem
+  modal-geral duplicado). Sem lista transacional de vencidos (dívida futura).
+  PRE-F13-HOME-POLISH-3: detalhamento analítico dos modais (local;
+  homologado). Rankings `realizedByCategory` em Faturamento/Já recebido/
+  Despesas/Entradas×Saídas; composição billing−despesas no Resultado; A receber
+  honesto sem categoria expected. Sem commit. F13 NÃO iniciada.
+F13 (desenvolvimento local): DESBLOQUEADA (não iniciada).
 Produção: AINDA BLOQUEADA (rollout operacional — ver pendências CASH-7/8B abaixo).
 CASH-7: bootstrap/backfill LOCAL do ledger IMPLEMENTADO (Clínica Life).
   Discovery = AR/AP local `paid > 0` + GET `/baixa` nas não cobertas.

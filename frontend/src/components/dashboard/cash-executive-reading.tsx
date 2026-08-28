@@ -35,6 +35,17 @@ export type CashExecutiveReadingProps = {
   readonly model: CashExecutiveReadingModel;
   readonly emptyMessage?: string;
   readonly className?: string;
+  /** Abre o detalhe CASH correspondente ao mini-bloco (HOME-POLISH-2). */
+  readonly onMetricActivate?: (metricId: string) => void;
+};
+
+const METRIC_EXPAND_LABEL: Record<string, string> = {
+  'cash-received': 'Abrir detalhe de Já recebido',
+  'cash-receivable': 'Abrir detalhe de A receber',
+  'cash-paid': 'Abrir detalhe de Despesas (pago)',
+  'cash-payable': 'Abrir detalhe de Despesas (a pagar)',
+  'cash-result': 'Abrir detalhe de Resultado',
+  'cash-coverage': 'Abrir detalhe de Faturamento',
 };
 
 function metricTone(metric: CashExecutiveMetric): SignalTone {
@@ -65,12 +76,13 @@ function StatusStrip({ status }: { readonly status: CashExecutiveStatus }) {
 
 /**
  * Leitura executiva de caixa — métricas curtas + status discreto (FINAL-UI).
- * Não altera fórmulas; só a apresentação.
+ * Mini-blocos podem navegar para o modal CASH correspondente (POLISH-2).
  */
 export function CashExecutiveReading({
   model,
   emptyMessage = 'Sem movimentação de caixa para leitura neste mês.',
   className,
+  onMetricActivate,
 }: CashExecutiveReadingProps) {
   if (model.metrics.length === 0 && model.status === null) {
     return <p className={cx(styles.empty, className)}>{emptyMessage}</p>;
@@ -90,21 +102,41 @@ export function CashExecutiveReading({
         {model.metrics.map((metric) => {
           const Icon = METRIC_ICONS[metric.id] ?? CircleDollarSign;
           const tone = metricTone(metric);
+          const canActivate = Boolean(onMetricActivate) && metric.id in METRIC_EXPAND_LABEL;
+          const activateLabel = METRIC_EXPAND_LABEL[metric.id] ?? `Abrir detalhe de ${metric.label}`;
+
           return (
-            <li
-              key={metric.id}
-              className={styles.metric}
-              data-signal={metric.id}
-              data-tone={tone}
-            >
-              <div className={styles.metricHeader}>
-                <span className={styles.icon} aria-hidden="true">
-                  <Icon size={14} strokeWidth={UI_ICON_STROKE} />
-                </span>
-                <span className={styles.label}>{metric.label}</span>
-              </div>
-              <p className={styles.value}>{metric.value}</p>
-              <p className={styles.hint}>{metric.hint}</p>
+            <li key={metric.id} className={styles.metricItem} data-signal={metric.id}>
+              {canActivate ? (
+                <button
+                  type="button"
+                  className={cx(styles.metric, styles.metricClickable)}
+                  data-tone={tone}
+                  data-stop-expand
+                  aria-label={activateLabel}
+                  onClick={() => onMetricActivate?.(metric.id)}
+                >
+                  <div className={styles.metricHeader}>
+                    <span className={styles.icon} aria-hidden="true">
+                      <Icon size={14} strokeWidth={UI_ICON_STROKE} />
+                    </span>
+                    <span className={styles.label}>{metric.label}</span>
+                  </div>
+                  <p className={styles.value}>{metric.value}</p>
+                  <p className={styles.hint}>{metric.hint}</p>
+                </button>
+              ) : (
+                <div className={styles.metric} data-tone={tone}>
+                  <div className={styles.metricHeader}>
+                    <span className={styles.icon} aria-hidden="true">
+                      <Icon size={14} strokeWidth={UI_ICON_STROKE} />
+                    </span>
+                    <span className={styles.label}>{metric.label}</span>
+                  </div>
+                  <p className={styles.value}>{metric.value}</p>
+                  <p className={styles.hint}>{metric.hint}</p>
+                </div>
+              )}
             </li>
           );
         })}

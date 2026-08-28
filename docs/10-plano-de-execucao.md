@@ -1125,7 +1125,19 @@ CASH-4C — Visualizações da Home em caixa: IMPLEMENTADA (local; aguarda
 CASH-4C-CAT — Donuts de categoria em caixa realizado: IMPLEMENTADA (local).
      `realizedByCategory.inflows/outflows` no MonthlyCashFlow; D8 sobre
      netAmount/share; fecha com realized.inflows/outflows; previsto fora;
-     transferências fora. Zoom/expansão = dívida futura.
+     transferências fora.
+PRE-F13-HOME-POLISH-1 — Expansão/detalhamento da Home: FECHADO / HOMOLOGADO
+     (27/08/2026). Restaura clique/zoom nos KPIs e gráficos (Faturamento,
+     Já recebido, A receber, Despesas, Resultado, Entradas×Saídas, donuts);
+     Meta/Comparativo/Movimentação preservados. Conteúdo dos modais = contrato
+     CASH; competência não volta. Sem F13.
+PRE-F13-HOME-POLISH-2 — Cobertura + drill-down analítico: FECHADO / HOMOLOGADO
+     (27/08/2026). Até o fim do mês / Inadimplência / Fluxo previsto
+     expansíveis; mini-blocos da Leitura executiva abrem modais CASH existentes;
+     sem modal-geral duplicado; sem lista de títulos vencidos (sem DTO).
+PRE-F13-HOME-POLISH-3 — Detalhamento analítico dos modais: FECHADO / HOMOLOGADO
+     (27/08/2026). Rankings de categorias realizadas nos modais principais;
+     composição explícita no Resultado; previsto sem categoria inventada.
      Relatórios = CASH-6 (IMPLEMENTADA localmente; mesmo MonthlyCashFlow).
      HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES
      DO BACKFILL DE PRODUÇÃO + CASH-8B (R3 no gap de over-coverage).

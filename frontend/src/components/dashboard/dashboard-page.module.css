@@ -444,8 +444,65 @@
   min-width: 0;
 }
 
+.expandFormula {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-elevated) 35%, var(--color-surface));
+}
+
+.expandFormulaRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.expandFormulaLabel {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.expandFormulaValue {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.expandFormulaTotal {
+  padding-top: var(--space-2);
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--color-border);
+}
+
+.expandFormulaTotal .expandFormulaLabel,
+.expandFormulaTotal .expandFormulaValue {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.expandSplit {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
 @media (min-width: 768px) {
   .expandColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .expandSplit {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

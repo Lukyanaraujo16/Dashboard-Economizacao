@@ -817,12 +817,12 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-financial-section="qualidade-recebiveis"]')).toBeNull();
   });
 
-  it('KPI de faturamento não expande na Home CASH-4B', async () => {
+  it('KPI de faturamento expande na Home CASH (PRE-F13-HOME-POLISH)', async () => {
     getOverview.mockResolvedValue(syncedOverview);
     renderDashboard();
 
     await waitFor(() => {
-      expect(kpiScope('Faturamento').queryByRole('button', { name: 'Expandir' })).toBeNull();
+      expect(kpiScope('Faturamento').getByRole('button', { name: 'Expandir' })).toBeTruthy();
     });
   });
 

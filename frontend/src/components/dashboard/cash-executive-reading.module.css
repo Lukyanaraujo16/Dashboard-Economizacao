@@ -27,15 +27,49 @@
   }
 }
 
+.metricItem {
+  min-width: 0;
+  list-style: none;
+}
+
 .metric {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  width: 100%;
   min-width: 0;
+  margin: 0;
   padding: var(--space-2) var(--space-3);
   border: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--color-surface-elevated) 40%, var(--color-surface));
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+
+.metricClickable {
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) ease,
+    background-color var(--duration-fast) ease,
+    box-shadow var(--duration-fast) ease;
+}
+
+.metricClickable:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface-elevated) 70%, var(--color-surface));
+}
+
+.metricClickable:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .metricClickable {
+    transition: none;
+  }
 }
 
 .metricHeader {
