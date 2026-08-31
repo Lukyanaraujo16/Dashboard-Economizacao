@@ -526,4 +526,30 @@ describe('página /relatorios', () => {
     expect(getReportsExpenses).not.toHaveBeenCalled();
     expect(getReportsRevenue).toHaveBeenCalledTimes(1);
   });
+
+  it('troca de tenant em Support Mode recarrega catálogos de filtros', async () => {
+    const CAT_A = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    vi.mocked(getDashboardCategories).mockClear();
+    vi.mocked(getDashboardCategories)
+      .mockResolvedValueOnce({
+        items: [{ id: CAT_A, name: 'Receita A', type: 'REVENUE' }],
+      })
+      .mockResolvedValueOnce({
+        items: [{ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', name: 'Despesa B', type: 'EXPENSE' }],
+      });
+
+    const first = renderReports({
+      role: 'SUPER_ADMIN',
+      support: { active: true, tenantId: 'tenant-a', tenantDisplayName: 'Empresa A' },
+    });
+    await waitFor(() => expect(getDashboardCategories).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    cleanup();
+    renderReports({
+      role: 'SUPER_ADMIN',
+      support: { active: true, tenantId: 'tenant-b', tenantDisplayName: 'Empresa B' },
+    });
+    await waitFor(() => expect(getDashboardCategories).toHaveBeenCalledTimes(2));
+  });
 });

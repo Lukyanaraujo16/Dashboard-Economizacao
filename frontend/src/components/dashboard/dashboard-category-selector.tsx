@@ -227,8 +227,17 @@ export function DashboardCategorySelector({
                 Nenhuma categoria encontrada.
               </li>
             ) : (
-              groups.map((group) => (
-                <li key={group.type} role="group" aria-label={group.label} className={styles.group}>
+              groups.map((group, groupIndex) => (
+                <li
+                  key={group.type}
+                  role="group"
+                  aria-label={group.label}
+                  className={styles.group}
+                  data-group-type={group.type}
+                >
+                  {groupIndex > 0 ? (
+                    <div className={styles.groupDivider} role="presentation" aria-hidden="true" />
+                  ) : null}
                   <p className={styles.groupLabel}>{group.label}</p>
                   <ul className={styles.groupList} role="presentation">
                     {group.items.map((item) => {

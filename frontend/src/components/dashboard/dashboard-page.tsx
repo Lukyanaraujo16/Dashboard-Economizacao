@@ -33,6 +33,7 @@ import {
   createDashboardFilterCache,
   dashboardCashFlowCacheKey,
   dashboardCashWindowCacheKey,
+  dashboardOverviewCacheKey,
 } from '../../lib/dashboard-filter-cache';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
@@ -119,6 +120,7 @@ import {
   formatSyncTimestamp,
   hasOperationalDashboardTenant,
   isNeverSynced,
+  resolveOperationalTenantId,
   shouldSkipOverviewFetch,
 } from './dashboard-overview-view';
 import { CategoryDonutChart } from './category-donut-chart';
@@ -458,6 +460,15 @@ export function DashboardPage() {
   const monthEndCacheRef = useRef(createDashboardFilterCache<DashboardMonthEndCashPressureResponse>());
   const forecastCacheRef = useRef(createDashboardFilterCache<DashboardCashFlowForecastResponse>());
 
+  const operationalTenantId = useMemo(
+    () => resolveOperationalTenantId(user, support),
+    [user, support],
+  );
+  const operationalTenantIdRef = useRef(operationalTenantId);
+  operationalTenantIdRef.current = operationalTenantId;
+  const catalogTenantIdRef = useRef<string | null>(null);
+  const catalogLoadGenerationRef = useRef(0);
+
   const loadOverview = useCallback(
     async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
       if (shouldSkipOverviewFetch(user, support)) {
@@ -481,9 +492,14 @@ export function DashboardPage() {
         return;
       }
 
+      const tenantId = operationalTenantIdRef.current;
+      if (tenantId === null) {
+        setView({ kind: 'forbidden' });
+        return;
+      }
 
       const soft = options?.soft === true;
-      const cacheKey = costCenterId ?? '';
+      const cacheKey = dashboardOverviewCacheKey(tenantId, costCenterId);
       const cached = overviewCacheRef.current.get(cacheKey);
       if (soft && cached && !isNeverSynced(cached)) {
         setView({ kind: 'ready', data: cached });
@@ -493,7 +509,7 @@ export function DashboardPage() {
 
       try {
         const data = await getDashboardOverview(costCenterId);
-        if (signal.aborted) {
+        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
         if (isNeverSynced(data)) {
@@ -538,48 +554,6 @@ export function DashboardPage() {
     [support, user],
   );
 
-  const loadCostCenters = useCallback(async (signal: AbortSignal) => {
-    setCostCentersLoading(true);
-    try {
-      const data = await getDashboardCostCenters();
-      if (signal.aborted) {
-        return;
-      }
-      setCostCenters(data.items);
-    } catch {
-      if (signal.aborted) {
-        return;
-      }
-      setCostCenters([]);
-    } finally {
-      if (!signal.aborted) {
-        setCostCentersLoading(false);
-      }
-    }
-  }, []);
-
-  const loadCategories = useCallback(async (signal: AbortSignal) => {
-    setCategoriesLoading(true);
-    setCategoriesError(false);
-    try {
-      const data = await getDashboardCategories();
-      if (signal.aborted) {
-        return;
-      }
-      setCategories(data.items);
-    } catch {
-      if (signal.aborted) {
-        return;
-      }
-      setCategories([]);
-      setCategoriesError(true);
-    } finally {
-      if (!signal.aborted) {
-        setCategoriesLoading(false);
-      }
-    }
-  }, []);
-
   const loadMonthEnd = useCallback(
     async (
       signal: AbortSignal,
@@ -587,8 +561,12 @@ export function DashboardPage() {
       categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
+      const tenantId = operationalTenantIdRef.current;
+      if (tenantId === null) {
+        return;
+      }
       const soft = options?.soft === true;
-      const cacheKey = dashboardCashWindowCacheKey(costCenterId, categoryId);
+      const cacheKey = dashboardCashWindowCacheKey(tenantId, costCenterId, categoryId);
       const cached = monthEndCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setMonthEndView({ kind: 'ready', data: cached });
@@ -597,7 +575,7 @@ export function DashboardPage() {
       }
       try {
         const data = await getDashboardMonthEndCashPressure(costCenterId, categoryId);
-        if (signal.aborted) {
+        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
         monthEndCacheRef.current.set(cacheKey, data);
@@ -626,8 +604,12 @@ export function DashboardPage() {
       categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
+      const tenantId = operationalTenantIdRef.current;
+      if (tenantId === null) {
+        return;
+      }
       const soft = options?.soft === true;
-      const cacheKey = dashboardCashWindowCacheKey(costCenterId, categoryId);
+      const cacheKey = dashboardCashWindowCacheKey(tenantId, costCenterId, categoryId);
       const cached = forecastCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setForecastView({ kind: 'ready', data: cached });
@@ -636,7 +618,7 @@ export function DashboardPage() {
       }
       try {
         const data = await getDashboardCashFlowForecast(costCenterId, categoryId);
-        if (signal.aborted) {
+        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
         forecastCacheRef.current.set(cacheKey, data);
@@ -667,8 +649,12 @@ export function DashboardPage() {
       categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
+      const tenantId = operationalTenantIdRef.current;
+      if (tenantId === null) {
+        return;
+      }
       const soft = options?.soft === true;
-      const cacheKey = dashboardCashFlowCacheKey(monthKey, costCenterId, categoryId);
+      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
       const cached = cashFlowCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setMonthlyCashFlowView({
@@ -685,7 +671,7 @@ export function DashboardPage() {
           costCenterId,
           categoryId,
         );
-        if (signal.aborted) {
+        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
         cashFlowCacheRef.current.set(cacheKey, data);
@@ -721,8 +707,12 @@ export function DashboardPage() {
       categoryId: string | null,
       options?: SoftLoadOptions,
     ) => {
+      const tenantId = operationalTenantIdRef.current;
+      if (tenantId === null) {
+        return;
+      }
       const soft = options?.soft === true;
-      const cacheKey = dashboardCashFlowCacheKey(monthKey, costCenterId, categoryId);
+      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
       const cached = previousMonthCacheRef.current.get(cacheKey);
       if (soft && cached) {
         setPreviousMonthView({
@@ -739,7 +729,7 @@ export function DashboardPage() {
           costCenterId,
           categoryId,
         );
-        if (signal.aborted) {
+        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
         previousMonthCacheRef.current.set(cacheKey, data);
@@ -781,14 +771,75 @@ export function DashboardPage() {
   );
 
   useEffect(() => {
-    if (status !== 'authenticated') {
+    if (status !== 'authenticated' || operationalTenantId === null) {
+      setCategories([]);
+      setCostCenters([]);
+      catalogTenantIdRef.current = null;
       return;
     }
+
+    overviewCacheRef.current.clear();
+    cashFlowCacheRef.current.clear();
+    previousMonthCacheRef.current.clear();
+    monthEndCacheRef.current.clear();
+    forecastCacheRef.current.clear();
+
+    setCategories([]);
+    setCostCenters([]);
+    setCategoriesError(false);
+    catalogTenantIdRef.current = null;
+    catalogLoadGenerationRef.current += 1;
+    const generation = catalogLoadGenerationRef.current;
+    const tenantId = operationalTenantId;
+
     const controller = new AbortController();
-    void loadCostCenters(controller.signal);
-    void loadCategories(controller.signal);
-    return () => controller.abort();
-  }, [loadCategories, loadCostCenters, status]);
+    setCategoriesLoading(true);
+    setCostCentersLoading(true);
+
+    void (async () => {
+      try {
+        const [categoryResult, costCenterResult] = await Promise.all([
+          getDashboardCategories(),
+          getDashboardCostCenters(),
+        ]);
+        if (
+          controller.signal.aborted ||
+          catalogLoadGenerationRef.current !== generation ||
+          operationalTenantIdRef.current !== tenantId
+        ) {
+          return;
+        }
+        setCategories(categoryResult.items);
+        setCostCenters(costCenterResult.items);
+        catalogTenantIdRef.current = tenantId;
+      } catch {
+        if (
+          controller.signal.aborted ||
+          catalogLoadGenerationRef.current !== generation ||
+          operationalTenantIdRef.current !== tenantId
+        ) {
+          return;
+        }
+        setCategories([]);
+        setCostCenters([]);
+        setCategoriesError(true);
+      } finally {
+        if (
+          !controller.signal.aborted &&
+          catalogLoadGenerationRef.current === generation &&
+          operationalTenantIdRef.current === tenantId
+        ) {
+          setCategoriesLoading(false);
+          setCostCentersLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      catalogLoadGenerationRef.current += 1;
+    };
+  }, [operationalTenantId, status]);
 
   const todayMonthKey =
     view.kind === 'ready' ? view.data.today.slice(0, 7) : currentDashboardMonthKey();
@@ -822,6 +873,45 @@ export function DashboardPage() {
     return categories.find((item) => item.id === selectedCategoryId)?.name ?? null;
   }, [categories, selectedCategoryId]);
 
+  useEffect(() => {
+    if (
+      operationalTenantId === null ||
+      catalogTenantIdRef.current !== operationalTenantId ||
+      categoriesLoading ||
+      costCentersLoading
+    ) {
+      return;
+    }
+    let nextParams: URLSearchParams | null = null;
+    if (
+      selectedCategoryId !== null &&
+      !categories.some((item) => item.id === selectedCategoryId)
+    ) {
+      nextParams = buildDashboardCategorySearchParams(nextParams ?? searchParams, null);
+    }
+    if (
+      selectedCostCenterId !== null &&
+      !costCenters.some((item) => item.id === selectedCostCenterId)
+    ) {
+      nextParams = buildDashboardCostCenterSearchParams(nextParams ?? searchParams, null);
+    }
+    if (nextParams) {
+      const qs = nextParams.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    }
+  }, [
+    categories,
+    categoriesLoading,
+    costCenters,
+    costCentersLoading,
+    operationalTenantId,
+    pathname,
+    router,
+    searchParams,
+    selectedCategoryId,
+    selectedCostCenterId,
+  ]);
+
   const previousMonthKey = shiftDashboardMonthKey(selectedMonthKey, -1);
   const selectedMonthPhase = dashboardMonthPhase(selectedMonthKey, todayMonthKey);
   const cashWindowsApply = selectedMonthPhase === 'current';
@@ -834,7 +924,7 @@ export function DashboardPage() {
     const soft = viewRef.current.kind === 'ready';
     void loadOverview(controller.signal, selectedCostCenterId, { soft });
     return () => controller.abort();
-  }, [loadOverview, selectedCostCenterId, status]);
+  }, [loadOverview, operationalTenantId, selectedCostCenterId, status]);
 
   useEffect(() => {
     if (view.kind !== 'ready' || !cashWindowsApply) {

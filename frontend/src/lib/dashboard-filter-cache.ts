@@ -7,21 +7,30 @@ import type { DashboardSituation } from './dashboard-situation';
  * Ausente = string vazia, chave determinística.
  */
 
+export function dashboardOverviewCacheKey(
+  tenantId: string,
+  costCenterId: string | null,
+): string {
+  return `${tenantId}|${costCenterId ?? ''}`;
+}
+
 export function dashboardFilterCacheKey(
+  tenantId: string,
   monthKey: string,
   costCenterId: string | null,
   situation: DashboardSituation | null = null,
   categoryId: string | null = null,
 ): string {
-  return `${monthKey}|${costCenterId ?? ''}|${situation ?? ''}|${categoryId ?? ''}`;
+  return `${tenantId}|${monthKey}|${costCenterId ?? ''}|${situation ?? ''}|${categoryId ?? ''}`;
 }
 
 /** Forecast / pressão: category distingue; situation não entra (não altera semântica). */
 export function dashboardCashWindowCacheKey(
+  tenantId: string,
   costCenterId: string | null,
   categoryId: string | null = null,
 ): string {
-  return `${costCenterId ?? ''}|${categoryId ?? ''}`;
+  return `${tenantId}|${costCenterId ?? ''}|${categoryId ?? ''}`;
 }
 
 /**
@@ -29,11 +38,12 @@ export function dashboardCashWindowCacheKey(
  * situation NÃO entra — o realizado histórico não é filtrado por situação.
  */
 export function dashboardCashFlowCacheKey(
+  tenantId: string,
   monthKey: string,
   costCenterId: string | null,
   categoryId: string | null = null,
 ): string {
-  return `${monthKey}|${costCenterId ?? ''}|${categoryId ?? ''}`;
+  return `${tenantId}|${monthKey}|${costCenterId ?? ''}|${categoryId ?? ''}`;
 }
 
 export function createDashboardFilterCache<T>() {

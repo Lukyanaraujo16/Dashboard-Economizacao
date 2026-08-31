@@ -86,8 +86,8 @@ describe('dashboard category URL', () => {
       { id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', name: 'Ajuste', type: 'UNKNOWN' },
     ]);
     expect(groups.map((group) => group.label)).toEqual([
-      'Receita',
-      'Despesa',
+      'Categorias de receita',
+      'Categorias de despesa',
       'Não classificadas',
     ]);
     expect(DASHBOARD_CATEGORY_ALL_LABEL).toBe('Todas as categorias');
@@ -107,13 +107,16 @@ describe('dashboard category URL', () => {
 });
 
 describe('dashboard filter cache e query paths', () => {
-  it('chave inclui situation e category de forma determinística', () => {
-    expect(dashboardFilterCacheKey('2026-08', null)).toBe('2026-08|||');
-    expect(dashboardFilterCacheKey('2026-08', CENTER, 'settled', CATEGORY)).toBe(
-      `2026-08|${CENTER}|settled|${CATEGORY}`,
+  it('chave inclui tenant, situation e category de forma determinística', () => {
+    const TENANT = '33333333-3333-4333-8333-333333333333';
+    expect(dashboardFilterCacheKey(TENANT, '2026-08', null)).toBe(`${TENANT}|2026-08|||`);
+    expect(dashboardFilterCacheKey(TENANT, '2026-08', CENTER, 'settled', CATEGORY)).toBe(
+      `${TENANT}|2026-08|${CENTER}|settled|${CATEGORY}`,
     );
-    expect(dashboardCashWindowCacheKey(CENTER, CATEGORY)).toBe(`${CENTER}|${CATEGORY}`);
-    expect(dashboardCashWindowCacheKey(CENTER, null)).toBe(`${CENTER}|`);
+    expect(dashboardCashWindowCacheKey(TENANT, CENTER, CATEGORY)).toBe(
+      `${TENANT}|${CENTER}|${CATEGORY}`,
+    );
+    expect(dashboardCashWindowCacheKey(TENANT, CENTER, null)).toBe(`${TENANT}|${CENTER}|`);
   });
 
   it('monthly/insights enviam os 4 params; forecast/pressão só category; meta nenhum slice', () => {

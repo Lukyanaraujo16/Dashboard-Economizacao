@@ -39,7 +39,7 @@ describe('DashboardSituationSelector', () => {
 });
 
 describe('DashboardCategorySelector', () => {
-  it('agrupa Receita/Despesa, busca e escolhe Todas', () => {
+  it('agrupa Categorias de receita/despesa, busca e escolhe Todas', () => {
     const onSelect = vi.fn();
     render(
       <ThemeProvider>
@@ -51,14 +51,41 @@ describe('DashboardCategorySelector', () => {
       </ThemeProvider>,
     );
     fireEvent.click(screen.getByRole('button', { name: /Categoria: Folha/ }));
-    expect(screen.getByText('Receita')).toBeTruthy();
-    expect(screen.getByText('Despesa')).toBeTruthy();
+    expect(screen.getByText('Categorias de receita')).toBeTruthy();
+    expect(screen.getByText('Categorias de despesa')).toBeTruthy();
     expect(screen.getByText('Não classificadas')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Buscar categoria'), { target: { value: 'alug' } });
     expect(screen.queryByRole('option', { name: 'Folha' })).toBeNull();
     expect(screen.getByRole('option', { name: 'Aluguel' })).toBeTruthy();
+    expect(screen.queryByText('Categorias de receita')).toBeNull();
     fireEvent.click(screen.getByRole('option', { name: 'Aluguel' }));
     expect(onSelect).toHaveBeenCalledWith('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+  });
+
+  it('busca com match em receita e despesa mantém grupos separados', () => {
+    render(
+      <ThemeProvider>
+        <DashboardCategorySelector items={items} selectedId={null} onSelect={() => undefined} />
+      </ThemeProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Categoria:/ }));
+    fireEvent.change(screen.getByLabelText('Buscar categoria'), { target: { value: 'a' } });
+    expect(screen.getByText('Categorias de receita')).toBeTruthy();
+    expect(screen.getByText('Categorias de despesa')).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Assinaturas' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Aluguel' })).toBeTruthy();
+  });
+
+  it('busca só receita exibe apenas grupo de receita', () => {
+    render(
+      <ThemeProvider>
+        <DashboardCategorySelector items={items} selectedId={null} onSelect={() => undefined} />
+      </ThemeProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Categoria:/ }));
+    fireEvent.change(screen.getByLabelText('Buscar categoria'), { target: { value: 'serv' } });
+    expect(screen.getByText('Categorias de receita')).toBeTruthy();
+    expect(screen.queryByText('Categorias de despesa')).toBeNull();
   });
 
   it('Todas as categorias notifica null e erro do catálogo fica no controle', () => {

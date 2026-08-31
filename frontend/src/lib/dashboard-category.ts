@@ -6,8 +6,8 @@ export const DASHBOARD_CATEGORY_ALL_LABEL = 'Todas as categorias';
 export type DashboardCategoryType = 'REVENUE' | 'EXPENSE' | 'UNKNOWN';
 
 export const DASHBOARD_CATEGORY_TYPE_LABELS: Record<DashboardCategoryType, string> = {
-  REVENUE: 'Receita',
-  EXPENSE: 'Despesa',
+  REVENUE: 'Categorias de receita',
+  EXPENSE: 'Categorias de despesa',
   UNKNOWN: 'Não classificadas',
 };
 

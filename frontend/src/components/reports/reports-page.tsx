@@ -40,7 +40,7 @@ import { FinancialGrid, FinancialSection, KpiCard, StateWrapper } from '../finan
 import { DashboardCategorySelector } from '../dashboard/dashboard-category-selector';
 import { DashboardCostCenterSelector } from '../dashboard/dashboard-cost-center-selector';
 import { DashboardMonthSelector } from '../dashboard/dashboard-month-selector';
-import { hasOperationalDashboardTenant } from '../dashboard/dashboard-overview-view';
+import { hasOperationalDashboardTenant, resolveOperationalTenantId } from '../dashboard/dashboard-overview-view';
 import { formatMonthKeyPtBr } from '../dashboard/dashboard-forecast-view';
 import { Button, Typography } from '../ui';
 import { isExpensesReportEmpty } from './reports-expenses-view';
@@ -100,7 +100,13 @@ export function ReportsPage() {
 
   const lastRequestKey = useRef<string | null>(null);
   const exportLock = useRef(false);
+  const catalogTenantIdRef = useRef<string | null>(null);
+  const catalogLoadGenerationRef = useRef(0);
 
+  const operationalTenantId = useMemo(
+    () => resolveOperationalTenantId(user, support),
+    [user, support],
+  );
   const hasTenant = hasOperationalDashboardTenant(user, support);
   const canQuery = hasTenant && Boolean(user);
 
@@ -112,35 +118,131 @@ export function ReportsPage() {
       readonly costCenterId: string | null;
       readonly categoryId: string | null;
     }) =>
-      `${next.type}|${next.from}|${next.to}|${next.costCenterId ?? ''}|${next.categoryId ?? ''}|${canQuery ? '1' : '0'}`,
-    [canQuery],
+      `${operationalTenantId ?? ''}|${next.type}|${next.from}|${next.to}|${next.costCenterId ?? ''}|${next.categoryId ?? ''}|${canQuery ? '1' : '0'}`,
+    [canQuery, operationalTenantId],
   );
 
-  const loadFilterCatalogs = useCallback(async () => {
-    if (!canQuery) {
+  useEffect(() => {
+    if (!canQuery || operationalTenantId === null) {
       setCategories([]);
       setCostCenters([]);
+      catalogTenantIdRef.current = null;
       return;
     }
+
+    setCategories([]);
+    setCostCenters([]);
+    catalogTenantIdRef.current = null;
+    catalogLoadGenerationRef.current += 1;
+    const generation = catalogLoadGenerationRef.current;
+    const tenantId = operationalTenantId;
+    const controller = new AbortController();
+
     setFiltersLoading(true);
-    try {
-      const [categoryResult, costCenterResult] = await Promise.all([
-        getDashboardCategories(),
-        getDashboardCostCenters(),
-      ]);
-      setCategories(categoryResult.items);
-      setCostCenters(costCenterResult.items);
-    } catch {
-      setCategories([]);
-      setCostCenters([]);
-    } finally {
-      setFiltersLoading(false);
-    }
-  }, [canQuery]);
+    void (async () => {
+      try {
+        const [categoryResult, costCenterResult] = await Promise.all([
+          getDashboardCategories(),
+          getDashboardCostCenters(),
+        ]);
+        if (
+          controller.signal.aborted ||
+          catalogLoadGenerationRef.current !== generation ||
+          operationalTenantId !== tenantId
+        ) {
+          return;
+        }
+        setCategories(categoryResult.items);
+        setCostCenters(costCenterResult.items);
+        catalogTenantIdRef.current = tenantId;
+      } catch {
+        if (
+          controller.signal.aborted ||
+          catalogLoadGenerationRef.current !== generation ||
+          operationalTenantId !== tenantId
+        ) {
+          return;
+        }
+        setCategories([]);
+        setCostCenters([]);
+      } finally {
+        if (
+          !controller.signal.aborted &&
+          catalogLoadGenerationRef.current === generation &&
+          operationalTenantId === tenantId
+        ) {
+          setFiltersLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      catalogLoadGenerationRef.current += 1;
+    };
+  }, [canQuery, operationalTenantId]);
 
   useEffect(() => {
-    void loadFilterCatalogs();
-  }, [loadFilterCatalogs]);
+    if (operationalTenantId === null) {
+      return;
+    }
+    setRevenueData(null);
+    setExpensesData(null);
+    setAppliedFilters(null);
+    setViewState('idle');
+    setErrorMessage(null);
+    lastRequestKey.current = null;
+  }, [operationalTenantId]);
+
+  useEffect(() => {
+    if (
+      operationalTenantId === null ||
+      catalogTenantIdRef.current !== operationalTenantId ||
+      filtersLoading
+    ) {
+      return;
+    }
+
+    let nextCategoryId = categoryId;
+    let nextCostCenterId = costCenterId;
+    let changed = false;
+
+    if (categoryId !== null && !categories.some((item) => item.id === categoryId)) {
+      nextCategoryId = null;
+      changed = true;
+    }
+    if (costCenterId !== null && !costCenters.some((item) => item.id === costCenterId)) {
+      nextCostCenterId = null;
+      changed = true;
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    setCategoryId(nextCategoryId);
+    setCostCenterId(nextCostCenterId);
+    const qs = buildReportsSearchParams({
+      type: reportType,
+      from: fromKey,
+      to: toKey,
+      costCenterId: nextCostCenterId,
+      categoryId: nextCategoryId,
+    }).toString();
+    router.replace(`${pathname}?${qs}`);
+  }, [
+    categories,
+    categoryId,
+    costCenterId,
+    costCenters,
+    filtersLoading,
+    fromKey,
+    operationalTenantId,
+    pathname,
+    reportType,
+    router,
+    toKey,
+  ]);
 
   const fetchReport = useCallback(
     async (next: AppliedFilters) => {

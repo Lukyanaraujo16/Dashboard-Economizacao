@@ -11,14 +11,28 @@ export type DashboardKpiView = {
   readonly meta: string;
 };
 
+/**
+ * Tenant operacional da Dashboard/Relatórios: sessão / Support Mode.
+ * Espelha resolveOperationalTenantId do backend — nunca lê tenantId da URL.
+ */
+export function resolveOperationalTenantId(
+  user: AuthenticatedUser | null,
+  support: SupportState,
+): string | null {
+  if (support.active) {
+    return support.tenantId;
+  }
+  if (user?.role === 'USER' && user.tenantId != null) {
+    return user.tenantId;
+  }
+  return null;
+}
+
 export function hasOperationalDashboardTenant(
   user: AuthenticatedUser | null,
   support: SupportState,
 ): boolean {
-  if (support.active) {
-    return true;
-  }
-  return user?.role === 'USER' && user.tenantId != null;
+  return resolveOperationalTenantId(user, support) !== null;
 }
 
 export function shouldSkipOverviewFetch(

@@ -221,10 +221,15 @@ function renderDashboard() {
 
 describe('dashboardFilterCache', () => {
   it('chave e get/set', () => {
-    expect(dashboardFilterCacheKey('2026-08', null)).toBe('2026-08|||');
-    expect(dashboardFilterCacheKey('2026-08', CENTER_A)).toBe(`2026-08|${CENTER_A}||`);
-    expect(dashboardCashFlowCacheKey('2026-08', CENTER_A, null)).toBe(`2026-08|${CENTER_A}|`);
-    expect(dashboardCashFlowCacheKey('2026-08', CENTER_A, null)).not.toContain('open');
+    const TENANT = 'tenant-1';
+    expect(dashboardFilterCacheKey(TENANT, '2026-08', null)).toBe(`${TENANT}|2026-08|||`);
+    expect(dashboardFilterCacheKey(TENANT, '2026-08', CENTER_A)).toBe(
+      `${TENANT}|2026-08|${CENTER_A}||`,
+    );
+    expect(dashboardCashFlowCacheKey(TENANT, '2026-08', CENTER_A, null)).toBe(
+      `${TENANT}|2026-08|${CENTER_A}|`,
+    );
+    expect(dashboardCashFlowCacheKey(TENANT, '2026-08', CENTER_A, null)).not.toContain('open');
     const cache = createDashboardFilterCache<string>();
     cache.set('k', 'v');
     expect(cache.get('k')).toBe('v');
