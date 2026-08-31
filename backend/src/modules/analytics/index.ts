@@ -2,7 +2,6 @@ export { analyticalTimeZone, civilTodayInSaoPaulo } from './domain/analytical-ti
 export { CASH_FLOW_FORECAST_HORIZON_DAYS } from './domain/cash-flow-forecast.js';
 export { sumUpcomingUnpaid, summarizeUpcomingWindow } from './domain/upcoming.js';
 export {
-  DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
   classifyOpenPayablesByCategory,
   classifyOpenReceivablesByCategory,
   presentOpenPayablesCategoryComposition,

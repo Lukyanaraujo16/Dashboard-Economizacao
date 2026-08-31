@@ -4,9 +4,7 @@ import type {
   FinancialInstallmentReadRecord,
 } from '../../finance/domain/types.js';
 import {
-  DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
   IMPRECISE_PAYABLE_BUCKET_NAME,
-  OTHER_PAYABLE_CATEGORIES_BUCKET_NAME,
   UNCATEGORIZED_PAYABLE_BUCKET_NAME,
   type CompositionCategoryType,
   type PayableCompositionBucketKind,
@@ -55,7 +53,6 @@ export function calculateMonthlyCompetenceRevenue(
   installments: readonly MonthlyCompetenceRevenueSource[],
   categories: readonly CategoryLookup[],
   today: Date,
-  maxNamedCategories: number = DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
   expectedType: CompositionCategoryType = 'REVENUE',
 ): MonthlyCompetenceRevenue {
   const catalog = new Map(categories.map((category) => [category.externalId, category]));
@@ -94,10 +91,9 @@ export function calculateMonthlyCompetenceRevenue(
     (sum, bucket) => sum.plus(bucket.amount),
     ZERO,
   );
-  const namedBuckets = [...named.values()];
-  const quality: MonthlyCompetenceRevenueBucket[] = [];
+  const presented: MonthlyCompetenceRevenueBucket[] = [...named.values()];
   if (uncategorized.amount.greaterThan(ZERO)) {
-    quality.push({
+    presented.push({
       kind: 'uncategorized',
       key: 'uncategorized',
       name: UNCATEGORIZED_PAYABLE_BUCKET_NAME,
@@ -105,30 +101,12 @@ export function calculateMonthlyCompetenceRevenue(
     });
   }
   if (imprecise.amount.greaterThan(ZERO)) {
-    quality.push({
+    presented.push({
       kind: 'imprecise',
       key: 'imprecise',
       name: IMPRECISE_PAYABLE_BUCKET_NAME,
       ...imprecise,
     });
-  }
-
-  let presented: MonthlyCompetenceRevenueBucket[] = [...namedBuckets, ...quality];
-  if (namedBuckets.length > maxNamedCategories) {
-    const sortedNamed = sortBuckets(namedBuckets);
-    const kept = sortedNamed.slice(0, maxNamedCategories);
-    const folded = sortedNamed.slice(maxNamedCategories);
-    const other = folded.reduce((acc, bucket) => addBucketMoney(acc, bucket), emptyMoney());
-    presented = [
-      ...kept,
-      {
-        kind: 'other',
-        key: 'other',
-        name: OTHER_PAYABLE_CATEGORIES_BUCKET_NAME,
-        ...other,
-      },
-      ...quality,
-    ];
   }
 
   const items = sortBuckets(presented).map((bucket) => ({
@@ -202,14 +180,6 @@ function addInstallmentBucket(
     key: current.key,
     name: current.name,
     ...addInstallmentMoney(current, installment),
-  };
-}
-
-function addBucketMoney(acc: MoneyTriple, bucket: MonthlyCompetenceRevenueBucket): MoneyTriple {
-  return {
-    amount: acc.amount.plus(bucket.amount),
-    received: acc.received.plus(bucket.received),
-    outstanding: acc.outstanding.plus(bucket.outstanding),
   };
 }
 

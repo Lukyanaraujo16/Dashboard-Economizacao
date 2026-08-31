@@ -374,7 +374,6 @@ async function loadMonthlyCompetenceRevenue(
       sources,
       categories,
       'REVENUE',
-      undefined,
       today,
     );
     return {
@@ -463,7 +462,6 @@ async function loadMonthlyCompetenceExpenses(
       sources,
       categories,
       'EXPENSE',
-      undefined,
       today,
     );
     return {
@@ -503,7 +501,6 @@ async function loadMonthlyCompetenceExpenses(
     payables,
     categories,
     today,
-    undefined,
     'EXPENSE',
   );
   return {

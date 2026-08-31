@@ -150,4 +150,24 @@ describe('presentOpenPayablesCategoryComposition (AR)', () => {
     expect(presented.coverageRate).toBeNull();
     expect(presented.items).toEqual([]);
   });
+
+  it('preserva todas as categorias nominais sem fold Outras (AR aberto)', () => {
+    const namedCount = 12;
+    const receivables = Array.from({ length: namedCount }, (_, index) =>
+      receivable({
+        unpaid: String(namedCount - index),
+        categoryExternalIds: [`r${index}`],
+      }),
+    );
+    const categories = Array.from({ length: namedCount }, (_, index) =>
+      category({ externalId: `r${index}`, name: `Rec ${index}` }),
+    );
+    const presented = presentOpenPayablesCategoryComposition(
+      classifyOpenReceivablesByCategory(receivables, categories),
+    );
+    expect(presented.items.filter((item) => item.kind === 'category')).toHaveLength(namedCount);
+    expect(presented.items.some((item) => item.kind === 'other')).toBe(false);
+    const itemSum = presented.items.reduce((sum, item) => sum.plus(item.amount), ZERO);
+    expect(itemSum.toString()).toBe(presented.total.toString());
+  });
 });

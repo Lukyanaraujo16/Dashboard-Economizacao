@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Prisma } from '../src/generated/prisma/client.js';
 import type { FinancialInstallmentStatus } from '../src/generated/prisma/client.js';
 import {
-  DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
   IMPRECISE_PAYABLE_BUCKET_NAME,
-  OTHER_PAYABLE_CATEGORIES_BUCKET_NAME,
   UNCATEGORIZED_PAYABLE_BUCKET_NAME,
   classifyOpenPayablesByCategory,
   presentOpenPayablesCategoryComposition,
@@ -196,7 +194,7 @@ describe('presentOpenPayablesCategoryComposition', () => {
     expect(presented.items).toEqual([]);
   });
 
-  it('massa de 9 categorias precisas permanece nominada (limite 10)', () => {
+  it('massa de 9 categorias precisas permanece nominada', () => {
     const payables = Array.from({ length: 9 }, (_, index) =>
       payable({
         unpaid: String(9 - index),
@@ -213,8 +211,8 @@ describe('presentOpenPayablesCategoryComposition', () => {
     expect(presented.items.some((item) => item.kind === 'other')).toBe(false);
   });
 
-  it('agrega o restante nominal em Outras categorias sem absorver qualidade', () => {
-    const namedCount = DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES + 2;
+  it('preserva todas as categorias nominais sem fold Outras (AP aberto)', () => {
+    const namedCount = 12;
     const payables = Array.from({ length: namedCount }, (_, index) =>
       payable({
         unpaid: String(namedCount - index),
@@ -227,14 +225,12 @@ describe('presentOpenPayablesCategoryComposition', () => {
     );
     const presented = presentOpenPayablesCategoryComposition(
       classifyOpenPayablesByCategory(payables, categories),
-      DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
     );
     const named = presented.items.filter((item) => item.kind === 'category');
-    const other = presented.items.find((item) => item.kind === 'other');
     const uncategorized = presented.items.find((item) => item.kind === 'uncategorized');
-    expect(named).toHaveLength(DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES);
-    expect(other?.name).toBe(OTHER_PAYABLE_CATEGORIES_BUCKET_NAME);
-    expect(other?.amount.toString()).toBe('3');
+    expect(named).toHaveLength(namedCount);
+    expect(presented.items.some((item) => item.kind === 'other')).toBe(false);
+    expect(presented.items.some((item) => item.name === 'Outras categorias')).toBe(false);
     expect(uncategorized?.amount.toString()).toBe('5');
     const itemSum = presented.items.reduce((sum, item) => sum.plus(item.amount), ZERO);
     expect(itemSum.toString()).toBe(presented.total.toString());

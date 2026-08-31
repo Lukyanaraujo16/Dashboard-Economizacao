@@ -188,7 +188,6 @@ describe('buildDailyCompetenceAllocationTotals', () => {
       sources,
       [],
       'REVENUE',
-      undefined,
       today,
     );
     const points = buildDailyCompetenceAllocationTotals(sources, from, to, today);

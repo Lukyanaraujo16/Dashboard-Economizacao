@@ -1,9 +1,7 @@
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { FinancialCategoryReadRecord } from '../../finance/domain/types.js';
 import {
-  DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
   IMPRECISE_PAYABLE_BUCKET_NAME,
-  OTHER_PAYABLE_CATEGORIES_BUCKET_NAME,
   UNCATEGORIZED_PAYABLE_BUCKET_NAME,
   type CompositionCategoryType,
   type PayableCompositionBucketKind,
@@ -51,7 +49,6 @@ export function classifyCashAmountsByCategory(
   rows: readonly CashAttributedCategorySource[],
   categories: readonly CategoryLookup[],
   expectedType: CompositionCategoryType,
-  maxNamedCategories: number = DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
 ): CashRealizedCategoryComposition {
   const catalog = new Map(categories.map((category) => [category.externalId, category]));
   const named = new Map<string, CashRealizedCategoryBucket>();
@@ -85,10 +82,9 @@ export function classifyCashAmountsByCategory(
   }
 
   const classified = [...named.values()].reduce((sum, bucket) => sum.plus(bucket.amount), ZERO);
-  const namedBuckets = [...named.values()];
-  const quality: CashRealizedCategoryBucket[] = [];
+  const presented: CashRealizedCategoryBucket[] = [...named.values()];
   if (uncategorized.greaterThan(ZERO)) {
-    quality.push({
+    presented.push({
       kind: 'uncategorized',
       key: 'uncategorized',
       name: UNCATEGORIZED_PAYABLE_BUCKET_NAME,
@@ -96,30 +92,12 @@ export function classifyCashAmountsByCategory(
     });
   }
   if (imprecise.greaterThan(ZERO)) {
-    quality.push({
+    presented.push({
       kind: 'imprecise',
       key: 'imprecise',
       name: IMPRECISE_PAYABLE_BUCKET_NAME,
       amount: imprecise,
     });
-  }
-
-  let presented: CashRealizedCategoryBucket[] = [...namedBuckets, ...quality];
-  if (namedBuckets.length > maxNamedCategories) {
-    const sortedNamed = sortBuckets(namedBuckets);
-    const kept = sortedNamed.slice(0, maxNamedCategories);
-    const folded = sortedNamed.slice(maxNamedCategories);
-    const otherAmount = folded.reduce((sum, bucket) => sum.plus(bucket.amount), ZERO);
-    presented = [
-      ...kept,
-      {
-        kind: 'other',
-        key: 'other',
-        name: OTHER_PAYABLE_CATEGORIES_BUCKET_NAME,
-        amount: otherAmount,
-      },
-      ...quality,
-    ];
   }
 
   const items = sortBuckets(presented).map((bucket) => ({

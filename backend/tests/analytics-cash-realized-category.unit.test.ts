@@ -314,7 +314,7 @@ describe('CASH-4C-CAT — composição de caixa realizado por categoria', () => 
     expect(result.realizedByCategory.inflows).toBeNull();
   });
 
-  it('CAT18/CAT19 — percentuais sobre total realizado; Outras preserva soma', () => {
+  it('CAT18/CAT19 — percentuais sobre total realizado; todas as categorias nominais', () => {
     const rows = Array.from({ length: 12 }, (_, index) => ({
       amount: dec('10'),
       categoryExternalIds: [`c-${index}`],
@@ -326,13 +326,38 @@ describe('CASH-4C-CAT — composição de caixa realizado por categoria', () => 
         type: 'REVENUE',
       }),
     );
-    const composition = classifyCashAmountsByCategory(rows, categories, 'REVENUE', 10);
+    const composition = classifyCashAmountsByCategory(rows, categories, 'REVENUE');
     expect(composition.total.toString()).toBe('120');
     const itemSum = composition.items.reduce((acc, item) => acc.plus(item.amount), dec('0'));
     expect(itemSum.toString()).toBe('120');
-    const other = composition.items.find((item) => item.kind === 'other');
-    expect(other?.amount.toString()).toBe('20');
+    expect(composition.items.filter((item) => item.kind === 'category')).toHaveLength(12);
+    expect(composition.items.some((item) => item.kind === 'other')).toBe(false);
+    expect(composition.items.some((item) => item.name === 'Outras categorias')).toBe(false);
     const pctSum = composition.items.reduce((acc, item) => acc.plus(item.percentage), dec('0'));
     expect(pctSum.toFixed(4)).toBe('100.0000');
+  });
+
+  it('regressão Marielle — 25 categorias de saída permanecem individualizadas', () => {
+    const namedCount = 25;
+    const rows = Array.from({ length: namedCount }, (_, index) => ({
+      amount: dec(String(namedCount - index)),
+      categoryExternalIds: [`exp-${index}`],
+    }));
+    const categories = rows.map((_, index) =>
+      category({
+        externalId: `exp-${index}`,
+        name: `Despesa ${index}`,
+        type: 'EXPENSE',
+      }),
+    );
+    const composition = classifyCashAmountsByCategory(rows, categories, 'EXPENSE');
+    const named = composition.items.filter((item) => item.kind === 'category');
+    expect(named).toHaveLength(namedCount);
+    expect(composition.items.some((item) => item.kind === 'other')).toBe(false);
+    const itemSum = composition.items.reduce((acc, item) => acc.plus(item.amount), dec('0'));
+    expect(itemSum.toString()).toBe(composition.total.toString());
+    const eleventh = named.find((item) => item.name === 'Despesa 10');
+    expect(eleventh).toBeDefined();
+    expect(eleventh?.amount.toString()).toBe('15');
   });
 });

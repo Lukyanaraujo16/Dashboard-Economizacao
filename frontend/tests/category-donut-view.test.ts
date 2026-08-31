@@ -19,7 +19,7 @@ describe('presentTopCategoryDonutSlices', () => {
     expect(slices.some((slice) => slice.name === 'Outras')).toBe(false);
   });
 
-  it('agrega Top 5 + Outras com soma exata para 6+ categorias', () => {
+  it('agrega Top 5 + Outras com soma exata para 6+ categorias (somente visual Home)', () => {
     const items = [
       { kind: 'category', name: 'C1', amount: '50', percentage: '50' },
       { kind: 'category', name: 'C2', amount: '20', percentage: '20' },

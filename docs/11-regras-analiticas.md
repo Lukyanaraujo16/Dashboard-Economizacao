@@ -410,6 +410,9 @@ F1-G (Faturamento Gerencial por competência): SUPERSEDED na Home (CASH-4B).
 A composição de receitas/despesas por categoria na Home (CASH-4C-CAT) é
 caixa realizado: D8 sobre settlements elegíveis (ACTIVE, sem transferência).
 SUM(items) = realized.inflows / realized.outflows. Previsto e vencidos fora.
+Composições retornam **todas** as categorias nominais; não há fold semântico
+em “Outras categorias”. Top N na Home compacta é **somente visual** e não
+altera o dataset financeiro (modal, reports, PDF/XLSX usam items completos).
 Relatórios (CASH-6 homologado): mesmo motor `MonthlyCashFlow` da Home.
 Realizado = `occurredOn`/`netAmount`; previsto = `dueDate`/`unpaid` no prazo;
 vencido separado (`ofMonth` no intervalo). Competência não define totais.

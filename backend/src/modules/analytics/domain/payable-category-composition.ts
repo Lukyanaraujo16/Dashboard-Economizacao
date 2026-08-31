@@ -9,16 +9,13 @@ const ZERO = new Prisma.Decimal(0);
 const HUNDRED = new Prisma.Decimal(100);
 
 /**
- * Home executiva: no máximo este número de categorias nominais precisas.
- * Massa DEV (Empresa teste): 9 categorias precisas no AP em aberto —
- * todas cabem. O limite protege a Home se a massa crescer (39 EXPENSE
- * cadastradas). “Outras categorias” não absorve buckets de qualidade.
+ * Buckets de qualidade D8 (não são categorias nominais Conta Azul).
+ * Composições retornam TODAS as categorias nominais; Top N é só visual na UI.
+ * `other` permanece no union apenas para tolerância defensiva de payloads legados —
+ * o domínio novo NÃO produz kind=other.
  */
-export const DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES = 10;
-
 export const UNCATEGORIZED_PAYABLE_BUCKET_NAME = 'Sem categoria';
 export const IMPRECISE_PAYABLE_BUCKET_NAME = 'Sem classificação precisa';
-export const OTHER_PAYABLE_CATEGORIES_BUCKET_NAME = 'Outras categorias';
 
 export type PayableCompositionBucketKind = 'category' | 'other' | 'uncategorized' | 'imprecise';
 
@@ -144,28 +141,8 @@ export function classifyOpenReceivablesByCategory(
 
 export function presentOpenPayablesCategoryComposition(
   classified: ReturnType<typeof classifyOpenInstallmentsByCategory>,
-  maxNamedCategories: number = DASHBOARD_EXPENSE_COMPOSITION_MAX_NAMED_CATEGORIES,
 ): OpenPayablesCategoryComposition {
-  const named = classified.buckets.filter((bucket) => bucket.kind === 'category');
-  const quality = classified.buckets.filter((bucket) => bucket.kind !== 'category');
-  let presented: PayableCompositionBucket[] = [...named, ...quality];
-  if (named.length > maxNamedCategories) {
-    const kept = named.slice(0, maxNamedCategories);
-    const folded = named.slice(maxNamedCategories);
-    const otherAmount = folded.reduce((sum, bucket) => sum.plus(bucket.amount), ZERO);
-    presented = [
-      ...kept,
-      {
-        kind: 'other',
-        key: 'other',
-        name: OTHER_PAYABLE_CATEGORIES_BUCKET_NAME,
-        amount: otherAmount,
-      },
-      ...quality,
-    ];
-  }
-
-  const items = sortBuckets(presented).map((bucket) => ({
+  const items = sortBuckets(classified.buckets).map((bucket) => ({
     ...bucket,
     percentage: shareOfTotal(bucket.amount, classified.total),
   }));

@@ -178,7 +178,6 @@ describe('calculateMonthlyCompetenceRevenue', () => {
         category({ externalId: 'serv', name: 'Serviços', type: 'REVENUE' }),
       ],
       TODAY,
-      undefined,
       'EXPENSE',
     );
     expect(result.classified.toString()).toBe('600');

@@ -35,7 +35,11 @@ export type CategoryDonutSlice = {
 
 const OTHERS_LABEL = 'Outras';
 
-/** Top N categorias nominais; restante agregado em Outras (soma exata dos amounts/percentages do backend). */
+/**
+ * Transformação VISUAL da Home compacta: Top N categorias + fatia "Outras".
+ * NÃO altera o DTO financeiro. Modal/relatórios devem usar o `items` completo da API.
+ * O rótulo "Outras" não é categoria Conta Azul nem `kind=other` do backend.
+ */
 export function presentTopCategoryDonutSlices(
   items: readonly CategoryCompositionItem[],
   maxNamed = 5,
