@@ -2250,6 +2250,18 @@ export function DashboardPage() {
                         valueCaption="pago no dia"
                       />
                     </div>
+                    <p className={styles.expandLabel}>
+                      Saídas realizadas acumuladas (dia de baixa)
+                    </p>
+                    <div className={styles.expandChart}>
+                      <Sparkline
+                        points={accumulate(realizedOutflows)}
+                        colorVar="--color-series-expense"
+                        interactive
+                        ariaLabel="Saídas realizadas acumuladas por dia de baixa"
+                        valueCaption="acumulado de caixa"
+                      />
+                    </div>
                   </div>
                 ) : null;
               }

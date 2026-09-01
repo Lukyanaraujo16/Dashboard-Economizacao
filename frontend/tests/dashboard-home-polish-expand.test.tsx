@@ -216,13 +216,27 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
-  it('Z9/Z10 — Despesas abre com Pago e A pagar', async () => {
+  it('Z9/Z10 — Despesas abre com Pago, acumulado e A pagar', async () => {
     const dialog = await openKpiExpand('Despesas');
     expect(within(dialog).getByRole('heading', { name: 'Despesas' })).toBeTruthy();
     expect(within(dialog).getByText('Pago')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*111\.111,11/).length).toBeGreaterThan(0);
     expect(within(dialog).getByText('A pagar')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*22\.222,22/).length).toBeGreaterThan(0);
+
+    const paidDaily = within(dialog).getByText('Pago por dia de baixa');
+    const paidAccumulated = within(dialog).getByText(
+      'Saídas realizadas acumuladas (dia de baixa)',
+    );
+    const payableDue = within(dialog).getByText('A pagar por vencimento (no prazo)');
+    expect(
+      paidDaily.compareDocumentPosition(paidAccumulated) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      paidAccumulated.compareDocumentPosition(payableDue) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    expect(within(dialog).getByText('Maiores categorias das saídas realizadas')).toBeTruthy();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 

@@ -3,6 +3,7 @@
 import {
   useCallback,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
@@ -23,6 +24,8 @@ import {
   toPolyline,
   type DailyPoint,
 } from './chart-math';
+import { anchorRatioFromSvgX } from './chart-tooltip-placement';
+import { ChartTooltip } from './chart-tooltip';
 import styles from './sparkline.module.css';
 
 const VIEW_WIDTH = 120;
@@ -54,6 +57,7 @@ export function Sparkline({
   className,
 }: SparklineProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
+  const plotRef = useRef<HTMLDivElement>(null);
 
   const values = useMemo(() => amountValues(points), [points]);
   const scale = useMemo(
@@ -145,6 +149,7 @@ export function Sparkline({
 
   return (
     <div
+      ref={plotRef}
       className={cx(styles.root, interactive && styles.interactive, className)}
       style={style}
       role="img"
@@ -195,9 +200,12 @@ export function Sparkline({
       </svg>
 
       {activePoint && activeDaily ? (
-        <span
+        <ChartTooltip
+          open
+          anchorRatio={anchorRatioFromSvgX(activePoint.x, VIEW_WIDTH)}
+          containerRef={plotRef}
           className={styles.tooltip}
-          style={{ left: `${(activePoint.x / VIEW_WIDTH) * 100}%` }}
+          verticalMode="auto-above-below"
           aria-hidden="true"
         >
           <span className={styles.tooltipDay}>{formatDayPt(activeDaily.date)}</span>
@@ -205,7 +213,7 @@ export function Sparkline({
           {valueCaption ? (
             <span className={styles.tooltipCaption}>{valueCaption}</span>
           ) : null}
-        </span>
+        </ChartTooltip>
       ) : null}
 
       <span className={styles.liveRegion} aria-live="polite">

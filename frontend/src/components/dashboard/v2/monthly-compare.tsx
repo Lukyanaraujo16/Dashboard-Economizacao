@@ -3,6 +3,7 @@
 import {
   useCallback,
   useId,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
@@ -12,6 +13,8 @@ import {
 import { formatDelinquencyRate, formatMoneyBrl } from '../../../lib/format-money-brl';
 import { cx } from '../../ui/utils/cx';
 import { maxAbs, parseAmount, percentChangeRate, subtractDecimalStrings } from './chart-math';
+import { anchorRatioFromIndex } from './chart-tooltip-placement';
+import { ChartTooltip } from './chart-tooltip';
 import styles from './monthly-compare.module.css';
 
 export type MonthlyCompareTone = 'revenue' | 'expense' | 'result';
@@ -94,6 +97,102 @@ function summarizeRow(
       return `${periodContextLabel(period)} ${formatMoneyBrl(amount)}`;
     })
     .join('; ');
+}
+
+type CompareRowPlotProps = {
+  readonly row: MonthlyCompareRow;
+  readonly periods: readonly MonthlyComparePeriod[];
+  readonly latestIndex: number;
+  readonly rowActive: boolean;
+  readonly activeIndex: number;
+  readonly activePeriod: MonthlyComparePeriod | undefined;
+  readonly activeAmount: string | null;
+  readonly baseline: number;
+  readonly amounts: readonly string[];
+  readonly scale: number;
+  readonly onActivate: (event: MouseEvent<HTMLDivElement>, rowId: string, count: number) => void;
+  readonly onClear: () => void;
+  readonly onFocusRow: (rowId: string, periodIndex: number) => void;
+  readonly onKeyDown: (
+    event: KeyboardEvent<HTMLDivElement>,
+    rowId: string,
+    count: number,
+  ) => void;
+};
+
+function CompareRowPlot({
+  row,
+  periods,
+  latestIndex,
+  rowActive,
+  activeIndex,
+  activePeriod,
+  activeAmount,
+  baseline,
+  amounts,
+  scale,
+  onActivate,
+  onClear,
+  onFocusRow,
+  onKeyDown,
+}: CompareRowPlotProps) {
+  const plotRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={plotRef}
+      className={styles.plot}
+      data-signed={baseline > 0 ? 'true' : undefined}
+      data-active={rowActive ? 'true' : undefined}
+      role="img"
+      tabIndex={0}
+      aria-label={`${row.label}. ${summarizeRow(row, periods)}`}
+      onMouseMove={(event) => onActivate(event, row.id, periods.length)}
+      onMouseLeave={onClear}
+      onFocus={() => onFocusRow(row.id, latestIndex)}
+      onBlur={onClear}
+      onKeyDown={(event) => onKeyDown(event, row.id, periods.length)}
+    >
+      <span className={styles.baseline} style={{ bottom: `${baseline}%` }} aria-hidden="true" />
+      {periods.map((period, index) => {
+        const amount = amounts[index] ?? '0.00';
+        const isActive = activeIndex === index;
+        const dimmed = rowActive && !isActive;
+        return (
+          <span
+            key={period.id}
+            className={cx(styles.slot, isActive && styles.slotActive)}
+            data-active={isActive ? 'true' : undefined}
+            data-dimmed={dimmed ? 'true' : undefined}
+          >
+            <span
+              className={cx(
+                styles.bar,
+                index === latestIndex ? styles.latestBar : styles.pastBar,
+              )}
+              style={barStyle(amount, scale, baseline)}
+              aria-hidden="true"
+            />
+          </span>
+        );
+      })}
+
+      {rowActive && activePeriod && activeAmount !== null ? (
+        <ChartTooltip
+          open
+          anchorRatio={anchorRatioFromIndex(activeIndex, periods.length)}
+          containerRef={plotRef}
+          className={styles.tooltip}
+          role="tooltip"
+          aria-hidden="true"
+        >
+          <p className={styles.tooltipPeriod}>{periodContextLabel(activePeriod)}</p>
+          <p className={styles.tooltipMetric}>{row.label}</p>
+          <p className={styles.tooltipValue}>{formatMoneyBrl(activeAmount)}</p>
+        </ChartTooltip>
+      ) : null}
+    </div>
+  );
 }
 
 /**
@@ -193,55 +292,22 @@ export function MonthlyCompare({
                 </span>
               </div>
 
-              <div
-                className={styles.plot}
-                data-signed={baseline > 0 ? 'true' : undefined}
-                data-active={rowActive ? 'true' : undefined}
-                role="img"
-                tabIndex={0}
-                aria-label={`${row.label}. ${summarizeRow(row, periods)}`}
-                onMouseMove={(event) => activateFromPointer(event, row.id, periods.length)}
-                onMouseLeave={clearActive}
-                onFocus={() => setActive({ rowId: row.id, periodIndex: latestIndex })}
-                onBlur={clearActive}
-                onKeyDown={(event) => handlePlotKeyDown(event, row.id, periods.length)}
-              >
-                <span
-                  className={styles.baseline}
-                  style={{ bottom: `${baseline}%` }}
-                  aria-hidden="true"
-                />
-                {periods.map((period, index) => {
-                  const amount = amounts[index] ?? '0.00';
-                  const isActive = activeIndex === index;
-                  const dimmed = rowActive && !isActive;
-                  return (
-                    <span
-                      key={period.id}
-                      className={cx(styles.slot, isActive && styles.slotActive)}
-                      data-active={isActive ? 'true' : undefined}
-                      data-dimmed={dimmed ? 'true' : undefined}
-                    >
-                      <span
-                        className={cx(
-                          styles.bar,
-                          index === latestIndex ? styles.latestBar : styles.pastBar,
-                        )}
-                        style={barStyle(amount, scale, baseline)}
-                        aria-hidden="true"
-                      />
-                    </span>
-                  );
-                })}
-
-                {rowActive && activePeriod && activeAmount !== null ? (
-                  <div className={styles.tooltip} role="tooltip" aria-hidden="true">
-                    <p className={styles.tooltipPeriod}>{periodContextLabel(activePeriod)}</p>
-                    <p className={styles.tooltipMetric}>{row.label}</p>
-                    <p className={styles.tooltipValue}>{formatMoneyBrl(activeAmount)}</p>
-                  </div>
-                ) : null}
-              </div>
+              <CompareRowPlot
+                row={row}
+                periods={periods}
+                latestIndex={latestIndex}
+                rowActive={rowActive}
+                activeIndex={activeIndex}
+                activePeriod={rowActive ? activePeriod : undefined}
+                activeAmount={rowActive ? activeAmount : null}
+                baseline={baseline}
+                amounts={amounts}
+                scale={scale}
+                onActivate={activateFromPointer}
+                onClear={clearActive}
+                onFocusRow={(rowId, periodIndex) => setActive({ rowId, periodIndex })}
+                onKeyDown={handlePlotKeyDown}
+              />
 
               <dl className={styles.axis} aria-hidden="true">
                 {periods.map((period, index) => (

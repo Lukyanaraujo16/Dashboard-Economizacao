@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
 import { cx } from '../../ui/utils/cx';
@@ -15,6 +22,8 @@ import {
   maxAbs,
   type DailyPoint,
 } from './chart-math';
+import { anchorRatioFromIndex } from './chart-tooltip-placement';
+import { ChartTooltip } from './chart-tooltip';
 import styles from './competence-daily-bars.module.css';
 
 const VIEW_WIDTH = 320;
@@ -65,6 +74,7 @@ export function CompetenceDailyBars({
   className,
 }: CompetenceDailyBarsProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
+  const plotRef = useRef<HTMLDivElement>(null);
 
   const series = useMemo(() => {
     const aligned = alignDailySeries(revenueDaily, expenseDaily);
@@ -152,6 +162,7 @@ export function CompetenceDailyBars({
         </div>
 
         <div
+          ref={plotRef}
           className={styles.plot}
           role="img"
           aria-label={ariaLabel ?? `Receitas e despesas por dia de competência em ${monthLabel}`}
@@ -209,9 +220,11 @@ export function CompetenceDailyBars({
           </svg>
 
           {activeRevenue && activeExpense ? (
-            <div
+            <ChartTooltip
+              open
+              anchorRatio={anchorRatioFromIndex(activeIndex, count)}
+              containerRef={plotRef}
               className={styles.tooltip}
-              style={{ left: `${((activeIndex + 0.5) / Math.max(count, 1)) * 100}%` }}
               aria-hidden="true"
             >
               <p className={styles.tooltipDay}>{formatDayPt(activeRevenue.date)}</p>
@@ -225,7 +238,7 @@ export function CompetenceDailyBars({
                 {expenseLabel}
                 <span className={styles.tooltipValue}>{formatMoneyBrl(activeExpense.amount)}</span>
               </p>
-            </div>
+            </ChartTooltip>
           ) : null}
         </div>
       </div>

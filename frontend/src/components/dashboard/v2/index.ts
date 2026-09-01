@@ -1,3 +1,15 @@
+export {
+  anchorRatioFromIndex,
+  anchorRatioFromSvgX,
+  DEFAULT_CHART_TOOLTIP_PADDING,
+  isHorizontalTooltipWithinBounds,
+  resolveHorizontalTooltipPlacement,
+  resolveVerticalTooltipPlacement,
+} from './chart-tooltip-placement';
+
+export { ChartTooltip } from './chart-tooltip';
+export type { ChartTooltipProps, ChartTooltipVerticalMode } from './chart-tooltip';
+
 export { CategoryRanking } from './category-ranking';
 export type { CategoryRankingItem, CategoryRankingProps } from './category-ranking';
 

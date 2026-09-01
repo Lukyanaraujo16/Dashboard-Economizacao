@@ -57,6 +57,42 @@ describe('chart-math', () => {
     expect(accumulate([])).toEqual([]);
   });
 
+  it('accumulate cobre dias zerados e termina no total pago', () => {
+    expect(
+      accumulate([
+        { date: '2026-08-01', amount: '10' },
+        { date: '2026-08-02', amount: '20' },
+        { date: '2026-08-03', amount: '0' },
+        { date: '2026-08-04', amount: '30' },
+      ]),
+    ).toEqual([
+      { date: '2026-08-01', amount: '10.00' },
+      { date: '2026-08-02', amount: '30.00' },
+      { date: '2026-08-03', amount: '30.00' },
+      { date: '2026-08-04', amount: '60.00' },
+    ]);
+
+    expect(
+      accumulate([
+        { date: '2026-08-01', amount: '0' },
+        { date: '2026-08-02', amount: '500' },
+      ]),
+    ).toEqual([
+      { date: '2026-08-01', amount: '0.00' },
+      { date: '2026-08-02', amount: '500.00' },
+    ]);
+
+    expect(
+      accumulate([
+        { date: '2026-08-01', amount: '0' },
+        { date: '2026-08-02', amount: '0.00' },
+      ]),
+    ).toEqual([
+      { date: '2026-08-01', amount: '0.00' },
+      { date: '2026-08-02', amount: '0.00' },
+    ]);
+  });
+
   it('subtractDecimalStrings preserva centavos e sinal', () => {
     expect(subtractDecimalStrings('10000', '100')).toBe('9900.00');
     expect(subtractDecimalStrings('100', '150')).toBe('-50.00');

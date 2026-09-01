@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   cashExpensesComposedSeries,
   cashManagerialResultComposedSeries,
+  cashRealizedOutflowsAccumulated,
+  cashRealizedOutflowsSeries,
 } from '../src/components/dashboard/dashboard-cash-series-view';
 import { toMonthlyCashFlowView } from '../src/components/dashboard/dashboard-monthly-cash-flow-view';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
@@ -23,16 +25,24 @@ function lifeAugustWithDaily(): DashboardMonthlyCashFlowResponse {
       ofMonth: { receivables: '0', payables: '0' },
     },
     coverage: '0.95',
-  realizedByCategory: {
-    inflows: {
-      total: '224790.30', classified: '224790.30', uncategorized: '0', imprecise: '0', coverageRate: '100',
-      items: [{ kind: 'category', name: 'Consultas', amount: '224790.30', percentage: '100' }],
+    realizedByCategory: {
+      inflows: {
+        total: '224790.30',
+        classified: '224790.30',
+        uncategorized: '0',
+        imprecise: '0',
+        coverageRate: '100',
+        items: [{ kind: 'category', name: 'Consultas', amount: '224790.30', percentage: '100' }],
+      },
+      outflows: {
+        total: '98941.52',
+        classified: '98941.52',
+        uncategorized: '0',
+        imprecise: '0',
+        coverageRate: '100',
+        items: [{ kind: 'category', name: 'Operacional', amount: '98941.52', percentage: '100' }],
+      },
     },
-    outflows: {
-      total: '98941.52', classified: '98941.52', uncategorized: '0', imprecise: '0', coverageRate: '100',
-      items: [{ kind: 'category', name: 'Operacional', amount: '98941.52', percentage: '100' }],
-    },
-  },
     daily: {
       realized: [
         { date: '2026-08-05', inflows: '100000.00', outflows: '40000.00', result: '60000.00' },
@@ -64,6 +74,21 @@ describe('CASH-4C — séries compostas de caixa', () => {
     expect(last.amount).toBe(view.managerialResult);
   });
 
+  it('saídas acumuladas terminam no total PAGO e espelham a diária', () => {
+    const view = toMonthlyCashFlowView(lifeAugustWithDaily());
+    const daily = cashRealizedOutflowsSeries(view);
+    const cumulative = cashRealizedOutflowsAccumulated(view);
+    expect(daily).toEqual([
+      { date: '2026-08-05', amount: '40000.00' },
+      { date: '2026-08-12', amount: '58941.52' },
+    ]);
+    expect(cumulative).toEqual([
+      { date: '2026-08-05', amount: '40000.00' },
+      { date: '2026-08-12', amount: '98941.52' },
+    ]);
+    expect(cumulative!.at(-1)!.amount).toBe(view.paid);
+  });
+
   it('séries indefinidas quando split de caixa está desligado', () => {
     const view = toMonthlyCashFlowView({
       ...lifeAugustWithDaily(),
@@ -80,5 +105,6 @@ describe('CASH-4C — séries compostas de caixa', () => {
     });
     expect(cashExpensesComposedSeries(view)).toBeUndefined();
     expect(cashManagerialResultComposedSeries(view)).toBeUndefined();
+    expect(cashRealizedOutflowsAccumulated(view)).toBeUndefined();
   });
 });

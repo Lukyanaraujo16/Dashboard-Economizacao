@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
 import { cx } from '../../ui/utils/cx';
@@ -19,6 +26,8 @@ import {
   toPolyline,
   type DailyPoint,
 } from './chart-math';
+import { anchorRatioFromSvgX } from './chart-tooltip-placement';
+import { ChartTooltip } from './chart-tooltip';
 import styles from './competence-comparison-chart.module.css';
 
 const VIEW_WIDTH = 320;
@@ -53,6 +62,7 @@ export function CompetenceComparisonChart({
   className,
 }: CompetenceComparisonChartProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
+  const plotRef = useRef<HTMLDivElement>(null);
 
   const series = useMemo(() => {
     const aligned = alignDailySeries(revenueDaily, expenseDaily);
@@ -147,6 +157,7 @@ export function CompetenceComparisonChart({
         </div>
 
         <div
+          ref={plotRef}
           className={styles.plot}
           role="img"
           aria-label={
@@ -229,9 +240,11 @@ export function CompetenceComparisonChart({
           </svg>
 
           {activePoint && activeRevenue && activeExpense ? (
-            <div
+            <ChartTooltip
+              open
+              anchorRatio={anchorRatioFromSvgX(activePoint.x, VIEW_WIDTH)}
+              containerRef={plotRef}
               className={styles.tooltip}
-              style={{ left: `${(activePoint.x / VIEW_WIDTH) * 100}%` }}
               aria-hidden="true"
             >
               <p className={styles.tooltipDay}>{formatDayPt(activeRevenue.date)}</p>
@@ -245,7 +258,7 @@ export function CompetenceComparisonChart({
                 {expenseLabel}
                 <span className={styles.tooltipValue}>{formatMoneyBrl(activeExpense.amount)}</span>
               </p>
-            </div>
+            </ChartTooltip>
           ) : null}
         </div>
       </div>

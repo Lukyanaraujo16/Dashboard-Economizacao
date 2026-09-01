@@ -75,9 +75,6 @@
 }
 
 .tooltip {
-  position: absolute;
-  bottom: calc(100% + var(--space-1));
-  transform: translateX(-50%);
   display: inline-flex;
   align-items: baseline;
   gap: var(--space-2);
