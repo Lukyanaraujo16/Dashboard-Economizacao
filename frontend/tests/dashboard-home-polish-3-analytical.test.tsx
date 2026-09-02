@@ -216,21 +216,11 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     const dialog = await openKpiExpand('Faturamento');
     expect(within(dialog).getByText('Maiores categorias das entradas realizadas')).toBeTruthy();
     expect(within(dialog).queryByText(/Maiores categorias do faturamento/i)).toBeNull();
+    expect(within(dialog).getByText('Entradas realizadas')).toBeTruthy();
     expect(within(dialog).getByText('Serviços')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*888\.888,88/).length).toBeGreaterThan(0);
     expect(within(dialog).queryByText(/111\.111,11.*Serviços|Serviços.*111\.111,11/)).toBeNull();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
-  });
-
-  it('P3-5 — Já recebido via leitura executiva mostra categorias realized', async () => {
-    renderDashboard();
-    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de Já recebido' });
-    fireEvent.click(btn);
-    const dialog = await screen.findByRole('dialog');
-    expect(
-      within(dialog).getByText('Principais categorias dos recebimentos realizados'),
-    ).toBeTruthy();
-    expect(within(dialog).getByText('Serviços')).toBeTruthy();
   });
 
   it('P3-6 — A receber lista recebimentos previstos sem composição categórica agregada', async () => {

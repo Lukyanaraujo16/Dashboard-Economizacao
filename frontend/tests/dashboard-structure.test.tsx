@@ -321,7 +321,6 @@ describe('Dashboard V2 structure', () => {
       'Despesas por categoria',
       'Receitas por categoria',
       'Meta de faturamento',
-      'Leitura executiva',
       'Inadimplência',
       'Comparativo mensal',
       'Movimentação diária',
@@ -329,6 +328,12 @@ describe('Dashboard V2 structure', () => {
     ]) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy();
     }
+
+    expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
+    expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
+    expect(screen.queryByText('Sinais do fluxo de caixa do mês')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Abrir detalhe de Já recebido' })).toBeNull();
 
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Até o fim do mês' })).toBeNull();
@@ -338,7 +343,6 @@ describe('Dashboard V2 structure', () => {
     expect(screen.queryByText(/Competência de/i)).toBeNull();
 
     expect(screen.queryByText('Previsto até o fim do mês')).toBeNull();
-    expect(screen.getByText('Sinais do fluxo de caixa do mês')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Realizado' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Previsto' })).toBeTruthy();
 
@@ -474,10 +478,8 @@ describe('Dashboard V2 structure', () => {
     expect(kpiScope('Despesas').getByText('Sem despesas de caixa no mês')).toBeTruthy();
     expect(kpiScope('Resultado').getByText('Sem resultado de caixa no mês')).toBeTruthy();
     expect(sectionScope('inadimplencia').getByText('Taxa global (D1)')).toBeTruthy();
-
-    expect(
-      await screen.findByText(/Nenhum valor a receber vencido no momento/i),
-    ).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
+    expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="despesas-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="receitas-categoria"]')).toBeTruthy();
     expect(
@@ -542,7 +544,7 @@ describe('Dashboard V2 structure', () => {
     await waitFor(() => {
       expect(sectionScope('inadimplencia').getByText('Taxa global (D1)')).toBeTruthy();
     });
-    for (const id of ['entradas-saidas', 'meta-faturamento', 'leitura-executiva', 'inadimplencia']) {
+    for (const id of ['entradas-saidas', 'meta-faturamento', 'inadimplencia']) {
       expect(sectionScope(id).queryByText(/Integração desconectada/)).toBeNull();
     }
     expect(getMonthEnd).not.toHaveBeenCalled();
@@ -631,7 +633,10 @@ describe('Dashboard V2 structure', () => {
     expect(getForecast).not.toHaveBeenCalled();
     expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-06', null, null);
-    expect(screen.getByRole('heading', { name: 'Leitura executiva' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
+    expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Meta de faturamento' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Inadimplência' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Comparativo mensal' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
     expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
@@ -706,23 +711,23 @@ describe('Dashboard V2 structure', () => {
     expect(screen.getByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
   });
 
-  it('Leitura executiva usa sinais de caixa do MonthlyCashFlow', async () => {
+  it('Leitura executiva e banda executive-reading estão ausentes da Home', async () => {
     getOverview.mockResolvedValue(syncedOverview);
     renderDashboard();
 
-    const scope = await waitFor(() => {
-      const node = sectionScope('leitura-executiva');
-      expect(node.getByText(/888\.888,88/)).toBeTruthy();
-      return node;
+    await waitFor(() => {
+      expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
     });
-    expect(scope.getByText('Entrou no caixa')).toBeTruthy();
-    expect(scope.getByText('Ainda a receber')).toBeTruthy();
-    expect(scope.getByText('Resultado projetado')).toBeTruthy();
-    expect(section('leitura-executiva').textContent?.toLowerCase()).not.toMatch(/competência/);
-    expect(section('leitura-executiva').querySelectorAll('[data-signal]').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
+    expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
+    expect(screen.queryByText('Sinais do fluxo de caixa do mês')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Abrir detalhe de Já recebido' })).toBeNull();
+    expect(kpiScope('Faturamento').getByText('Recebido')).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText('A receber')).toBeTruthy();
   });
 
-  it('erro de cash-flow na leitura executiva não derruba os demais widgets', async () => {
+  it('erro de cash-flow não derruba os demais widgets', async () => {
     getOverview.mockResolvedValue(syncedOverview);
     getMonthlyCashFlow.mockRejectedValue(
       new DashboardMonthlyCashFlowRequestError(

@@ -142,16 +142,16 @@ beforeEach(() => {
 });
 
 describe('CASH-4C-CAT-FINAL — refino visual Home', () => {
-  it('FNL1–FNL5 — faixa compacta + Leitura larga; sinais preservados', async () => {
+  it('FNL1–FNL5 — faixa compacta Meta|Inadimplência; sem Leitura executiva', async () => {
     renderDashboard();
     await waitFor(() => {
       expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
     });
 
     const compact = document.querySelector('[data-home-band="compact-kpis"]');
-    const executive = document.querySelector('[data-home-band="executive-reading"]');
     expect(compact).toBeTruthy();
-    expect(executive).toBeTruthy();
+    expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
 
     expect(compact!.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
     expect(compact!.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
@@ -159,11 +159,7 @@ describe('CASH-4C-CAT-FINAL — refino visual Home', () => {
     expect(compact!.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
     expect(compact!.getAttribute('data-cols')).toBe('2');
 
-    expect(executive!.querySelector('[data-financial-section="leitura-executiva"]')).toBeTruthy();
-    const metricGrid = executive!.querySelector('[data-layout="metrics"]');
-    expect(metricGrid).toBeTruthy();
-    expect(executive!.querySelectorAll('[data-signal]').length).toBeGreaterThanOrEqual(5);
-
+    expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
     expect(screen.getByText('Meta ainda não definida')).toBeTruthy();
     expect(within(section('inadimplencia')).getByText('Taxa global (D1)')).toBeTruthy();
   });

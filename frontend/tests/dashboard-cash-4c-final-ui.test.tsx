@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardPage } from '../src/components/dashboard';
@@ -125,12 +125,6 @@ function renderDashboard() {
   );
 }
 
-function section(id: string): HTMLElement {
-  const node = document.querySelector(`[data-financial-section="${id}"]`);
-  expect(node).toBeTruthy();
-  return node as HTMLElement;
-}
-
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -149,76 +143,18 @@ beforeEach(() => {
   getCategories.mockResolvedValue({ items: [] });
 });
 
-describe('PRE-F13-CASH-4C-CAT-FINAL-UI — Leitura executiva compacta', () => {
-  it('UI1–UI7 — 6 sinais, valores Life, status discreto, sem frases longas', async () => {
-    renderDashboard();
-    const scope = within(section('leitura-executiva'));
-    await waitFor(() => {
-      expect(scope.getByText('Entrou no caixa')).toBeTruthy();
-    });
-
-    // UI1 — 6 sinais principais
-    for (const label of [
-      'Entrou no caixa',
-      'Ainda a receber',
-      'Saiu do caixa',
-      'Ainda a pagar',
-      'Resultado projetado',
-      'Faturamento realizado',
-    ]) {
-      expect(scope.getByText(label)).toBeTruthy();
-    }
-
-    // UI2 / UI6 — valores financeiros iguais
-    expect(scope.getByText('R$ 224.790,30')).toBeTruthy();
-    expect(scope.getByText('R$ 10.511,20')).toBeTruthy();
-    expect(scope.getByText('R$ 98.941,52')).toBeTruthy();
-    expect(scope.getByText('R$ 28.289,80')).toBeTruthy();
-    expect(scope.getByText('R$ 108.070,18')).toBeTruthy();
-    expect(scope.getByText(/95,5%/)).toBeTruthy();
-
-    // UI3 — textos longos anteriores não são mais necessários
-    expect(scope.queryByText(/já entrou no caixa neste mês/i)).toBeNull();
-    expect(scope.queryByText(/ainda está previsto para entrar até o fim do mês/i)).toBeNull();
-    expect(scope.queryByText(/resultado projetado do mês/i)).toBeNull();
-
-    // UI4 — bloco “Ainda a receber” com valor agora curto e sem frase deformada
-    const receivable = scope.getByText('Ainda a receber').closest('[data-signal]');
-    expect(receivable).toBeTruthy();
-    expect(receivable!.getAttribute('data-signal')).toBe('cash-receivable');
-    const receivableValue = receivable!.querySelector('p');
-    expect(receivableValue?.textContent).toMatch(/R\$\s*10\.511,20/);
-
-    // UI5 — diferenciação semântica de ícones
-    expect(scope.getByText('Entrou no caixa').closest('[data-tone]')?.getAttribute('data-tone')).toBe(
-      'revenue',
-    );
-    expect(scope.getByText('Ainda a receber').closest('[data-tone]')?.getAttribute('data-tone')).toBe(
-      'receivable',
-    );
-    expect(scope.getByText('Saiu do caixa').closest('[data-tone]')?.getAttribute('data-tone')).toBe(
-      'expense',
-    );
-    expect(scope.getByText('Resultado projetado').closest('[data-tone]')?.getAttribute('data-tone')).toBe(
-      'result',
-    );
-    expect(
-      scope.getByText('Faturamento realizado').closest('[data-tone]')?.getAttribute('data-tone'),
-    ).toBe('positive');
-
-    // UI7 — status de vencido presente (discreto)
-    expect(scope.getByText(/Nenhum valor a receber vencido no momento/i)).toBeTruthy();
-    expect(scope.getByRole('status').getAttribute('data-status')).toBe('clear');
-  });
-
-  it('UI8–UI10 — grid metrics 1→2→3 colunas via data-layout', async () => {
+describe('PRE-F13-CASH-4C-CAT-FINAL-UI — Home sem Leitura executiva', () => {
+  it('UI1 — Leitura executiva e banda executive-reading ausentes', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(document.querySelector('[data-cash-executive="true"]')).toBeTruthy();
+      expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
     });
-    const grid = document.querySelector('[data-cash-executive="true"] [data-layout="metrics"]');
-    expect(grid).toBeTruthy();
-    expect(grid!.querySelectorAll('[data-signal]').length).toBe(6);
+    expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
+    expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
+    expect(document.querySelector('[data-cash-executive="true"]')).toBeNull();
+    expect(screen.queryByText('Sinais do fluxo de caixa do mês')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Abrir detalhe de Já recebido' })).toBeNull();
   });
 
   it('UI11–UI13 — Meta/Inadimplência compactos; KPIs e competência intactos', async () => {
@@ -228,36 +164,32 @@ describe('PRE-F13-CASH-4C-CAT-FINAL-UI — Leitura executiva compacta', () => {
     });
 
     const compact = document.querySelector('[data-home-band="compact-kpis"]')!;
-    const executive = document.querySelector('[data-home-band="executive-reading"]')!;
     expect(compact.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
     expect(compact.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(compact.querySelector('[data-financial-section="inadimplencia"]')).toBeTruthy();
     expect(compact.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
     expect(compact.getAttribute('data-cols')).toBe('2');
-    expect(executive.querySelector('[data-financial-section="leitura-executiva"]')).toBeTruthy();
+    expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
 
     // UI12 — KPI faturamento Life
     expect(await screen.findByText('R$ 235.301,50')).toBeTruthy();
 
-    // UI13 — nenhuma competência reaparece na leitura
-    expect(section('leitura-executiva').textContent?.toLowerCase()).not.toMatch(/competência/);
+    // UI13 — nenhuma competência reaparece
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
   });
 
-  it('UI14/UI15 — light/dark tokens e sem overflow forçado na faixa executiva', async () => {
+  it('UI14/UI15 — light/dark tokens; faixa compacta sem overflow forçado', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(document.querySelector('[data-cash-executive="true"]')).toBeTruthy();
+      expect(document.querySelector('[data-home-band="compact-kpis"]')).toBeTruthy();
     });
-    const executive = document.querySelector(
-      '[data-home-band="executive-reading"]',
-    ) as HTMLElement;
-    expect(executive.scrollWidth).toBeLessThanOrEqual(executive.clientWidth + 1);
+    const compact = document.querySelector('[data-home-band="compact-kpis"]') as HTMLElement;
+    expect(compact.scrollWidth).toBeLessThanOrEqual(compact.clientWidth + 1);
 
     const root = document.documentElement;
     root.setAttribute('data-theme', 'dark');
-    expect(document.querySelector('[data-cash-executive="true"]')).toBeTruthy();
+    expect(document.querySelector('[data-home-band="compact-kpis"]')).toBeTruthy();
     root.setAttribute('data-theme', 'light');
-    expect(document.querySelector('[data-cash-executive="true"]')).toBeTruthy();
+    expect(document.querySelector('[data-home-band="compact-kpis"]')).toBeTruthy();
   });
 });

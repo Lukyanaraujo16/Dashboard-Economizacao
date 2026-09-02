@@ -260,14 +260,6 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     ).toBeNull();
   });
 
-  it('Z4b — Leitura executiva ainda abre modal Já recebido', async () => {
-    renderDashboard();
-    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de Já recebido' });
-    fireEvent.click(btn);
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('heading', { name: 'Já recebido' })).toBeTruthy();
-  });
-
   it('Z6/Z7/Z8 — A receber abre com previsto; vencido fora; detalhes lazy', async () => {
     const dialog = await openKpiExpand('A receber');
     expect(within(dialog).getByRole('heading', { name: 'A receber' })).toBeTruthy();

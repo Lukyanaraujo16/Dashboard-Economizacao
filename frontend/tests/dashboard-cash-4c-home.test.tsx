@@ -180,12 +180,15 @@ describe('CASH-4C — Home', () => {
     });
   });
 
-  it('C8 — Leitura executiva vem do caixa, sem competência', async () => {
+  it('C8 — Leitura executiva ausente da Home', async () => {
     renderDashboard();
-    const scope = within(section('leitura-executiva'));
-    expect(await scope.findByText('Entrou no caixa')).toBeTruthy();
-    expect(scope.getByText('Sinais do fluxo de caixa do mês')).toBeTruthy();
-    expect(section('leitura-executiva').textContent?.toLowerCase()).not.toMatch(/competência/);
+    await waitFor(() => {
+      expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
+    });
+    expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
+    expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
+    expect(screen.queryByText('Sinais do fluxo de caixa do mês')).toBeNull();
   });
 
   it('C13 — donuts de categoria em caixa (não competência)', async () => {

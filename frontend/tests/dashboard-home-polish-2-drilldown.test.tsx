@@ -166,6 +166,17 @@ async function openSectionExpand(sectionId: string) {
   return screen.findByRole('dialog');
 }
 
+async function openKpiExpand(title: string) {
+  renderDashboard();
+  const scope = await waitFor(() => {
+    const card = kpiScope(title);
+    expect(card.getByRole('button', { name: 'Expandir' })).toBeTruthy();
+    return card;
+  });
+  fireEvent.click(scope.getByRole('button', { name: 'Expandir' }));
+  return screen.findByRole('dialog');
+}
+
 beforeEach(() => {
   dashboardSearchParams = new URLSearchParams();
   getOverview.mockResolvedValue(syncedOverview);
@@ -200,55 +211,30 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
-  it('P2-8 — Entrou no caixa abre Já recebido', async () => {
-    renderDashboard();
-    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de Já recebido' });
-    fireEvent.click(btn);
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('heading', { name: 'Já recebido' })).toBeTruthy();
-  });
-
-  it('P2-9 — Ainda a receber abre A receber', async () => {
-    renderDashboard();
-    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de A receber' });
-    fireEvent.click(btn);
-    const dialog = await screen.findByRole('dialog');
+  it('P2-9 — A receber abre via KPI', async () => {
+    const dialog = await openKpiExpand('A receber');
     expect(within(dialog).getByRole('heading', { name: 'A receber' })).toBeTruthy();
   });
 
-  it('P2-10 — Saiu do caixa abre Despesas (pago)', async () => {
-    renderDashboard();
-    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de Despesas (pago)' });
-    fireEvent.click(btn);
-    const dialog = await screen.findByRole('dialog');
+  it('P2-10 — Despesas abre via KPI', async () => {
+    const dialog = await openKpiExpand('Despesas');
     expect(within(dialog).getByRole('heading', { name: 'Despesas' })).toBeTruthy();
-    expect(within(dialog).getByText(/Pago \(realizado\)/i)).toBeTruthy();
+    expect(within(dialog).getByText('Pago')).toBeTruthy();
   });
 
-  it('P2-11 — Ainda a pagar abre Contas a pagar', async () => {
-    renderDashboard();
-    const btn = await screen.findByRole('button', {
-      name: 'Abrir detalhe de Contas a pagar',
-    });
-    fireEvent.click(btn);
-    const dialog = await screen.findByRole('dialog');
+  it('P2-11 — Contas a pagar abre via KPI', async () => {
+    const dialog = await openKpiExpand('Contas a pagar');
     expect(within(dialog).getByRole('heading', { name: 'Contas a pagar' })).toBeTruthy();
     expect(within(dialog).getByText('Total a pagar')).toBeTruthy();
   });
 
-  it('P2-12 — Resultado projetado abre Resultado', async () => {
-    renderDashboard();
-    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de Resultado' });
-    fireEvent.click(btn);
-    const dialog = await screen.findByRole('dialog');
+  it('P2-12 — Resultado abre via KPI', async () => {
+    const dialog = await openKpiExpand('Resultado');
     expect(within(dialog).getByRole('heading', { name: 'Resultado' })).toBeTruthy();
   });
 
-  it('P2-13 — Faturamento realizado abre Faturamento', async () => {
-    renderDashboard();
-    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de Faturamento' });
-    fireEvent.click(btn);
-    const dialog = await screen.findByRole('dialog');
+  it('P2-13 — Faturamento abre via KPI', async () => {
+    const dialog = await openKpiExpand('Faturamento');
     expect(within(dialog).getByRole('heading', { name: 'Faturamento' })).toBeTruthy();
   });
 
@@ -284,17 +270,16 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
     expect(within(dialog).getByRole('heading', { name: 'Meta de faturamento' })).toBeTruthy();
   });
 
-  it('P2-20/P2-21/P2-22 — barras Já recebido/A receber semânticas', async () => {
+  it('P2-20/P2-21/P2-22 — barras A receber semânticas; sem modal Já recebido', async () => {
     renderDashboard();
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Abrir detalhe de Já recebido' }),
-    );
-    let dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/dia de baixa/i)).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => {
+      expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
+    });
+    expect(screen.queryByRole('button', { name: 'Abrir detalhe de Já recebido' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
 
     fireEvent.click(kpiScope('A receber').getByRole('button', { name: 'Expandir' }));
-    dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getAllByText(/vencimento/i).length).toBeGreaterThan(0);
     // fixture tem um único dia de expected → uma barra é válida
     expect(within(dialog).queryByText(/competência/i)).toBeNull();

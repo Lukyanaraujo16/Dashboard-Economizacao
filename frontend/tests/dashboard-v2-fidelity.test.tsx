@@ -345,7 +345,6 @@ describe('Dashboard V2.3 fidelidade', () => {
       ['despesas-categoria', 'Despesas por categoria'],
       ['receitas-categoria', 'Receitas por categoria'],
       ['meta-faturamento', 'Meta de faturamento'],
-      ['leitura-executiva', 'Leitura executiva'],
       ['inadimplencia', 'Inadimplência'],
       ['comparativo-mensal', 'Comparativo mensal'],
       ['movimentacao-diaria', 'Movimentação diária'],

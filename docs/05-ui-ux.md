@@ -351,21 +351,22 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   naturezas numa só série);
 * Comparativo mensal: apenas realized (entradas/saídas/resultado) vs
   mês anterior via segundo fetch de `monthly-cash-flow`;
-* Leitura executiva: `buildCashExecutiveSignals` a partir do
-  MonthlyCashFlow (sem `executive-insights` / competência);
+* Leitura executiva: **removida da Home** (Correção 07 / Option A).
+  Footer Recebido/A receber do card Faturamento permanece (display only);
+  modal/`expandKind` `received` (“Já recebido”) removido; entradas
+  realizadas continuam no modal de Faturamento. Componente legado
+  ExecutiveSignals permanece fora da Home;
 * Home não chama mais `monthly-revenue` / `monthly-expenses`.
 * CASH-4C-CAT-FINAL: faixa Meta de faturamento | Inadimplência em altura
-  natural; Leitura executiva em linha própria (largura total, sinais em
-  multi-coluna no desktop). Copy do Comparativo sem “competência”.
+  natural (2 colunas). Copy do Comparativo sem “competência”.
   Zoom/expansão dos KPIs e gráficos principais restaurada
-  (PRE-F13-HOME-POLISH-1): Faturamento, Já recebido, A receber,
+  (PRE-F13-HOME-POLISH-1): Faturamento, A receber,
   Despesas, Resultado, Entradas × Saídas, donuts de categoria —
   via `WidgetExpandDialog` existente; conteúdo somente do contrato
   CASH (`MonthlyCashFlow`). Competência não volta nos modais.
   Meta / Comparativo / Movimentação preservados.
   PRE-F13-HOME-POLISH-2: Inadimplência e Fluxo previsto
-  também expansíveis; Leitura executiva com navegação contextual dos
-  mini-blocos para os modais CASH (sem modal-geral).
+  também expansíveis.
   PRE-F13-HOME-POLISH-3: modais enriquecidos com rankings de categorias
   realizadas e composição explícita do Resultado; previsto sem categoria
   inventada.
@@ -408,7 +409,7 @@ Grade secundária (`secondaryGrid` / `compactSecondaryGrid`):
   card funcional F2/F2.0.1 (status temporal por competência);
 * Inadimplência.
   (faixa compacta em 2 colunas: Meta de faturamento | Inadimplência;
-  Leitura executiva fica em banda própria abaixo.)
+  Leitura executiva removida da Home — Correção 07.)
 
 Composição V2.2 — Visual Fidelity Pass (IMPLEMENTADA / SUPERSEDED pela V2.3.1 como baseline da Home):
 

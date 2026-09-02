@@ -75,8 +75,6 @@ import {
 import { StateWrapper } from '../financial';
 import { Badge, Button, Typography } from '../ui';
 import { UI_ICON_STROKE } from '../ui/icons';
-import { buildCashExecutiveReading } from './dashboard-cash-executive-reading';
-import { CashExecutiveReading } from './cash-executive-reading';
 import { CashCategoryRanking } from './cash-category-ranking';
 import { CashRealizedCategoryPanel } from './cash-realized-category-panel';
 import { ExpectedReceivableDetailsPanel } from './expected-receivable-details-panel';
@@ -234,7 +232,6 @@ type KpiSlot = {
 
 type ExpandKind =
   | 'billing'
-  | 'received'
   | 'receivable'
   | 'payable'
   | 'expense'
@@ -247,9 +244,6 @@ type ExpandKind =
   | 'goal'
   | 'delinquency'
   | 'forecast';
-
-/** Destaque opcional no modal de Despesas (navegação da Leitura executiva). */
-type ExpenseExpandFocus = 'paid' | 'payable' | null;
 
 /** Recorte das barras diárias de caixa: baixas realizadas ou vencimentos previstos. */
 type DailyCashMode = 'realized' | 'expected';
@@ -430,7 +424,6 @@ export function DashboardPage() {
     useState<ExpectedReceivableDetailsView>({ kind: 'idle' });
   const [expectedPayableDetailsView, setExpectedPayableDetailsView] =
     useState<ExpectedPayableDetailsView>({ kind: 'idle' });
-  const [expenseExpandFocus, setExpenseExpandFocus] = useState<ExpenseExpandFocus>(null);
   const [dailyMode, setDailyMode] = useState<DailyCashMode>('realized');
 
   const viewRef = useRef(view);
@@ -1313,10 +1306,6 @@ export function DashboardPage() {
     cashFlowModel && payableSlot.state === 'ready' && cashFlowModel.payable !== null
       ? formatPayableDueDaysCaption(expectedPayables)
       : undefined;
-  const cashReading = useMemo(
-    () => (cashFlowModel ? buildCashExecutiveReading(cashFlowModel) : null),
-    [cashFlowModel],
-  );
 
   const dailySeries =
     dailyMode === 'realized'
@@ -1396,8 +1385,6 @@ export function DashboardPage() {
   const canExpandCashDetail = gate === 'ready' && cashHasSplit && cashFlowModel !== null;
   const canExpandBilling =
     canExpandCashDetail && cashFlowModel !== null && cashFlowModel.billing !== null;
-  const canExpandReceived =
-    canExpandCashDetail && cashFlowModel !== null && cashFlowModel.received !== null;
   const canExpandReceivable =
     canExpandCashDetail && cashFlowModel !== null && cashFlowModel.receivable !== null;
   const canExpandExpenses =
@@ -1423,70 +1410,9 @@ export function DashboardPage() {
 
   const closeExpand = useCallback(() => {
     setExpandKind(null);
-    setExpenseExpandFocus(null);
     setExpectedReceivableDetailsView({ kind: 'idle' });
     setExpectedPayableDetailsView({ kind: 'idle' });
   }, []);
-
-  const openExpenseExpand = useCallback((focus: ExpenseExpandFocus = null) => {
-    setExpenseExpandFocus(focus);
-    setExpandKind('expense');
-  }, []);
-
-  const activateExecutiveMetric = useCallback(
-    (metricId: string) => {
-      switch (metricId) {
-        case 'cash-received':
-          if (canExpandReceived) {
-            setExpenseExpandFocus(null);
-            setExpandKind('received');
-          }
-          return;
-        case 'cash-receivable':
-          if (canExpandReceivable) {
-            setExpenseExpandFocus(null);
-            setExpandKind('receivable');
-          }
-          return;
-        case 'cash-paid':
-          if (canExpandExpenses) {
-            openExpenseExpand('paid');
-          }
-          return;
-        case 'cash-payable':
-          if (canExpandPayable) {
-            setExpenseExpandFocus(null);
-            setExpandKind('payable');
-          } else if (canExpandExpenses) {
-            openExpenseExpand('payable');
-          }
-          return;
-        case 'cash-result':
-          if (canExpandResult) {
-            setExpenseExpandFocus(null);
-            setExpandKind('result');
-          }
-          return;
-        case 'cash-coverage':
-          if (canExpandBilling) {
-            setExpenseExpandFocus(null);
-            setExpandKind('billing');
-          }
-          return;
-        default:
-          return;
-      }
-    },
-    [
-      canExpandBilling,
-      canExpandExpenses,
-      canExpandPayable,
-      canExpandReceivable,
-      canExpandReceived,
-      canExpandResult,
-      openExpenseExpand,
-    ],
-  );
 
   return (
     <div
@@ -1625,7 +1551,7 @@ export function DashboardPage() {
             sparklineAriaLabel={CASH_EXPENSES_SPARKLINE_CAPTION}
             sparklineCaption={CASH_EXPENSES_SPARKLINE_CAPTION}
             expandable={canExpandExpenses}
-            onExpand={canExpandExpenses ? () => openExpenseExpand(null) : undefined}
+            onExpand={canExpandExpenses ? () => setExpandKind('expense') : undefined}
             footer={
               cashFlowModel && expensesSlot.state === 'ready' && cashHasSplit ? (
                 <KpiFooter
@@ -1894,31 +1820,6 @@ export function DashboardPage() {
         </WidgetShell>
       </div>
 
-      <div className={styles.executiveRow} data-home-band="executive-reading">
-        <WidgetShell
-          id="leitura-executiva"
-          sectionId="leitura-executiva"
-          title="Leitura executiva"
-          subtitle="Sinais do fluxo de caixa do mês"
-        >
-          <WidgetBody
-            gate={gate}
-            loadingLabel="Carregando leitura executiva"
-            error={cashFlowError}
-            onRetry={retryCashFlow}
-            pending={cashFlowPending}
-          >
-            {cashReading ? (
-              <CashExecutiveReading
-                model={cashReading}
-                emptyMessage="Sem movimentação de caixa para leitura neste mês."
-                onMetricActivate={activateExecutiveMetric}
-              />
-            ) : null}
-          </WidgetBody>
-        </WidgetShell>
-      </div>
-
       <div className={styles.tertiaryGrid}>
         <WidgetShell
           id="comparativo-mensal"
@@ -2125,71 +2026,6 @@ export function DashboardPage() {
         </WidgetExpandDialog>
       ) : null}
 
-      {expandKind === 'received' && cashFlowModel && cashFlowModel.received !== null ? (
-        <WidgetExpandDialog
-          open
-          title="Já recebido"
-          subtitle={`Caixa de ${monthLabel}`}
-          onClose={closeExpand}
-        >
-          <div className={styles.expandBody}>
-            <dl className={styles.statsRow}>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Total recebido</dt>
-                <dd className={styles.statsValue}>{formatMoneyBrl(cashFlowModel.received)}</dd>
-              </div>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Dias com entrada</dt>
-                <dd className={styles.statsValue}>
-                  {realizedInflows
-                    ? String(countNonZeroDailyPoints(realizedInflows))
-                    : '—'}
-                </dd>
-              </div>
-              {(() => {
-                const peak = peakNonZeroDailyPoint(realizedInflows);
-                return peak ? (
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>Maior dia de entrada</dt>
-                    <dd className={styles.statsValue}>
-                      {formatPeakDayLabel(peak.date)} · {formatMoneyBrl(peak.amount)}
-                    </dd>
-                  </div>
-                ) : null;
-              })()}
-            </dl>
-            {realizedInflows ? (
-              <CompetenceDailyBars
-                revenueDaily={realizedInflows}
-                expenseDaily={zeroSeriesLike(realizedInflows)}
-                monthKey={selectedMonthKey}
-                revenueLabel="Entradas"
-                expenseLabel="—"
-                ariaLabel={`Entradas de caixa por dia de baixa em ${monthLabel}`}
-                caption={CASH_DAILY_REALIZED_CAPTION}
-                emptyMessage={`Sem entradas de caixa em ${monthLabel}.`}
-              />
-            ) : (
-              <p className={styles.expandLabel}>{CASH_SERIES_UNAVAILABLE}</p>
-            )}
-            {cashFlowModel.realizedInflowsByCategory &&
-            cashFlowModel.realizedInflowsByCategory.items.length > 0 ? (
-              <>
-                <p className={styles.expandLabel}>
-                  Principais categorias dos recebimentos realizados
-                </p>
-                <CashCategoryRanking
-                  composition={cashFlowModel.realizedInflowsByCategory}
-                  sectionTitle="Principais categorias dos recebimentos realizados"
-                  colorVar="--color-series-revenue"
-                  emptyMessage="Sem recebimentos categorizados neste mês."
-                />
-              </>
-            ) : null}
-          </div>
-        </WidgetExpandDialog>
-      ) : null}
-
       {expandKind === 'receivable' && cashFlowModel && cashFlowModel.receivable !== null ? (
         <WidgetExpandDialog
           open
@@ -2350,13 +2186,7 @@ export function DashboardPage() {
         <WidgetExpandDialog
           open
           title="Despesas"
-          subtitle={
-            expenseExpandFocus === 'paid'
-              ? `Pago (realizado) · ${monthLabel}`
-              : expenseExpandFocus === 'payable'
-                ? `A pagar (previsto no prazo) · ${monthLabel}`
-                : `Caixa de ${monthLabel}`
-          }
+          subtitle={`Caixa de ${monthLabel}`}
           onClose={closeExpand}
         >
           <div className={styles.expandBody}>
@@ -2376,57 +2206,48 @@ export function DashboardPage() {
                 <dd className={styles.statsValue}>{moneyOrDashCash(cashFlowModel.payable)}</dd>
               </div>
             </dl>
-            {(expenseExpandFocus === 'payable'
-              ? (['payable', 'paid'] as const)
-              : (['paid', 'payable'] as const)
-            ).map((section) => {
-              if (section === 'paid') {
-                return realizedOutflows ? (
-                  <div key="paid">
-                    <p className={styles.expandLabel}>Pago por dia de baixa</p>
-                    <div className={styles.expandChart}>
-                      <Sparkline
-                        points={realizedOutflows}
-                        colorVar="--color-series-expense"
-                        interactive
-                        ariaLabel="Saídas realizadas por dia de baixa"
-                        valueCaption="pago no dia"
-                      />
-                    </div>
-                    <p className={styles.expandLabel}>
-                      Saídas realizadas acumuladas (dia de baixa)
-                    </p>
-                    <div className={styles.expandChart}>
-                      <Sparkline
-                        points={accumulate(realizedOutflows)}
-                        colorVar="--color-series-expense"
-                        interactive
-                        ariaLabel="Saídas realizadas acumuladas por dia de baixa"
-                        valueCaption="acumulado de caixa"
-                      />
-                    </div>
-                  </div>
-                ) : null;
-              }
-              return expectedPayables && expectedPayables.length > 0 ? (
-                <div key="payable">
-                  <p className={styles.expandLabel}>A pagar por vencimento (no prazo)</p>
-                  <div className={styles.expandChart}>
-                    <Sparkline
-                      points={expectedPayables}
-                      colorVar="--color-series-expense"
-                      interactive
-                      ariaLabel="A pagar por dia de vencimento no prazo"
-                      valueCaption="previsto no prazo"
-                    />
-                  </div>
+            {realizedOutflows ? (
+              <div key="paid">
+                <p className={styles.expandLabel}>Pago por dia de baixa</p>
+                <div className={styles.expandChart}>
+                  <Sparkline
+                    points={realizedOutflows}
+                    colorVar="--color-series-expense"
+                    interactive
+                    ariaLabel="Saídas realizadas por dia de baixa"
+                    valueCaption="pago no dia"
+                  />
                 </div>
-              ) : (
-                <p key="payable-empty" className={styles.expandLabel}>
-                  Sem valores a pagar no prazo neste mês.
+                <p className={styles.expandLabel}>
+                  Saídas realizadas acumuladas (dia de baixa)
                 </p>
-              );
-            })}
+                <div className={styles.expandChart}>
+                  <Sparkline
+                    points={accumulate(realizedOutflows)}
+                    colorVar="--color-series-expense"
+                    interactive
+                    ariaLabel="Saídas realizadas acumuladas por dia de baixa"
+                    valueCaption="acumulado de caixa"
+                  />
+                </div>
+              </div>
+            ) : null}
+            {expectedPayables && expectedPayables.length > 0 ? (
+              <div key="payable">
+                <p className={styles.expandLabel}>A pagar por vencimento (no prazo)</p>
+                <div className={styles.expandChart}>
+                  <Sparkline
+                    points={expectedPayables}
+                    colorVar="--color-series-expense"
+                    interactive
+                    ariaLabel="A pagar por dia de vencimento no prazo"
+                    valueCaption="previsto no prazo"
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className={styles.expandLabel}>Sem valores a pagar no prazo neste mês.</p>
+            )}
             {cashFlowModel.realizedOutflowsByCategory &&
             cashFlowModel.realizedOutflowsByCategory.items.length > 0 ? (
               <>
