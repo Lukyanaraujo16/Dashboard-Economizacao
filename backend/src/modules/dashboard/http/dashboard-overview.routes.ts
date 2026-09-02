@@ -4,6 +4,7 @@ import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
 import { createAnalyticsService } from '../../analytics/services/analytics.service.js';
 import { createExpectedReceivableDetailsService } from '../../analytics/services/expected-receivable-details.service.js';
+import { createExpectedPayableDetailsService } from '../../analytics/services/expected-payable-details.service.js';
 import { createMonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
@@ -53,6 +54,12 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
     }),
     expectedReceivableDetails: createExpectedReceivableDetailsService({
       receivables,
+      categories,
+      parties,
+      costCenterAllocations,
+    }),
+    expectedPayableDetails: createExpectedPayableDetailsService({
+      payables,
       categories,
       parties,
       costCenterAllocations,
@@ -242,6 +249,29 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       const categoryId = parseDashboardCategoryQuery(request.query);
       parseDashboardSituationQuery(request.query);
       const body = await dashboard.getExpectedReceivableDetails(
+        auth,
+        monthKey,
+        costCenterId,
+        categoryId,
+      );
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
+    '/dashboard/payables/expected-details',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const monthKey = parseDashboardMonth(request.query);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      parseDashboardSituationQuery(request.query);
+      const body = await dashboard.getExpectedPayableDetails(
         auth,
         monthKey,
         costCenterId,

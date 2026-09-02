@@ -308,13 +308,16 @@ describe('Dashboard V2 structure', () => {
 
     for (const title of [
       'Faturamento',
-      'Já recebido',
       'A receber',
       'Despesas',
+      'Contas a pagar',
       'Resultado',
     ]) {
       expect(kpiCard(title)).toBeTruthy();
     }
+    expect(
+      sectionScope('resumo-financeiro').queryByRole('heading', { name: 'Já recebido' }),
+    ).toBeNull();
 
     for (const title of [
       'Entradas × Saídas',
@@ -741,9 +744,13 @@ describe('Dashboard V2 structure', () => {
     await waitFor(() => {
       expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
     });
-    expect(kpiScope('Já recebido').getByText(/R\$\s*888\.888,88/)).toBeTruthy();
-    expect(kpiScope('Já recebido').getByText('88,8% do faturamento')).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText(/R\$\s*22\.222,22/)).toBeTruthy();
     expect(kpiScope('Resultado').getByText(/R\$\s*866\.666,66/)).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText('Recebido')).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText('A receber')).toBeTruthy();
+    expect(
+      sectionScope('resumo-financeiro').queryByRole('heading', { name: 'Já recebido' }),
+    ).toBeNull();
     expect(kpiScope('Faturamento').queryByText(/R\$\s*10\.000,00/)).toBeNull();
     expect(document.querySelector('[data-financial-section="receitas-mes"]')).toBeNull();
   });

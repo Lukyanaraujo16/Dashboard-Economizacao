@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cashCompositionToRankingItems,
   countNonZeroDailyPoints,
+  formatPayableDueDaysCaption,
   peakNonZeroDailyPoint,
 } from '../src/components/dashboard/dashboard-cash-modal-view';
 import { singleCashCategoryComposition } from './helpers/monthly-cash-flow-fixture';
@@ -31,5 +32,22 @@ describe('dashboard-cash-modal-view', () => {
         { date: '2026-08-02', amount: '5.00' },
       ]),
     ).toBe(1);
+  });
+
+  it('formatPayableDueDaysCaption — plural, singular e vazio', () => {
+    expect(
+      formatPayableDueDaysCaption([
+        { date: '2026-08-01', amount: '10.00' },
+        { date: '2026-08-05', amount: '20.00' },
+        { date: '2026-08-10', amount: '0' },
+      ]),
+    ).toBe('2 dias com vencimento');
+    expect(formatPayableDueDaysCaption([{ date: '2026-08-01', amount: '5.00' }])).toBe(
+      '1 dia com vencimento',
+    );
+    expect(formatPayableDueDaysCaption([{ date: '2026-08-01', amount: '0' }])).toBe(
+      'Sem vencimentos previstos',
+    );
+    expect(formatPayableDueDaysCaption(undefined)).toBe('Sem vencimentos previstos');
   });
 });

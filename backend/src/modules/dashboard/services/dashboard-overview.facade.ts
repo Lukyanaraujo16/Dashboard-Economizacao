@@ -5,6 +5,7 @@ import type { AnalyticsService } from '../../analytics/services/analytics.servic
 import { monthlyBilling } from '../../analytics/domain/monthly-cash-flow.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import type { ExpectedReceivableDetailsService } from '../../analytics/services/expected-receivable-details.service.js';
+import type { ExpectedPayableDetailsService } from '../../analytics/services/expected-payable-details.service.js';
 import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import type { ContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
 import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
@@ -30,6 +31,7 @@ import type {
   DashboardReceivableCompositionResponse,
   DashboardMonthlyCashFlowResponse,
   DashboardExpectedReceivableDetailsResponse,
+  DashboardExpectedPayableDetailsResponse,
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyRevenueResponse,
   DashboardRevenueGoalResponse,
@@ -41,6 +43,7 @@ import { toDashboardExecutiveInsightsResponse } from '../http/to-dashboard-execu
 import { toDashboardMonthEndCashPressureResponse } from '../http/to-dashboard-month-end-cash-pressure-response.js';
 import { toDashboardExpenseCompositionResponse } from '../http/to-dashboard-expense-composition-response.js';
 import { toDashboardExpectedReceivableDetailsResponse } from '../http/to-dashboard-expected-receivable-details-response.js';
+import { toDashboardExpectedPayableDetailsResponse } from '../http/to-dashboard-expected-payable-details-response.js';
 import { toDashboardMonthlyCashFlowResponse } from '../http/to-dashboard-monthly-cash-flow-response.js';
 import { toDashboardMonthlyExpenseResponse } from '../http/to-dashboard-monthly-expense-response.js';
 import { toDashboardMonthlyRevenueResponse } from '../http/to-dashboard-monthly-revenue-response.js';
@@ -122,6 +125,12 @@ export type DashboardOverviewFacade = {
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardExpectedReceivableDetailsResponse>;
+  getExpectedPayableDetails(
+    auth: AuthenticatedRequestContext,
+    monthKey: string | null,
+    costCenterId?: string | null,
+    categoryId?: string | null,
+  ): Promise<DashboardExpectedPayableDetailsResponse>;
   getMonthlyExecutiveInsights(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
@@ -157,6 +166,8 @@ export type DashboardOverviewFacadeDependencies = {
   readonly cashFlow?: MonthlyCashFlowService;
   /** Detalhe lazy do A receber (CASH-4 receivable details). */
   readonly expectedReceivableDetails?: ExpectedReceivableDetailsService;
+  /** Detalhe lazy de Contas a pagar (CASH-5 payable details). */
+  readonly expectedPayableDetails?: ExpectedPayableDetailsService;
 };
 
 export function createDashboardOverviewFacade(
@@ -358,6 +369,20 @@ export function createDashboardOverviewFacade(
       return toDashboardExpectedReceivableDetailsResponse(details);
     },
 
+    async getExpectedPayableDetails(auth, monthKey, costCenterId = null, categoryId = null) {
+      const detailsService = requireExpectedPayableDetails(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
+      const details = await detailsService.getExpectedPayableDetails({
+        tenantId,
+        ...(monthKey === null ? {} : { monthKey }),
+        ...costCenterFilter(resolved),
+        ...categoryFilterSpread(categoryFilter),
+      });
+      return toDashboardExpectedPayableDetailsResponse(details);
+    },
+
     async getMonthlyExecutiveInsights(
       auth,
       monthKey,
@@ -531,6 +556,17 @@ function requireExpectedReceivableDetails(
     );
   }
   return deps.expectedReceivableDetails;
+}
+
+function requireExpectedPayableDetails(
+  deps: DashboardOverviewFacadeDependencies,
+): ExpectedPayableDetailsService {
+  if (!deps.expectedPayableDetails) {
+    throw new Error(
+      'ExpectedPayableDetailsService é obrigatório para payables/expected-details.',
+    );
+  }
+  return deps.expectedPayableDetails;
 }
 
 function requireCashFlow(deps: DashboardOverviewFacadeDependencies): MonthlyCashFlowService {

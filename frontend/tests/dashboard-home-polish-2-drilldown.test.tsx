@@ -238,15 +238,15 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
     expect(within(dialog).getByText(/Pago \(realizado\)/i)).toBeTruthy();
   });
 
-  it('P2-11 — Ainda a pagar abre Despesas (a pagar)', async () => {
+  it('P2-11 — Ainda a pagar abre Contas a pagar', async () => {
     renderDashboard();
     const btn = await screen.findByRole('button', {
-      name: 'Abrir detalhe de Despesas (a pagar)',
+      name: 'Abrir detalhe de Contas a pagar',
     });
     fireEvent.click(btn);
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('heading', { name: 'Despesas' })).toBeTruthy();
-    expect(within(dialog).getByText(/A pagar \(previsto no prazo\)/i)).toBeTruthy();
+    expect(within(dialog).getByRole('heading', { name: 'Contas a pagar' })).toBeTruthy();
+    expect(within(dialog).getByText('Total a pagar')).toBeTruthy();
   });
 
   it('P2-12 — Resultado projetado abre Resultado', async () => {
@@ -300,7 +300,7 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
   it('P2-20/P2-21/P2-22 — barras Já recebido/A receber semânticas', async () => {
     renderDashboard();
     fireEvent.click(
-      await waitFor(() => kpiScope('Já recebido').getByRole('button', { name: 'Expandir' })),
+      await screen.findByRole('button', { name: 'Abrir detalhe de Já recebido' }),
     );
     let dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/dia de baixa/i)).toBeTruthy();
@@ -318,7 +318,7 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
     await waitFor(() => {
       expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
     });
-    expect(kpiScope('Já recebido').getByText(/R\$\s*888\.888,88/)).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText(/R\$\s*22\.222,22/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/R\$\s*133\.333,33/)).toBeTruthy();
     fireEvent.click(kpiScope('Faturamento').getByRole('button', { name: 'Expandir' }));
     const dialog = await screen.findByRole('dialog');

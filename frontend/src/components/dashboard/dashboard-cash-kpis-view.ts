@@ -109,6 +109,22 @@ export function toCashReceivableKpi(
   );
 }
 
+/** Contas a pagar = expected.payables (dueDate no mês, ainda no prazo). */
+export function toCashPayableKpi(
+  view: MonthlyCashFlowView,
+  phase: DashboardMonthPhase,
+): MonthlyContextKpiView {
+  return moneyKpi(
+    'cash-payable',
+    'Contas a pagar',
+    view.payable,
+    phase === 'future'
+      ? 'Valores previstos para sair do caixa no mês'
+      : 'A pagar ainda no prazo',
+    phase === 'future' ? 'Sem valores previstos no mês' : 'Sem contas a pagar no prazo',
+  );
+}
+
 /** Despesas = realized.outflows + expected.payables. */
 export function toCashExpensesKpi(
   view: MonthlyCashFlowView,
@@ -242,3 +258,4 @@ export function cashReceivableDailySeries(
 
 export const CASH_RECEIVED_SPARKLINE_CAPTION = 'Entradas no caixa por dia de baixa';
 export const CASH_RECEIVABLE_SPARKLINE_CAPTION = 'A receber no prazo por dia de vencimento';
+export const CASH_PAYABLE_SPARKLINE_CAPTION = 'A pagar no prazo por dia de vencimento';

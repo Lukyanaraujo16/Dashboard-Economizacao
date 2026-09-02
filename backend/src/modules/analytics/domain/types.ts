@@ -254,3 +254,24 @@ export type ExpectedReceivableDetails = {
   readonly total: Prisma.Decimal | null;
   readonly items: readonly ExpectedReceivableDetailItem[];
 };
+
+export type ExpectedPayableDetailItem = {
+  readonly id: string;
+  readonly externalId: string;
+  readonly dueDate: Date;
+  readonly amount: Prisma.Decimal;
+  readonly description: string | null;
+  readonly supplierName: string | null;
+  readonly categoryNames: readonly string[];
+};
+
+export type ExpectedPayableDetails = {
+  readonly tenantId: string;
+  readonly monthKey: string;
+  readonly from: Date;
+  readonly to: Date;
+  readonly today: Date;
+  readonly available: boolean;
+  readonly total: Prisma.Decimal | null;
+  readonly items: readonly ExpectedPayableDetailItem[];
+};

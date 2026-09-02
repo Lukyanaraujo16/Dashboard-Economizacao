@@ -5,6 +5,7 @@ import {
   toCashExpensesKpi,
   toCashManagerialResultKpi,
   toCashOverdueReceivablesKpi,
+  toCashPayableKpi,
   toCashReceivableKpi,
   toCashReceivedKpi,
 } from '../src/components/dashboard/dashboard-cash-kpis-view';
@@ -99,10 +100,11 @@ describe('CASH-4B — KPIs de caixa (view)', () => {
     expect(toCashBillingKpi(view, 'current').value).not.toMatch(/0,00/);
   });
 
-  it('Já recebido / A receber — copies de caixa', () => {
+  it('Já recebido / A receber / Contas a pagar — copies de caixa', () => {
     const view = toMonthlyCashFlowView(lifeAugust());
     expect(toCashReceivedKpi(view).meta.toLowerCase()).toContain('caixa');
     expect(toCashReceivedKpi(view).meta.toLowerCase()).not.toContain('competência');
     expect(toCashReceivableKpi(view, 'current').meta.toLowerCase()).toContain('caixa');
+    expect(toCashPayableKpi(view, 'current').meta.toLowerCase()).toContain('prazo');
   });
 });

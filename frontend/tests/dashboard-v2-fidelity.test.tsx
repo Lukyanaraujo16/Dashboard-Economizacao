@@ -418,19 +418,23 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(putRevenueGoal).not.toHaveBeenCalled();
   });
 
-  it('KPIs de caixa com sparkline exibem séries de entrada, despesa e resultado', async () => {
+  it('KPIs de caixa com sparkline exibem séries de faturamento, recebível, despesa, pagável e resultado', async () => {
     await renderReadyDashboard();
 
     const scope = widgetScope('resumo-financeiro');
-    expect(scope.getByRole('img', { name: 'Entradas no caixa por dia de baixa' })).toBeTruthy();
+    expect(
+      scope.getByRole('img', { name: /do faturamento do mês já realizado/i }),
+    ).toBeTruthy();
     expect(
       scope.getByRole('img', { name: 'A receber no prazo por dia de vencimento' }),
     ).toBeTruthy();
     expect(scope.getByRole('img', { name: 'Pago acumulado + total a pagar ainda no prazo' })).toBeTruthy();
+    expect(scope.getByRole('img', { name: 'A pagar no prazo por dia de vencimento' })).toBeTruthy();
     expect(
       scope.getByRole('img', { name: 'Resultado projetado do mês (realizado + previsto no prazo)' }),
     ).toBeTruthy();
     expect(scope.queryByRole('img', { name: /série diária por competência/i })).toBeNull();
+    expect(scope.queryByRole('img', { name: 'Entradas no caixa por dia de baixa' })).toBeNull();
   });
 
   it('rodapés dos KPIs refletem totais de caixa', async () => {

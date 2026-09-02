@@ -11,11 +11,13 @@ import {
 import { addCivilDays, civilMonthKey, isCivilDateInInclusiveRange } from './civil-calendar.js';
 import {
   accumulateReceivableOverdue,
-  isExpectedOpenReceivable,
   selectExpectedOpenReceivables,
 } from './expected-open-receivables.js';
 import {
-  isDashboardOverdue,
+  accumulatePayableOverdue,
+  selectExpectedOpenPayables,
+} from './expected-open-payables.js';
+import {
   matchesDashboardCategoryFilter,
   type DashboardCategoryFilter,
 } from './dashboard-home-filters.js';
@@ -91,15 +93,6 @@ function fillCivilDays<T>(from: Date, to: Date, build: (date: Date) => T): T[] {
     cursor = addCivilDays(cursor, 1);
   }
   return points;
-}
-
-function isExpectedOpen(
-  installment: Pick<FinancialInstallmentReadRecord, 'unpaid' | 'dueDate'>,
-  today: Date,
-  from: Date,
-  to: Date,
-): boolean {
-  return isExpectedOpenReceivable(installment, today, from, to);
 }
 
 function matchesSettlementCategory(
@@ -350,74 +343,40 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
   const overdueReceivables = receivableOverdue.overdue;
   const overdueReceivablesOfMonth = receivableOverdue.overdueOfMonth;
 
-  const expectedPayablesOpen: FinancialInstallmentReadRecord[] = [];
-  let expectedPayablesTotal = ZERO;
-  let overduePayables = ZERO;
-  let overduePayablesOfMonth = ZERO;
+  const payableOpen = selectExpectedOpenPayables({
+    rows: expectedPayableRows,
+    today: input.today,
+    from: input.from,
+    to: input.to,
+    categoryFilter,
+    hasCostCenter: Boolean(input.costCenter),
+  });
+  if (!payableOpen.available) {
+    expectedAvailable = false;
+  }
+  let expectedPayablesTotal = payableOpen.total;
+  for (const [dayKey, amount] of payableOpen.byDay) {
+    const day = expectedByDay.get(dayKey) ?? { receivables: ZERO, payables: ZERO };
+    day.payables = day.payables.plus(amount);
+    expectedByDay.set(dayKey, day);
+  }
 
-  const consumePayableStock = (rows: readonly CashCostCenterAllocationSource[]) => {
-    for (const row of rows) {
-      if (!isActiveInstallment(row.installment)) {
-        continue;
-      }
-      if (!matchesDashboardCategoryFilter(row.installment, categoryFilter, 'EXPENSE')) {
-        continue;
-      }
-      if (input.costCenter) {
-        const split = deriveInstallmentCostCenterCashSplit({
-          allocationAmount: row.amount,
-          installmentTotal: row.installment.total,
-          paid: row.installment.paid,
-          unpaid: row.installment.unpaid,
-          dueDate: row.installment.dueDate,
-          today: input.today,
-        });
-        if (split.kind === 'UNAVAILABLE') {
-          expectedAvailable = false;
-          continue;
-        }
-        const outstanding = split.outstanding;
-        const overdue = split.overdue;
-        if (isExpectedOpen(row.installment, input.today, input.from, input.to)) {
-          expectedPayablesTotal = expectedPayablesTotal.plus(outstanding);
-          expectedPayablesOpen.push(row.installment);
-          const day = expectedByDay.get(row.installment.dueDate.getTime()) ?? {
-            receivables: ZERO,
-            payables: ZERO,
-          };
-          day.payables = day.payables.plus(outstanding);
-          expectedByDay.set(row.installment.dueDate.getTime(), day);
-        }
-        overduePayables = overduePayables.plus(overdue);
-        if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
-          overduePayablesOfMonth = overduePayablesOfMonth.plus(overdue);
-        }
-        continue;
-      }
-
-      if (isExpectedOpen(row.installment, input.today, input.from, input.to)) {
-        expectedPayablesTotal = expectedPayablesTotal.plus(row.installment.unpaid);
-        expectedPayablesOpen.push(row.installment);
-        const day = expectedByDay.get(row.installment.dueDate.getTime()) ?? {
-          receivables: ZERO,
-          payables: ZERO,
-        };
-        day.payables = day.payables.plus(row.installment.unpaid);
-        expectedByDay.set(row.installment.dueDate.getTime(), day);
-      }
-      if (isDashboardOverdue(row.installment, input.today)) {
-        overduePayables = overduePayables.plus(row.installment.unpaid);
-        if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
-          overduePayablesOfMonth = overduePayablesOfMonth.plus(row.installment.unpaid);
-        }
-      }
-    }
-  };
-
-  consumePayableStock(expectedPayableRows);
+  const payableOverdue = accumulatePayableOverdue({
+    rows: expectedPayableRows,
+    today: input.today,
+    from: input.from,
+    to: input.to,
+    categoryFilter,
+    hasCostCenter: Boolean(input.costCenter),
+  });
+  if (!payableOverdue.available) {
+    expectedAvailable = false;
+  }
+  const overduePayables = payableOverdue.overdue;
+  const overduePayablesOfMonth = payableOverdue.overdueOfMonth;
 
   if (!input.costCenter) {
-    expectedPayablesTotal = sumUnpaid(expectedPayablesOpen);
+    expectedPayablesTotal = sumUnpaid(payableOpen.items.map((item) => item.installment));
   }
 
   const realized = splitCashTotals(realizedAvailable, inflows, outflows);

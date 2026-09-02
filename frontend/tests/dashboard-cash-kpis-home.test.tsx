@@ -198,9 +198,11 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     await waitFor(() => {
       expect(kpiScope('Faturamento').getByText(/R\$\s*235\.301,50/)).toBeTruthy();
     });
-    expect(kpiScope('Já recebido').getByText(/R\$\s*224\.790,30/)).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText('Recebido')).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText(/R\$\s*224\.790,30/)).toBeTruthy();
     expect(kpiScope('A receber').getByText(/R\$\s*10\.511,20/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/R\$\s*127\.231,32/)).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText(/R\$\s*28\.289,80/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/^Pago$/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/R\$\s*98\.941,52/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/^A pagar$/)).toBeTruthy();
@@ -287,9 +289,62 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     await waitFor(() => {
       expect(kpiScope('Faturamento').getByText('—')).toBeTruthy();
     });
-    expect(kpiScope('Já recebido').getByText('—')).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText('—')).toBeTruthy();
     expect(kpiScope('Despesas').getByText('—')).toBeTruthy();
     expect(kpiScope('Resultado').getByText('—')).toBeTruthy();
     expect(kpiScope('Faturamento').queryByText(/R\$\s*0,00/)).toBeNull();
+  });
+
+  it('CORREÇÃO 05.1 — Contas a pagar exibe dias com vencimento no rodapé', async () => {
+    await renderReadyDashboard();
+    const payableCard = kpiScope('Contas a pagar');
+    await waitFor(() => {
+      expect(payableCard.getByText(/R\$\s*28\.289,80/)).toBeTruthy();
+    });
+    expect(payableCard.getByText('1 dia com vencimento')).toBeTruthy();
+    expect(payableCard.queryByText(/% do faturamento/i)).toBeNull();
+    expect(kpiScope('Faturamento').getByText('Recebido')).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText('A receber')).toBeTruthy();
+  });
+
+  it('CORREÇÃO 05.1 — plural no rodapé de Contas a pagar', async () => {
+    getMonthlyCashFlow.mockResolvedValue({
+      ...lifeCashFlow,
+      expected: { receivables: '10511.20', payables: '300.00', result: '10211.20' },
+      daily: {
+        realized: lifeCashFlow.daily.realized,
+        expected: [
+          { date: '2026-08-10', receivables: '0', payables: '100.00', result: '-100.00' },
+          { date: '2026-08-15', receivables: '0', payables: '100.00', result: '-100.00' },
+          { date: '2026-08-20', receivables: '10511.20', payables: '100.00', result: '10411.20' },
+        ],
+      },
+    });
+    await renderReadyDashboard();
+    const payableCard = kpiScope('Contas a pagar');
+    await waitFor(() => {
+      expect(payableCard.getByText('3 dias com vencimento')).toBeTruthy();
+    });
+    expect(payableCard.queryByText(/% do faturamento/i)).toBeNull();
+  });
+
+  it('CORREÇÃO 05.1 — sem dias com vencimento na série', async () => {
+    getMonthlyCashFlow.mockResolvedValue({
+      ...lifeCashFlow,
+      expected: { receivables: '10511.20', payables: '100.00', result: '10411.20' },
+      daily: {
+        realized: lifeCashFlow.daily.realized,
+        expected: [
+          { date: '2026-08-31', receivables: '10511.20', payables: '0', result: '10511.20' },
+        ],
+      },
+    });
+    await renderReadyDashboard();
+    const payableCard = kpiScope('Contas a pagar');
+    await waitFor(() => {
+      expect(payableCard.getByText(/R\$\s*100,00/)).toBeTruthy();
+    });
+    expect(payableCard.getByText('Sem vencimentos previstos')).toBeTruthy();
+    expect(payableCard.queryByText(/% do faturamento/i)).toBeNull();
   });
 });

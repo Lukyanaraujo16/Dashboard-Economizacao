@@ -11,6 +11,7 @@ import type { DashboardCashFlowForecastResponse } from '../src/services/dashboar
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
+import { getDashboardExpectedPayableDetails } from '../src/services/dashboard/expected-payable-details';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -46,6 +47,9 @@ vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
 vi.mock('../src/services/dashboard/expected-receivable-details', () => ({
   getDashboardExpectedReceivableDetails: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/expected-payable-details', () => ({
+  getDashboardExpectedPayableDetails: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -58,6 +62,7 @@ const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getExpectedReceivableDetails = vi.mocked(getDashboardExpectedReceivableDetails);
+const getExpectedPayableDetails = vi.mocked(getDashboardExpectedPayableDetails);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -198,6 +203,25 @@ beforeEach(() => {
       },
     ],
   });
+  getExpectedPayableDetails.mockResolvedValue({
+    today: '2026-08-19',
+    monthKey: '2026-08',
+    from: '2026-08-01',
+    to: '2026-08-31',
+    available: true,
+    total: '22222.22',
+    items: [
+      {
+        id: 'ap-1',
+        externalId: 'ext-ap-1',
+        dueDate: '2026-08-28',
+        amount: '22222.22',
+        description: 'Honorários contábeis',
+        supplierName: 'Fornecedor XYZ',
+        categoryNames: ['Contabilidade'],
+      },
+    ],
+  });
   getRevenueGoal.mockResolvedValue(goal);
   getCostCenters.mockResolvedValue({ items: [] });
   getCategories.mockResolvedValue({ items: [] });
@@ -221,13 +245,27 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
-  it('Z4/Z5 — Já recebido abre com daily.realized.inflows', async () => {
-    const dialog = await openKpiExpand('Já recebido');
+  it('Z4 — Já recebido não aparece como card principal; Faturamento mantém Recebido', async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
+    });
+    expect(kpiScope('Faturamento').getByText('Recebido')).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText('A receber')).toBeTruthy();
+    expect(
+      within(document.querySelector('[data-financial-section="resumo-financeiro"]')!).queryByRole(
+        'heading',
+        { name: 'Já recebido' },
+      ),
+    ).toBeNull();
+  });
+
+  it('Z4b — Leitura executiva ainda abre modal Já recebido', async () => {
+    renderDashboard();
+    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de Já recebido' });
+    fireEvent.click(btn);
+    const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('heading', { name: 'Já recebido' })).toBeTruthy();
-    expect(within(dialog).getByText('Total recebido')).toBeTruthy();
-    expect(within(dialog).getAllByText(/R\$\s*888\.888,88/).length).toBeGreaterThan(0);
-    expect(within(dialog).getByText(/dia de baixa/i)).toBeTruthy();
-    expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
   it('Z6/Z7/Z8 — A receber abre com previsto; vencido fora; detalhes lazy', async () => {
@@ -246,6 +284,18 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(
       within(dialog).queryByText(/Composição por categoria do previsto não disponível/i),
     ).toBeNull();
+  });
+
+  it('Z8b — Contas a pagar abre com previsto; detalhes lazy', async () => {
+    const dialog = await openKpiExpand('Contas a pagar');
+    expect(within(dialog).getByRole('heading', { name: 'Contas a pagar' })).toBeTruthy();
+    expect(within(dialog).getByText('Total a pagar')).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*22\.222,22/).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(getExpectedPayableDetails).toHaveBeenCalled();
+    });
+    expect(within(dialog).getByText('Pagamentos previstos')).toBeTruthy();
+    expect(within(dialog).getByText('Fornecedor XYZ')).toBeTruthy();
   });
 
   it('Z9/Z10 — Despesas abre com Pago, acumulado e A pagar', async () => {
@@ -379,7 +429,7 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     await waitFor(() => {
       expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
     });
-    expect(kpiScope('Já recebido').getByText(/R\$\s*888\.888,88/)).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText(/R\$\s*22\.222,22/)).toBeTruthy();
     expect(kpiScope('A receber').getByText(/R\$\s*111\.111,11/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/R\$\s*133\.333,33/)).toBeTruthy();
     expect(kpiScope('Resultado').getByText(/R\$\s*866\.666,66/)).toBeTruthy();

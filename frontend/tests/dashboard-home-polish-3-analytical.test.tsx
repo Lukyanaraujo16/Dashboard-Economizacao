@@ -222,8 +222,11 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
-  it('P3-5 — Já recebido mostra categorias realized', async () => {
-    const dialog = await openKpiExpand('Já recebido');
+  it('P3-5 — Já recebido via leitura executiva mostra categorias realized', async () => {
+    renderDashboard();
+    const btn = await screen.findByRole('button', { name: 'Abrir detalhe de Já recebido' });
+    fireEvent.click(btn);
+    const dialog = await screen.findByRole('dialog');
     expect(
       within(dialog).getByText('Principais categorias dos recebimentos realizados'),
     ).toBeTruthy();
@@ -274,7 +277,7 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     await waitFor(() => {
       expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
     });
-    expect(kpiScope('Já recebido').getByText(/R\$\s*888\.888,88/)).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText(/R\$\s*22\.222,22/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/R\$\s*133\.333,33/)).toBeTruthy();
     fireEvent.click(kpiScope('Faturamento').getByRole('button', { name: 'Expandir' }));
     const dialog = await screen.findByRole('dialog');

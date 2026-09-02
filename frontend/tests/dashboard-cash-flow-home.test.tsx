@@ -280,7 +280,8 @@ describe('CASH-4A/4B — Home carrega MonthlyCashFlow e exibe KPIs de caixa', ()
       expect(getMonthlyCashFlow).toHaveBeenCalled();
       expect(kpiScope('Faturamento').getByText(/R\$\s*999\.999,99/)).toBeTruthy();
     });
-    expect(kpiScope('Já recebido').getByText(/R\$\s*888\.888,88/)).toBeTruthy();
+    expect(kpiScope('Faturamento').getByText('Recebido')).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText(/R\$\s*22\.222,22/)).toBeTruthy();
     expect(kpiScope('A receber').getByText(/R\$\s*111\.111,11/)).toBeTruthy();
     expect(kpiScope('Faturamento').queryByText(/R\$\s*10\.000,00/)).toBeNull();
     await waitFor(() => {

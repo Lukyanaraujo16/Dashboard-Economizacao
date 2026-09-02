@@ -285,6 +285,18 @@ export function dashboardExpectedReceivableDetailsPath(
   })}`;
 }
 
+export function dashboardExpectedPayableDetailsPath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+  categoryId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/payables/expected-details${dashboardQueryString({
+    monthKey,
+    costCenterId,
+    categoryId,
+  })}`;
+}
+
 export function dashboardExecutiveInsightsPath(
   monthKey?: string | null,
   costCenterId?: string | null,

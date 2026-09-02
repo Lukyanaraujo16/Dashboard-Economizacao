@@ -43,7 +43,7 @@ const METRIC_EXPAND_LABEL: Record<string, string> = {
   'cash-received': 'Abrir detalhe de Já recebido',
   'cash-receivable': 'Abrir detalhe de A receber',
   'cash-paid': 'Abrir detalhe de Despesas (pago)',
-  'cash-payable': 'Abrir detalhe de Despesas (a pagar)',
+  'cash-payable': 'Abrir detalhe de Contas a pagar',
   'cash-result': 'Abrir detalhe de Resultado',
   'cash-coverage': 'Abrir detalhe de Faturamento',
 };

@@ -360,3 +360,24 @@ export type DashboardExpectedReceivableDetailsResponse = {
   readonly total: string | null;
   readonly items: readonly DashboardExpectedReceivableDetailItem[];
 };
+
+/** GET /dashboard/payables/expected-details — itens do KPI Contas a pagar (lazy). */
+export type DashboardExpectedPayableDetailItem = {
+  readonly id: string;
+  readonly externalId: string;
+  readonly dueDate: string;
+  readonly amount: string;
+  readonly description: string | null;
+  readonly supplierName: string | null;
+  readonly categoryNames: readonly string[];
+};
+
+export type DashboardExpectedPayableDetailsResponse = {
+  readonly today: string;
+  readonly monthKey: string;
+  readonly from: string;
+  readonly to: string;
+  readonly available: boolean;
+  readonly total: string | null;
+  readonly items: readonly DashboardExpectedPayableDetailItem[];
+};

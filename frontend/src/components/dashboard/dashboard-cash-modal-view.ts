@@ -43,6 +43,18 @@ export function countNonZeroDailyPoints(points: readonly DailyPoint[] | undefine
   return points.filter((point) => Math.abs(parseAmount(point.amount)) > 0).length;
 }
 
+/** Rodapé operacional do card Contas a pagar (mesma base do stat "Dias com vencimento" do modal). */
+export function formatPayableDueDaysCaption(points: readonly DailyPoint[] | undefined): string {
+  const count = countNonZeroDailyPoints(points);
+  if (count === 0) {
+    return 'Sem vencimentos previstos';
+  }
+  if (count === 1) {
+    return '1 dia com vencimento';
+  }
+  return `${count} dias com vencimento`;
+}
+
 /** Rótulo curto do dia para resumos de modal (ex.: `19 ago`). */
 export function formatPeakDayLabel(date: string): string {
   return formatDayPt(date);
