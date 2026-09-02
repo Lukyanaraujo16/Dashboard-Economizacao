@@ -339,3 +339,24 @@ export type DashboardMonthlyCashFlowResponse = {
     readonly expected: readonly DashboardMonthlyCashFlowDailyExpectedPoint[];
   };
 };
+
+/** GET /dashboard/receivables/expected-details — itens do KPI A receber (lazy). */
+export type DashboardExpectedReceivableDetailItem = {
+  readonly id: string;
+  readonly externalId: string;
+  readonly dueDate: string;
+  readonly amount: string;
+  readonly description: string | null;
+  readonly customerName: string | null;
+  readonly categoryNames: readonly string[];
+};
+
+export type DashboardExpectedReceivableDetailsResponse = {
+  readonly today: string;
+  readonly monthKey: string;
+  readonly from: string;
+  readonly to: string;
+  readonly available: boolean;
+  readonly total: string | null;
+  readonly items: readonly DashboardExpectedReceivableDetailItem[];
+};

@@ -20,6 +20,7 @@ function mapInstallmentReadRecord(row: Receivable | Payable): FinancialInstallme
     total: row.total,
     paid: row.paid,
     unpaid: row.unpaid,
+    partyId: row.partyId,
     categoryExternalIds: row.categoryExternalIds,
     syncedAt: row.syncedAt,
   };

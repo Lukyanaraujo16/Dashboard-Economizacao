@@ -38,6 +38,7 @@ export type FinancialInstallmentReadRecord = {
   readonly total: Prisma.Decimal;
   readonly paid: Prisma.Decimal;
   readonly unpaid: Prisma.Decimal;
+  readonly partyId: string | null;
   readonly categoryExternalIds: readonly string[];
   readonly syncedAt: Date;
 };

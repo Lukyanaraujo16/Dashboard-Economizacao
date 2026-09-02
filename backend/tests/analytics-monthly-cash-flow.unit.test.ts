@@ -53,6 +53,7 @@ function installment(
     total,
     paid,
     unpaid,
+    partyId: null,
     categoryExternalIds: input.categoryExternalIds ?? [],
     syncedAt: TODAY,
   };

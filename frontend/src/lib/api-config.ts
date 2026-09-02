@@ -272,6 +272,19 @@ export function dashboardMonthlyCashFlowPath(
   })}`;
 }
 
+/** Detalhe lazy do KPI A receber — mesmos filtros do monthly-cash-flow. */
+export function dashboardExpectedReceivableDetailsPath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+  categoryId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/receivables/expected-details${dashboardQueryString({
+    monthKey,
+    costCenterId,
+    categoryId,
+  })}`;
+}
+
 export function dashboardExecutiveInsightsPath(
   monthKey?: string | null,
   costCenterId?: string | null,

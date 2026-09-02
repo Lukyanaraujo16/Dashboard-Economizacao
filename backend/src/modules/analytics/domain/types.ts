@@ -233,3 +233,24 @@ export type GetMonthlyCashFlowInput = GetFinancialStockSnapshotInput & {
   /** Mês civil (`YYYY-MM`). Ausente = mês corrente em America/Sao_Paulo. */
   readonly monthKey?: string;
 };
+
+export type ExpectedReceivableDetailItem = {
+  readonly id: string;
+  readonly externalId: string;
+  readonly dueDate: Date;
+  readonly amount: Prisma.Decimal;
+  readonly description: string | null;
+  readonly customerName: string | null;
+  readonly categoryNames: readonly string[];
+};
+
+export type ExpectedReceivableDetails = {
+  readonly tenantId: string;
+  readonly monthKey: string;
+  readonly from: Date;
+  readonly to: Date;
+  readonly today: Date;
+  readonly available: boolean;
+  readonly total: Prisma.Decimal | null;
+  readonly items: readonly ExpectedReceivableDetailItem[];
+};

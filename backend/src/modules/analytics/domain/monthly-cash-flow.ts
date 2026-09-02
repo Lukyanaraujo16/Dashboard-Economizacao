@@ -9,12 +9,17 @@ import {
   type CashAttributedCategorySource,
 } from './cash-realized-category-composition.js';
 import { addCivilDays, civilMonthKey, isCivilDateInInclusiveRange } from './civil-calendar.js';
-import { deriveInstallmentCostCenterCashSplit } from './cost-center-cash-split.js';
+import {
+  accumulateReceivableOverdue,
+  isExpectedOpenReceivable,
+  selectExpectedOpenReceivables,
+} from './expected-open-receivables.js';
 import {
   isDashboardOverdue,
   matchesDashboardCategoryFilter,
   type DashboardCategoryFilter,
 } from './dashboard-home-filters.js';
+import { deriveInstallmentCostCenterCashSplit } from './cost-center-cash-split.js';
 import type {
   MonthlyCashFlow,
   MonthlyCashFlowDailyExpectedPoint,
@@ -94,11 +99,7 @@ function isExpectedOpen(
   from: Date,
   to: Date,
 ): boolean {
-  return (
-    installment.unpaid.greaterThan(0) &&
-    installment.dueDate.getTime() >= today.getTime() &&
-    isCivilDateInInclusiveRange(installment.dueDate, from, to)
-  );
+  return isExpectedOpenReceivable(installment, today, from, to);
 }
 
 function matchesSettlementCategory(
@@ -317,24 +318,49 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
     ? input.costCenter.expectedPayables
     : payables.map((installment) => ({ amount: installment.unpaid, installment }));
 
-  const expectedReceivablesOpen: FinancialInstallmentReadRecord[] = [];
+  const receivableOpen = selectExpectedOpenReceivables({
+    rows: expectedReceivableRows,
+    today: input.today,
+    from: input.from,
+    to: input.to,
+    categoryFilter,
+    hasCostCenter: Boolean(input.costCenter),
+  });
+  if (!receivableOpen.available) {
+    expectedAvailable = false;
+  }
+  const expectedReceivablesTotal = receivableOpen.total;
+  for (const [dayKey, amount] of receivableOpen.byDay) {
+    const day = expectedByDay.get(dayKey) ?? { receivables: ZERO, payables: ZERO };
+    day.receivables = day.receivables.plus(amount);
+    expectedByDay.set(dayKey, day);
+  }
+
+  const receivableOverdue = accumulateReceivableOverdue({
+    rows: expectedReceivableRows,
+    today: input.today,
+    from: input.from,
+    to: input.to,
+    categoryFilter,
+    hasCostCenter: Boolean(input.costCenter),
+  });
+  if (!receivableOverdue.available) {
+    expectedAvailable = false;
+  }
+  const overdueReceivables = receivableOverdue.overdue;
+  const overdueReceivablesOfMonth = receivableOverdue.overdueOfMonth;
+
   const expectedPayablesOpen: FinancialInstallmentReadRecord[] = [];
-  let expectedReceivablesTotal = ZERO;
   let expectedPayablesTotal = ZERO;
-  let overdueReceivables = ZERO;
   let overduePayables = ZERO;
-  let overdueReceivablesOfMonth = ZERO;
   let overduePayablesOfMonth = ZERO;
 
-  const consumeStock = (
-    rows: readonly CashCostCenterAllocationSource[],
-    expectedType: 'REVENUE' | 'EXPENSE',
-  ) => {
+  const consumePayableStock = (rows: readonly CashCostCenterAllocationSource[]) => {
     for (const row of rows) {
       if (!isActiveInstallment(row.installment)) {
         continue;
       }
-      if (!matchesDashboardCategoryFilter(row.installment, categoryFilter, expectedType)) {
+      if (!matchesDashboardCategoryFilter(row.installment, categoryFilter, 'EXPENSE')) {
         continue;
       }
       if (input.costCenter) {
@@ -353,78 +379,44 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
         const outstanding = split.outstanding;
         const overdue = split.overdue;
         if (isExpectedOpen(row.installment, input.today, input.from, input.to)) {
-          if (expectedType === 'REVENUE') {
-            expectedReceivablesTotal = expectedReceivablesTotal.plus(outstanding);
-            expectedReceivablesOpen.push(row.installment);
-          } else {
-            expectedPayablesTotal = expectedPayablesTotal.plus(outstanding);
-            expectedPayablesOpen.push(row.installment);
-          }
+          expectedPayablesTotal = expectedPayablesTotal.plus(outstanding);
+          expectedPayablesOpen.push(row.installment);
           const day = expectedByDay.get(row.installment.dueDate.getTime()) ?? {
             receivables: ZERO,
             payables: ZERO,
           };
-          if (expectedType === 'REVENUE') {
-            day.receivables = day.receivables.plus(outstanding);
-          } else {
-            day.payables = day.payables.plus(outstanding);
-          }
+          day.payables = day.payables.plus(outstanding);
           expectedByDay.set(row.installment.dueDate.getTime(), day);
         }
-        if (expectedType === 'REVENUE') {
-          overdueReceivables = overdueReceivables.plus(overdue);
-          if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
-            overdueReceivablesOfMonth = overdueReceivablesOfMonth.plus(overdue);
-          }
-        } else {
-          overduePayables = overduePayables.plus(overdue);
-          if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
-            overduePayablesOfMonth = overduePayablesOfMonth.plus(overdue);
-          }
+        overduePayables = overduePayables.plus(overdue);
+        if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
+          overduePayablesOfMonth = overduePayablesOfMonth.plus(overdue);
         }
         continue;
       }
 
       if (isExpectedOpen(row.installment, input.today, input.from, input.to)) {
-        if (expectedType === 'REVENUE') {
-          expectedReceivablesTotal = expectedReceivablesTotal.plus(row.installment.unpaid);
-          expectedReceivablesOpen.push(row.installment);
-        } else {
-          expectedPayablesTotal = expectedPayablesTotal.plus(row.installment.unpaid);
-          expectedPayablesOpen.push(row.installment);
-        }
+        expectedPayablesTotal = expectedPayablesTotal.plus(row.installment.unpaid);
+        expectedPayablesOpen.push(row.installment);
         const day = expectedByDay.get(row.installment.dueDate.getTime()) ?? {
           receivables: ZERO,
           payables: ZERO,
         };
-        if (expectedType === 'REVENUE') {
-          day.receivables = day.receivables.plus(row.installment.unpaid);
-        } else {
-          day.payables = day.payables.plus(row.installment.unpaid);
-        }
+        day.payables = day.payables.plus(row.installment.unpaid);
         expectedByDay.set(row.installment.dueDate.getTime(), day);
       }
       if (isDashboardOverdue(row.installment, input.today)) {
-        if (expectedType === 'REVENUE') {
-          overdueReceivables = overdueReceivables.plus(row.installment.unpaid);
-          if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
-            overdueReceivablesOfMonth = overdueReceivablesOfMonth.plus(row.installment.unpaid);
-          }
-        } else {
-          overduePayables = overduePayables.plus(row.installment.unpaid);
-          if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
-            overduePayablesOfMonth = overduePayablesOfMonth.plus(row.installment.unpaid);
-          }
+        overduePayables = overduePayables.plus(row.installment.unpaid);
+        if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
+          overduePayablesOfMonth = overduePayablesOfMonth.plus(row.installment.unpaid);
         }
       }
     }
   };
 
-  consumeStock(expectedReceivableRows, 'REVENUE');
-  consumeStock(expectedPayableRows, 'EXPENSE');
+  consumePayableStock(expectedPayableRows);
 
   if (!input.costCenter) {
-    expectedReceivablesTotal = sumUnpaid(expectedReceivablesOpen);
     expectedPayablesTotal = sumUnpaid(expectedPayablesOpen);
   }
 

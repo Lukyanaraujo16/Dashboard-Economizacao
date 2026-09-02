@@ -44,6 +44,11 @@ import {
   DashboardMonthlyCashFlowRequestError,
   type DashboardMonthlyCashFlowResponse,
 } from '../../services/dashboard/monthly-cash-flow.types';
+import { getDashboardExpectedReceivableDetails } from '../../services/dashboard/expected-receivable-details';
+import {
+  DashboardExpectedReceivableDetailsRequestError,
+  type DashboardExpectedReceivableDetailsResponse,
+} from '../../services/dashboard/expected-receivable-details.types';
 import { getDashboardCashFlowForecast } from '../../services/dashboard/forecast';
 import {
   DashboardForecastRequestError,
@@ -74,6 +79,8 @@ import { buildCashExecutiveReading } from './dashboard-cash-executive-reading';
 import { CashExecutiveReading } from './cash-executive-reading';
 import { CashCategoryRanking } from './cash-category-ranking';
 import { CashRealizedCategoryPanel } from './cash-realized-category-panel';
+import { ExpectedReceivableDetailsPanel } from './expected-receivable-details-panel';
+import expectedReceivableStyles from './expected-receivable-details-panel.module.css';
 import {
   countNonZeroDailyPoints,
   formatPeakDayLabel,
@@ -209,6 +216,12 @@ type PreviousMonthView =
       readonly data: DashboardMonthlyCashFlowResponse;
       readonly model: MonthlyCashFlowView;
     };
+
+type ExpectedReceivableDetailsView =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'ready'; readonly data: DashboardExpectedReceivableDetailsResponse };
 
 /** Estado do overview aplicado a cada widget antes dos dados locais. */
 type WidgetGate = 'loading' | 'first-sync' | 'blocked' | 'ready';
@@ -438,6 +451,8 @@ export function DashboardPage() {
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaveError, setGoalSaveError] = useState<string | null>(null);
   const [expandKind, setExpandKind] = useState<ExpandKind | null>(null);
+  const [expectedReceivableDetailsView, setExpectedReceivableDetailsView] =
+    useState<ExpectedReceivableDetailsView>({ kind: 'idle' });
   const [expenseExpandFocus, setExpenseExpandFocus] = useState<ExpenseExpandFocus>(null);
   const [dailyMode, setDailyMode] = useState<DailyCashMode>('realized');
 
@@ -459,6 +474,11 @@ export function DashboardPage() {
   );
   const monthEndCacheRef = useRef(createDashboardFilterCache<DashboardMonthEndCashPressureResponse>());
   const forecastCacheRef = useRef(createDashboardFilterCache<DashboardCashFlowForecastResponse>());
+  const expectedReceivableDetailsCacheRef = useRef(
+    createDashboardFilterCache<DashboardExpectedReceivableDetailsResponse>(),
+  );
+  const expectedReceivableDetailsViewRef = useRef(expectedReceivableDetailsView);
+  expectedReceivableDetailsViewRef.current = expectedReceivableDetailsView;
 
   const operationalTenantId = useMemo(
     () => resolveOperationalTenantId(user, support),
@@ -692,6 +712,53 @@ export function DashboardPage() {
             ? error.message
             : 'Não foi possível carregar o fluxo de caixa do mês.';
         setMonthlyCashFlowView({ kind: 'error', message });
+      }
+    },
+    [],
+  );
+
+  const loadExpectedReceivableDetails = useCallback(
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      costCenterId: string | null,
+      categoryId: string | null,
+    ) => {
+      const tenantId = operationalTenantIdRef.current;
+      if (tenantId === null) {
+        return;
+      }
+      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
+      const cached = expectedReceivableDetailsCacheRef.current.get(cacheKey);
+      if (cached) {
+        setExpectedReceivableDetailsView({ kind: 'ready', data: cached });
+      } else {
+        setExpectedReceivableDetailsView({ kind: 'loading' });
+      }
+      try {
+        const data = await getDashboardExpectedReceivableDetails(
+          monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
+          categoryId,
+        );
+        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
+          return;
+        }
+        expectedReceivableDetailsCacheRef.current.set(cacheKey, data);
+        setExpectedReceivableDetailsView({ kind: 'ready', data });
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        if (expectedReceivableDetailsViewRef.current.kind === 'ready') {
+          return;
+        }
+        const message =
+          error instanceof DashboardExpectedReceivableDetailsRequestError
+            ? error.message
+            : 'Não foi possível carregar os recebimentos previstos.';
+        setExpectedReceivableDetailsView({ kind: 'error', message });
       }
     },
     [],
@@ -1004,6 +1071,30 @@ export function DashboardPage() {
     previousMonthKey,
     selectedCategoryId,
     selectedCostCenterId,
+    todayMonthKey,
+    view.kind,
+  ]);
+
+  useEffect(() => {
+    if (expandKind !== 'receivable' || view.kind !== 'ready') {
+      setExpectedReceivableDetailsView({ kind: 'idle' });
+      return;
+    }
+    const controller = new AbortController();
+    void loadExpectedReceivableDetails(
+      controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+      selectedCategoryId,
+    );
+    return () => controller.abort();
+  }, [
+    expandKind,
+    loadExpectedReceivableDetails,
+    selectedCategoryId,
+    selectedCostCenterId,
+    selectedMonthKey,
     todayMonthKey,
     view.kind,
   ]);
@@ -1350,6 +1441,7 @@ export function DashboardPage() {
   const closeExpand = useCallback(() => {
     setExpandKind(null);
     setExpenseExpandFocus(null);
+    setExpectedReceivableDetailsView({ kind: 'idle' });
   }, []);
 
   const openExpenseExpand = useCallback((focus: ExpenseExpandFocus = null) => {
@@ -2196,9 +2288,25 @@ export function DashboardPage() {
                 Sem previsão a receber no prazo neste mês.
               </p>
             )}
-            <p className={styles.expandLabel}>
-              Composição por categoria do previsto não disponível no DTO atual.
-            </p>
+            <h3 className={expectedReceivableStyles.sectionTitle}>Recebimentos previstos</h3>
+            {expectedReceivableDetailsView.kind === 'loading' ? (
+              <p className={expectedReceivableStyles.loading}>Carregando detalhes…</p>
+            ) : null}
+            {expectedReceivableDetailsView.kind === 'error' ? (
+              <p className={expectedReceivableStyles.error} role="alert">
+                {expectedReceivableDetailsView.message}
+              </p>
+            ) : null}
+            {expectedReceivableDetailsView.kind === 'ready' &&
+            expectedReceivableDetailsView.data.available ? (
+              <ExpectedReceivableDetailsPanel items={expectedReceivableDetailsView.data.items} />
+            ) : null}
+            {expectedReceivableDetailsView.kind === 'ready' &&
+            !expectedReceivableDetailsView.data.available ? (
+              <p className={expectedReceivableStyles.empty}>
+                Detalhamento indisponível para o centro de custo selecionado.
+              </p>
+            ) : null}
           </div>
         </WidgetExpandDialog>
       ) : null}
