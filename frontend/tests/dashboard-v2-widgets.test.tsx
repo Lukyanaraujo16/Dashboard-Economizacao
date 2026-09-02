@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CategoryRanking,
-  CompactMonthEnd,
   CompetenceComparisonChart,
   ExecutiveKpiCard,
   ExecutiveSignals,
@@ -576,33 +575,6 @@ describe('CompetenceComparisonChart', () => {
         'Acumulado por competência no mês selecionado. Não representa saldo bancário.',
       ),
     ).toBeTruthy();
-  });
-});
-
-describe('CompactMonthEnd', () => {
-  it('usa o summary do backend e não chama de saldo bancário', () => {
-    render(
-      <CompactMonthEnd
-        summary={{ receivable: '8.5', payable: '4', net: '4.5' }}
-        remainingDays={13}
-      />,
-    );
-    expect(screen.getByText('Faltam 13 dias no mês')).toBeTruthy();
-    expect(screen.getByText(/R\$\s*8,50/)).toBeTruthy();
-    expect(screen.getByText(/R\$\s*4,00/)).toBeTruthy();
-    expect(screen.getByText(/R\$\s*4,50/)).toBeTruthy();
-    expect(screen.getByText('Diferença prevista; não é saldo bancário.')).toBeTruthy();
-  });
-
-  it('singular e último dia do mês têm copy própria', () => {
-    const { rerender } = render(
-      <CompactMonthEnd summary={{ receivable: '0', payable: '0', net: '0' }} remainingDays={1} />,
-    );
-    expect(screen.getByText('Falta 1 dia no mês')).toBeTruthy();
-    rerender(
-      <CompactMonthEnd summary={{ receivable: '0', payable: '0', net: '0' }} remainingDays={0} />,
-    );
-    expect(screen.getByText('Último dia do mês')).toBeTruthy();
   });
 });
 

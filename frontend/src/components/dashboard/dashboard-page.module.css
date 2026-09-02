@@ -187,7 +187,7 @@
 }
 
 /*
- * CASH-4C-CAT-FINAL: Meta / Até fim do mês / Inadimplência em altura natural.
+ * CASH-4C-CAT-FINAL / CORREÇÃO 06: Meta de faturamento | Inadimplência.
  * Leitura executiva fica em faixa própria abaixo (executiveRow).
  */
 .compactSecondaryGrid {
@@ -201,16 +201,6 @@
 @media (min-width: 700px) {
   .compactSecondaryGrid[data-cols='2'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .compactSecondaryGrid[data-cols='3'] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1024px) {
-  .compactSecondaryGrid[data-cols='3'] {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

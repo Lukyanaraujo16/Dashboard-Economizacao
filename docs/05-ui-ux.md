@@ -351,11 +351,10 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   naturezas numa só série);
 * Comparativo mensal: apenas realized (entradas/saídas/resultado) vs
   mês anterior via segundo fetch de `monthly-cash-flow`;
-* Até o fim do mês: subtítulo “Previsto até o fim do mês”; vencidos fora;
 * Leitura executiva: `buildCashExecutiveSignals` a partir do
   MonthlyCashFlow (sem `executive-insights` / competência);
 * Home não chama mais `monthly-revenue` / `monthly-expenses`.
-* CASH-4C-CAT-FINAL: faixa Meta / Até fim do mês / Inadimplência em altura
+* CASH-4C-CAT-FINAL: faixa Meta de faturamento | Inadimplência em altura
   natural; Leitura executiva em linha própria (largura total, sinais em
   multi-coluna no desktop). Copy do Comparativo sem “competência”.
   Zoom/expansão dos KPIs e gráficos principais restaurada
@@ -364,7 +363,7 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   via `WidgetExpandDialog` existente; conteúdo somente do contrato
   CASH (`MonthlyCashFlow`). Competência não volta nos modais.
   Meta / Comparativo / Movimentação preservados.
-  PRE-F13-HOME-POLISH-2: Até o fim do mês, Inadimplência e Fluxo previsto
+  PRE-F13-HOME-POLISH-2: Inadimplência e Fluxo previsto
   também expansíveis; Leitura executiva com navegação contextual dos
   mini-blocos para os modais CASH (sem modal-geral).
   PRE-F13-HOME-POLISH-3: modais enriquecidos com rankings de categorias
@@ -402,14 +401,14 @@ Interação legada de donuts de competência: removida. Donuts atuais =
 caixa realizado (CASH-4C-CAT). PRE-F13-HOME-POLISH-1 restaura zoom/modal
 com `realizedByCategory` (sem competência / sem previsto).
 
-Grade secundária (`secondaryGrid`):
+Grade secundária (`secondaryGrid` / `compactSecondaryGrid`):
 * Meta de faturamento (`sectionId` `meta-faturamento`) — empty comercial
   V2.3.1 (título “Meta ainda não definida” + apoio “Defina uma meta mensal
   para acompanhar o desempenho do faturamento.”) enquanto sem meta; com meta,
   card funcional F2/F2.0.1 (status temporal por competência);
-* Até o fim do mês (só mês civil atual) — subtítulo “Previsto até o fim do mês”;
-* Leitura executiva (caixa / MonthlyCashFlow);
 * Inadimplência.
+  (faixa compacta em 2 colunas: Meta de faturamento | Inadimplência;
+  Leitura executiva fica em banda própria abaixo.)
 
 Composição V2.2 — Visual Fidelity Pass (IMPLEMENTADA / SUPERSEDED pela V2.3.1 como baseline da Home):
 

@@ -345,7 +345,6 @@ describe('Dashboard V2.3 fidelidade', () => {
       ['despesas-categoria', 'Despesas por categoria'],
       ['receitas-categoria', 'Receitas por categoria'],
       ['meta-faturamento', 'Meta de faturamento'],
-      ['ate-fim-do-mes', 'Até o fim do mês'],
       ['leitura-executiva', 'Leitura executiva'],
       ['inadimplencia', 'Inadimplência'],
       ['comparativo-mensal', 'Comparativo mensal'],
@@ -499,7 +498,8 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(
       screen.queryByRole('heading', { name: 'Movimentação diária da competência' }),
     ).toBeNull();
-    expect(screen.getByText('Previsto até o fim do mês')).toBeTruthy();
+    expect(screen.queryByText('Previsto até o fim do mês')).toBeNull();
+    expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
   });
 
   it('não há bloco de próximos vencimentos nem régua de dias', async () => {
@@ -513,7 +513,7 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(screen.queryByRole('columnheader')).toBeNull();
   });
 
-  it('mês passado esconde fluxo previsto e fim do mês', async () => {
+  it('mês passado esconde fluxo previsto', async () => {
     dashboardSearchParams = new URLSearchParams('month=2026-07');
     renderDashboard();
 

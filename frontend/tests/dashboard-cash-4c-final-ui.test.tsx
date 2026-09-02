@@ -221,7 +221,7 @@ describe('PRE-F13-CASH-4C-CAT-FINAL-UI — Leitura executiva compacta', () => {
     expect(grid!.querySelectorAll('[data-signal]').length).toBe(6);
   });
 
-  it('UI11–UI13 — Meta/Fim/Inadimplência compactos; KPIs e competência intactos', async () => {
+  it('UI11–UI13 — Meta/Inadimplência compactos; KPIs e competência intactos', async () => {
     renderDashboard();
     await waitFor(() => {
       expect(document.querySelector('[data-home-band="compact-kpis"]')).toBeTruthy();
@@ -230,9 +230,10 @@ describe('PRE-F13-CASH-4C-CAT-FINAL-UI — Leitura executiva compacta', () => {
     const compact = document.querySelector('[data-home-band="compact-kpis"]')!;
     const executive = document.querySelector('[data-home-band="executive-reading"]')!;
     expect(compact.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
-    expect(compact.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeTruthy();
+    expect(compact.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(compact.querySelector('[data-financial-section="inadimplencia"]')).toBeTruthy();
     expect(compact.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
+    expect(compact.getAttribute('data-cols')).toBe('2');
     expect(executive.querySelector('[data-financial-section="leitura-executiva"]')).toBeTruthy();
 
     // UI12 — KPI faturamento Life

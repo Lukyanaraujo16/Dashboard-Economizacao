@@ -294,11 +294,6 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     });
   });
 
-  it('P3-20 — Até fim do mês continua expansível (POLISH-2)', async () => {
-    const dialog = await openSectionExpand('ate-fim-do-mes');
-    expect(within(dialog).getByRole('heading', { name: 'Até o fim do mês' })).toBeTruthy();
-  });
-
   it('P3-21/P3-22 — modal responsivo e tema', async () => {
     const dialog = await openKpiExpand('Despesas');
     expect(dialog.className).toMatch(/dialog/i);

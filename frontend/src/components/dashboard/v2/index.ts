@@ -44,9 +44,6 @@ export type {
   SvgScaleOptions,
 } from './chart-math';
 
-export { CompactMonthEnd } from './compact-month-end';
-export type { CompactMonthEndProps, CompactMonthEndSummary } from './compact-month-end';
-
 export { CompetenceComparisonChart } from './competence-comparison-chart';
 export type { CompetenceComparisonChartProps } from './competence-comparison-chart';
 

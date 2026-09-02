@@ -393,7 +393,7 @@ describe('CC1.3.1 soft filter refresh', () => {
     await waitFor(() => {
       expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, categoryId);
       expect(getForecast).toHaveBeenCalledWith(null, categoryId);
-      expect(getMonthEnd).toHaveBeenCalledWith(null, categoryId);
+      expect(getMonthEnd).not.toHaveBeenCalled();
     });
     expect(getMonthlyRevenue).not.toHaveBeenCalled();
     expect(getMonthlyExpenses).not.toHaveBeenCalled();

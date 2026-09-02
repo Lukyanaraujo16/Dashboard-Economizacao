@@ -188,11 +188,6 @@ describe('CASH-4C — Home', () => {
     expect(section('leitura-executiva').textContent?.toLowerCase()).not.toMatch(/competência/);
   });
 
-  it('C9 — Até o fim do mês mostra subtítulo previsto no mês corrente', async () => {
-    renderDashboard();
-    expect(await screen.findByText('Previsto até o fim do mês')).toBeTruthy();
-  });
-
   it('C13 — donuts de categoria em caixa (não competência)', async () => {
     renderDashboard();
     await waitFor(() => {

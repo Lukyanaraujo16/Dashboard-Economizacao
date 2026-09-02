@@ -154,9 +154,10 @@ describe('CASH-4C-CAT-FINAL — refino visual Home', () => {
     expect(executive).toBeTruthy();
 
     expect(compact!.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
-    expect(compact!.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeTruthy();
+    expect(compact!.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(compact!.querySelector('[data-financial-section="inadimplencia"]')).toBeTruthy();
     expect(compact!.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
+    expect(compact!.getAttribute('data-cols')).toBe('2');
 
     expect(executive!.querySelector('[data-financial-section="leitura-executiva"]')).toBeTruthy();
     const metricGrid = executive!.querySelector('[data-layout="metrics"]');
@@ -164,7 +165,6 @@ describe('CASH-4C-CAT-FINAL — refino visual Home', () => {
     expect(executive!.querySelectorAll('[data-signal]').length).toBeGreaterThanOrEqual(5);
 
     expect(screen.getByText('Meta ainda não definida')).toBeTruthy();
-    expect(within(section('ate-fim-do-mes')).getByText('Diferença prevista')).toBeTruthy();
     expect(within(section('inadimplencia')).getByText('Taxa global (D1)')).toBeTruthy();
   });
 

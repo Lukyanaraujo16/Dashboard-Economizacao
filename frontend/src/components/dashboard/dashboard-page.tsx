@@ -59,11 +59,6 @@ import {
   DashboardForecastRequestError,
   type DashboardCashFlowForecastResponse,
 } from '../../services/dashboard/forecast.types';
-import { getDashboardMonthEndCashPressure } from '../../services/dashboard/month-end-cash-pressure';
-import {
-  DashboardMonthEndCashPressureRequestError,
-  type DashboardMonthEndCashPressureResponse,
-} from '../../services/dashboard/month-end-cash-pressure.types';
 import { getDashboardOverview } from '../../services/dashboard/overview';
 import {
   DashboardOverviewRequestError,
@@ -140,7 +135,6 @@ import {
 import { CategoryDonutChart } from './category-donut-chart';
 import { presentTopCategoryDonutSlices } from './category-donut-view';
 import {
-  CompactMonthEnd,
   CategoryRanking,
   CompetenceComparisonChart,
   CompetenceDailyBars,
@@ -175,20 +169,12 @@ const CASH_SERIES_UNAVAILABLE =
 const CASH_CATEGORY_EMPTY = 'Sem movimentação de caixa realizada neste mês.';
 const CASH_CATEGORY_UNAVAILABLE =
   'Composição por categoria indisponível para os filtros selecionados.';
-const DAY_MS = 86_400_000;
-
 type OverviewView =
   | { readonly kind: 'loading' }
   | { readonly kind: 'forbidden' }
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'never-sync' }
   | { readonly kind: 'ready'; readonly data: DashboardOverviewResponse };
-
-type MonthEndView =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly data: DashboardMonthEndCashPressureResponse };
 
 type ForecastView =
   | { readonly kind: 'idle' }
@@ -259,7 +245,6 @@ type ExpandKind =
   | 'compare'
   | 'daily'
   | 'goal'
-  | 'month-end'
   | 'delinquency'
   | 'forecast';
 
@@ -281,18 +266,6 @@ function toRankingItems(
 
 function zeroSeriesLike(points: readonly DailyPoint[]): readonly DailyPoint[] {
   return points.map((point) => ({ date: point.date, amount: '0' }));
-}
-
-/** Recorte civil a partir de `fromDate` (inclusive) — usado em Até o fim do mês. */
-function seriesFromDate(
-  points: readonly DailyPoint[] | undefined,
-  fromDate: string,
-): readonly DailyPoint[] | undefined {
-  if (!points) {
-    return undefined;
-  }
-  const filtered = points.filter((point) => point.date >= fromDate);
-  return filtered.length > 0 ? filtered : undefined;
 }
 
 const DAILY_MODES: readonly { readonly id: DailyCashMode; readonly label: string }[] = [
@@ -351,17 +324,6 @@ function cashKpiSlot(
     return { state: 'loading' };
   }
   return kpiViewSlot(build(cashFlow.model));
-}
-
-/** Dias restantes do mês corrente, incluindo hoje. */
-function remainingDaysInMonth(today: string, monthEnd: string): number | undefined {
-  const from = Date.parse(`${today}T00:00:00Z`);
-  const to = Date.parse(`${monthEnd}T00:00:00Z`);
-  if (!Number.isFinite(from) || !Number.isFinite(to)) {
-    return undefined;
-  }
-  const days = Math.round((to - from) / DAY_MS) + 1;
-  return days >= 0 ? days : undefined;
 }
 
 /** AGO — rótulo curto do mês para o comparativo. */
@@ -449,7 +411,6 @@ export function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [view, setView] = useState<OverviewView>({ kind: 'loading' });
-  const [monthEndView, setMonthEndView] = useState<MonthEndView>({ kind: 'idle' });
   const [forecastView, setForecastView] = useState<ForecastView>({ kind: 'idle' });
   const [monthlyCashFlowView, setMonthlyCashFlowView] = useState<MonthlyCashFlowLoadView>({
     kind: 'idle',
@@ -474,8 +435,6 @@ export function DashboardPage() {
 
   const viewRef = useRef(view);
   viewRef.current = view;
-  const monthEndViewRef = useRef(monthEndView);
-  monthEndViewRef.current = monthEndView;
   const forecastViewRef = useRef(forecastView);
   forecastViewRef.current = forecastView;
   const monthlyCashFlowViewRef = useRef(monthlyCashFlowView);
@@ -488,7 +447,6 @@ export function DashboardPage() {
   const previousMonthCacheRef = useRef(
     createDashboardFilterCache<DashboardMonthlyCashFlowResponse>(),
   );
-  const monthEndCacheRef = useRef(createDashboardFilterCache<DashboardMonthEndCashPressureResponse>());
   const forecastCacheRef = useRef(createDashboardFilterCache<DashboardCashFlowForecastResponse>());
   const expectedReceivableDetailsCacheRef = useRef(
     createDashboardFilterCache<DashboardExpectedReceivableDetailsResponse>(),
@@ -514,7 +472,6 @@ export function DashboardPage() {
     async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
       if (shouldSkipOverviewFetch(user, support)) {
         setView({ kind: 'forbidden' });
-        setMonthEndView({ kind: 'idle' });
         setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
@@ -524,7 +481,6 @@ export function DashboardPage() {
       }
       if (!hasOperationalDashboardTenant(user, support)) {
         setView({ kind: 'forbidden' });
-        setMonthEndView({ kind: 'idle' });
         setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
@@ -555,7 +511,6 @@ export function DashboardPage() {
         }
         if (isNeverSynced(data)) {
           setView({ kind: 'never-sync' });
-          setMonthEndView({ kind: 'idle' });
           setForecastView({ kind: 'idle' });
           setMonthlyCashFlowView({ kind: 'idle' });
             setPreviousMonthView({ kind: 'idle' });
@@ -570,7 +525,6 @@ export function DashboardPage() {
         }
         if (error instanceof DashboardOverviewRequestError && error.kind === 'forbidden') {
           setView({ kind: 'forbidden' });
-          setMonthEndView({ kind: 'idle' });
           setForecastView({ kind: 'idle' });
           setMonthlyCashFlowView({ kind: 'idle' });
             setPreviousMonthView({ kind: 'idle' });
@@ -585,7 +539,6 @@ export function DashboardPage() {
           return;
         }
         setView({ kind: 'error', message });
-        setMonthEndView({ kind: 'idle' });
         setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setPreviousMonthView({ kind: 'idle' });
@@ -593,49 +546,6 @@ export function DashboardPage() {
       }
     },
     [support, user],
-  );
-
-  const loadMonthEnd = useCallback(
-    async (
-      signal: AbortSignal,
-      costCenterId: string | null,
-      categoryId: string | null,
-      options?: SoftLoadOptions,
-    ) => {
-      const tenantId = operationalTenantIdRef.current;
-      if (tenantId === null) {
-        return;
-      }
-      const soft = options?.soft === true;
-      const cacheKey = dashboardCashWindowCacheKey(tenantId, costCenterId, categoryId);
-      const cached = monthEndCacheRef.current.get(cacheKey);
-      if (soft && cached) {
-        setMonthEndView({ kind: 'ready', data: cached });
-      } else if (!(soft && monthEndViewRef.current.kind === 'ready')) {
-        setMonthEndView({ kind: 'loading' });
-      }
-      try {
-        const data = await getDashboardMonthEndCashPressure(costCenterId, categoryId);
-        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
-          return;
-        }
-        monthEndCacheRef.current.set(cacheKey, data);
-        setMonthEndView({ kind: 'ready', data });
-      } catch (error) {
-        if (signal.aborted) {
-          return;
-        }
-        if (soft && monthEndViewRef.current.kind === 'ready') {
-          return;
-        }
-        const message =
-          error instanceof DashboardMonthEndCashPressureRequestError
-            ? error.message
-            : 'Não foi possível carregar a agenda até o fim do mês.';
-        setMonthEndView({ kind: 'error', message });
-      }
-    },
-    [],
   );
 
   const loadForecast = useCallback(
@@ -916,7 +826,6 @@ export function DashboardPage() {
     overviewCacheRef.current.clear();
     cashFlowCacheRef.current.clear();
     previousMonthCacheRef.current.clear();
-    monthEndCacheRef.current.clear();
     forecastCacheRef.current.clear();
 
     setCategories([]);
@@ -1060,17 +969,6 @@ export function DashboardPage() {
     void loadOverview(controller.signal, selectedCostCenterId, { soft });
     return () => controller.abort();
   }, [loadOverview, operationalTenantId, selectedCostCenterId, status]);
-
-  useEffect(() => {
-    if (view.kind !== 'ready' || !cashWindowsApply) {
-      setMonthEndView({ kind: 'idle' });
-      return;
-    }
-    const controller = new AbortController();
-    const soft = monthEndViewRef.current.kind === 'ready';
-    void loadMonthEnd(controller.signal, selectedCostCenterId, selectedCategoryId, { soft });
-    return () => controller.abort();
-  }, [cashWindowsApply, loadMonthEnd, selectedCategoryId, selectedCostCenterId, view.kind]);
 
   useEffect(() => {
     if (view.kind !== 'ready' || !cashWindowsApply) {
@@ -1261,9 +1159,6 @@ export function DashboardPage() {
   const retryOverview = () => {
     void loadOverview(new AbortController().signal, selectedCostCenterId);
   };
-  const retryMonthEnd = () => {
-    void loadMonthEnd(new AbortController().signal, selectedCostCenterId, selectedCategoryId);
-  };
   const retryForecast = () => {
     void loadForecast(new AbortController().signal, selectedCostCenterId, selectedCategoryId);
   };
@@ -1344,7 +1239,6 @@ export function DashboardPage() {
   const revenueGoalData = revenueGoalView.kind === 'ready' ? revenueGoalView.data : null;
   const revenueGoalError = revenueGoalView.kind === 'error' ? revenueGoalView.message : null;
   const canExpandGoal = gate === 'ready' && revenueGoalData !== null;
-  const monthEndError = monthEndView.kind === 'error' ? monthEndView.message : null;
   const forecastError = forecastView.kind === 'error' ? forecastView.message : null;
 
   const billingKpi = cashFlowModel
@@ -1438,12 +1332,6 @@ export function DashboardPage() {
       ? managerialMarginLabel(cashFlowModel.managerialResult, cashFlowModel.billing)
       : undefined;
 
-  const monthEndSummary = monthEndView.kind === 'ready' ? monthEndView.data.summary : null;
-  const monthEndRemainingDays =
-    view.kind === 'ready' && monthEndView.kind === 'ready'
-      ? remainingDaysInMonth(view.data.today, monthEndView.data.to)
-      : undefined;
-
   const comparePeriods = useMemo<readonly MonthlyComparePeriod[]>(
     () => [
       { id: previousMonthKey, label: compactMonthLabel(previousMonthKey) },
@@ -1530,7 +1418,6 @@ export function DashboardPage() {
     cashFlowModel !== null &&
     cashFlowModel.realizedOutflowsByCategory !== null &&
     cashFlowModel.realizedOutflowsByCategory.items.length > 0;
-  const canExpandMonthEnd = gate === 'ready' && cashWindowsApply && monthEndSummary !== null;
   const canExpandDelinquency = gate === 'ready' && monthlyCashFlowView.kind === 'ready';
   const canExpandForecast = gate === 'ready' && cashWindowsApply && forecastView.kind === 'ready';
 
@@ -1599,16 +1486,6 @@ export function DashboardPage() {
       canExpandResult,
       openExpenseExpand,
     ],
-  );
-
-  const todayIso = view.kind === 'ready' ? view.data.today : null;
-  const remainingExpectedReceivables = useMemo(
-    () => (todayIso ? seriesFromDate(expectedReceivables, todayIso) : expectedReceivables),
-    [expectedReceivables, todayIso],
-  );
-  const remainingExpectedPayables = useMemo(
-    () => (todayIso ? seriesFromDate(expectedPayables, todayIso) : expectedPayables),
-    [expectedPayables, todayIso],
   );
 
   return (
@@ -1941,7 +1818,7 @@ export function DashboardPage() {
 
       <div
         className={styles.compactSecondaryGrid}
-        data-cols={cashWindowsApply ? '3' : '2'}
+        data-cols="2"
         data-home-band="compact-kpis"
       >
         <WidgetShell
@@ -1971,29 +1848,6 @@ export function DashboardPage() {
             ) : null}
           </WidgetBody>
         </WidgetShell>
-
-        {cashWindowsApply ? (
-          <WidgetShell
-            id="fim-do-mes"
-            sectionId="ate-fim-do-mes"
-            title="Até o fim do mês"
-            subtitle="Previsto até o fim do mês"
-            expandable={canExpandMonthEnd}
-            onExpand={canExpandMonthEnd ? () => setExpandKind('month-end') : undefined}
-          >
-            <WidgetBody
-              gate={gate}
-              loadingLabel="Carregando agenda do mês"
-              error={monthEndError}
-              onRetry={retryMonthEnd}
-              pending={monthEndSummary === null}
-            >
-              {monthEndSummary ? (
-                <CompactMonthEnd summary={monthEndSummary} remainingDays={monthEndRemainingDays} />
-              ) : null}
-            </WidgetBody>
-          </WidgetShell>
-        ) : null}
 
         <WidgetShell
           id="inadimplencia"
@@ -2825,62 +2679,6 @@ export function DashboardPage() {
               colorVar="--color-series-expense"
               emptyMessage={CASH_CATEGORY_EMPTY}
             />
-          </div>
-        </WidgetExpandDialog>
-      ) : null}
-
-      {expandKind === 'month-end' && monthEndSummary ? (
-        <WidgetExpandDialog
-          open
-          title="Até o fim do mês"
-          subtitle={`Compromissos previstos no prazo · ${monthLabel}`}
-          onClose={closeExpand}
-        >
-          <div className={styles.expandBody}>
-            <dl className={styles.statsRow}>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>A receber restante</dt>
-                <dd className={styles.statsValue}>
-                  {formatMoneyBrl(monthEndSummary.receivable)}
-                </dd>
-              </div>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>A pagar restante</dt>
-                <dd className={styles.statsValue}>{formatMoneyBrl(monthEndSummary.payable)}</dd>
-              </div>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Diferença prevista</dt>
-                <dd className={styles.statsValue}>{formatMoneyBrl(monthEndSummary.net)}</dd>
-              </div>
-              {monthEndRemainingDays !== undefined ? (
-                <div className={styles.statsItem}>
-                  <dt className={styles.statsLabel}>Dias restantes</dt>
-                  <dd className={styles.statsValue}>{String(monthEndRemainingDays)}</dd>
-                </div>
-              ) : null}
-            </dl>
-            {remainingExpectedReceivables || remainingExpectedPayables ? (
-              <CompetenceDailyBars
-                revenueDaily={remainingExpectedReceivables ?? []}
-                expenseDaily={
-                  remainingExpectedPayables ??
-                  (remainingExpectedReceivables
-                    ? zeroSeriesLike(remainingExpectedReceivables)
-                    : [])
-                }
-                monthKey={selectedMonthKey}
-                revenueLabel="Entradas previstas"
-                expenseLabel="Saídas previstas"
-                ariaLabel={`Compromissos previstos por dia de vencimento até o fim de ${monthLabel}`}
-                caption="Previsto no prazo por dia de vencimento · não é saldo bancário"
-                emptyMessage={`Sem compromissos previstos no prazo até o fim de ${monthLabel}.`}
-              />
-            ) : (
-              <p className={styles.expandLabel}>
-                Sem distribuição diária prevista disponível para os filtros selecionados.
-              </p>
-            )}
-            <p className={styles.expandLabel}>Vencidos não entram nesta leitura.</p>
           </div>
         </WidgetExpandDialog>
       ) : null}

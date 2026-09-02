@@ -187,19 +187,6 @@ afterEach(() => {
 });
 
 describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
-  it('P2-1/P2-2/P2-3/P2-4 — Até o fim do mês abre com expected; vencidos fora', async () => {
-    const dialog = await openSectionExpand('ate-fim-do-mes');
-    expect(within(dialog).getByRole('heading', { name: 'Até o fim do mês' })).toBeTruthy();
-    expect(within(dialog).getByText(/Compromissos previstos no prazo/i)).toBeTruthy();
-    expect(within(dialog).getByText('A receber restante')).toBeTruthy();
-    expect(within(dialog).getByText(/R\$\s*111\.111,11/)).toBeTruthy();
-    expect(within(dialog).getByText('A pagar restante')).toBeTruthy();
-    expect(within(dialog).getByText(/R\$\s*22\.222,22/)).toBeTruthy();
-    expect(within(dialog).getByText(/Vencidos não entram/i)).toBeTruthy();
-    expect(within(dialog).queryByText(/competência/i)).toBeNull();
-    expect(within(dialog).queryByText(/saldo bancário acumulado/i)).toBeNull();
-  });
-
   it('P2-5/P2-6/P2-7 — Inadimplência zero com empty state honesto', async () => {
     const dialog = await openSectionExpand('inadimplencia');
     expect(within(dialog).getByRole('heading', { name: 'Inadimplência' })).toBeTruthy();
@@ -327,7 +314,7 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
   });
 
   it('P2-26/P2-27/P2-28 — Escape/close, keyboard e dialog mobile', async () => {
-    const dialog = await openSectionExpand('ate-fim-do-mes');
+    const dialog = await openSectionExpand('inadimplencia');
     expect(dialog.className).toMatch(/dialog/i);
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => {
