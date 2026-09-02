@@ -186,12 +186,14 @@ describe('CASH-4C-CAT-FINAL — refino visual Home', () => {
     ).toBeTruthy();
   });
 
-  it('FNL10–FNL12 — KPIs, donuts e Entradas × Saídas intactos', async () => {
+  it('FNL10–FNL12 — KPIs, donuts e Movimentação financeira intactos', async () => {
     renderDashboard();
     await waitFor(() => {
       expect(screen.getByText('R$ 235.301,50')).toBeTruthy();
     });
-    expect(screen.getByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Entradas × Saídas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Movimentação diária' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Receitas por categoria' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Despesas por categoria' })).toBeTruthy();
     expect(within(section('receitas-categoria')).getByText('Consultas')).toBeTruthy();

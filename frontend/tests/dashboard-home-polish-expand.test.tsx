@@ -325,13 +325,15 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
-  it('Z13/Z14 — Entradas × Saídas abre com realized', async () => {
-    const dialog = await openSectionExpand('entradas-saidas');
-    expect(within(dialog).getByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
-    expect(within(dialog).getByText('Entradas realizadas')).toBeTruthy();
-    expect(within(dialog).getByText('Saídas realizadas')).toBeTruthy();
-    expect(within(dialog).getByText(/realizadas no mês/i)).toBeTruthy();
+  it('Z13/Z14 — Movimentação financeira abre com barras diárias e toggle', async () => {
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    expect(within(dialog).getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Realizado' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Previsto' })).toBeTruthy();
+    expect(within(dialog).getAllByText(/dia de baixa/i).length).toBeGreaterThan(0);
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
+    expect(within(dialog).queryByText(/Saldo bancário/i)).toBeNull();
+    expect(within(dialog).queryByText(/Principais entradas por categoria/i)).toBeNull();
   });
 
   it('Z15/Z16 — donut receitas abre e fecha com realized.inflows', async () => {
@@ -371,9 +373,9 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getByText('Entradas realizadas')).toBeTruthy();
   });
 
-  it('Z23 — Movimentação continua abrindo', async () => {
-    const dialog = await openSectionExpand('movimentacao-diaria');
-    expect(within(dialog).getByRole('heading', { name: 'Movimentação diária' })).toBeTruthy();
+  it('Z23 — Movimentação continua abrindo a partir do gráfico principal', async () => {
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    expect(within(dialog).getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
     expect(within(dialog).getAllByText(/dia de baixa/i).length).toBeGreaterThan(0);
   });
 
@@ -429,7 +431,9 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
 
   it('Z30 — Home sem modal permanece com seções principais', async () => {
     renderDashboard();
-    expect(await screen.findByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Entradas × Saídas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Movimentação diária' })).toBeNull();
     expect(screen.getByRole('heading', { name: 'Receitas por categoria' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Despesas por categoria' })).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();

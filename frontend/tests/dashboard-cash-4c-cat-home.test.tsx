@@ -194,7 +194,9 @@ describe('CASH-4C-CAT — donuts de caixa na Home', () => {
     expect(within(revenueCard).getByText('Consultas')).toBeTruthy();
     expect(within(expenseCard).getByText('Operacional')).toBeTruthy();
 
-    expect(screen.getByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Entradas × Saídas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Movimentação diária' })).toBeNull();
     expect(screen.getByText('R$ 235.301,50')).toBeTruthy();
   });
 

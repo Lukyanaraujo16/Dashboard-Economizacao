@@ -255,8 +255,8 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
   });
 
   it('P2-18 — Movimentação permanece funcionando com toggle', async () => {
-    const dialog = await openSectionExpand('movimentacao-diaria');
-    expect(within(dialog).getByRole('heading', { name: 'Movimentação diária' })).toBeTruthy();
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    expect(within(dialog).getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Realizado' })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Previsto' })).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Previsto' }));

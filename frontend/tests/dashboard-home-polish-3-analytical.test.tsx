@@ -254,12 +254,26 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     expect(within(dialog).getByText(/R\$\s*777\.777,77/)).toBeTruthy();
   });
 
-  it('P3-13/P3-14/P3-15 — Entradas×Saídas mostra dois rankings', async () => {
-    const dialog = await openSectionExpand('entradas-saidas');
-    expect(within(dialog).getByText('Principais entradas por categoria')).toBeTruthy();
-    expect(within(dialog).getByText('Principais saídas por categoria')).toBeTruthy();
-    expect(within(dialog).getByText('Serviços')).toBeTruthy();
-    expect(within(dialog).getByText('Salários')).toBeTruthy();
+  it('P3-13/P3-14/P3-15 — Movimentação financeira no principal; rankings ficam nos donuts', async () => {
+    renderDashboard();
+    expect(await screen.findByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Entradas × Saídas' })).toBeNull();
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    expect(within(dialog).getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(within(dialog).queryByText('Principais entradas por categoria')).toBeNull();
+    expect(within(dialog).queryByText('Principais saídas por categoria')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    const revenueDialog = await openSectionExpand('receitas-categoria');
+    expect(within(revenueDialog).getAllByText('Serviços').length).toBeGreaterThan(0);
+    fireEvent.click(within(revenueDialog).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    const expenseDialog = await openSectionExpand('despesas-categoria');
+    expect(within(expenseDialog).getAllByText('Salários').length).toBeGreaterThan(0);
   });
 
   it('P3-16/P3-17/P3-18 — transferências e competência fora; KPIs estáveis', async () => {

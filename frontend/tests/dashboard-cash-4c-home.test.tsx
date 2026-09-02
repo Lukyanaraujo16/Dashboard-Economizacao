@@ -150,12 +150,18 @@ afterEach(() => {
 });
 
 describe('CASH-4C — Home', () => {
-  it('C1/C2 — Entradas × Saídas visível; Receitas × Despesas ausente', async () => {
+  it('C1/C2 — Movimentação financeira no gráfico principal; Entradas × Saídas e Receitas × Despesas ausentes', async () => {
     renderDashboard();
-    expect(await screen.findByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
-    expect(screen.getByText('Entradas e saídas realizadas no mês')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(screen.getByText('Entradas e saídas por dia de baixa')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Entradas × Saídas' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Movimentação diária' })).toBeNull();
+    expect(document.querySelector('[data-financial-section="movimentacao-financeira"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="entradas-saidas"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeNull();
     expect(screen.queryByText(/Competência de/i)).toBeNull();
+    expect(screen.queryByRole('heading', { name: /Saldo bancário/i })).toBeNull();
   });
 
   it('C6 — Comparativo mensal usa caixa realizado do mês anterior', async () => {
@@ -169,15 +175,20 @@ describe('CASH-4C — Home', () => {
     expect(scope.getByText('Resultado realizado')).toBeTruthy();
   });
 
-  it('C7 — Movimentação diária alterna Realizado e Previsto', async () => {
+  it('C7 — Movimentação financeira alterna Realizado e Previsto', async () => {
     renderDashboard();
-    const scope = within(section('movimentacao-diaria'));
+    const scope = within(section('movimentacao-financeira'));
     expect(await scope.findByRole('button', { name: 'Realizado' })).toBeTruthy();
     expect(scope.getByRole('button', { name: 'Previsto' })).toBeTruthy();
     fireEvent.click(scope.getByRole('button', { name: 'Previsto' }));
     await waitFor(() => {
-      expect(scope.getByText(/A receber e a pagar por dia/i)).toBeTruthy();
+      expect(scope.getByText(/A receber e a pagar por dia de vencimento/i)).toBeTruthy();
     });
+    fireEvent.click(scope.getByRole('button', { name: 'Realizado' }));
+    await waitFor(() => {
+      expect(scope.getByText(/Entradas e saídas por dia de baixa/i)).toBeTruthy();
+    });
+    expect(screen.queryByRole('heading', { name: /Saldo bancário/i })).toBeNull();
   });
 
   it('C8 — Leitura executiva ausente da Home', async () => {

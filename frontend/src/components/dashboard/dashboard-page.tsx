@@ -104,7 +104,6 @@ import {
   CASH_DAILY_EXPECTED_CAPTION,
   CASH_DAILY_REALIZED_CAPTION,
   CASH_EXPENSES_SPARKLINE_CAPTION,
-  CASH_REALIZED_COMPARISON_CAPTION,
   CASH_RESULT_SPARKLINE_CAPTION,
   cashBillingCoverageRatio,
   cashExpectedPayablesSeries,
@@ -134,7 +133,6 @@ import { CategoryDonutChart } from './category-donut-chart';
 import { presentTopCategoryDonutSlices } from './category-donut-view';
 import {
   CategoryRanking,
-  CompetenceComparisonChart,
   CompetenceDailyBars,
   ExecutiveKpiCard,
   ForecastPanel,
@@ -236,7 +234,6 @@ type ExpandKind =
   | 'payable'
   | 'expense'
   | 'result'
-  | 'comparison'
   | 'categories-revenue'
   | 'categories-expense'
   | 'compare'
@@ -1393,8 +1390,6 @@ export function DashboardPage() {
     canExpandCashDetail && cashFlowModel !== null && cashFlowModel.payable !== null;
   const canExpandResult =
     canExpandCashDetail && cashFlowModel !== null && cashFlowModel.managerialResult !== null;
-  const canExpandComparison =
-    canExpandCashDetail && realizedInflows !== undefined && realizedOutflows !== undefined;
   const canExpandCategoriesRevenue =
     canExpandCashDetail &&
     cashFlowModel !== null &&
@@ -1632,37 +1627,67 @@ export function DashboardPage() {
 
       <div className={styles.mainGrid}>
         <WidgetShell
-          id="entradas-saidas"
-          sectionId="entradas-saidas"
-          title="Entradas × Saídas"
-          subtitle="Entradas e saídas realizadas no mês"
-          expandable={canExpandComparison}
-          onExpand={canExpandComparison ? () => setExpandKind('comparison') : undefined}
+          id="movimentacao-financeira"
+          sectionId="movimentacao-financeira"
+          title="Movimentação financeira"
+          subtitle={
+            dailyMode === 'realized'
+              ? 'Entradas e saídas por dia de baixa'
+              : 'A receber e a pagar por dia de vencimento'
+          }
+          expandable={canExpandDaily}
+          onExpand={canExpandDaily ? () => setExpandKind('daily') : undefined}
         >
+          <div
+            className={styles.segmented}
+            role="group"
+            aria-label="Recorte da movimentação financeira"
+            data-stop-expand
+          >
+            {DAILY_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                className={styles.segmentedOption}
+                aria-pressed={dailyMode === mode.id}
+                onClick={() => setDailyMode(mode.id)}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
           <WidgetBody
             gate={gate}
-            loadingLabel="Carregando entradas e saídas do caixa"
+            loadingLabel="Carregando movimentação financeira"
             error={cashFlowError}
             onRetry={retryCashFlow}
             pending={cashFlowPending}
           >
-            {realizedInflows && realizedOutflows ? (
-              <CompetenceComparisonChart
-                revenueDaily={realizedInflows}
-                expenseDaily={realizedOutflows}
+            {dailySeries.inflows && dailySeries.outflows ? (
+              <CompetenceDailyBars
+                revenueDaily={dailySeries.inflows}
+                expenseDaily={dailySeries.outflows}
                 monthKey={selectedMonthKey}
-                revenueLabel="Entradas"
-                expenseLabel="Saídas"
-                ariaLabel={`Entradas e saídas de caixa acumuladas em ${monthLabel}`}
-                caption={CASH_REALIZED_COMPARISON_CAPTION}
-                emptyMessage={`Sem entradas ou saídas de caixa em ${monthLabel}.`}
+                revenueLabel={dailyMode === 'realized' ? 'Entradas' : 'A receber'}
+                expenseLabel={dailyMode === 'realized' ? 'Saídas' : 'A pagar'}
+                ariaLabel={
+                  dailyMode === 'realized'
+                    ? `Entradas e saídas de caixa por dia de baixa em ${monthLabel}`
+                    : `A receber e a pagar por dia de vencimento em ${monthLabel}`
+                }
+                caption={
+                  dailyMode === 'realized'
+                    ? CASH_DAILY_REALIZED_CAPTION
+                    : CASH_DAILY_EXPECTED_CAPTION
+                }
+                emptyMessage={
+                  dailyMode === 'realized'
+                    ? `Sem baixas de caixa em ${monthLabel}.`
+                    : `Sem vencimentos previstos no prazo em ${monthLabel}.`
+                }
               />
             ) : (
-              <StateWrapper
-                state="empty"
-                emptyMessage={CASH_SERIES_UNAVAILABLE}
-                align="start"
-              />
+              <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
             )}
           </WidgetBody>
         </WidgetShell>
@@ -1820,7 +1845,7 @@ export function DashboardPage() {
         </WidgetShell>
       </div>
 
-      <div className={styles.tertiaryGrid}>
+      <div className={styles.tertiaryGrid} data-cols="1">
         <WidgetShell
           id="comparativo-mensal"
           sectionId="comparativo-mensal"
@@ -1841,72 +1866,6 @@ export function DashboardPage() {
               rows={compareRows}
               emptyMessage={`Sem caixa realizado em ${previousMonthLabel} para comparar.`}
             />
-          </WidgetBody>
-        </WidgetShell>
-
-        <WidgetShell
-          id="movimentacao-diaria"
-          sectionId="movimentacao-diaria"
-          title="Movimentação diária"
-          subtitle={
-            dailyMode === 'realized'
-              ? `Entradas e saídas por dia · ${monthLabel}`
-              : `A receber e a pagar por dia · ${monthLabel}`
-          }
-          expandable={canExpandDaily}
-          onExpand={canExpandDaily ? () => setExpandKind('daily') : undefined}
-        >
-          <div
-            className={styles.segmented}
-            role="group"
-            aria-label="Recorte da movimentação diária"
-            data-stop-expand
-          >
-            {DAILY_MODES.map((mode) => (
-              <button
-                key={mode.id}
-                type="button"
-                className={styles.segmentedOption}
-                aria-pressed={dailyMode === mode.id}
-                onClick={() => setDailyMode(mode.id)}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
-          <WidgetBody
-            gate={gate}
-            loadingLabel="Carregando movimentação diária"
-            error={cashFlowError}
-            onRetry={retryCashFlow}
-            pending={cashFlowPending}
-          >
-            {dailySeries.inflows && dailySeries.outflows ? (
-              <CompetenceDailyBars
-                revenueDaily={dailySeries.inflows}
-                expenseDaily={dailySeries.outflows}
-                monthKey={selectedMonthKey}
-                revenueLabel={dailyMode === 'realized' ? 'Entradas' : 'A receber'}
-                expenseLabel={dailyMode === 'realized' ? 'Saídas' : 'A pagar'}
-                ariaLabel={
-                  dailyMode === 'realized'
-                    ? `Entradas e saídas de caixa por dia de baixa em ${monthLabel}`
-                    : `A receber e a pagar por dia de vencimento em ${monthLabel}`
-                }
-                caption={
-                  dailyMode === 'realized'
-                    ? CASH_DAILY_REALIZED_CAPTION
-                    : CASH_DAILY_EXPECTED_CAPTION
-                }
-                emptyMessage={
-                  dailyMode === 'realized'
-                    ? `Sem baixas de caixa em ${monthLabel}.`
-                    : `Sem vencimentos previstos no prazo em ${monthLabel}.`
-                }
-              />
-            ) : (
-              <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
-            )}
           </WidgetBody>
         </WidgetShell>
       </div>
@@ -2368,64 +2327,6 @@ export function DashboardPage() {
         </WidgetExpandDialog>
       ) : null}
 
-      {expandKind === 'comparison' && realizedInflows && realizedOutflows ? (
-        <WidgetExpandDialog
-          open
-          title="Entradas × Saídas"
-          subtitle={`Caixa realizado · ${monthLabel}`}
-          onClose={closeExpand}
-        >
-          <div className={styles.expandBody}>
-            <dl className={styles.statsRow}>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Entradas realizadas</dt>
-                <dd className={styles.statsValue}>
-                  {moneyOrDashCash(cashFlowModel?.realizedInflows)}
-                </dd>
-              </div>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Saídas realizadas</dt>
-                <dd className={styles.statsValue}>
-                  {moneyOrDashCash(cashFlowModel?.realizedOutflows)}
-                </dd>
-              </div>
-            </dl>
-            <CompetenceComparisonChart
-              revenueDaily={realizedInflows}
-              expenseDaily={realizedOutflows}
-              monthKey={selectedMonthKey}
-              revenueLabel="Entradas"
-              expenseLabel="Saídas"
-              ariaLabel={`Entradas e saídas de caixa acumuladas em ${monthLabel}`}
-              caption={CASH_REALIZED_COMPARISON_CAPTION}
-              emptyMessage={`Sem entradas ou saídas de caixa em ${monthLabel}.`}
-            />
-            {cashFlowModel?.realizedInflowsByCategory || cashFlowModel?.realizedOutflowsByCategory ? (
-              <div className={styles.expandColumns}>
-                <div>
-                  <p className={styles.expandLabel}>Principais entradas por categoria</p>
-                  <CashCategoryRanking
-                    composition={cashFlowModel.realizedInflowsByCategory}
-                    sectionTitle="Principais entradas por categoria"
-                    colorVar="--color-series-revenue"
-                    emptyMessage="Sem entradas categorizadas neste mês."
-                  />
-                </div>
-                <div>
-                  <p className={styles.expandLabel}>Principais saídas por categoria</p>
-                  <CashCategoryRanking
-                    composition={cashFlowModel.realizedOutflowsByCategory}
-                    sectionTitle="Principais saídas por categoria"
-                    colorVar="--color-series-expense"
-                    emptyMessage="Sem saídas categorizadas neste mês."
-                  />
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </WidgetExpandDialog>
-      ) : null}
-
       {expandKind === 'categories-revenue' &&
       cashFlowModel?.realizedInflowsByCategory &&
       cashFlowModel.realizedInflowsByCategory.items.length > 0 ? (
@@ -2627,7 +2528,7 @@ export function DashboardPage() {
       {expandKind === 'daily' && dailySeries.inflows && dailySeries.outflows ? (
         <WidgetExpandDialog
           open
-          title="Movimentação diária"
+          title="Movimentação financeira"
           subtitle={`${monthLabel} · ${
             dailyMode === 'realized' ? CASH_DAILY_REALIZED_CAPTION : CASH_DAILY_EXPECTED_CAPTION
           }`}
@@ -2637,7 +2538,7 @@ export function DashboardPage() {
             <div
               className={styles.segmented}
               role="group"
-              aria-label="Recorte da movimentação diária"
+              aria-label="Recorte da movimentação financeira"
               data-stop-expand
             >
               {DAILY_MODES.map((mode) => (

@@ -138,7 +138,7 @@
   }
 }
 
-/* CASH-4C: Entradas × Saídas em largura cheia. */
+/* CASH-4C / Correção 08-A: Movimentação financeira em largura cheia. */
 .mainGrid {
   display: grid;
   gap: var(--space-3);
@@ -188,7 +188,7 @@
 
 /*
  * CASH-4C-CAT-FINAL / CORREÇÃO 06–07: Meta de faturamento | Inadimplência.
- * Comparativo / Movimentação seguem em tertiaryGrid abaixo.
+ * CORREÇÃO 08-A: Comparativo mensal em tertiaryGrid (largura total).
  */
 .compactSecondaryGrid {
   display: grid;
@@ -212,7 +212,7 @@
 }
 
 @media (min-width: 900px) {
-  .tertiaryGrid {
+  .tertiaryGrid[data-cols='2'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: stretch;
   }

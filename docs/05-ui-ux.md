@@ -340,17 +340,20 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   `monthlyExpenses`); Resultado = acumulado (in−out) + expectedNet
   (último ponto = `managerialResult`); Faturamento = coverage ratio
   (mês corrente) quando disponível — não inventa “faturamento diário”;
-* Grade principal: Entradas × Saídas = realizado acumulado
-  (`occurredOn`; copy “Entradas e saídas realizadas no mês”);
+* Grade principal: Movimentação financeira = barras diárias com toggle
+  Realizado | Previsto (Correção 08-A). Realizado = entradas/saídas por
+  dia de baixa; Previsto = a receber/a pagar por dia de vencimento
+  (somente no prazo). Substitui o antigo card Entradas × Saídas
+  (acumulado) e consolida o antigo widget inferior Movimentação diária.
+  Modo Mensal e saldo bancário **não** entregues nesta fase (08-B / 08-C);
 * CASH-4C-CAT: Despesas/Receitas por categoria = **somente caixa realizado**
   (`realizedByCategory.outflows` / `.inflows`); fecham com
   `realized.outflows` / `realized.inflows`; previsto e vencidos fora;
   transferências fora; subtítulos “Pagamentos/Recebimentos realizados”;
-  lado a lado abaixo de Entradas × Saídas (empilhados no mobile);
-* Movimentação diária: toggle Realizado | Previsto (não misturar as
-  naturezas numa só série);
+  lado a lado abaixo da Movimentação financeira (empilhados no mobile);
 * Comparativo mensal: apenas realized (entradas/saídas/resultado) vs
-  mês anterior via segundo fetch de `monthly-cash-flow`;
+  mês anterior via segundo fetch de `monthly-cash-flow`; preservado na
+  Correção 08-A em largura total após remoção do irmão diário;
 * Leitura executiva: **removida da Home** (Correção 07 / Option A).
   Footer Recebido/A receber do card Faturamento permanece (display only);
   modal/`expandKind` `received` (“Já recebido”) removido; entradas
@@ -361,10 +364,11 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   natural (2 colunas). Copy do Comparativo sem “competência”.
   Zoom/expansão dos KPIs e gráficos principais restaurada
   (PRE-F13-HOME-POLISH-1): Faturamento, A receber,
-  Despesas, Resultado, Entradas × Saídas, donuts de categoria —
+  Despesas, Resultado, Movimentação financeira, donuts de categoria —
   via `WidgetExpandDialog` existente; conteúdo somente do contrato
   CASH (`MonthlyCashFlow`). Competência não volta nos modais.
   Meta / Comparativo / Movimentação preservados.
+  Expand `comparison` (Entradas × Saídas acumulado) removido na 08-A.
   PRE-F13-HOME-POLISH-2: Inadimplência e Fluxo previsto
   também expansíveis.
   PRE-F13-HOME-POLISH-3: modais enriquecidos com rankings de categorias
@@ -382,8 +386,9 @@ Meta: `actual = billing`. `costCenterCashSplit=false` → métricas null
 (“—”), nunca R$ 0,00.
 
 Grade principal (`mainGrid`):
-* Entradas × Saídas (`sectionId` `entradas-saidas`) — caixa realizado
-  acumulado (CASH-4C).
+* Movimentação financeira (`sectionId` `movimentacao-financeira`) —
+  barras diárias Realizado | Previsto (Correção 08-A). Antigo
+  `entradas-saidas` (Entradas × Saídas acumulado) removido da Home.
 
 Grade de categorias (`categoryGrid`, abaixo do gráfico grande):
 * Despesas por categoria (`sectionId` `despesas-categoria`) — caixa
@@ -410,6 +415,12 @@ Grade secundária (`secondaryGrid` / `compactSecondaryGrid`):
 * Inadimplência.
   (faixa compacta em 2 colunas: Meta de faturamento | Inadimplência;
   Leitura executiva removida da Home — Correção 07.)
+
+Grade terciária (`tertiaryGrid`, `data-cols="1"`):
+* Comparativo mensal (`sectionId` `comparativo-mensal`) — largura total
+  após Correção 08-A (widget irmão “Movimentação diária” removido por
+  consolidação no gráfico principal). Semântica do comparativo intacta.
+  Modo Mensal histórico e saldo bancário fora desta fase.
 
 Composição V2.2 — Visual Fidelity Pass (IMPLEMENTADA / SUPERSEDED pela V2.3.1 como baseline da Home):
 

@@ -317,13 +317,12 @@ describe('Dashboard V2 structure', () => {
     ).toBeNull();
 
     for (const title of [
-      'Entradas × Saídas',
+      'Movimentação financeira',
       'Despesas por categoria',
       'Receitas por categoria',
       'Meta de faturamento',
       'Inadimplência',
       'Comparativo mensal',
-      'Movimentação diária',
       'Fluxo previsto',
     ]) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy();
@@ -336,12 +335,14 @@ describe('Dashboard V2 structure', () => {
     expect(screen.queryByRole('button', { name: 'Abrir detalhe de Já recebido' })).toBeNull();
 
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Entradas × Saídas' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Até o fim do mês' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Movimentação diária' })).toBeNull();
     expect(
       screen.queryByRole('heading', { name: 'Movimentação diária da competência' }),
     ).toBeNull();
     expect(screen.queryByText(/Competência de/i)).toBeNull();
-
+    expect(screen.queryByRole('heading', { name: /Saldo bancário/i })).toBeNull();
     expect(screen.queryByText('Previsto até o fim do mês')).toBeNull();
     expect(screen.getByRole('button', { name: 'Realizado' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Previsto' })).toBeTruthy();
@@ -353,14 +354,21 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-financial-section="despesas-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="receitas-categoria"]')).toBeTruthy();
     expect(document.querySelector('[data-financial-section="despesas-categoria"]')).toBeTruthy();
-    expect(document.querySelector('[data-financial-section="entradas-saidas"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="movimentacao-financeira"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="entradas-saidas"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(document.querySelector('[data-home-band="compact-kpis"]')?.getAttribute('data-cols')).toBe(
       '2',
     );
     expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
-    expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeNull();
+    expect(
+      document.querySelector('[data-financial-section="movimentacao-financeira"]'),
+    ).toBeTruthy();
+    expect(
+      document.querySelectorAll('[data-financial-section="movimentacao-financeira"]').length,
+    ).toBe(1);
 
     expect(screen.getByText('Última atualização')).toBeTruthy();
     expect(document.querySelector('[data-cost-center-selector="true"]')).toBeTruthy();
@@ -544,7 +552,7 @@ describe('Dashboard V2 structure', () => {
     await waitFor(() => {
       expect(sectionScope('inadimplencia').getByText('Taxa global (D1)')).toBeTruthy();
     });
-    for (const id of ['entradas-saidas', 'meta-faturamento', 'inadimplencia']) {
+    for (const id of ['movimentacao-financeira', 'meta-faturamento', 'inadimplencia']) {
       expect(sectionScope(id).queryByText(/Integração desconectada/)).toBeNull();
     }
     expect(getMonthEnd).not.toHaveBeenCalled();
@@ -708,7 +716,7 @@ describe('Dashboard V2 structure', () => {
       ).toBeGreaterThan(0);
     });
     expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
   });
 
   it('Leitura executiva e banda executive-reading estão ausentes da Home', async () => {

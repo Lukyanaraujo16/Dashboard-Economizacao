@@ -341,13 +341,12 @@ describe('Dashboard V2.3 fidelidade', () => {
     await renderReadyDashboard();
 
     const widgets: readonly (readonly [string, string])[] = [
-      ['entradas-saidas', 'Entradas × Saídas'],
+      ['movimentacao-financeira', 'Movimentação financeira'],
       ['despesas-categoria', 'Despesas por categoria'],
       ['receitas-categoria', 'Receitas por categoria'],
       ['meta-faturamento', 'Meta de faturamento'],
       ['inadimplencia', 'Inadimplência'],
       ['comparativo-mensal', 'Comparativo mensal'],
-      ['movimentacao-diaria', 'Movimentação diária'],
       ['fluxo-previsto', 'Fluxo previsto'],
     ];
 
@@ -487,16 +486,20 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(document.querySelector('[data-financial-section="despesas-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="receitas-categoria"]')).toBeTruthy();
     expect(document.querySelector('[data-financial-section="despesas-categoria"]')).toBeTruthy();
-    expect(document.querySelector('[data-financial-section="entradas-saidas"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="entradas-saidas"]')).toBeNull();
+    expect(document.querySelector('[data-financial-section="movimentacao-financeira"]')).toBeTruthy();
     expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
-    expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
-    expect(screen.getByRole('heading', { name: 'Entradas × Saídas' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Entradas × Saídas' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Movimentação diária' })).toBeNull();
     expect(screen.getByText(/Pagamentos realizados em/i)).toBeTruthy();
     expect(screen.getByText(/Recebimentos realizados em/i)).toBeTruthy();
     expect(
       screen.queryByRole('heading', { name: 'Movimentação diária da competência' }),
     ).toBeNull();
+    expect(screen.queryByRole('heading', { name: /Saldo bancário/i })).toBeNull();
     expect(screen.queryByText('Previsto até o fim do mês')).toBeNull();
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
   });
