@@ -183,3 +183,5 @@ export const CASH_RESULT_SPARKLINE_CAPTION =
 export const CASH_REALIZED_COMPARISON_CAPTION = 'Entradas e saídas realizadas no mês';
 export const CASH_DAILY_REALIZED_CAPTION = 'Movimentação realizada por dia de baixa';
 export const CASH_DAILY_EXPECTED_CAPTION = 'Previsto no prazo por dia de vencimento';
+export const CASH_MONTHLY_REALIZED_CAPTION =
+  'Entradas e saídas realizadas por mês de baixa';

@@ -19,6 +19,9 @@ export type HorizontalTooltipPlacement = {
 
 export type VerticalTooltipPlacement = 'above' | 'below' | 'inside-top';
 
+/** Modos de resolução vertical usados pelo ChartTooltip. */
+export type VerticalTooltipMode = 'inside-top' | 'auto-above-below' | 'floating-top';
+
 export function clampValue(value: number, min: number, max: number): number {
   if (max < min) {
     return min;
@@ -87,19 +90,24 @@ export type VerticalTooltipPlacementInput = {
   readonly padding?: number;
   readonly gap?: number;
   readonly preferAbove?: boolean;
-  readonly mode?: 'inside-top' | 'auto-above-below';
+  readonly mode?: VerticalTooltipMode;
 };
 
 /**
  * Escolhe colocação vertical.
- * - inside-top: tooltip fixo no topo interno do plot (comparison/daily-bars/monthly).
- * - auto-above-below: dentro do plot no topo se couber; senão abaixo do plot (Sparkline).
+ * - inside-top: tooltip no topo interno do plot (comparison chart / similares).
+ * - floating-top: fora do fluxo, acima do container (Diário / Mensal) — não reserva layout.
+ * - auto-above-below: dentro no topo se couber; senão abaixo (Sparkline).
  */
 export function resolveVerticalTooltipPlacement(
   input: VerticalTooltipPlacementInput,
 ): VerticalTooltipPlacement {
   if (input.mode === 'inside-top') {
     return 'inside-top';
+  }
+
+  if (input.mode === 'floating-top') {
+    return 'above';
   }
 
   const padding = input.padding ?? DEFAULT_CHART_TOOLTIP_PADDING;

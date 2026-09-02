@@ -322,7 +322,6 @@ describe('Dashboard V2 structure', () => {
       'Receitas por categoria',
       'Meta de faturamento',
       'Inadimplência',
-      'Comparativo mensal',
       'Fluxo previsto',
     ]) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy();
@@ -361,7 +360,7 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-home-band="compact-kpis"]')?.getAttribute('data-cols')).toBe(
       '2',
     );
-    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeNull();
     expect(
       document.querySelector('[data-financial-section="movimentacao-financeira"]'),
@@ -387,7 +386,7 @@ describe('Dashboard V2 structure', () => {
 
     expect(getOverview).toHaveBeenCalledWith(null);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
-    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
+    expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-07', null, null);
   });
 
   it('exibe nota de meta consolidada quando centro de custo está selecionado', async () => {
@@ -443,7 +442,7 @@ describe('Dashboard V2 structure', () => {
     expect(screen.getByRole('button', { name: /Categoria: Serviços/ })).toBeTruthy();
     expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, centerId, categoryId);
-    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', centerId, categoryId);
+    expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-07', centerId, categoryId);
     expect(getForecast).toHaveBeenCalledWith(centerId, categoryId);
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getOverview).toHaveBeenCalledWith(centerId);
@@ -640,14 +639,14 @@ describe('Dashboard V2 structure', () => {
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getForecast).not.toHaveBeenCalled();
     expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
-    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-06', null, null);
+    expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-06', null, null);
     expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
     expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Meta de faturamento' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Inadimplência' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Comparativo mensal' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Comparativo mensal' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
-    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
     expect(document.querySelector('[data-home-band="compact-kpis"]')?.getAttribute('data-cols')).toBe(
       '2',
     );
@@ -789,7 +788,8 @@ describe('Dashboard V2 structure', () => {
     expect(getOverview).toHaveBeenCalledTimes(1);
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getForecast).toHaveBeenCalledTimes(1);
-    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
+    expect(getMonthlyCashFlow).toHaveBeenCalledTimes(1);
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
   });
 
   it('EmptyState e EmptyPanel renderizam descrição', () => {

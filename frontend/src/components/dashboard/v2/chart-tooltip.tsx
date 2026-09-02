@@ -18,7 +18,7 @@ import {
 } from './chart-tooltip-placement';
 import styles from './chart-tooltip.module.css';
 
-export type ChartTooltipVerticalMode = 'inside-top' | 'auto-above-below';
+export type ChartTooltipVerticalMode = 'inside-top' | 'auto-above-below' | 'floating-top';
 
 export type ChartTooltipProps = {
   readonly open: boolean;
@@ -30,6 +30,16 @@ export type ChartTooltipProps = {
   readonly 'aria-hidden'?: boolean | 'true' | 'false';
   readonly children: ReactNode;
 };
+
+function initialVerticalForMode(mode: ChartTooltipVerticalMode): VerticalTooltipPlacement {
+  if (mode === 'floating-top') {
+    return 'above';
+  }
+  if (mode === 'inside-top') {
+    return 'inside-top';
+  }
+  return 'below';
+}
 
 type ComputedPlacement = {
   readonly left: number;
@@ -93,7 +103,7 @@ export function ChartTooltip({
       tooltipHeight,
       padding,
       gap: VERTICAL_GAP_PX,
-      mode: verticalMode === 'inside-top' ? 'inside-top' : 'auto-above-below',
+      mode: verticalMode,
     });
 
     setPlacement({
@@ -107,15 +117,15 @@ export function ChartTooltip({
     return null;
   }
 
+  const resolvedVertical = placement?.vertical ?? initialVerticalForMode(verticalMode);
+
   const inlineStyle: CSSProperties = {
     position: 'absolute',
     left: placement ? `${placement.left}px` : 0,
     transform: 'none',
     maxWidth: placement && placement.maxWidth > 0 ? `${placement.maxWidth}px` : undefined,
     visibility: placement ? 'visible' : 'hidden',
-    ...(placement
-      ? buildVerticalStyle(placement.vertical)
-      : buildVerticalStyle(verticalMode === 'inside-top' ? 'inside-top' : 'below')),
+    ...buildVerticalStyle(resolvedVertical),
   };
 
   return (
@@ -125,6 +135,8 @@ export function ChartTooltip({
       style={inlineStyle}
       role={role}
       aria-hidden={ariaHidden}
+      data-vertical-placement={resolvedVertical}
+      data-vertical-mode={verticalMode}
     >
       {children}
     </div>

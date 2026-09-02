@@ -7,7 +7,6 @@ import {
   ExecutiveKpiCard,
   ExecutiveSignals,
   ForecastPanel,
-  MonthlyCompare,
   WidgetExpandDialog,
   accumulate,
   alignDailySeries,
@@ -246,82 +245,6 @@ describe('séries diárias de competência', () => {
   });
 });
 
-describe('MonthlyCompare', () => {
-  const periods = [
-    { id: '2026-07', label: 'JUL' },
-    { id: '2026-08', label: 'AGO' },
-  ];
-
-  it('agrupa uma barra por competência em cada métrica sem valores no eixo', () => {
-    render(
-      <MonthlyCompare
-        periods={periods}
-        rows={[
-          { id: 'billing', label: 'Faturamento', tone: 'revenue', amounts: ['8000', '10000'] },
-          { id: 'expenses', label: 'Despesas', tone: 'expense', amounts: ['100', '100'] },
-        ]}
-      />,
-    );
-    expect(screen.getAllByText('JUL')).toHaveLength(2);
-    expect(screen.getAllByText('AGO')).toHaveLength(2);
-    // Valores completos saem do eixo (evita colisão) e permanecem no delta / aria.
-    expect(screen.queryByText(/R\$\s*8\.000,00/)).toBeNull();
-    expect(screen.queryByText(/R\$\s*10\.000,00/)).toBeNull();
-    expect(screen.getByText(/R\$\s*2\.000,00/)).toBeTruthy();
-    expect(screen.getByText('25,0%')).toBeTruthy();
-    expect(screen.getByText(/R\$\s*0,00/)).toBeTruthy();
-    expect(
-      screen.getByRole('img', {
-        name: /Faturamento\. JUL\/2026 R\$\s*8\.000,00; AGO\/2026 R\$\s*10\.000,00/,
-      }),
-    ).toBeTruthy();
-    expect(
-      screen.getByText('Comparação dos movimentos realizados entre os meses.'),
-    ).toBeTruthy();
-  });
-
-  it('tooltip de hover expõe competência, indicador e valor — inclusive zero', () => {
-    render(
-      <MonthlyCompare
-        periods={periods}
-        rows={[
-          { id: 'billing', label: 'Faturamento', tone: 'revenue', amounts: ['0', '10000'] },
-        ]}
-      />,
-    );
-    const plot = screen.getByRole('img', { name: /Faturamento/ });
-    fireEvent.mouseMove(plot, { clientX: 0, clientY: 0 });
-    // Sem bounding rect no jsdom o índice cai no último — valida o contrato do tooltip.
-    Object.defineProperty(plot, 'getBoundingClientRect', {
-      value: () => ({ left: 0, width: 200, top: 0, height: 40, right: 200, bottom: 40 }),
-    });
-    fireEvent.mouseMove(plot, { clientX: 20, clientY: 10 });
-    const tip = screen.getByRole('tooltip', { hidden: true });
-    expect(within(tip).getByText('JUL/2026')).toBeTruthy();
-    expect(within(tip).getByText('Faturamento')).toBeTruthy();
-    expect(within(tip).getByText(/R\$\s*0,00/)).toBeTruthy();
-  });
-
-  it('base zero não inventa variação percentual', () => {
-    render(
-      <MonthlyCompare
-        periods={periods}
-        rows={[{ id: 'result', label: 'Resultado', tone: 'result', amounts: ['0', '-50'] }]}
-      />,
-    );
-    // Apenas a variação no header (eixo não imprime mais o valor da barra).
-    expect(screen.getAllByText(/-R\$\s*50,00/)).toHaveLength(1);
-    expect(screen.queryByText(/%$/)).toBeNull();
-    expect(
-      screen.getByRole('img', { name: /JUL\/2026 R\$\s*0,00; AGO\/2026 -R\$\s*50,00/ }),
-    ).toBeTruthy();
-  });
-
-  it('sem métricas usa a mensagem vazia', () => {
-    render(<MonthlyCompare periods={periods} rows={[]} emptyMessage="Sem competência anterior." />);
-    expect(screen.getByText('Sem competência anterior.')).toBeTruthy();
-  });
-});
 
 describe('CategoryRanking', () => {
   const items: readonly CategoryRankingItem[] = [

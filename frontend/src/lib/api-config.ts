@@ -272,6 +272,19 @@ export function dashboardMonthlyCashFlowPath(
   })}`;
 }
 
+/** Correção 08-B — histórico de 12 meses de caixa realizado. */
+export function dashboardCashMovementHistoryPath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+  categoryId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/cash-movement-history${dashboardQueryString({
+    monthKey,
+    costCenterId,
+    categoryId,
+  })}`;
+}
+
 /** Detalhe lazy do KPI A receber — mesmos filtros do monthly-cash-flow. */
 export function dashboardExpectedReceivableDetailsPath(
   monthKey?: string | null,

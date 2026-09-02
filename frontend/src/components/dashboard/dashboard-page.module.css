@@ -188,7 +188,7 @@
 
 /*
  * CASH-4C-CAT-FINAL / CORREÇÃO 06–07: Meta de faturamento | Inadimplência.
- * CORREÇÃO 08-A: Comparativo mensal em tertiaryGrid (largura total).
+ * CORREÇÃO 08-B.4: Comparativo mensal / tertiaryGrid removidos da Home.
  */
 .compactSecondaryGrid {
   display: grid;
@@ -201,20 +201,6 @@
 @media (min-width: 700px) {
   .compactSecondaryGrid[data-cols='2'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.tertiaryGrid {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: 1fr;
-  min-width: 0;
-}
-
-@media (min-width: 900px) {
-  .tertiaryGrid[data-cols='2'] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: stretch;
   }
 }
 

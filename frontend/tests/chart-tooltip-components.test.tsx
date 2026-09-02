@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   accumulate,
+  CashMonthlyGroupedBars,
   CompetenceComparisonChart,
   CompetenceDailyBars,
-  MonthlyCompare,
   Sparkline,
   WidgetExpandDialog,
 } from '../src/components/dashboard/v2';
@@ -63,7 +63,7 @@ describe('ChartTooltip nos componentes V2', () => {
     expect(Number.parseFloat((tooltip as HTMLElement).style.left)).toBeGreaterThan(0);
   });
 
-  it('CompetenceDailyBars posiciona tooltip no primeiro ponto', () => {
+  it('CompetenceDailyBars posiciona tooltip flutuante no primeiro ponto', () => {
     render(
       <CompetenceDailyBars
         revenueDaily={dailySeries(10)}
@@ -76,12 +76,43 @@ describe('ChartTooltip nos componentes V2', () => {
     });
     mockPlotRect(plot, 400, 108);
     fireEvent.mouseMove(plot, { clientX: 4, clientY: 40 });
-    const tooltip = document.querySelector('[class*="tooltip"]');
+    const tooltip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
     expect(tooltip).toBeTruthy();
-    expect((tooltip as HTMLElement).style.transform).not.toBe('translateX(-50%)');
-    const left = Number.parseFloat((tooltip as HTMLElement).style.left);
+    expect(tooltip.getAttribute('data-vertical-mode')).toBe('floating-top');
+    expect(tooltip.getAttribute('data-vertical-placement')).toBe('above');
+    expect(tooltip.style.transform).not.toBe('translateX(-50%)');
+    expect(tooltip.style.bottom).toMatch(/calc\(100%/);
+    expect(tooltip.style.top).toBe('auto');
+    const left = Number.parseFloat(tooltip.style.left);
     expect(Number.isFinite(left)).toBe(true);
     expect(left).toBeGreaterThanOrEqual(0);
+  });
+
+  it('CompetenceDailyBars no expand: floating-top e conteúdo preservados', () => {
+    render(
+      <ThemeProvider>
+        <WidgetExpandDialog open title="Movimentação financeira" onClose={vi.fn()}>
+          <CompetenceDailyBars
+            revenueDaily={dailySeries(10)}
+            expenseDaily={dailySeries(10)}
+            monthKey="2026-08"
+            revenueLabel="Entradas"
+            expenseLabel="Saídas"
+          />
+        </WidgetExpandDialog>
+      </ThemeProvider>,
+    );
+    const plot = screen.getByRole('img', {
+      name: /Receitas e despesas por dia de competência em ago\/2026/,
+    });
+    mockPlotRect(plot, 640, 108);
+    fireEvent.mouseMove(plot, { clientX: 620, clientY: 40 });
+    const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+    expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
+    expect(tip.textContent).toMatch(/Entradas/);
+    expect(tip.textContent).toMatch(/Saídas/);
+    expect(tip.textContent).toMatch(/R\$/);
+    expect(tip.style.bottom).toMatch(/calc\(100%/);
   });
 
   it('Sparkline exibe tooltip visível com data e valor após medição', async () => {
@@ -170,28 +201,93 @@ describe('ChartTooltip nos componentes V2', () => {
     });
   });
 
-  it('MonthlyCompare mantém tooltip com nova infraestrutura', () => {
+  it('CashMonthlyGroupedBars: tooltip flutuante com mês, Entradas, Saídas, Resultado e BRL', () => {
+    const buckets = Array.from({ length: 12 }, (_, index) => {
+      const date = new Date(Date.UTC(2026, 7 - 11 + index, 1));
+      const monthKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+      const isLast = index === 11;
+      return {
+        monthKey,
+        inflows: isLast ? '888888.88' : '1000.00',
+        outflows: isLast ? '111111.11' : '500.00',
+        result: isLast ? '777777.77' : '500.00',
+      };
+    });
     render(
-      <MonthlyCompare
-        periods={[
-          { id: '2026-07', label: 'JUL' },
-          { id: '2026-08', label: 'AGO' },
-        ]}
-        rows={[
-          { id: 'billing', label: 'Faturamento', tone: 'revenue', amounts: ['8000', '10000'] },
+      <CashMonthlyGroupedBars buckets={buckets} ariaLabel="Histórico mensal de caixa" />,
+    );
+    const plot = screen.getByRole('img', { name: 'Histórico mensal de caixa' });
+    expect(plot.getAttribute('data-tooltip-lane')).toBeNull();
+    mockPlotRect(plot, 480, 120);
+
+    fireEvent.mouseMove(plot, { clientX: 470, clientY: 40 });
+    const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+    expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
+    expect(tip.getAttribute('data-vertical-placement')).toBe('above');
+    expect(tip.textContent).toMatch(/AGO\/26/);
+    expect(tip.textContent).toMatch(/Entradas/);
+    expect(tip.textContent).toMatch(/Saídas/);
+    expect(tip.textContent).toMatch(/Resultado/);
+    expect(tip.textContent).toMatch(/R\$\s*888\.888,88/);
+    expect(tip.textContent).toMatch(/R\$\s*111\.111,11/);
+    expect(tip.textContent).toMatch(/R\$\s*777\.777,77/);
+    expect(tip.style.transform).not.toBe('translateX(-50%)');
+    expect(tip.style.bottom).toMatch(/calc\(100%/);
+    expect(tip.style.top).toBe('auto');
+    const lastLeft = Number.parseFloat(tip.style.left);
+    expect(Number.isFinite(lastLeft)).toBe(true);
+    expect(lastLeft).toBeGreaterThanOrEqual(0);
+    expect(lastLeft + 8).toBeLessThanOrEqual(480);
+
+    fireEvent.mouseMove(plot, { clientX: 4, clientY: 40 });
+    const firstTip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+    expect(firstTip.textContent).toMatch(/SET\/25/);
+    const firstLeft = Number.parseFloat(firstTip.style.left);
+    expect(firstLeft).toBeGreaterThanOrEqual(0);
+    expect(firstLeft).toBeLessThan(120);
+
+    fireEvent.mouseMove(plot, { clientX: 240, clientY: 40 });
+    const midTip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+    expect(midTip.textContent).toMatch(/FEV\/26|MAR\/26/);
+    const midLeft = Number.parseFloat(midTip.style.left);
+    expect(midLeft).toBeGreaterThan(firstLeft);
+    expect(midLeft).toBeLessThan(lastLeft);
+  });
+
+  it('CashMonthlyGroupedBars: primeiro mês e null → —', () => {
+    render(
+      <CashMonthlyGroupedBars
+        ariaLabel="Mensal null"
+        buckets={[
+          {
+            monthKey: '2025-09',
+            inflows: null,
+            outflows: null,
+            result: null,
+          },
+          {
+            monthKey: '2025-10',
+            inflows: '10.00',
+            outflows: '5.00',
+            result: '5.00',
+          },
         ]}
       />,
     );
-    const plot = screen.getByRole('img', { name: /Faturamento/ });
-    mockPlotRect(plot, 240, 68);
-    Object.defineProperty(plot, 'getBoundingClientRect', {
-      configurable: true,
-      value: () => ({ left: 0, width: 240, top: 0, height: 68, right: 240, bottom: 68 }),
-    });
-    fireEvent.mouseMove(plot, { clientX: 220, clientY: 20 });
-    const tip = screen.getByRole('tooltip', { hidden: true });
-    expect(tip).toBeTruthy();
-    expect((tip as HTMLElement).style.transform).not.toBe('translateX(-50%)');
+    const plot = screen.getByRole('img', { name: 'Mensal null' });
+    expect(plot.getAttribute('data-tooltip-lane')).toBeNull();
+    mockPlotRect(plot, 320, 120);
+    fireEvent.mouseMove(plot, { clientX: 4, clientY: 40 });
+    const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+    expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
+    expect(tip.textContent).toMatch(/SET\/25/);
+    expect(tip.textContent).toMatch(/—/);
+    expect(tip.textContent).not.toMatch(/R\$\s*0,00/);
+    expect(tip.style.transform).not.toBe('translateX(-50%)');
+    expect(tip.style.bottom).toMatch(/calc\(100%/);
+    expect(tip.style.top).toBe('auto');
+    const left = Number.parseFloat(tip.style.left);
+    expect(left).toBeGreaterThanOrEqual(0);
   });
 });
 

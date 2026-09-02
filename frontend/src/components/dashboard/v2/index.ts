@@ -50,6 +50,12 @@ export type { CompetenceComparisonChartProps } from './competence-comparison-cha
 export { CompetenceDailyBars } from './competence-daily-bars';
 export type { CompetenceDailyBarsProps } from './competence-daily-bars';
 
+export { CashMonthlyGroupedBars } from './cash-monthly-grouped-bars';
+export type {
+  CashMonthlyGroupedBarsBucket,
+  CashMonthlyGroupedBarsProps,
+} from './cash-monthly-grouped-bars';
+
 export { ExecutiveKpiCard } from './executive-kpi-card';
 export type {
   ExecutiveKpiCardProps,
@@ -62,14 +68,6 @@ export type { ExecutiveSignal, ExecutiveSignalsProps, SignalTone } from './execu
 
 export { ForecastPanel } from './forecast-panel';
 export type { ForecastPanelBucket, ForecastPanelProps } from './forecast-panel';
-
-export { MonthlyCompare, periodContextLabel } from './monthly-compare';
-export type {
-  MonthlyComparePeriod,
-  MonthlyCompareProps,
-  MonthlyCompareRow,
-  MonthlyCompareTone,
-} from './monthly-compare';
 
 export { RatioMeter } from './ratio-meter';
 export type { RatioMeterProps } from './ratio-meter';

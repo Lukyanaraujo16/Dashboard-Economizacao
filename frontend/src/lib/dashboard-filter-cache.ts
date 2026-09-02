@@ -46,6 +46,12 @@ export function dashboardCashFlowCacheKey(
   return `${tenantId}|${monthKey}|${costCenterId ?? ''}|${categoryId ?? ''}`;
 }
 
+/**
+ * Cash-movement-history (Correção 08-B): mesma chave que MonthlyCashFlow
+ * (tenant × month × centro × categoria; situation não entra).
+ */
+export const dashboardCashMovementHistoryCacheKey = dashboardCashFlowCacheKey;
+
 export function createDashboardFilterCache<T>() {
   const map = new Map<string, T>();
   return {

@@ -22,6 +22,7 @@ import {
 import type { RevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
 import type {
   DashboardCashFlowForecastResponse,
+  DashboardCashMovementHistoryResponse,
   DashboardCategoriesResponse,
   DashboardCostCentersResponse,
   DashboardExecutiveInsightsResponse,
@@ -45,6 +46,7 @@ import { toDashboardExpenseCompositionResponse } from '../http/to-dashboard-expe
 import { toDashboardExpectedReceivableDetailsResponse } from '../http/to-dashboard-expected-receivable-details-response.js';
 import { toDashboardExpectedPayableDetailsResponse } from '../http/to-dashboard-expected-payable-details-response.js';
 import { toDashboardMonthlyCashFlowResponse } from '../http/to-dashboard-monthly-cash-flow-response.js';
+import { toDashboardCashMovementHistoryResponse } from '../http/to-dashboard-cash-movement-history-response.js';
 import { toDashboardMonthlyExpenseResponse } from '../http/to-dashboard-monthly-expense-response.js';
 import { toDashboardMonthlyRevenueResponse } from '../http/to-dashboard-monthly-revenue-response.js';
 import { toDashboardOverviewResponse } from '../http/to-dashboard-overview-response.js';
@@ -57,6 +59,9 @@ import type { ExpensesReportResponse, RevenueReportResponse } from '../../report
 
 /** Competências exibidas no histórico compacto da meta, incluindo a selecionada. */
 export const REVENUE_GOAL_HISTORY_MONTHS = 6;
+
+/** Movimentação financeira Mensal: janela fixa de 12 meses (Correção 08-B). */
+export const CASH_MOVEMENT_HISTORY_MONTHS = 12;
 
 export type DashboardOverviewFacade = {
   listCostCenters(auth: AuthenticatedRequestContext): Promise<DashboardCostCentersResponse>;
@@ -119,6 +124,12 @@ export type DashboardOverviewFacade = {
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardMonthlyCashFlowResponse>;
+  getCashMovementHistory(
+    auth: AuthenticatedRequestContext,
+    monthKey: string | null,
+    costCenterId?: string | null,
+    categoryId?: string | null,
+  ): Promise<DashboardCashMovementHistoryResponse>;
   getExpectedReceivableDetails(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
@@ -353,6 +364,30 @@ export function createDashboardOverviewFacade(
         ...categoryFilterSpread(categoryFilter),
       });
       return toDashboardMonthlyCashFlowResponse(flow);
+    },
+
+    /**
+     * Histórico de 12 meses de caixa realizado (Correção 08-B).
+     * Estratégia A: N× MonthlyCashFlowService — mesma semântica da Home.
+     */
+    async getCashMovementHistory(auth, monthKey, costCenterId = null, categoryId = null) {
+      const cashFlow = requireCashFlow(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
+      const endMonth = monthKey ?? civilMonthKey(civilTodayInSaoPaulo(new Date()));
+      const monthKeys = listRevenueGoalHistoryMonthKeys(endMonth, CASH_MOVEMENT_HISTORY_MONTHS);
+      const flows = await Promise.all(
+        monthKeys.map((key) =>
+          cashFlow.getMonthlyCashFlow({
+            tenantId,
+            monthKey: key,
+            ...costCenterFilter(resolved),
+            ...categoryFilterSpread(categoryFilter),
+          }),
+        ),
+      );
+      return toDashboardCashMovementHistoryResponse(flows);
     },
 
     async getExpectedReceivableDetails(auth, monthKey, costCenterId = null, categoryId = null) {

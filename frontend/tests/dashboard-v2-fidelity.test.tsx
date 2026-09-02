@@ -266,7 +266,7 @@ async function renderReadyDashboard() {
     expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
   });
   await waitFor(() => {
-    expect(getMonthlyCashFlow).toHaveBeenCalledTimes(2);
+    expect(getMonthlyCashFlow).toHaveBeenCalledTimes(1);
   });
 }
 
@@ -346,7 +346,6 @@ describe('Dashboard V2.3 fidelidade', () => {
       ['receitas-categoria', 'Receitas por categoria'],
       ['meta-faturamento', 'Meta de faturamento'],
       ['inadimplencia', 'Inadimplência'],
-      ['comparativo-mensal', 'Comparativo mensal'],
       ['fluxo-previsto', 'Fluxo previsto'],
     ];
 
@@ -488,7 +487,7 @@ describe('Dashboard V2.3 fidelidade', () => {
     expect(document.querySelector('[data-financial-section="despesas-categoria"]')).toBeTruthy();
     expect(document.querySelector('[data-financial-section="entradas-saidas"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="movimentacao-financeira"]')).toBeTruthy();
-    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Entradas × Saídas' })).toBeNull();
@@ -521,13 +520,13 @@ describe('Dashboard V2.3 fidelidade', () => {
 
     await waitFor(() => {
       expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
-      expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-06', null, null);
     });
+    expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-06', null, null);
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getForecast).not.toHaveBeenCalled();
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
-    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
     expect(screen.getByRole('button', { name: 'JUL 2026' })).toBeTruthy();
   });
 });

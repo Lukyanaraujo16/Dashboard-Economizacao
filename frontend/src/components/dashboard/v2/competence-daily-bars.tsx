@@ -222,9 +222,11 @@ export function CompetenceDailyBars({
           {activeRevenue && activeExpense ? (
             <ChartTooltip
               open
+              verticalMode="floating-top"
               anchorRatio={anchorRatioFromIndex(activeIndex, count)}
               containerRef={plotRef}
               className={styles.tooltip}
+              role="tooltip"
               aria-hidden="true"
             >
               <p className={styles.tooltipDay}>{formatDayPt(activeRevenue.date)}</p>

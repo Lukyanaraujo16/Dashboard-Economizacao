@@ -367,10 +367,14 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getByText('Realizado')).toBeTruthy();
   });
 
-  it('Z22 — Comparativo continua abrindo', async () => {
-    const dialog = await openSectionExpand('comparativo-mensal');
-    expect(within(dialog).getByRole('heading', { name: 'Comparativo mensal' })).toBeTruthy();
-    expect(within(dialog).getByText('Entradas realizadas')).toBeTruthy();
+  it('Z22 — Comparativo mensal removido da Home (08-B.4)', async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
+    });
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Comparativo mensal' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
   });
 
   it('Z23 — Movimentação continua abrindo a partir do gráfico principal', async () => {

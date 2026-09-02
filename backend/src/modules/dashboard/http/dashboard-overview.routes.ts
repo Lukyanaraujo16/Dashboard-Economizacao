@@ -236,6 +236,24 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
   );
 
   app.get(
+    '/dashboard/cash-movement-history',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const monthKey = parseDashboardMonth(request.query);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      parseDashboardSituationQuery(request.query);
+      const body = await dashboard.getCashMovementHistory(auth, monthKey, costCenterId, categoryId);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
     '/dashboard/receivables/expected-details',
     { preHandler: requireAuthentication },
     async (request, reply) => {

@@ -463,6 +463,10 @@ Se a baixa ocorrer ainda no mês do vencimento: volta ao Faturamento via realiza
 (sem duplicar título: expected/overdue usam unpaid atual; realizado usa ledger).
 Helper de domínio: `monthlyBilling(flow)` — composição das peças; não é motor paralelo.
 HTTP CASH-3B: `GET /dashboard/monthly-cash-flow` serializa `billing` a partir do helper.
+Correção 08-B: `GET /dashboard/cash-movement-history` reutiliza o mesmo
+`MonthlyCashFlowService` para 12 meses civis terminando no mês selecionado e
+expõe somente `realized.{inflows,outflows,result}` (sem expected / sem saldo bancário).
+Cada bucket deve reconciliar com `monthly-cash-flow` do mesmo mês e filtros.
 CASH-4A: Home carrega o DTO e o view-model (`toMonthlyCashFlowView`).
 CASH-4B: Home visual = caixa / MonthlyCashFlow (F1-G SUPERSEDED nos KPIs).
 

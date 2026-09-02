@@ -10,6 +10,7 @@ export type {
   DashboardMonthEndCashPressureResponse,
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyCashFlowResponse,
+  DashboardCashMovementHistoryResponse,
   DashboardMonthlyRevenueResponse,
   DashboardOverviewResponse,
   DashboardReceivableCompositionResponse,
@@ -31,6 +32,10 @@ export type {
   RevenueGoalRepository,
 } from './repositories/revenue-goal.repository.js';
 export { createDashboardOverviewFacade } from './services/dashboard-overview.facade.js';
+export {
+  CASH_MOVEMENT_HISTORY_MONTHS,
+  REVENUE_GOAL_HISTORY_MONTHS,
+} from './services/dashboard-overview.facade.js';
 export type {
   DashboardOverviewFacade,
   DashboardOverviewFacadeDependencies,

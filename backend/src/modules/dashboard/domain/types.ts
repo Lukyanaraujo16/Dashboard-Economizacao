@@ -340,6 +340,24 @@ export type DashboardMonthlyCashFlowResponse = {
   };
 };
 
+/**
+ * GET /dashboard/cash-movement-history (Correção 08-B).
+ * Janela fixa de 12 meses civis terminando em `endMonth`.
+ * Somente caixa realizado (occurredOn); sem expected / saldo bancário.
+ */
+export type DashboardCashMovementHistoryMonth = {
+  readonly monthKey: string;
+  readonly realized: DashboardMonthlyCashFlowMoney;
+};
+
+export type DashboardCashMovementHistoryResponse = {
+  readonly today: string;
+  readonly startMonth: string;
+  readonly endMonth: string;
+  readonly costCenterCashSplit: boolean;
+  readonly months: readonly DashboardCashMovementHistoryMonth[];
+};
+
 /** GET /dashboard/receivables/expected-details — itens do KPI A receber (lazy). */
 export type DashboardExpectedReceivableDetailItem = {
   readonly id: string;

@@ -164,15 +164,13 @@ describe('CASH-4C — Home', () => {
     expect(screen.queryByRole('heading', { name: /Saldo bancário/i })).toBeNull();
   });
 
-  it('C6 — Comparativo mensal usa caixa realizado do mês anterior', async () => {
+  it('C6 — Comparativo mensal removido da Home (08-B.4)', async () => {
     renderDashboard();
-    await waitFor(() => {
-      expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
-    });
-    const scope = within(section('comparativo-mensal'));
-    expect(await scope.findByText('Entradas realizadas')).toBeTruthy();
-    expect(scope.getByText('Saídas realizadas')).toBeTruthy();
-    expect(scope.getByText('Resultado realizado')).toBeTruthy();
+    await screen.findByRole('heading', { name: 'Movimentação financeira' });
+    expect(screen.queryByRole('heading', { name: 'Comparativo mensal' })).toBeNull();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Meta de faturamento' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Inadimplência' })).toBeTruthy();
   });
 
   it('C7 — Movimentação financeira alterna Realizado e Previsto', async () => {

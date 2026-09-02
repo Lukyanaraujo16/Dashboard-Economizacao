@@ -174,16 +174,16 @@ describe('CASH-4C-CAT-FINAL — refino visual Home', () => {
     expect(compact.scrollWidth).toBeLessThanOrEqual(compact.clientWidth + 1);
   });
 
-  it('FNL8/FNL9 — Comparativo sem “competência” e com copy de realizado', async () => {
+  it('FNL8/FNL9 — Comparativo mensal removido; Meta/Inadimplência intactas (08-B.4)', async () => {
     renderDashboard();
     await waitFor(() => {
       expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
     });
-    const compare = section('comparativo-mensal');
-    expect(compare.textContent?.toLowerCase()).not.toMatch(/competência/);
-    expect(
-      within(compare).getByText('Comparação dos movimentos realizados entre os meses.'),
-    ).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Comparativo mensal' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Meta de faturamento' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Inadimplência' })).toBeTruthy();
+    expect(document.querySelector('[data-home-band="compact-kpis"]')).toBeTruthy();
   });
 
   it('FNL10–FNL12 — KPIs, donuts e Movimentação financeira intactos', async () => {

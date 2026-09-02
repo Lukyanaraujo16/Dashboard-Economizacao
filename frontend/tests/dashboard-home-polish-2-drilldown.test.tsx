@@ -248,10 +248,14 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
     expect(within(dialog).getByText(/não o saldo bancário/i)).toBeTruthy();
   });
 
-  it('P2-17 — Comparativo permanece funcionando', async () => {
-    const dialog = await openSectionExpand('comparativo-mensal');
-    expect(within(dialog).getByRole('heading', { name: 'Comparativo mensal' })).toBeTruthy();
-    expect(within(dialog).getByText('Entradas realizadas')).toBeTruthy();
+  it('P2-17 — Comparativo mensal removido da Home (08-B.4)', async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(document.querySelector('[data-cash-flow-state="ready"]')).toBeTruthy();
+    });
+    expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Comparativo mensal' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
   });
 
   it('P2-18 — Movimentação permanece funcionando com toggle', async () => {

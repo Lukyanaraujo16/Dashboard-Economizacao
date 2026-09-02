@@ -123,6 +123,16 @@ describe('chart-tooltip-placement', () => {
     expect(anchorRatioFromSvgX(0, 320)).toBe(0);
   });
 
+  it('resolveVerticalTooltipPlacement floating-top fica acima do plot', () => {
+    expect(
+      resolveVerticalTooltipPlacement({
+        containerHeight: 100,
+        tooltipHeight: 80,
+        mode: 'floating-top',
+      }),
+    ).toBe('above');
+  });
+
   it('resolveVerticalTooltipPlacement inside-top para gráficos internos', () => {
     expect(
       resolveVerticalTooltipPlacement({
