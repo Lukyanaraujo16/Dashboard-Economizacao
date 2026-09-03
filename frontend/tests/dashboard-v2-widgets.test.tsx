@@ -6,7 +6,6 @@ import {
   CompetenceComparisonChart,
   ExecutiveKpiCard,
   ExecutiveSignals,
-  ForecastPanel,
   WidgetExpandDialog,
   accumulate,
   alignDailySeries,
@@ -496,33 +495,6 @@ describe('CompetenceComparisonChart', () => {
     expect(
       screen.getByText(
         'Acumulado por competência no mês selecionado. Não representa saldo bancário.',
-      ),
-    ).toBeTruthy();
-  });
-});
-
-describe('ForecastPanel', () => {
-  it('horizonte integralmente zerado usa estado vazio', () => {
-    render(<ForecastPanel buckets={[{ key: '2026-08', inflows: '0', outflows: '0', net: '0' }]} />);
-    expect(screen.getByText('Sem lançamentos previstos no horizonte.')).toBeTruthy();
-  });
-
-  it('resume picos e mantém o líquido do backend', () => {
-    render(
-      <ForecastPanel
-        buckets={[
-          { key: '2026-08', inflows: '10', outflows: '4', net: '6' },
-          { key: '2026-09', inflows: '2', outflows: '8', net: '-6' },
-        ]}
-      />,
-    );
-    expect(screen.getByText('Meses previstos')).toBeTruthy();
-    expect(screen.getByText('2')).toBeTruthy();
-    expect(screen.getAllByText(/R\$\s*6,00/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/-R\$\s*6,00/).length).toBeGreaterThan(0);
-    expect(
-      screen.getByText(
-        'O líquido é a diferença prevista de cada mês e não o saldo bancário acumulado.',
       ),
     ).toBeTruthy();
   });

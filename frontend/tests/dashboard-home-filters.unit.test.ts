@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  dashboardCashFlowForecastPath,
   dashboardExecutiveInsightsPath,
   dashboardMonthEndCashPressurePath,
   dashboardMonthlyExpensesPath,
@@ -119,7 +118,7 @@ describe('dashboard filter cache e query paths', () => {
     expect(dashboardCashWindowCacheKey(TENANT, CENTER, null)).toBe(`${TENANT}|${CENTER}|`);
   });
 
-  it('monthly/insights enviam os 4 params; forecast/pressão só category; meta nenhum slice', () => {
+  it('monthly/insights enviam os 4 params; pressão só category; meta nenhum slice', () => {
     const monthly = dashboardMonthlyRevenuePath('2026-07', CENTER, 'settled', CATEGORY);
     expect(monthly).toContain('month=2026-07');
     expect(monthly).toContain('costCenter=');
@@ -132,9 +131,6 @@ describe('dashboard filter cache e query paths', () => {
       'situation=overdue',
     );
 
-    const forecast = dashboardCashFlowForecastPath(CENTER, CATEGORY);
-    expect(forecast).toContain(`category=${CATEGORY}`);
-    expect(forecast).not.toContain('situation=');
     const pressure = dashboardMonthEndCashPressurePath(CENTER, CATEGORY);
     expect(pressure).toContain(`category=${CATEGORY}`);
     expect(pressure).not.toContain('situation=');

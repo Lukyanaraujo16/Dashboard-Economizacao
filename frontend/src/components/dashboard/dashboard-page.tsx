@@ -32,7 +32,6 @@ import {
   dashboardCashBalanceHistoryCacheKey,
   dashboardCashFlowCacheKey,
   dashboardCashMovementHistoryCacheKey,
-  dashboardCashWindowCacheKey,
   dashboardOverviewCacheKey,
 } from '../../lib/dashboard-filter-cache';
 import { getDashboardCashBalanceHistory } from '../../services/dashboard/cash-balance-history';
@@ -62,11 +61,6 @@ import {
   DashboardExpectedPayableDetailsRequestError,
   type DashboardExpectedPayableDetailsResponse,
 } from '../../services/dashboard/expected-payable-details.types';
-import { getDashboardCashFlowForecast } from '../../services/dashboard/forecast';
-import {
-  DashboardForecastRequestError,
-  type DashboardCashFlowForecastResponse,
-} from '../../services/dashboard/forecast.types';
 import { getDashboardOverview } from '../../services/dashboard/overview';
 import {
   DashboardOverviewRequestError,
@@ -150,7 +144,6 @@ import {
   CashMonthlyGroupedBars,
   CompetenceDailyBars,
   ExecutiveKpiCard,
-  ForecastPanel,
   RevenueGoalCard,
   RevenueGoalEditDialog,
   RevenueGoalHistoryList,
@@ -183,12 +176,6 @@ type OverviewView =
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'never-sync' }
   | { readonly kind: 'ready'; readonly data: DashboardOverviewResponse };
-
-type ForecastView =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly data: DashboardCashFlowForecastResponse };
 
 /** Fonte única dos KPIs (CASH-4B) e dos gráficos da Home (CASH-4C). */
 type MonthlyCashFlowLoadView =
@@ -253,8 +240,7 @@ type ExpandKind =
   | 'categories-expense'
   | 'daily'
   | 'goal'
-  | 'delinquency'
-  | 'forecast';
+  | 'delinquency';
 
 /** Recorte das barras diárias de caixa: baixas realizadas ou vencimentos previstos. */
 type DailyCashMode = 'realized' | 'expected';
@@ -419,7 +405,6 @@ export function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [view, setView] = useState<OverviewView>({ kind: 'loading' });
-  const [forecastView, setForecastView] = useState<ForecastView>({ kind: 'idle' });
   const [monthlyCashFlowView, setMonthlyCashFlowView] = useState<MonthlyCashFlowLoadView>({
     kind: 'idle',
   });
@@ -447,8 +432,6 @@ export function DashboardPage() {
 
   const viewRef = useRef(view);
   viewRef.current = view;
-  const forecastViewRef = useRef(forecastView);
-  forecastViewRef.current = forecastView;
   const monthlyCashFlowViewRef = useRef(monthlyCashFlowView);
   monthlyCashFlowViewRef.current = monthlyCashFlowView;
   const cashMovementHistoryViewRef = useRef(cashMovementHistoryView);
@@ -464,7 +447,6 @@ export function DashboardPage() {
   const cashBalanceHistoryCacheRef = useRef(
     createDashboardFilterCache<DashboardCashBalanceHistoryResponse>(),
   );
-  const forecastCacheRef = useRef(createDashboardFilterCache<DashboardCashFlowForecastResponse>());
   const expectedReceivableDetailsCacheRef = useRef(
     createDashboardFilterCache<DashboardExpectedReceivableDetailsResponse>(),
   );
@@ -489,7 +471,6 @@ export function DashboardPage() {
     async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
       if (shouldSkipOverviewFetch(user, support)) {
         setView({ kind: 'forbidden' });
-        setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setCashMovementHistoryView({ kind: 'idle' });
         setCashBalanceHistoryView({ kind: 'idle' });
@@ -499,7 +480,6 @@ export function DashboardPage() {
       }
       if (!hasOperationalDashboardTenant(user, support)) {
         setView({ kind: 'forbidden' });
-        setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setCashMovementHistoryView({ kind: 'idle' });
         setCashBalanceHistoryView({ kind: 'idle' });
@@ -530,7 +510,6 @@ export function DashboardPage() {
         }
         if (isNeverSynced(data)) {
           setView({ kind: 'never-sync' });
-          setForecastView({ kind: 'idle' });
           setMonthlyCashFlowView({ kind: 'idle' });
             setCashMovementHistoryView({ kind: 'idle' });
             setCashBalanceHistoryView({ kind: 'idle' });
@@ -545,7 +524,6 @@ export function DashboardPage() {
         }
         if (error instanceof DashboardOverviewRequestError && error.kind === 'forbidden') {
           setView({ kind: 'forbidden' });
-          setForecastView({ kind: 'idle' });
           setMonthlyCashFlowView({ kind: 'idle' });
             setCashMovementHistoryView({ kind: 'idle' });
             setCashBalanceHistoryView({ kind: 'idle' });
@@ -560,7 +538,6 @@ export function DashboardPage() {
           return;
         }
         setView({ kind: 'error', message });
-        setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setCashMovementHistoryView({ kind: 'idle' });
         setCashBalanceHistoryView({ kind: 'idle' });
@@ -568,49 +545,6 @@ export function DashboardPage() {
       }
     },
     [support, user],
-  );
-
-  const loadForecast = useCallback(
-    async (
-      signal: AbortSignal,
-      costCenterId: string | null,
-      categoryId: string | null,
-      options?: SoftLoadOptions,
-    ) => {
-      const tenantId = operationalTenantIdRef.current;
-      if (tenantId === null) {
-        return;
-      }
-      const soft = options?.soft === true;
-      const cacheKey = dashboardCashWindowCacheKey(tenantId, costCenterId, categoryId);
-      const cached = forecastCacheRef.current.get(cacheKey);
-      if (soft && cached) {
-        setForecastView({ kind: 'ready', data: cached });
-      } else if (!(soft && forecastViewRef.current.kind === 'ready')) {
-        setForecastView({ kind: 'loading' });
-      }
-      try {
-        const data = await getDashboardCashFlowForecast(costCenterId, categoryId);
-        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
-          return;
-        }
-        forecastCacheRef.current.set(cacheKey, data);
-        setForecastView({ kind: 'ready', data });
-      } catch (error) {
-        if (signal.aborted) {
-          return;
-        }
-        if (soft && forecastViewRef.current.kind === 'ready') {
-          return;
-        }
-        const message =
-          error instanceof DashboardForecastRequestError
-            ? error.message
-            : 'Não foi possível carregar o fluxo previsto.';
-        setForecastView({ kind: 'error', message });
-      }
-    },
-    [],
   );
 
   const loadMonthlyCashFlow = useCallback(
@@ -900,7 +834,6 @@ export function DashboardPage() {
     cashFlowCacheRef.current.clear();
     cashMovementHistoryCacheRef.current.clear();
     cashBalanceHistoryCacheRef.current.clear();
-    forecastCacheRef.current.clear();
 
     setCashBalanceHistoryView({ kind: 'idle' });
     setCashMovementHistoryView({ kind: 'idle' });
@@ -1034,7 +967,6 @@ export function DashboardPage() {
   ]);
 
   const selectedMonthPhase = dashboardMonthPhase(selectedMonthKey, todayMonthKey);
-  const cashWindowsApply = selectedMonthPhase === 'current';
 
   useEffect(() => {
     if (status !== 'authenticated') {
@@ -1045,17 +977,6 @@ export function DashboardPage() {
     void loadOverview(controller.signal, selectedCostCenterId, { soft });
     return () => controller.abort();
   }, [loadOverview, operationalTenantId, selectedCostCenterId, status]);
-
-  useEffect(() => {
-    if (view.kind !== 'ready' || !cashWindowsApply) {
-      setForecastView({ kind: 'idle' });
-      return;
-    }
-    const controller = new AbortController();
-    const soft = forecastViewRef.current.kind === 'ready';
-    void loadForecast(controller.signal, selectedCostCenterId, selectedCategoryId, { soft });
-    return () => controller.abort();
-  }, [cashWindowsApply, loadForecast, selectedCategoryId, selectedCostCenterId, view.kind]);
 
   useEffect(() => {
     if (view.kind !== 'ready') {
@@ -1249,9 +1170,6 @@ export function DashboardPage() {
   const retryOverview = () => {
     void loadOverview(new AbortController().signal, selectedCostCenterId);
   };
-  const retryForecast = () => {
-    void loadForecast(new AbortController().signal, selectedCostCenterId, selectedCategoryId);
-  };
   const retryCashFlow = () => {
     void loadMonthlyCashFlow(
       new AbortController().signal,
@@ -1326,7 +1244,6 @@ export function DashboardPage() {
   const revenueGoalData = revenueGoalView.kind === 'ready' ? revenueGoalView.data : null;
   const revenueGoalError = revenueGoalView.kind === 'error' ? revenueGoalView.message : null;
   const canExpandGoal = gate === 'ready' && revenueGoalData !== null;
-  const forecastError = forecastView.kind === 'error' ? forecastView.message : null;
 
   const billingKpi = cashFlowModel
     ? toCashBillingKpi(cashFlowModel, selectedMonthPhase)
@@ -1503,7 +1420,6 @@ export function DashboardPage() {
     cashFlowModel.realizedOutflowsByCategory !== null &&
     cashFlowModel.realizedOutflowsByCategory.items.length > 0;
   const canExpandDelinquency = gate === 'ready' && monthlyCashFlowView.kind === 'ready';
-  const canExpandForecast = gate === 'ready' && cashWindowsApply && forecastView.kind === 'ready';
 
   const closeExpand = useCallback(() => {
     setExpandKind(null);
@@ -1983,29 +1899,6 @@ export function DashboardPage() {
           </WidgetBody>
         </WidgetShell>
       </div>
-
-      {cashWindowsApply ? (
-        <WidgetShell
-          id="fluxo-previsto"
-          sectionId="fluxo-previsto"
-          title="Fluxo previsto"
-          subtitle="Entradas e saídas previstas para os próximos 90 dias"
-          expandable={canExpandForecast}
-          onExpand={canExpandForecast ? () => setExpandKind('forecast') : undefined}
-        >
-          <WidgetBody
-            gate={gate}
-            loadingLabel="Carregando fluxo previsto"
-            error={forecastError}
-            onRetry={retryForecast}
-            pending={forecastView.kind !== 'ready'}
-          >
-            {forecastView.kind === 'ready' ? (
-              <ForecastPanel buckets={forecastView.data.buckets} />
-            ) : null}
-          </WidgetBody>
-        </WidgetShell>
-      ) : null}
 
       <p className={styles.hint}>
         Clique em um card ou gráfico para abrir o detalhe em regime de caixa do mês selecionado.
@@ -2556,19 +2449,6 @@ export function DashboardPage() {
             <p className={styles.expandLabel}>
               Lista de títulos vencidos ainda não disponível neste detalhe analítico.
             </p>
-          </div>
-        </WidgetExpandDialog>
-      ) : null}
-
-      {expandKind === 'forecast' && forecastView.kind === 'ready' ? (
-        <WidgetExpandDialog
-          open
-          title="Fluxo previsto"
-          subtitle={`Horizonte de ${forecastView.data.horizonDays} dias · entradas e saídas previstas`}
-          onClose={closeExpand}
-        >
-          <div className={styles.expandBody}>
-            <ForecastPanel buckets={forecastView.data.buckets} />
           </div>
         </WidgetExpandDialog>
       ) : null}

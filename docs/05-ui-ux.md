@@ -379,8 +379,8 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   CASH (`MonthlyCashFlow`). Competência não volta nos modais.
   Meta / Movimentação preservados; Comparativo removido (08-B.4).
   Expand `comparison` (Entradas × Saídas acumulado) removido na 08-A.
-  PRE-F13-HOME-POLISH-2: Inadimplência e Fluxo previsto
-  também expansíveis.
+  PRE-F13-HOME-POLISH-2: Inadimplência expansível (Fluxo previsto removido
+  da Home na Correção 09).
   PRE-F13-HOME-POLISH-3: modais enriquecidos com rankings de categorias
   realizadas e composição explícita do Resultado; previsto sem categoria
   inventada.
@@ -431,9 +431,11 @@ Grade secundária (`secondaryGrid` / `compactSecondaryGrid`):
   (faixa compacta em 2 colunas: Meta de faturamento | Inadimplência;
   Leitura executiva removida da Home — Correção 07.)
 
-Após Meta | Inadimplência: Fluxo previsto (quando o mês corrente aplica),
-sem grade terciária. Comparativo mensal e `tertiaryGrid` removidos na
-Correção 08-B.4 (histórico coberto pelo modo Mensal 12m).
+Após Meta | Inadimplência: sem widget adicional. O card **Fluxo previsto**
+(90 dias) foi removido da Home na Correção 09 — o modo Realizado/Previsto
+da Movimentação financeira permanece intacto. Comparativo mensal e
+`tertiaryGrid` removidos na Correção 08-B.4 (histórico coberto pelo modo
+Mensal 12m).
 
 Composição V2.2 — Visual Fidelity Pass (IMPLEMENTADA / SUPERSEDED pela V2.3.1 como baseline da Home):
 
@@ -527,7 +529,8 @@ Layout modular denso (não relatório A4):
 4. Grid: Receitas × Despesas (acumulado por competenceDate) | Donut despesas |
    Top despesas;
 5. Grid: Até o fim do mês (só mês atual) | Leitura executiva | Qualidade recebíveis;
-6. Fluxo previsto 90d (só mês atual) — painel denso, sem tabela espremida.
+6. ~~Fluxo previsto 90d~~ — removido da Home na Correção 09
+   (`GET /dashboard/cash-flow-forecast` permanece no backend).
 
 Interações: sparklines/tooltips (séries de competência), hover donut↔legenda,
 cards expansíveis (modal ESC/X), ranking Top 5.
@@ -545,7 +548,7 @@ Ordem final da Home:
 3. **Até o fim do mês** — somente no mês civil atual;
 4. Leitura executiva mensal;
 5. Receitas por categoria | Despesas por categoria (lado a lado no desktop);
-6. Fluxo previsto — somente no mês civil atual;
+6. ~~Fluxo previsto~~ — removido da Home na Correção 09;
 7. fim da Home.
 
 **Removidos da Home (capacidade preservada no backend):**
@@ -563,11 +566,11 @@ Ordem final da Home:
 * não usar saldo/resultado/lucro/prejuízo/caixa disponível;
 * mês passado/futuro selecionado: bloco oculto (não fingir histórico).
 
-**Fluxo previsto** (90 dias a partir de hoje — inalterado):
+**Fluxo previsto** (Correção 09 — removido da Home):
 
-* barras CSS Entradas × Saídas + tabela compacta;
-* líquido = `net` do bucket, não saldo acumulado;
-* visível apenas no mês civil atual nesta fase.
+* widget/card da Home e expand associados removidos;
+* modo Realizado/Previsto da Movimentação financeira **não** é afetado;
+* `GET /dashboard/cash-flow-forecast` permanece no backend (sem consumidor na Home).
 
 Composição E2 — Despesas por categoria na Home (P2):
 

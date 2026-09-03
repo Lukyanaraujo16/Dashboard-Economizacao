@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { dashboardCashFlowForecastPath, dashboardUpcomingPath } from '../src/lib/api-config';
-import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
+import { dashboardUpcomingPath } from '../src/lib/api-config';
 import { getDashboardUpcoming } from '../src/services/dashboard/upcoming';
 
 afterEach(() => {
@@ -17,14 +16,6 @@ const upcomingBody = {
   summary: { receivable: '0', payable: '0', net: '0' },
   receivables: { items: [] },
   payables: { items: [] },
-};
-
-const forecastBody = {
-  today: '2026-08-19',
-  from: '2026-08-19',
-  to: '2026-11-17',
-  horizonDays: 90,
-  buckets: [{ key: '2026-08', inflows: '10', outflows: '4', net: '6' }],
 };
 
 describe('dashboard 10C services', () => {
@@ -66,44 +57,6 @@ describe('dashboard 10C services', () => {
     );
 
     await expect(getDashboardUpcoming(15)).rejects.toMatchObject({ kind: 'invalid_response' });
-  });
-
-  it('forecast busca horizonte do backend sem query', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify(forecastBody),
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const result = await getDashboardCashFlowForecast();
-
-    expect(fetchMock).toHaveBeenCalledWith(dashboardCashFlowForecastPath(), {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    });
-    expect(result.horizonDays).toBe(90);
-    expect(typeof result.buckets[0]?.net).toBe('string');
-  });
-
-  it('forecast envia category e não inclui situation', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify(forecastBody),
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    const center = '11111111-1111-4111-8111-111111111111';
-    const category = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    await getDashboardCashFlowForecast(center, category);
-    expect(fetchMock).toHaveBeenCalledWith(dashboardCashFlowForecastPath(center, category), {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    });
-    expect(dashboardCashFlowForecastPath(center, category)).toContain(`category=${category}`);
-    expect(dashboardCashFlowForecastPath(center, category)).not.toContain('situation=');
   });
 
   it('rejeita unpaid numérico', async () => {

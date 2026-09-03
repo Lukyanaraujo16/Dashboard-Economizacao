@@ -13,7 +13,6 @@ import { ThemeProvider } from '../src/theme';
 import { DashboardPage } from '../src/components/dashboard/dashboard-page';
 import { getDashboardOverview } from '../src/services/dashboard/overview';
 import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/month-end-cash-pressure';
-import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
@@ -82,7 +81,6 @@ vi.mock('../src/services/dashboard/overview', () => ({ getDashboardOverview: vi.
 vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
   getDashboardMonthEndCashPressure: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/forecast', () => ({ getDashboardCashFlowForecast: vi.fn() }));
 vi.mock('../src/services/dashboard/monthly-expenses', () => ({
   getDashboardMonthlyExpenses: vi.fn(),
 }));
@@ -101,7 +99,6 @@ vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories:
 
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
-const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
@@ -170,13 +167,6 @@ const emptyRevenue: DashboardMonthlyRevenueResponse = {
 function stubDashboardApis() {
   getOverview.mockResolvedValue(syncedOverview);
   getMonthEnd.mockResolvedValue(emptyMonthEnd);
-  getForecast.mockResolvedValue({
-    today: '2026-08-19',
-    from: '2026-08-19',
-    to: '2026-11-17',
-    horizonDays: 90,
-    buckets: [{ key: '2026-08', inflows: '0', outflows: '0', net: '0' }],
-  });
   getMonthlyExpenses.mockResolvedValue(emptyExpenses);
   getMonthlyRevenue.mockResolvedValue(emptyRevenue);
   getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);

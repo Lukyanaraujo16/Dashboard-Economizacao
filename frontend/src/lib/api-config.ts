@@ -213,16 +213,6 @@ export function dashboardUpcomingPath(
   return `${DASHBOARD_API_PREFIX}/upcoming?${params.toString()}`;
 }
 
-export function dashboardCashFlowForecastPath(
-  costCenterId?: string | null,
-  categoryId?: string | null,
-): string {
-  return `${DASHBOARD_API_PREFIX}/cash-flow-forecast${dashboardQueryString({
-    costCenterId,
-    categoryId,
-  })}`;
-}
-
 export function dashboardExpenseCompositionPath(costCenterId?: string | null): string {
   return `${DASHBOARD_API_PREFIX}/expense-composition${dashboardQueryString({ costCenterId })}`;
 }

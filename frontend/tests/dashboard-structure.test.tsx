@@ -18,8 +18,6 @@ import {
 } from '../src/services/dashboard/overview.types';
 import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/month-end-cash-pressure';
 import type { DashboardMonthEndCashPressureResponse } from '../src/services/dashboard/month-end-cash-pressure.types';
-import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
-import type { DashboardCashFlowForecastResponse } from '../src/services/dashboard/forecast.types';
 import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
 import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
@@ -58,10 +56,6 @@ vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
   getDashboardMonthEndCashPressure: vi.fn(),
 }));
 
-vi.mock('../src/services/dashboard/forecast', () => ({
-  getDashboardCashFlowForecast: vi.fn(),
-}));
-
 vi.mock('../src/services/dashboard/monthly-expenses', () => ({
   getDashboardMonthlyExpenses: vi.fn(),
 }));
@@ -89,7 +83,6 @@ vi.mock('../src/services/dashboard/categories', () => ({
 
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
-const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
@@ -114,17 +107,6 @@ const emptyMonthEnd: DashboardMonthEndCashPressureResponse = {
   from: '2026-08-19',
   to: '2026-08-31',
   summary: { receivable: '0', payable: '0', net: '0' },
-};
-
-const emptyForecast: DashboardCashFlowForecastResponse = {
-  today: '2026-08-19',
-  from: '2026-08-19',
-  to: '2026-11-17',
-  horizonDays: 90,
-  buckets: [
-    { key: '2026-08', inflows: '0', outflows: '0', net: '0' },
-    { key: '2026-09', inflows: '0', outflows: '0', net: '0' },
-  ],
 };
 
 const emptyMonthlyExpenses: DashboardMonthlyExpenseResponse = {
@@ -250,7 +232,6 @@ function renderDashboard(
 beforeEach(() => {
   dashboardSearchParams = new URLSearchParams();
   getMonthEnd.mockResolvedValue(emptyMonthEnd);
-  getForecast.mockResolvedValue(emptyForecast);
   getMonthlyExpenses.mockResolvedValue(emptyMonthlyExpenses);
   getMonthlyRevenue.mockResolvedValue(emptyMonthlyRevenue);
   getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
@@ -322,10 +303,11 @@ describe('Dashboard V2 structure', () => {
       'Receitas por categoria',
       'Meta de faturamento',
       'Inadimplência',
-      'Fluxo previsto',
     ]) {
       expect(screen.getByRole('heading', { name: title })).toBeTruthy();
     }
+    expect(screen.queryByRole('heading', { name: 'Fluxo previsto' })).toBeNull();
+    expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
 
     expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
     expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
@@ -443,11 +425,9 @@ describe('Dashboard V2 structure', () => {
     expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, centerId, categoryId);
     expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-07', centerId, categoryId);
-    expect(getForecast).toHaveBeenCalledWith(centerId, categoryId);
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getOverview).toHaveBeenCalledWith(centerId);
     expect(getRevenueGoal).toHaveBeenCalledWith(null);
-    expect(getForecast.mock.calls.every((call) => call.length === 2)).toBe(true);
   });
 
   it('nota de meta consolidada aparece com categoria selecionada', async () => {
@@ -489,9 +469,7 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="despesas-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="receitas-categoria"]')).toBeTruthy();
-    expect(
-      sectionScope('fluxo-previsto').getByText('Sem lançamentos previstos no horizonte.'),
-    ).toBeTruthy();
+    expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
   });
 
   it('never-sync não mostra zeros como dado financeiro', async () => {
@@ -516,7 +494,6 @@ describe('Dashboard V2 structure', () => {
     ).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText(/R\$\s*0,00/)).toBeNull();
     expect(getMonthEnd).not.toHaveBeenCalled();
-    expect(getForecast).not.toHaveBeenCalled();
     expect(getMonthlyExpenses).not.toHaveBeenCalled();
     expect(getMonthlyRevenue).not.toHaveBeenCalled();
   });
@@ -621,12 +598,11 @@ describe('Dashboard V2 structure', () => {
     ).toBeGreaterThan(0);
     expect(getOverview).not.toHaveBeenCalled();
     expect(getMonthEnd).not.toHaveBeenCalled();
-    expect(getForecast).not.toHaveBeenCalled();
     expect(getMonthlyExpenses).not.toHaveBeenCalled();
     expect(getMonthlyRevenue).not.toHaveBeenCalled();
   });
 
-  it('mês passado oculta Fluxo previsto', async () => {
+  it('mês passado mantém Fluxo previsto ausente', async () => {
     dashboardSearchParams = new URLSearchParams('month=2026-07');
     getOverview.mockResolvedValue(syncedOverview);
     renderDashboard();
@@ -637,7 +613,6 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
     expect(getMonthEnd).not.toHaveBeenCalled();
-    expect(getForecast).not.toHaveBeenCalled();
     expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-07', null, null);
     expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-06', null, null);
     expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
@@ -650,35 +625,6 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-home-band="compact-kpis"]')?.getAttribute('data-cols')).toBe(
       '2',
     );
-  });
-
-  it('fluxo previsto usa o líquido do backend e resume os picos do horizonte', async () => {
-    getOverview.mockResolvedValue(syncedOverview);
-    getForecast.mockResolvedValue({
-      ...emptyForecast,
-      buckets: [
-        { key: '2026-08', inflows: '10', outflows: '4', net: '6' },
-        { key: '2026-09', inflows: '0', outflows: '0', net: '0' },
-      ],
-    });
-    renderDashboard();
-
-    const scope = await waitFor(() => {
-      const node = sectionScope('fluxo-previsto');
-      expect(node.getAllByText('ago/2026').length).toBeGreaterThan(0);
-      return node;
-    });
-    expect(scope.getAllByText('set/2026').length).toBeGreaterThan(0);
-    expect(scope.getAllByText(/R\$\s*6,00/).length).toBeGreaterThan(0);
-    expect(scope.getByText('Meses previstos')).toBeTruthy();
-    expect(scope.getByText('Maior entrada prevista')).toBeTruthy();
-    expect(scope.getByText('Maior saída prevista')).toBeTruthy();
-    expect(
-      scope.getByText(
-        'O líquido é a diferença prevista de cada mês e não o saldo bancário acumulado.',
-      ),
-    ).toBeTruthy();
-    expect(screen.queryByText(/saldo projetado/i)).toBeNull();
   });
 
   it('KPIs de caixa usam MonthlyCashFlow e não totais de competência', async () => {
@@ -697,25 +643,6 @@ describe('Dashboard V2 structure', () => {
     ).toBeNull();
     expect(kpiScope('Faturamento').queryByText(/R\$\s*10\.000,00/)).toBeNull();
     expect(document.querySelector('[data-financial-section="receitas-mes"]')).toBeNull();
-  });
-
-  it('erro de cash-flow não derruba KPIs nem o fluxo previsto', async () => {
-    getOverview.mockResolvedValue(syncedOverview);
-    getMonthlyCashFlow.mockRejectedValue(
-      new DashboardMonthlyCashFlowRequestError(
-        'unavailable',
-        'Não foi possível carregar o fluxo de caixa do mês.',
-      ),
-    );
-    renderDashboard();
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByText('Não foi possível carregar o fluxo de caixa do mês.').length,
-      ).toBeGreaterThan(0);
-    });
-    expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
   });
 
   it('Leitura executiva e banda executive-reading estão ausentes da Home', async () => {
@@ -750,7 +677,8 @@ describe('Dashboard V2 structure', () => {
     expect(
       (await screen.findAllByText('Não foi possível carregar o fluxo de caixa do mês.')).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'Fluxo previsto' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Fluxo previsto' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
   });
 
   it('Inadimplência mostra vencido agora e taxa global D1', async () => {
@@ -787,7 +715,6 @@ describe('Dashboard V2 structure', () => {
     });
     expect(getOverview).toHaveBeenCalledTimes(1);
     expect(getMonthEnd).not.toHaveBeenCalled();
-    expect(getForecast).toHaveBeenCalledTimes(1);
     expect(getMonthlyCashFlow).toHaveBeenCalledTimes(1);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, null);
   });

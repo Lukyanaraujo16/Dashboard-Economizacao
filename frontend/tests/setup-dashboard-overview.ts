@@ -31,7 +31,6 @@ beforeEach(() => {
     }
     if (
       path.endsWith('/dashboard/upcoming') ||
-      path.endsWith('/dashboard/cash-flow-forecast') ||
       path.endsWith('/dashboard/expense-composition') ||
       path.endsWith('/dashboard/receivable-composition') ||
       path.endsWith('/dashboard/monthly-revenue') ||

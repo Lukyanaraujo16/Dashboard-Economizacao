@@ -6,8 +6,6 @@ import { getDashboardOverview } from '../src/services/dashboard/overview';
 import type { DashboardOverviewResponse } from '../src/services/dashboard/overview.types';
 import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/month-end-cash-pressure';
 import type { DashboardMonthEndCashPressureResponse } from '../src/services/dashboard/month-end-cash-pressure.types';
-import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
-import type { DashboardCashFlowForecastResponse } from '../src/services/dashboard/forecast.types';
 import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
 import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
@@ -46,9 +44,6 @@ vi.mock('../src/services/dashboard/overview', () => ({
 vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
   getDashboardMonthEndCashPressure: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/forecast', () => ({
-  getDashboardCashFlowForecast: vi.fn(),
-}));
 vi.mock('../src/services/dashboard/monthly-expenses', () => ({
   getDashboardMonthlyExpenses: vi.fn(),
 }));
@@ -71,7 +66,6 @@ vi.mock('../src/services/dashboard/categories', () => ({
 
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
-const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
@@ -169,14 +163,6 @@ const monthEnd: DashboardMonthEndCashPressureResponse = {
   summary: { receivable: '0', payable: '0', net: '0' },
 };
 
-const forecast: DashboardCashFlowForecastResponse = {
-  today: '2026-08-19',
-  from: '2026-08-19',
-  to: '2026-11-17',
-  horizonDays: 90,
-  buckets: [{ key: '2026-08', inflows: '0', outflows: '0', net: '0' }],
-};
-
 function kpiScope(title: string) {
   const heading = within(
     document.querySelector('[data-financial-section="resumo-financeiro"]') as HTMLElement,
@@ -209,7 +195,6 @@ beforeEach(() => {
   dashboardSearchParams = new URLSearchParams();
   getOverview.mockResolvedValue(syncedOverview);
   getMonthEnd.mockResolvedValue(monthEnd);
-  getForecast.mockResolvedValue(forecast);
   getMonthlyExpenses.mockResolvedValue(loadedExpenses);
   getMonthlyRevenue.mockResolvedValue(loadedRevenue);
   getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);

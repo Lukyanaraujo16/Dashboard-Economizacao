@@ -19,7 +19,6 @@ import {
 } from '../src/lib/dashboard-filter-cache';
 import { getDashboardOverview } from '../src/services/dashboard/overview';
 import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/month-end-cash-pressure';
-import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
@@ -29,7 +28,6 @@ import { getDashboardCategories } from '../src/services/dashboard/categories';
 import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
 import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
 import type { DashboardMonthEndCashPressureResponse } from '../src/services/dashboard/month-end-cash-pressure.types';
-import type { DashboardCashFlowForecastResponse } from '../src/services/dashboard/forecast.types';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import type { DashboardOverviewResponse } from '../src/services/dashboard/overview.types';
 import {
@@ -90,7 +88,6 @@ vi.mock('../src/services/dashboard/overview', () => ({ getDashboardOverview: vi.
 vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
   getDashboardMonthEndCashPressure: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/forecast', () => ({ getDashboardCashFlowForecast: vi.fn() }));
 vi.mock('../src/services/dashboard/monthly-expenses', () => ({
   getDashboardMonthlyExpenses: vi.fn(),
 }));
@@ -109,7 +106,6 @@ vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories:
 
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
-const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
@@ -186,14 +182,6 @@ const emptyMonthEnd: DashboardMonthEndCashPressureResponse = {
   summary: { receivable: '0', payable: '0', net: '0' },
 };
 
-const emptyForecast: DashboardCashFlowForecastResponse = {
-  today: '2026-08-21',
-  from: '2026-08-21',
-  to: '2026-11-17',
-  horizonDays: 90,
-  buckets: [{ key: '2026-08', inflows: '0', outflows: '0', net: '0' }],
-};
-
 const emptyGoal: RevenueGoalSnapshot = {
   monthKey: '2026-08',
   target: null,
@@ -242,7 +230,6 @@ describe('CC1.3.1 soft filter refresh', () => {
     pushMock.mockClear();
     getOverview.mockResolvedValue(syncedOverview);
     getMonthEnd.mockResolvedValue(emptyMonthEnd);
-    getForecast.mockResolvedValue(emptyForecast);
     getMonthlyExpenses.mockResolvedValue(emptyExpenses);
     getMonthlyRevenue.mockResolvedValue(revenueWithTotal('1000'));
     getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
@@ -392,7 +379,6 @@ describe('CC1.3.1 soft filter refresh', () => {
 
     await waitFor(() => {
       expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, categoryId);
-      expect(getForecast).toHaveBeenCalledWith(null, categoryId);
       expect(getMonthEnd).not.toHaveBeenCalled();
     });
     expect(getMonthlyRevenue).not.toHaveBeenCalled();

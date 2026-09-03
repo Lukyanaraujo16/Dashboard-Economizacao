@@ -1,4 +1,9 @@
-import type { DashboardForecastBucket } from '../../services/dashboard/forecast.types';
+/** Bucket genérico entrada/saída/líquido — escala visual (não contrato de API). */
+export type InflowOutflowBucket = {
+  readonly inflows: string;
+  readonly outflows: string;
+  readonly net: string;
+};
 
 const MONTHS_PT = [
   'jan',
@@ -45,7 +50,7 @@ export function decimalAbsScaled(value: string): bigint {
   return BigInt(wholeRaw ?? '0') * 10n ** VISUAL_SCALE + BigInt(frac || '0');
 }
 
-export function maxInflowOutflowScale(buckets: readonly DashboardForecastBucket[]): bigint {
+export function maxInflowOutflowScale(buckets: readonly InflowOutflowBucket[]): bigint {
   let max = 0n;
   for (const bucket of buckets) {
     const inflow = decimalAbsScaled(bucket.inflows);
@@ -73,7 +78,7 @@ export function visualBarPercent(value: string, maxAbs: bigint): number {
   return asNumber > 100 ? 100 : asNumber;
 }
 
-export function allForecastBucketsZero(buckets: readonly DashboardForecastBucket[]): boolean {
+export function allForecastBucketsZero(buckets: readonly InflowOutflowBucket[]): boolean {
   return buckets.every(
     (bucket) =>
       decimalAbsScaled(bucket.inflows) === 0n &&

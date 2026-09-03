@@ -66,9 +66,6 @@ export type {
 export { ExecutiveSignals, signalTone } from './executive-signals';
 export type { ExecutiveSignal, ExecutiveSignalsProps, SignalTone } from './executive-signals';
 
-export { ForecastPanel } from './forecast-panel';
-export type { ForecastPanelBucket, ForecastPanelProps } from './forecast-panel';
-
 export { RatioMeter } from './ratio-meter';
 export type { RatioMeterProps } from './ratio-meter';
 

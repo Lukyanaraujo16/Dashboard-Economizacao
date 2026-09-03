@@ -6,8 +6,6 @@ import { DashboardPage } from '../src/components/dashboard';
 import { getDashboardOverview } from '../src/services/dashboard/overview';
 import type { DashboardOverviewResponse } from '../src/services/dashboard/overview.types';
 import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/month-end-cash-pressure';
-import { getDashboardCashFlowForecast } from '../src/services/dashboard/forecast';
-import type { DashboardCashFlowForecastResponse } from '../src/services/dashboard/forecast.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { getDashboardCashMovementHistory } from '../src/services/dashboard/cash-movement-history';
 import type { DashboardCashMovementHistoryResponse } from '../src/services/dashboard/cash-movement-history.types';
@@ -38,7 +36,6 @@ vi.mock('../src/services/dashboard/overview', () => ({ getDashboardOverview: vi.
 vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
   getDashboardMonthEndCashPressure: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/forecast', () => ({ getDashboardCashFlowForecast: vi.fn() }));
 vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
   getDashboardMonthlyCashFlow: vi.fn(),
 }));
@@ -57,7 +54,6 @@ vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories:
 
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
-const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getHistory = vi.mocked(getDashboardCashMovementHistory);
 const getBalance = vi.mocked(getDashboardCashBalanceHistory);
@@ -75,14 +71,6 @@ const syncedOverview: DashboardOverviewResponse = {
     lastSuccessfulSyncAt: '2026-08-10T09:00:00.000Z',
     lastErrorCode: null,
   },
-};
-
-const forecast: DashboardCashFlowForecastResponse = {
-  today: '2026-08-19',
-  from: '2026-08-19',
-  to: '2026-11-17',
-  horizonDays: 90,
-  buckets: [{ key: '2026-08', inflows: '100', outflows: '50', net: '50' }],
 };
 
 const emptyGoal: RevenueGoalSnapshot = {
@@ -179,7 +167,6 @@ beforeEach(() => {
   dashboardSearchParams = new URLSearchParams('month=2026-08');
   getOverview.mockResolvedValue(syncedOverview);
   getMonthEnd.mockRejectedValue(new Error('not used'));
-  getForecast.mockResolvedValue(forecast);
   getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
   getHistory.mockResolvedValue(buildHistory('2026-08'));
   getBalance.mockResolvedValue(balanceFixture());
