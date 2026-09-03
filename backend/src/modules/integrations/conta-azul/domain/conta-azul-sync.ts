@@ -86,6 +86,10 @@ export type ContaAzulSyncCounts = {
   readonly ledgerSkippedInvalid: number;
   readonly ledgerIdentityMismatches: number;
   readonly ledgerParcelFailures: number;
+  /** 08-C1 — captura saldo-atual por conta ativa. */
+  readonly balanceSnapshotsAttempted: number;
+  readonly balanceSnapshotsUpserted: number;
+  readonly balanceSnapshotsFailed: number;
 };
 
 export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
@@ -110,6 +114,9 @@ export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
   ledgerSkippedInvalid: 0,
   ledgerIdentityMismatches: 0,
   ledgerParcelFailures: 0,
+  balanceSnapshotsAttempted: 0,
+  balanceSnapshotsUpserted: 0,
+  balanceSnapshotsFailed: 0,
 };
 
 export type ContaAzulSyncTrigger = 'MANUAL' | 'SCHEDULED';

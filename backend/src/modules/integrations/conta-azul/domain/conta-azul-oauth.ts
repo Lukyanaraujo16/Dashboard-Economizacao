@@ -12,6 +12,11 @@ export const CONTA_AZUL_CATEGORIES_URL = `${CONTA_AZUL_API_BASE_URL}/v1/categori
 
 export const CONTA_AZUL_FINANCIAL_ACCOUNTS_URL = `${CONTA_AZUL_API_BASE_URL}/v1/conta-financeira`;
 
+/** Saldo atual oficial por conta. Path oficial 2026 — NÃO usar `/saldo`. */
+export function contaAzulFinancialAccountCurrentBalanceUrl(accountExternalId: string): string {
+  return `${CONTA_AZUL_FINANCIAL_ACCOUNTS_URL}/${encodeURIComponent(accountExternalId)}/saldo-atual`;
+}
+
 export const CONTA_AZUL_PEOPLE_URL = `${CONTA_AZUL_API_BASE_URL}/v1/pessoas`;
 
 export const CONTA_AZUL_RECEIVABLES_SEARCH_URL = `${CONTA_AZUL_API_BASE_URL}/v1/financeiro/eventos-financeiros/contas-a-receber/buscar`;

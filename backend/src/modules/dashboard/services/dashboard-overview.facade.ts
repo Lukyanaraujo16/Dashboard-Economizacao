@@ -22,6 +22,7 @@ import {
 import type { RevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
 import type {
   DashboardCashFlowForecastResponse,
+  DashboardCashBalanceHistoryResponse,
   DashboardCashMovementHistoryResponse,
   DashboardCategoriesResponse,
   DashboardCostCentersResponse,
@@ -56,6 +57,7 @@ import { toDashboardUpcomingResponse } from '../http/to-dashboard-upcoming-respo
 import { toExpensesReportResponse } from '../../reports/http/to-expenses-report-response.js';
 import { toRevenueReportResponse } from '../../reports/http/to-revenue-report-response.js';
 import type { ExpensesReportResponse, RevenueReportResponse } from '../../reports/domain/types.js';
+import type { CashBalanceHistoryService } from './cash-balance-history.service.js';
 
 /** Competências exibidas no histórico compacto da meta, incluindo a selecionada. */
 export const REVENUE_GOAL_HISTORY_MONTHS = 6;
@@ -130,6 +132,10 @@ export type DashboardOverviewFacade = {
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardCashMovementHistoryResponse>;
+  getCashBalanceHistory(
+    auth: AuthenticatedRequestContext,
+    monthKey: string | null,
+  ): Promise<DashboardCashBalanceHistoryResponse>;
   getExpectedReceivableDetails(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
@@ -179,6 +185,8 @@ export type DashboardOverviewFacadeDependencies = {
   readonly expectedReceivableDetails?: ExpectedReceivableDetailsService;
   /** Detalhe lazy de Contas a pagar (CASH-5 payable details). */
   readonly expectedPayableDetails?: ExpectedPayableDetailsService;
+  /** 08-C2 — histórico de saldo bancário por snapshots. */
+  readonly cashBalanceHistory?: CashBalanceHistoryService;
 };
 
 export function createDashboardOverviewFacade(
@@ -388,6 +396,15 @@ export function createDashboardOverviewFacade(
         ),
       );
       return toDashboardCashMovementHistoryResponse(flows);
+    },
+
+    async getCashBalanceHistory(auth, monthKey) {
+      const service = requireCashBalanceHistory(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      return service.getCashBalanceHistory({
+        tenantId,
+        ...(monthKey === null ? {} : { monthKey }),
+      });
     },
 
     async getExpectedReceivableDetails(auth, monthKey, costCenterId = null, categoryId = null) {
@@ -611,6 +628,17 @@ function requireCashFlow(deps: DashboardOverviewFacadeDependencies): MonthlyCash
     );
   }
   return deps.cashFlow;
+}
+
+function requireCashBalanceHistory(
+  deps: DashboardOverviewFacadeDependencies,
+): CashBalanceHistoryService {
+  if (!deps.cashBalanceHistory) {
+    throw new Error(
+      'CashBalanceHistoryService é obrigatório para cash-balance-history.',
+    );
+  }
+  return deps.cashBalanceHistory;
 }
 
 function requireOperationalTenantId(auth: AuthenticatedRequestContext): string {

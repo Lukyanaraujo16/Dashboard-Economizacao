@@ -341,15 +341,22 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   (último ponto = `managerialResult`); Faturamento = coverage ratio
   (mês corrente) quando disponível — não inventa “faturamento diário”;
 * Grade principal: Movimentação financeira = barras diárias com toggle
-  Realizado | Previsto **ou** histórico Mensal de 12 meses (Correção 08-B).
+  Realizado | Previsto **ou** histórico Mensal de 12 meses (Correção 08-B)
+  + linha de **Saldo bancário** real (08-C3/C4) quando disponível.
   Granularidade `[ Diária | Mensal ]` (default Diária). Diária = 08-A
   (Realizado = entradas/saídas por dia de baixa; Previsto = AR/AP no prazo
   por vencimento). Mensal = somente caixa realizado, 12 meses civis
   terminando no mês selecionado (`GET /dashboard/cash-movement-history`,
   barras agrupadas Entradas|Saídas). Realizado|Previsto **escondido** no
   Mensal. Substitui o antigo card Entradas × Saídas (acumulado) e consolida
-  o antigo widget inferior Movimentação diária. Saldo bancário **não**
-  entregue (08-C);
+  o antigo widget inferior Movimentação diária.
+  Saldo bancário (`GET /dashboard/cash-balance-history`):
+  - Diária + Realizado: linha sobreposta (eixo Y secundário) com `daily[]`;
+  - Diária + Previsto: **sem** saldo;
+  - Mensal: linha com `monthly[]` (saldo final do mês);
+  - category/costCenter ativos: linha **ocultada** (saldo é consolidado total);
+  - cobertura inicia no primeiro snapshot real; sem histórico retroativo;
+  - `coverage=none` → sem linha; `partial` → nota discreta “disponível a partir de…”.
 * CASH-4C-CAT: Despesas/Receitas por categoria = **somente caixa realizado**
   (`realizedByCategory.outflows` / `.inflows`); fecham com
   `realized.outflows` / `realized.inflows`; previsto e vencidos fora;
@@ -394,7 +401,8 @@ Grade principal (`mainGrid`):
   Realizado | Previsto (08-A). Mensal = 12 meses realizados via
   `GET /dashboard/cash-movement-history` (mês selecionado fecha a janela).
   Antigo `entradas-saidas` (Entradas × Saídas acumulado) removido da Home.
-  Saldo bancário fora de escopo.
+  Saldo bancário real (08-C3/C4): linha via `GET /dashboard/cash-balance-history`
+  no Diário Realizado e no Mensal; oculto em Previsto e com category/CC.
 
 Grade de categorias (`categoryGrid`, abaixo do gráfico grande):
 * Despesas por categoria (`sectionId` `despesas-categoria`) — caixa

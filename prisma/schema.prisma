@@ -56,6 +56,7 @@ model Tenant {
   revenueGoals        RevenueGoal[]
   financialTransactions FinancialTransaction[]
   financialTransfers    FinancialTransfer[]
+  financialAccountBalanceSnapshots FinancialAccountBalanceSnapshot[]
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
 
@@ -215,6 +216,7 @@ model Integration {
   costCenters           CostCenter[]
   financialTransactions FinancialTransaction[]
   financialTransfers    FinancialTransfer[]
+  financialAccountBalanceSnapshots FinancialAccountBalanceSnapshot[]
   syncRuns              SyncRun[]
   syncCursors           IntegrationSyncCursor[]
 
@@ -386,10 +388,37 @@ model FinancialAccount {
   updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
   tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  balanceSnapshots FinancialAccountBalanceSnapshot[]
 
   @@unique([integrationId, externalId], map: "uq_financial_accounts_integration_external_id")
   @@index([tenantId], map: "idx_financial_accounts_tenant_id")
   @@map("financial_accounts")
+}
+
+/// Snapshot diário de saldo oficial Conta Azul (saldo-atual). Um ponto por conta/dia civil SP.
+/// Não reconstruído pelo ledger. Histórico inativo permanece.
+model FinancialAccountBalanceSnapshot {
+  id                         String           @id @default(uuid()) @db.Uuid
+  tenantId                   String           @map("tenant_id") @db.Uuid
+  integrationId              String           @map("integration_id") @db.Uuid
+  financialAccountId         String           @map("financial_account_id") @db.Uuid
+  financialAccountExternalId String           @map("financial_account_external_id")
+  balance                    Decimal          @db.Decimal(19, 4)
+  /// Dia civil America/Sao_Paulo (meia-noite UTC).
+  balanceDate                DateTime         @map("balance_date") @db.Date
+  capturedAt                 DateTime         @map("captured_at") @db.Timestamptz(3)
+  /// active no momento da captura (histórico; active atual da conta pode mudar).
+  accountActiveAtCapture     Boolean          @map("account_active_at_capture")
+  createdAt                  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  integration                Integration      @relation(fields: [integrationId], references: [id], onDelete: Restrict)
+  financialAccount           FinancialAccount @relation(fields: [financialAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([financialAccountId, balanceDate], map: "uq_financial_account_balance_snapshots_account_date")
+  @@index([tenantId, balanceDate], map: "idx_financial_account_balance_snapshots_tenant_date")
+  @@index([tenantId, financialAccountId, balanceDate], map: "idx_financial_account_balance_snapshots_tenant_account_date")
+  @@map("financial_account_balance_snapshots")
 }
 
 /// Pessoa do ERP (cliente e/ou fornecedor). Uma linha por externalId.

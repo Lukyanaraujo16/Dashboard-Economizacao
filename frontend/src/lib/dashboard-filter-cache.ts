@@ -52,6 +52,17 @@ export function dashboardCashFlowCacheKey(
  */
 export const dashboardCashMovementHistoryCacheKey = dashboardCashFlowCacheKey;
 
+/**
+ * Cash-balance-history (Correção 08-C): tenant × month.
+ * Category/CC não entram — endpoint rejeita esses filtros; UI só oculta a linha.
+ */
+export function dashboardCashBalanceHistoryCacheKey(
+  tenantId: string,
+  monthKey: string,
+): string {
+  return `${tenantId}|${monthKey}`;
+}
+
 export function createDashboardFilterCache<T>() {
   const map = new Map<string, T>();
   return {

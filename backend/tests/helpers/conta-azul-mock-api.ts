@@ -65,6 +65,10 @@ export function createMockContaAzulApiClient(
         itens: [{ id: 'acc-1', nome: 'Caixa', tipo: 'CONTA_CORRENTE', ativo: true }],
       };
     },
+    getFinancialAccountCurrentBalance: async () => {
+      options.onCall?.('accountBalance');
+      return { saldo_atual: 100 };
+    },
     getPeople: async () => {
       options.onCall?.('people');
       return {

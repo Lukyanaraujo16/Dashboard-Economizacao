@@ -11,6 +11,7 @@ export type {
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyCashFlowResponse,
   DashboardCashMovementHistoryResponse,
+  DashboardCashBalanceHistoryResponse,
   DashboardMonthlyRevenueResponse,
   DashboardOverviewResponse,
   DashboardReceivableCompositionResponse,

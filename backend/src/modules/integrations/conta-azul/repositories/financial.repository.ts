@@ -5,6 +5,11 @@ import type {
   MappedInstallment,
   MappedParty,
 } from '../domain/conta-azul-financial-mappers.js';
+import {
+  createContaAzulBalanceSnapshotRepository,
+  type PersistedFinancialAccountForBalance,
+  type UpsertDailyBalanceSnapshotInput,
+} from './balance-snapshot.repository.js';
 
 export type FinancialSyncScope = {
   readonly tenantId: string;
@@ -24,6 +29,12 @@ export type ContaAzulFinancialRepository = {
   upsertParties(scope: FinancialSyncScope, items: readonly MappedParty[]): Promise<void>;
   upsertReceivables(scope: FinancialSyncScope, items: readonly MappedInstallment[]): Promise<void>;
   upsertPayables(scope: FinancialSyncScope, items: readonly MappedInstallment[]): Promise<void>;
+  /** Contas ativas do escopo — captura de saldo-atual (08-C1). */
+  listActiveAccounts(scope: {
+    readonly tenantId: string;
+    readonly integrationId: string;
+  }): Promise<readonly PersistedFinancialAccountForBalance[]>;
+  upsertDailyBalanceSnapshot(input: UpsertDailyBalanceSnapshotInput): Promise<void>;
 };
 
 async function partyIdsByExternalId(
@@ -45,7 +56,11 @@ async function partyIdsByExternalId(
 export function createContaAzulFinancialRepository(
   prisma: PrismaClient,
 ): ContaAzulFinancialRepository {
+  const balanceSnapshots = createContaAzulBalanceSnapshotRepository(prisma);
   return {
+    listActiveAccounts: (scope) => balanceSnapshots.listActiveAccounts(scope),
+    upsertDailyBalanceSnapshot: (input) => balanceSnapshots.upsertDailyBalanceSnapshot(input),
+
     async upsertCategories(scope, items) {
       if (items.length === 0) {
         return;

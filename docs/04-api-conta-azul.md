@@ -545,15 +545,29 @@ A utilização exata no Dashboard Economização será determinada durante a imp
 A API financeira possui recursos relacionados a:
 
 * contas financeiras;
-* consulta de saldo.
+* consulta de saldo atual oficial.
 
-Esses dados são candidatos para utilização em indicadores como:
+Endpoint oficial homologado (Correção 08-C1):
 
-* disponibilidade financeira;
-* saldo atual;
-* composição de caixa.
+`GET /v1/conta-financeira/{id_conta_financeira}/saldo-atual`
 
-O significado exato de cada saldo deverá ser validado antes da criação do indicador correspondente.
+Contrato de resposta:
+
+```json
+{ "saldo_atual": 1234.56 }
+```
+
+Path legado `/saldo` **não** é usado.
+
+O Dashboard Economização captura esse valor no auto-sync (após sync de contas
+ativas), persiste snapshot diário por conta (`FinancialAccountBalanceSnapshot`)
+e expõe histórico consolidado em `GET /dashboard/cash-balance-history`.
+Não reconstrói saldo pelo ledger/FinancialTransaction.
+Não há histórico retroativo fabricado no dia 1 — apenas snapshots capturados
+daqui para frente (timezone `America/Sao_Paulo`).
+
+Esses dados alimentam o indicador futuro de saldo bancário na Movimentação
+financeira (linha 08-C3/C4 — ainda não entregue).
 
 ⸻
 
@@ -1089,8 +1103,10 @@ PENDENTE — necessidade condicional ao recorte de produto:
     — endpoint de detalhe `/parcelas/{id}` documentado; não consumido;
     necessário para KPI de receita/despesa por categoria precisa;
 9.  centros de custo — não consumidos; necessário se KPI exigir;
-11. saldos — endpoint de saldo documentado; não consumido;
-    necessário se saldo for KPI do primeiro Dashboard;
+11. saldos — `GET /v1/conta-financeira/{id}/saldo-atual` consumido no sync
+    (08-C1); snapshots em `financial_account_balance_snapshots`; read model
+    `GET /dashboard/cash-balance-history` (08-C2). Linha no gráfico Diária
+    (Realizado) e Mensal = 08-C3/C4. Path legado `/saldo` não é usado;
 14. vendas — não consumidas; necessárias para definir faturamento
     (ver §28 — fórmula de faturamento pendente de decisão de produto);
 16. registros cancelados / exclusões — ausência não é delete;

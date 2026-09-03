@@ -39,12 +39,23 @@
   background: var(--color-series-expense);
 }
 
+.balanceSwatch {
+  width: 0.75rem;
+  height: 0.125rem;
+  border-radius: 0;
+  background: var(--color-series-result);
+}
+
 .plotArea {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: var(--space-3);
   min-width: 0;
   overflow: visible;
+}
+
+.plotAreaWithBalance {
+  grid-template-columns: auto 1fr auto;
 }
 
 .axis {
@@ -98,6 +109,30 @@
   stroke-width: 1;
 }
 
+.balanceLine {
+  stroke: var(--color-series-result);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.balanceDot {
+  fill: var(--color-series-result);
+  stroke: var(--color-surface);
+  stroke-width: 1;
+}
+
+.balanceAxis {
+  text-align: left;
+}
+
+.coverageNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
 .tooltip {
   display: flex;
   flex-direction: column;
@@ -139,6 +174,10 @@
   margin-left: 3.5rem;
   color: var(--color-text-secondary);
   font-size: 0.6875rem;
+}
+
+.xAxisWithBalance {
+  margin-right: 3.5rem;
 }
 
 .caption {

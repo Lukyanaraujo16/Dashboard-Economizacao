@@ -45,6 +45,7 @@ import type { ContaAzulRateLimiter } from './conta-azul-rate-limiter.js';
 import type { ContaAzulCostCenterSyncService } from './conta-azul-cost-center-sync.service.js';
 import type { ContaAzulLedgerSyncService } from './conta-azul-ledger-sync.service.js';
 import type { LedgerInstallmentCandidate } from '../domain/conta-azul-settlement-mappers.js';
+import { captureActiveAccountBalanceSnapshots } from './conta-azul-balance-capture.js';
 
 export class ContaAzulSyncExecutionError extends Error {
   readonly code: ContaAzulSyncErrorCode;
@@ -246,6 +247,9 @@ export function createContaAzulManualSyncEngine(deps: {
         ledgerSkippedInvalid: 0,
         ledgerIdentityMismatches: 0,
         ledgerParcelFailures: 0,
+        balanceSnapshotsAttempted: 0,
+        balanceSnapshotsUpserted: 0,
+        balanceSnapshotsFailed: 0,
       };
 
       try {
@@ -359,6 +363,21 @@ export function createContaAzulManualSyncEngine(deps: {
           persist: (items) => deps.financial.upsertAccounts(scopeOf(), items),
           heartbeat,
         });
+
+        // 08-C1: saldo-atual oficial por conta ativa (após catálogo de contas).
+        // Falha de uma conta não aborta o sync nem grava zero.
+        const balanceCapture = await captureActiveAccountBalanceSnapshots({
+          scope: scopeOf(),
+          apiClient: deps.apiClient,
+          financial: deps.financial,
+          requestWithAuth,
+          gatedGet,
+          heartbeat,
+          now: now(),
+        });
+        processed.balanceSnapshotsAttempted = balanceCapture.balanceSnapshotsAttempted;
+        processed.balanceSnapshotsUpserted = balanceCapture.balanceSnapshotsUpserted;
+        processed.balanceSnapshotsFailed = balanceCapture.balanceSnapshotsFailed;
 
         const dueWindows = buildDueDateWindows(now(), {
           lookbackYears: CONTA_AZUL_SYNC_LOOKBACK_YEARS,

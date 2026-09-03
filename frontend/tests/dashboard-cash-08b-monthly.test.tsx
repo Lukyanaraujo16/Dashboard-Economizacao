@@ -11,6 +11,7 @@ import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-c
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardCashMovementHistory } from '../src/services/dashboard/cash-movement-history';
 import type { DashboardCashMovementHistoryResponse } from '../src/services/dashboard/cash-movement-history.types';
+import { getDashboardCashBalanceHistory } from '../src/services/dashboard/cash-balance-history';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -42,6 +43,9 @@ vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
 vi.mock('../src/services/dashboard/cash-movement-history', () => ({
   getDashboardCashMovementHistory: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/cash-balance-history', () => ({
+  getDashboardCashBalanceHistory: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -54,6 +58,7 @@ const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getForecast = vi.mocked(getDashboardCashFlowForecast);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getHistory = vi.mocked(getDashboardCashMovementHistory);
+const getBalance = vi.mocked(getDashboardCashBalanceHistory);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -160,6 +165,16 @@ beforeEach(() => {
     return cashFlowHomeFixture;
   });
   getHistory.mockImplementation(async (month) => buildHistory(month ?? '2026-08'));
+  getBalance.mockResolvedValue({
+    today: '2026-08-19',
+    availableFrom: null,
+    availableTo: null,
+    pointCount: 0,
+    accountsIncluded: 0,
+    coverage: 'none',
+    daily: [],
+    monthly: [],
+  });
   getRevenueGoal.mockResolvedValue(emptyGoal);
   getCostCenters.mockResolvedValue({ items: [] });
   getCategories.mockResolvedValue({ items: [] });

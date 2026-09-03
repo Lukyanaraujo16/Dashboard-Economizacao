@@ -289,6 +289,56 @@ describe('ChartTooltip nos componentes V2', () => {
     const left = Number.parseFloat(tip.style.left);
     expect(left).toBeGreaterThanOrEqual(0);
   });
+
+  it('CompetenceDailyBars + saldo: tooltip floating-top com Saldo bancário; dia sem saldo → —', () => {
+    const balanceByDate = new Map<string, string>([['2026-08-01', '1500.25']]);
+    render(
+      <CompetenceDailyBars
+        revenueDaily={dailySeries(3)}
+        expenseDaily={dailySeries(3)}
+        monthKey="2026-08"
+        revenueLabel="Entradas"
+        expenseLabel="Saídas"
+        balanceByDate={balanceByDate}
+      />,
+    );
+    expect(screen.getByText('Saldo bancário')).toBeTruthy();
+    const plot = screen.getByRole('img');
+    mockPlotRect(plot, 400, 108);
+    fireEvent.mouseMove(plot, { clientX: 4, clientY: 40 });
+    const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+    expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
+    expect(tip.textContent).toMatch(/Saldo bancário/);
+    expect(tip.textContent).toMatch(/R\$\s*1\.500,25/);
+    fireEvent.mouseMove(plot, { clientX: 390, clientY: 40 });
+    const tipGap = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+    expect(tipGap.textContent).toMatch(/Saldo bancário/);
+    expect(tipGap.textContent).toMatch(/—/);
+    expect(tipGap.textContent).not.toMatch(/R\$\s*0,00/);
+  });
+
+  it('CashMonthlyGroupedBars + saldo: tooltip inclui Saldo final', () => {
+    const balanceByMonthKey = new Map<string, string>([['2026-02', '2500.00']]);
+    render(
+      <CashMonthlyGroupedBars
+        ariaLabel="Mensal saldo"
+        buckets={[
+          { monthKey: '2026-01', inflows: '10', outflows: '5', result: '5' },
+          { monthKey: '2026-02', inflows: '20', outflows: '8', result: '12' },
+        ]}
+        balanceByMonthKey={balanceByMonthKey}
+      />,
+    );
+    expect(screen.getByText('Saldo bancário')).toBeTruthy();
+    const plot = screen.getByRole('img', { name: 'Mensal saldo' });
+    mockPlotRect(plot, 400, 120);
+    fireEvent.mouseMove(plot, { clientX: 300, clientY: 40 });
+    const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+    expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
+    expect(tip.textContent).toMatch(/Saldo final/);
+    expect(tip.textContent).toMatch(/R\$\s*2\.500,00/);
+    expect(tip.textContent).toMatch(/Resultado/);
+  });
 });
 
 describe('WidgetExpandDialog + CompetenceComparisonChart', () => {

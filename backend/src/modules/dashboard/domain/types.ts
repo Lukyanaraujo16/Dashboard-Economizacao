@@ -341,6 +341,33 @@ export type DashboardMonthlyCashFlowResponse = {
 };
 
 /**
+ * GET /dashboard/cash-balance-history (Correção 08-C2).
+ * Snapshots reais de saldo-atual; sem category/costCenter; sem ledger.
+ */
+export type DashboardCashBalanceCoverage = 'none' | 'partial' | 'available';
+
+export type DashboardCashBalanceDailyPoint = {
+  readonly date: string;
+  readonly balance: string;
+};
+
+export type DashboardCashBalanceMonthlyPoint = {
+  readonly monthKey: string;
+  readonly balance: string;
+};
+
+export type DashboardCashBalanceHistoryResponse = {
+  readonly today: string;
+  readonly availableFrom: string | null;
+  readonly availableTo: string | null;
+  readonly pointCount: number;
+  readonly accountsIncluded: number;
+  readonly coverage: DashboardCashBalanceCoverage;
+  readonly daily: readonly DashboardCashBalanceDailyPoint[];
+  readonly monthly: readonly DashboardCashBalanceMonthlyPoint[];
+};
+
+/**
  * GET /dashboard/cash-movement-history (Correção 08-B).
  * Janela fixa de 12 meses civis terminando em `endMonth`.
  * Somente caixa realizado (occurredOn); sem expected / saldo bancário.

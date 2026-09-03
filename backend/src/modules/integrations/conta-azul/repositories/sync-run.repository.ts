@@ -95,6 +95,9 @@ function mapCounts(value: Prisma.JsonValue | null): ContaAzulSyncCounts | null {
     ledgerSkippedInvalid: nonNegativeInt(record.ledgerSkippedInvalid) ?? 0,
     ledgerIdentityMismatches: nonNegativeInt(record.ledgerIdentityMismatches) ?? 0,
     ledgerParcelFailures: nonNegativeInt(record.ledgerParcelFailures) ?? 0,
+    balanceSnapshotsAttempted: nonNegativeInt(record.balanceSnapshotsAttempted) ?? 0,
+    balanceSnapshotsUpserted: nonNegativeInt(record.balanceSnapshotsUpserted) ?? 0,
+    balanceSnapshotsFailed: nonNegativeInt(record.balanceSnapshotsFailed) ?? 0,
   };
 }
 

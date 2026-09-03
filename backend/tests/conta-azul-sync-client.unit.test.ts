@@ -215,6 +215,17 @@ describe('Cliente HTTP financeiro Conta Azul', () => {
     expect(String(fetchImpl.mock.calls[1]![0])).not.toContain('data_pagamento');
   });
 
+  it('GET /v1/conta-financeira/{id}/saldo-atual', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ saldo_atual: 10 }));
+    const client = createContaAzulApiClient({ fetchImpl });
+    await client.getFinancialAccountCurrentBalance(
+      'token',
+      'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    );
+    expect(String(fetchImpl.mock.calls[0]![0])).toContain('/saldo-atual');
+    expect(String(fetchImpl.mock.calls[0]![0])).not.toMatch(/\/saldo(\?|$)/);
+  });
+
   it('GET /v1/financeiro/transferencias pagina e filtra período', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ itens_totais: 0, itens: [] }));
     const client = createContaAzulApiClient({ fetchImpl });

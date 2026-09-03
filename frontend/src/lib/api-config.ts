@@ -285,6 +285,13 @@ export function dashboardCashMovementHistoryPath(
   })}`;
 }
 
+/** Correção 08-C2 — histórico de saldo bancário (snapshots). Sem category/costCenter. */
+export function dashboardCashBalanceHistoryPath(monthKey?: string | null): string {
+  return `${DASHBOARD_API_PREFIX}/cash-balance-history${dashboardQueryString({
+    monthKey,
+  })}`;
+}
+
 /** Detalhe lazy do KPI A receber — mesmos filtros do monthly-cash-flow. */
 export function dashboardExpectedReceivableDetailsPath(
   monthKey?: string | null,

@@ -536,13 +536,36 @@ P1.1 — Home month-scoped (20/08/2026):
 
 ⸻
 
-13. Saldo
+13. Saldo bancário (Correção 08-C1 / 08-C2)
 
-Status: FORA DO PRIMEIRO RECORTE.
+Status: FUNDAÇÃO IMPLEMENTADA (captura + read model). Linha no gráfico =
+08-C3/C4 (ainda não entregue).
 
-Dado necessário: saldo por conta financeira com timestamp.
-Endpoint candidato: `GET /conta-financeira/{id}/saldo` (docs/04 §27,
-não homologado, não persistido). Não buscar nesta fase.
+Fonte oficial:
+
+`GET /v1/conta-financeira/{id}/saldo-atual` → `{ saldo_atual }`
+
+Persistência: `financial_account_balance_snapshots` (um ponto por conta +
+dia civil `America/Sao_Paulo`). Captura no auto-sync existente após sync de
+contas — **somente contas ativas**; falha de uma conta não grava zero e não
+apaga snapshots das demais. Conta que fica inativa depois: snapshots
+históricos permanecem; sync futuro não captura mais aquela conta.
+
+Read model: `GET /dashboard/cash-balance-history` (sem category/costCenter).
+
+* Não reconstrói saldo pelo ledger / FinancialTransaction.
+* Não fabrica histórico retroativo antes do primeiro snapshot.
+* Daily: fechamento = último consolidado conhecido do dia; carry-forward
+  permitido só após o primeiro snapshot disponível.
+* Monthly: último consolidado disponível no mês (mês atual até hoje).
+* Consolidado = soma por conta no read model (não snapshot consolidado
+  persistido). Dia incompleto (conta ativa sem cobertura) não gera ponto.
+* Category / cost center **não** filtram saldo; na UI futura a linha será
+  ocultada se esses filtros estiverem ativos.
+
+Limitação MVP: sem `active-at-date` histórico completo no schema legado;
+`accountActiveAtCapture` registra o estado na captura, mas o cohort do
+consolidado usa contas `active=true` agora.
 
 ⸻
 

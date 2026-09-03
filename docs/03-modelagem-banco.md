@@ -441,10 +441,37 @@ Campos conceituais:
 * name;
 * account_type;
 * status;
-* current_balance quando disponível;
 * external_created_at;
 * external_updated_at;
 * synced_at.
+
+Saldo corrente **não** fica denormalizado na conta. Snapshots oficiais vão
+para `financial_account_balance_snapshots` (08-C1).
+
+⸻
+
+7.1.1 financial_account_balance_snapshots (Correção 08-C1)
+
+Snapshot diário do saldo oficial Conta Azul (`saldo-atual`), por conta.
+
+Campos:
+
+* id;
+* tenant_id;
+* integration_id;
+* financial_account_id;
+* financial_account_external_id;
+* balance (Decimal 19,4);
+* balance_date (dia civil America/Sao_Paulo, `@db.Date`);
+* captured_at (UTC);
+* account_active_at_capture (active no momento da captura);
+* created_at / updated_at.
+
+Unique: `(financial_account_id, balance_date)` — upsert do saldo mais recente
+do mesmo dia; sem múltiplos pontos/dia/conta no MVP.
+
+Não há snapshot consolidado persistido: consolidado é read model.
+Histórico de conta posteriormente inativa permanece (não é apagado).
 
 ⸻
 

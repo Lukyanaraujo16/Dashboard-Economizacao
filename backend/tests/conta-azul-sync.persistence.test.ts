@@ -61,6 +61,7 @@ function pageClient(options?: { readonly failReceivablesOnPage?: number }): Cont
       itens_totais: 1,
       itens: [{ id: 'acc-1', nome: 'Caixa', tipo: 'CONTA_CORRENTE', ativo: true }],
     }),
+    getFinancialAccountCurrentBalance: async () => ({ saldo_atual: 100 }),
     getPeople: async () => ({
       totalItems: 1,
       items: [{ id: 'p-1', nome: 'Maria', ativo: true, perfis: ['CLIENTE'] }],

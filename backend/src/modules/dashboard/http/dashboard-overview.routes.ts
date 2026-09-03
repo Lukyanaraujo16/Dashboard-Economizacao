@@ -16,9 +16,12 @@ import { createPayableReadRepository } from '../../finance/repositories/payable-
 import { createPartyReadRepository } from '../../finance/repositories/party-read.repository.js';
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { createContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
+import { createContaAzulBalanceSnapshotRepository } from '../../integrations/conta-azul/repositories/balance-snapshot.repository.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createRevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
+import { createCashBalanceHistoryService } from '../services/cash-balance-history.service.js';
 import { createDashboardOverviewFacade } from '../services/dashboard-overview.facade.js';
+import { assertNoCashBalanceAnalyticsFilters } from './assert-no-cash-balance-analytics-filters.js';
 import { assertNoTenantIdQuery } from './assert-no-tenant-id-query.js';
 import { parseDashboardCategoryQuery } from './parse-dashboard-category-query.js';
 import { parseDashboardCostCenterQuery } from './parse-dashboard-cost-center-query.js';
@@ -63,6 +66,9 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       categories,
       parties,
       costCenterAllocations,
+    }),
+    cashBalanceHistory: createCashBalanceHistoryService({
+      snapshots: createContaAzulBalanceSnapshotRepository(prisma),
     }),
     integrations: createContaAzulIntegrationRepository(prisma),
     revenueGoals: createRevenueGoalRepository(prisma),
@@ -249,6 +255,22 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       const categoryId = parseDashboardCategoryQuery(request.query);
       parseDashboardSituationQuery(request.query);
       const body = await dashboard.getCashMovementHistory(auth, monthKey, costCenterId, categoryId);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
+    '/dashboard/cash-balance-history',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      assertNoCashBalanceAnalyticsFilters(request.query);
+      const monthKey = parseDashboardMonth(request.query);
+      const body = await dashboard.getCashBalanceHistory(auth, monthKey);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

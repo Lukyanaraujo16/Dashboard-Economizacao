@@ -10,6 +10,7 @@ import {
   CONTA_AZUL_PEOPLE_URL,
   CONTA_AZUL_RECEIVABLES_SEARCH_URL,
   CONTA_AZUL_TRANSFERS_URL,
+  contaAzulFinancialAccountCurrentBalanceUrl,
 } from '../domain/conta-azul-oauth.js';
 import {
   CONTA_AZUL_CATEGORIES_ONLY_CHILDREN,
@@ -78,6 +79,11 @@ export type ContaAzulApiClient = {
   getConnectedCompany(accessToken: string): Promise<unknown>;
   getCategories(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
   getFinancialAccounts(accessToken: string, query: ContaAzulPageQuery): Promise<unknown>;
+  /** GET /v1/conta-financeira/{id}/saldo-atual — payload cru; parse via mapper. */
+  getFinancialAccountCurrentBalance(
+    accessToken: string,
+    accountExternalId: string,
+  ): Promise<unknown>;
   getPeople(accessToken: string, query: ContaAzulPeopleQuery): Promise<unknown>;
   getCostCenters(accessToken: string, query: ContaAzulCostCentersQuery): Promise<unknown>;
   searchReceivables(accessToken: string, query: ContaAzulInstallmentSearchQuery): Promise<unknown>;
@@ -276,6 +282,13 @@ export function createContaAzulApiClient(
           pagina: query.pagina,
           tamanho_pagina: query.tamanhoPagina ?? CONTA_AZUL_SYNC_PAGE_SIZE,
         }),
+        accessToken,
+      );
+    },
+
+    getFinancialAccountCurrentBalance(accessToken, accountExternalId) {
+      return getJson(
+        contaAzulFinancialAccountCurrentBalanceUrl(accountExternalId),
         accessToken,
       );
     },

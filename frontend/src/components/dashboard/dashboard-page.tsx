@@ -29,11 +29,15 @@ import {
 } from '../../lib/dashboard-category';
 import {
   createDashboardFilterCache,
+  dashboardCashBalanceHistoryCacheKey,
   dashboardCashFlowCacheKey,
   dashboardCashMovementHistoryCacheKey,
   dashboardCashWindowCacheKey,
   dashboardOverviewCacheKey,
 } from '../../lib/dashboard-filter-cache';
+import { getDashboardCashBalanceHistory } from '../../services/dashboard/cash-balance-history';
+import type { DashboardCashBalanceHistoryResponse } from '../../services/dashboard/cash-balance-history.types';
+import { DashboardCashBalanceHistoryRequestError } from '../../services/dashboard/cash-balance-history.types';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
 import { getDashboardCategories } from '../../services/dashboard/categories';
@@ -118,6 +122,11 @@ import {
   cashRealizedInflowsSeries,
   cashRealizedOutflowsSeries,
 } from './dashboard-cash-series-view';
+import {
+  balanceByDate,
+  balanceByMonthKey,
+  formatCivilDatePtBr,
+} from './cash-balance-series-view';
 import {
   toMonthlyCashFlowView,
   type MonthlyCashFlowView,
@@ -204,6 +213,13 @@ type CashMovementHistoryView =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly data: DashboardCashMovementHistoryResponse };
+
+/** Saldo bancário por snapshots (Correção 08-C). Erro não derruba barras. */
+type CashBalanceHistoryView =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'ready'; readonly data: DashboardCashBalanceHistoryResponse };
 
 type ExpectedReceivableDetailsView =
   | { readonly kind: 'idle' }
@@ -409,6 +425,9 @@ export function DashboardPage() {
   });
   const [cashMovementHistoryView, setCashMovementHistoryView] =
     useState<CashMovementHistoryView>({ kind: 'idle' });
+  const [cashBalanceHistoryView, setCashBalanceHistoryView] = useState<CashBalanceHistoryView>({
+    kind: 'idle',
+  });
   const [revenueGoalView, setRevenueGoalView] = useState<RevenueGoalView>({ kind: 'idle' });
   const [costCenters, setCostCenters] = useState<readonly DashboardCostCenterItem[]>([]);
   const [costCentersLoading, setCostCentersLoading] = useState(false);
@@ -434,11 +453,16 @@ export function DashboardPage() {
   monthlyCashFlowViewRef.current = monthlyCashFlowView;
   const cashMovementHistoryViewRef = useRef(cashMovementHistoryView);
   cashMovementHistoryViewRef.current = cashMovementHistoryView;
+  const cashBalanceHistoryViewRef = useRef(cashBalanceHistoryView);
+  cashBalanceHistoryViewRef.current = cashBalanceHistoryView;
 
   const overviewCacheRef = useRef(createDashboardFilterCache<DashboardOverviewResponse>());
   const cashFlowCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyCashFlowResponse>());
   const cashMovementHistoryCacheRef = useRef(
     createDashboardFilterCache<DashboardCashMovementHistoryResponse>(),
+  );
+  const cashBalanceHistoryCacheRef = useRef(
+    createDashboardFilterCache<DashboardCashBalanceHistoryResponse>(),
   );
   const forecastCacheRef = useRef(createDashboardFilterCache<DashboardCashFlowForecastResponse>());
   const expectedReceivableDetailsCacheRef = useRef(
@@ -468,6 +492,7 @@ export function DashboardPage() {
         setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setCashMovementHistoryView({ kind: 'idle' });
+        setCashBalanceHistoryView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
         setCostCenters([]);
         return;
@@ -477,6 +502,7 @@ export function DashboardPage() {
         setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setCashMovementHistoryView({ kind: 'idle' });
+        setCashBalanceHistoryView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
         setCostCenters([]);
         return;
@@ -507,6 +533,7 @@ export function DashboardPage() {
           setForecastView({ kind: 'idle' });
           setMonthlyCashFlowView({ kind: 'idle' });
             setCashMovementHistoryView({ kind: 'idle' });
+            setCashBalanceHistoryView({ kind: 'idle' });
           setRevenueGoalView({ kind: 'idle' });
           return;
         }
@@ -521,6 +548,7 @@ export function DashboardPage() {
           setForecastView({ kind: 'idle' });
           setMonthlyCashFlowView({ kind: 'idle' });
             setCashMovementHistoryView({ kind: 'idle' });
+            setCashBalanceHistoryView({ kind: 'idle' });
           setRevenueGoalView({ kind: 'idle' });
           return;
         }
@@ -535,6 +563,7 @@ export function DashboardPage() {
         setForecastView({ kind: 'idle' });
         setMonthlyCashFlowView({ kind: 'idle' });
         setCashMovementHistoryView({ kind: 'idle' });
+        setCashBalanceHistoryView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
       }
     },
@@ -790,6 +819,52 @@ export function DashboardPage() {
     [],
   );
 
+  /** Saldo bancário real (snapshots). Lazy; erro não derruba Movimentação. */
+  const loadCashBalanceHistory = useCallback(
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      options?: SoftLoadOptions,
+    ) => {
+      const tenantId = operationalTenantIdRef.current;
+      if (tenantId === null) {
+        return;
+      }
+      const soft = options?.soft === true;
+      const cacheKey = dashboardCashBalanceHistoryCacheKey(tenantId, monthKey);
+      const cached = cashBalanceHistoryCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setCashBalanceHistoryView({ kind: 'ready', data: cached });
+      } else if (!(soft && cashBalanceHistoryViewRef.current.kind === 'ready')) {
+        setCashBalanceHistoryView({ kind: 'loading' });
+      }
+      try {
+        const data = await getDashboardCashBalanceHistory(
+          monthKey === todayMonthKey ? null : monthKey,
+        );
+        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
+          return;
+        }
+        cashBalanceHistoryCacheRef.current.set(cacheKey, data);
+        setCashBalanceHistoryView({ kind: 'ready', data });
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        if (soft && cashBalanceHistoryViewRef.current.kind === 'ready') {
+          return;
+        }
+        const message =
+          error instanceof DashboardCashBalanceHistoryRequestError
+            ? error.message
+            : 'Não foi possível carregar o saldo bancário.';
+        setCashBalanceHistoryView({ kind: 'error', message });
+      }
+    },
+    [],
+  );
+
   const loadRevenueGoal = useCallback(
     async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
       setRevenueGoalView({ kind: 'loading' });
@@ -824,7 +899,11 @@ export function DashboardPage() {
     overviewCacheRef.current.clear();
     cashFlowCacheRef.current.clear();
     cashMovementHistoryCacheRef.current.clear();
+    cashBalanceHistoryCacheRef.current.clear();
     forecastCacheRef.current.clear();
+
+    setCashBalanceHistoryView({ kind: 'idle' });
+    setCashMovementHistoryView({ kind: 'idle' });
 
     setCategories([]);
     setCostCenters([]);
@@ -1040,6 +1119,17 @@ export function DashboardPage() {
     todayMonthKey,
     view.kind,
   ]);
+
+  useEffect(() => {
+    if (view.kind !== 'ready') {
+      setCashBalanceHistoryView({ kind: 'idle' });
+      return;
+    }
+    const controller = new AbortController();
+    const soft = cashBalanceHistoryViewRef.current.kind === 'ready';
+    void loadCashBalanceHistory(controller.signal, selectedMonthKey, todayMonthKey, { soft });
+    return () => controller.abort();
+  }, [loadCashBalanceHistory, selectedMonthKey, todayMonthKey, view.kind]);
 
   useEffect(() => {
     if (expandKind !== 'receivable' || view.kind !== 'ready') {
@@ -1344,6 +1434,40 @@ export function DashboardPage() {
       result: month.realized.result,
     }));
   }, [historyData, historyMonthsUnavailable]);
+
+  /** Linha de saldo: só Realizado (diário) / Mensal, sem category/CC, com pontos reais. */
+  const balanceFiltersClear = selectedCategoryId === null && selectedCostCenterId === null;
+  const balanceData =
+    cashBalanceHistoryView.kind === 'ready' ? cashBalanceHistoryView.data : null;
+  const showDailyBalanceLine =
+    periodMode === 'daily' &&
+    dailyMode === 'realized' &&
+    balanceFiltersClear &&
+    balanceData !== null &&
+    balanceData.coverage !== 'none' &&
+    balanceData.daily.length > 0;
+  const showMonthlyBalanceLine =
+    periodMode === 'monthly' &&
+    balanceFiltersClear &&
+    balanceData !== null &&
+    balanceData.coverage !== 'none' &&
+    balanceData.monthly.length > 0;
+  const dailyBalanceMap = useMemo(
+    () => (showDailyBalanceLine && balanceData ? balanceByDate(balanceData.daily) : undefined),
+    [balanceData, showDailyBalanceLine],
+  );
+  const monthlyBalanceMap = useMemo(
+    () =>
+      showMonthlyBalanceLine && balanceData ? balanceByMonthKey(balanceData.monthly) : undefined,
+    [balanceData, showMonthlyBalanceLine],
+  );
+  const balanceCoverageNote =
+    balanceFiltersClear &&
+    balanceData !== null &&
+    balanceData.coverage === 'partial' &&
+    balanceData.availableFrom !== null
+      ? `Saldo bancário disponível a partir de ${formatCivilDatePtBr(balanceData.availableFrom)}`
+      : null;
 
   const managerialMargin =
     cashFlowModel &&
@@ -1670,6 +1794,8 @@ export function DashboardPage() {
                   ariaLabel={`Entradas e saídas realizadas por mês de baixa · 12 meses até ${monthLabel}`}
                   caption={CASH_MONTHLY_REALIZED_CAPTION}
                   emptyMessage={`Sem baixas de caixa nos 12 meses até ${monthLabel}.`}
+                  balanceByMonthKey={monthlyBalanceMap}
+                  balanceCoverageNote={showMonthlyBalanceLine ? balanceCoverageNote : null}
                 />
               ) : (
                 <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
@@ -1696,6 +1822,8 @@ export function DashboardPage() {
                     ? `Sem baixas de caixa em ${monthLabel}.`
                     : `Sem vencimentos previstos no prazo em ${monthLabel}.`
                 }
+                balanceByDate={dailyBalanceMap}
+                balanceCoverageNote={showDailyBalanceLine ? balanceCoverageNote : null}
               />
             ) : (
               <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
@@ -2569,6 +2697,8 @@ export function DashboardPage() {
                         ? CASH_DAILY_REALIZED_CAPTION
                         : CASH_DAILY_EXPECTED_CAPTION
                     }
+                    balanceByDate={dailyBalanceMap}
+                    balanceCoverageNote={showDailyBalanceLine ? balanceCoverageNote : null}
                   />
                 ) : (
                   <StateWrapper
@@ -2593,6 +2723,8 @@ export function DashboardPage() {
                 ariaLabel={`Entradas e saídas realizadas por mês de baixa · 12 meses até ${monthLabel}`}
                 caption={CASH_MONTHLY_REALIZED_CAPTION}
                 emptyMessage={`Sem baixas de caixa nos 12 meses até ${monthLabel}.`}
+                balanceByMonthKey={monthlyBalanceMap}
+                balanceCoverageNote={showMonthlyBalanceLine ? balanceCoverageNote : null}
               />
             ) : (
               <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />

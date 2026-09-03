@@ -20,6 +20,7 @@ import {
   indexFromRatio,
   isFlatSeries,
   maxAbs,
+  parseAmount,
   type DailyPoint,
 } from './chart-math';
 import { anchorRatioFromIndex } from './chart-tooltip-placement';
@@ -31,6 +32,7 @@ const HALF_HEIGHT = 56;
 const VIEW_HEIGHT = HALF_HEIGHT * 2;
 const MIN_BAR = 1;
 const BAR_GAP_RATIO = 0.35;
+const BALANCE_PAD = 4;
 
 export type CompetenceDailyBarsProps = {
   /** Dia = competenceDate; Σ total do dia. */
@@ -44,6 +46,14 @@ export type CompetenceDailyBarsProps = {
   readonly caption?: string;
   readonly emptyMessage?: string;
   readonly className?: string;
+  /**
+   * Saldo bancário por data (08-C3). Ausência = sem linha.
+   * Valores oficiais do endpoint; nunca inventar zero.
+   */
+  readonly balanceByDate?: ReadonlyMap<string, string>;
+  readonly balanceLabel?: string;
+  /** Copy discreta de cobertura parcial (ex.: disponível a partir de …). */
+  readonly balanceCoverageNote?: string | null;
 };
 
 /** Altura da barra em unidades do viewBox; mantém visível qualquer dia com valor. */
@@ -58,9 +68,58 @@ function barHeight(value: number, scale: number): number {
   return Math.max(MIN_BAR, (abs / scale) * HALF_HEIGHT);
 }
 
+type BalancePoint = { readonly index: number; readonly x: number; readonly y: number };
+
+function balanceGeometry(
+  dates: readonly string[],
+  balanceByDate: ReadonlyMap<string, string>,
+  slot: number,
+): {
+  readonly scale: number;
+  readonly points: readonly BalancePoint[];
+  readonly segments: readonly string[];
+} {
+  const values = dates.map((date) => {
+    const raw = balanceByDate.get(date);
+    return raw === undefined ? null : parseAmount(raw);
+  });
+  const present = values.filter((value): value is number => value !== null);
+  const scale = maxAbs(present);
+  const usable = VIEW_HEIGHT - BALANCE_PAD * 2;
+  const points: BalancePoint[] = [];
+  for (let index = 0; index < dates.length; index += 1) {
+    const value = values[index];
+    if (value === null || value === undefined) {
+      continue;
+    }
+    const ratio = scale > 0 ? Math.min(Math.max(value / scale, 0), 1) : 0;
+    const x = index * slot + slot / 2;
+    const y = BALANCE_PAD + usable - ratio * usable;
+    points.push({ index, x, y });
+  }
+  const segments: string[] = [];
+  let run: BalancePoint[] = [];
+  const flush = () => {
+    if (run.length >= 2) {
+      segments.push(run.map((point) => `${point.x},${point.y}`).join(' '));
+    }
+    run = [];
+  };
+  for (const point of points) {
+    const prev = run[run.length - 1];
+    if (prev && point.index !== prev.index + 1) {
+      flush();
+    }
+    run.push(point);
+  }
+  flush();
+  return { scale, points, segments };
+}
+
 /**
  * Movimentação diária em barras espelhadas — primeira série acima do eixo,
  * segunda abaixo. Rotulagem padrão é competência; caixa sobrescreve os rótulos.
+ * Linha de saldo bancário (08-C3) usa eixo Y secundário.
  */
 export function CompetenceDailyBars({
   revenueDaily,
@@ -72,6 +131,9 @@ export function CompetenceDailyBars({
   caption,
   emptyMessage,
   className,
+  balanceByDate,
+  balanceLabel = 'Saldo bancário',
+  balanceCoverageNote = null,
 }: CompetenceDailyBarsProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
   const plotRef = useRef<HTMLDivElement>(null);
@@ -89,6 +151,17 @@ export function CompetenceDailyBars({
       scale: maxAbs([...revenueValues, ...expenseValues]),
     };
   }, [expenseDaily, revenueDaily]);
+
+  const showBalance = balanceByDate !== undefined && balanceByDate.size > 0;
+
+  const balance = useMemo(() => {
+    if (!showBalance || !balanceByDate) {
+      return null;
+    }
+    const count = series.dates.length;
+    const slot = count > 0 ? VIEW_WIDTH / count : VIEW_WIDTH;
+    return balanceGeometry(series.dates, balanceByDate, slot);
+  }, [balanceByDate, series.dates, showBalance]);
 
   const handleMove = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -138,6 +211,9 @@ export function CompetenceDailyBars({
   const barWidth = Math.max(slot * (1 - BAR_GAP_RATIO), 0.5);
   const activeRevenue = activeIndex >= 0 ? series.revenue[activeIndex] : undefined;
   const activeExpense = activeIndex >= 0 ? series.expense[activeIndex] : undefined;
+  const activeDate = activeRevenue?.date;
+  const activeBalance =
+    showBalance && activeDate && balanceByDate ? balanceByDate.get(activeDate) : undefined;
   const firstDate = series.dates[0];
   const lastDate = series.dates[count - 1];
 
@@ -152,9 +228,15 @@ export function CompetenceDailyBars({
           <span className={cx(styles.swatch, styles.expenseSwatch)} aria-hidden="true" />
           {expenseLabel}
         </li>
+        {showBalance ? (
+          <li className={styles.legendItem}>
+            <span className={cx(styles.swatch, styles.balanceSwatch)} aria-hidden="true" />
+            {balanceLabel}
+          </li>
+        ) : null}
       </ul>
 
-      <div className={styles.plotArea}>
+      <div className={cx(styles.plotArea, showBalance ? styles.plotAreaWithBalance : undefined)}>
         <div className={styles.axis} aria-hidden="true">
           <span className={styles.axisTick}>{formatCompactBrl(series.scale)}</span>
           <span className={styles.axisTick}>{formatCompactBrl(0)}</span>
@@ -217,6 +299,30 @@ export function CompetenceDailyBars({
               y2={HALF_HEIGHT}
               vectorEffect="non-scaling-stroke"
             />
+
+            {balance
+              ? balance.segments.map((points) => (
+                  <polyline
+                    key={points}
+                    className={styles.balanceLine}
+                    points={points}
+                    fill="none"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))
+              : null}
+            {balance
+              ? balance.points.map((point) => (
+                  <circle
+                    key={`b-${point.index}`}
+                    className={styles.balanceDot}
+                    cx={point.x}
+                    cy={point.y}
+                    r={balance.points.length === 1 ? 3.5 : 2.25}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))
+              : null}
           </svg>
 
           {activeRevenue && activeExpense ? (
@@ -240,21 +346,44 @@ export function CompetenceDailyBars({
                 {expenseLabel}
                 <span className={styles.tooltipValue}>{formatMoneyBrl(activeExpense.amount)}</span>
               </p>
+              {showBalance ? (
+                <p className={styles.tooltipRow}>
+                  <span className={cx(styles.swatch, styles.balanceSwatch)} />
+                  {balanceLabel}
+                  <span className={styles.tooltipValue}>
+                    {activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}
+                  </span>
+                </p>
+              ) : null}
             </ChartTooltip>
           ) : null}
         </div>
+
+        {showBalance && balance ? (
+          <div className={cx(styles.axis, styles.balanceAxis)} aria-hidden="true">
+            <span className={styles.axisTick}>{formatCompactBrl(balance.scale)}</span>
+            <span className={styles.axisTick}>Saldo</span>
+            <span className={styles.axisTick}>{formatCompactBrl(0)}</span>
+          </div>
+        ) : null}
       </div>
 
-      <div className={styles.xAxis} aria-hidden="true">
+      <div className={cx(styles.xAxis, showBalance ? styles.xAxisWithBalance : undefined)} aria-hidden="true">
         <span>{firstDate ? formatDayPt(firstDate) : ''}</span>
         <span>{lastDate ? formatDayPt(lastDate) : ''}</span>
       </div>
+
+      {balanceCoverageNote ? <p className={styles.coverageNote}>{balanceCoverageNote}</p> : null}
 
       <p className={styles.caption}>{caption ?? 'Competência · não é caixa.'}</p>
 
       <span className={styles.liveRegion} aria-live="polite">
         {activeRevenue && activeExpense
-          ? `${formatDayPt(activeRevenue.date)}: ${revenueLabel.toLowerCase()} ${formatMoneyBrl(activeRevenue.amount)}, ${expenseLabel.toLowerCase()} ${formatMoneyBrl(activeExpense.amount)}`
+          ? `${formatDayPt(activeRevenue.date)}: ${revenueLabel.toLowerCase()} ${formatMoneyBrl(activeRevenue.amount)}, ${expenseLabel.toLowerCase()} ${formatMoneyBrl(activeExpense.amount)}${
+              showBalance
+                ? `, ${balanceLabel.toLowerCase()} ${activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}`
+                : ''
+            }`
           : ''}
       </span>
     </div>
