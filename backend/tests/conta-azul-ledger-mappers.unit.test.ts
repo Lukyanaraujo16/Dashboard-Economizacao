@@ -186,7 +186,7 @@ describe('Mapper de baixas Conta Azul (CASH-2)', () => {
     expect(() => mapSettlementList({ itens: [] })).toThrow(ContaAzulMappingError);
   });
 
-  it('mantém tombstone automático desligado', () => {
-    expect(CONTA_AZUL_LEDGER_AUTO_TOMBSTONE).toBe(false);
+  it('mantém tombstone automático ligado no fluxo padrão (10-C)', () => {
+    expect(CONTA_AZUL_LEDGER_AUTO_TOMBSTONE).toBe(true);
   });
 });

@@ -127,6 +127,7 @@ export function createContaAzulTransferRepository(prisma: PrismaClient): ContaAz
           netAmount: true,
           financialAccountExternalId: true,
           lifecycleStatus: true,
+          transactionType: true,
         },
       });
       const decisions = decideTransferMatches(transfers, settlements);

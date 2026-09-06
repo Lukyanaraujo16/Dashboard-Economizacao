@@ -90,6 +90,14 @@ export type ContaAzulSyncCounts = {
   readonly balanceSnapshotsAttempted: number;
   readonly balanceSnapshotsUpserted: number;
   readonly balanceSnapshotsFailed: number;
+  /** CASH-9C / 10-B — sync de transferências no fluxo padrão. */
+  readonly transferPages: number;
+  readonly transferFetched: number;
+  readonly transferUpserted: number;
+  readonly transferSkippedInvalid: number;
+  readonly transferMatched: number;
+  readonly transferUnmatched: number;
+  readonly transferAmbiguous: number;
 };
 
 export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
@@ -117,6 +125,13 @@ export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
   balanceSnapshotsAttempted: 0,
   balanceSnapshotsUpserted: 0,
   balanceSnapshotsFailed: 0,
+  transferPages: 0,
+  transferFetched: 0,
+  transferUpserted: 0,
+  transferSkippedInvalid: 0,
+  transferMatched: 0,
+  transferUnmatched: 0,
+  transferAmbiguous: 0,
 };
 
 export type ContaAzulSyncTrigger = 'MANUAL' | 'SCHEDULED';

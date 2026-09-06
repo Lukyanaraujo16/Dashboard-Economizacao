@@ -448,8 +448,9 @@ CASH-9C (26/08/2026): `GET /v1/financeiro/transferencias` — transferências
 entre contas próprias. Query: `pagina`, `tamanho_pagina`, `data_inicio`,
 `data_fim`, `ids_conta_financeira[]` (origem ou destino). Um objeto com
 `id`, `valor`, `data`, `origem.conta_financeira`, `destino.conta_financeira`.
-Não é o Extrato da UI. Não cria RECEIPT+DISBURSEMENT. Ingestão local
-explícita (`scripts/cash9c-transfers-backfill.ts`); fora do worker.
+Não é o Extrato da UI. Não cria RECEIPT+DISBURSEMENT. Correção 10-B:
+sincronizado no fluxo padrão do worker (`TransferSyncService` após ledger);
+script `cash9c-transfers-backfill.ts` permanece para operações admin/históricas.
 
 `GET /v1/pessoas` em conta sem cadastro de pessoas retornou `items: null`
 (não `[]`). A 2.3 trata **somente** `items === null` como lista vazia.
@@ -1093,7 +1094,7 @@ PENDENTE — necessidade condicional ao recorte de produto:
     nas não cobertas (Σ gross ACTIVE = paid; DELETED não impede skip).
     GET `/parcelas/baixa/{id}` (CASH-8A) distingue 404 de erro operacional.
     R3: missing + GET-por-id 404 + parcela viva + remaining = valor_pago
-    → DELETED só com flag true. R4 `[]` = HOLD. Flag default false.
+    → DELETED no sync padrão (Correção 10-C; flag default true). R4 `[]` = HOLD.
     Não inventa endpoint de estorno. Produção ainda não executada.
     KPI Home visual: CASH-4B.
     CASH-9C: `GET /v1/financeiro/transferencias` persistido em

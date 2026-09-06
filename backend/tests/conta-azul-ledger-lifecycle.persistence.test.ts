@@ -695,7 +695,7 @@ describe('CASH-8A lifecycle do ledger', () => {
     ).toBe('ACTIVE');
   });
 
-  it('L22/L23 / fixture e5a3 — flag false detecta e não muta; true muta', async () => {
+  it('L22/L23 / fixture e5a3 — flag false detecta e não muta; true (default 10-C) muta', async () => {
     const { tenant, integration } = await seedConnected('l22');
     const parcela = 'e5a3-flag';
     await financial.upsertReceivables(
@@ -725,7 +725,7 @@ describe('CASH-8A lifecycle do ledger', () => {
     expect(dry.confirmedStale).toBe(1);
     expect(dry.wouldDelete).toBe(1);
     expect(dry.deleted).toBe(0);
-    expect(CONTA_AZUL_LEDGER_AUTO_TOMBSTONE).toBe(false);
+    expect(CONTA_AZUL_LEDGER_AUTO_TOMBSTONE).toBe(true);
     expect(
       (
         await prisma.financialTransaction.findFirstOrThrow({

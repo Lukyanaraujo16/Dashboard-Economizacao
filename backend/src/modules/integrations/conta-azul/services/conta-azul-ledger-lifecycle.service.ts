@@ -2,7 +2,7 @@ import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-a
 import {
   addLedgerLifecycleCounters,
   emptyLedgerLifecycleCounters,
-  evaluateR3Tombstone,
+  explainR3Tombstone,
   readParcelaIdentity,
   type LedgerLifecycleCounters,
 } from '../domain/conta-azul-ledger-lifecycle.js';
@@ -104,9 +104,11 @@ export function createContaAzulLedgerLifecycleService(deps: {
         counters = addLedgerLifecycleCounters(counters, {
           ...emptyLedgerLifecycleCounters(),
           failure: 1,
+          skippedFetchFailure: 1,
         });
         logLifecycle('conta_azul_ledger_reconciliation_failure', {
           installmentExternalId: input.installmentExternalId,
+          note: 'list_fetch_failure_no_tombstone',
         });
         return counters;
       }
@@ -157,10 +159,12 @@ export function createContaAzulLedgerLifecycleService(deps: {
           counters = addLedgerLifecycleCounters(counters, {
             ...emptyLedgerLifecycleCounters(),
             failure: 1,
+            skippedFetchFailure: 1,
           });
           logLifecycle('conta_azul_ledger_reconciliation_failure', {
             installmentExternalId: input.installmentExternalId,
             stage: 'parcela_detail',
+            note: 'detail_failure_no_tombstone',
           });
           return counters;
         }
@@ -181,10 +185,11 @@ export function createContaAzulLedgerLifecycleService(deps: {
           counters = addLedgerLifecycleCounters(counters, {
             ...emptyLedgerLifecycleCounters(),
             failure: 1,
+            skippedFetchFailure: 1,
           });
         }
 
-        const decision = evaluateR3Tombstone({
+        const explained = explainR3Tombstone({
           listOkNonEmpty: true,
           missingFromList: true,
           settlementLookup: lookup,
@@ -192,7 +197,18 @@ export function createContaAzulLedgerLifecycleService(deps: {
           remainingGross,
           installmentExternalId: input.installmentExternalId,
         });
-        if (decision !== 'confirmed_stale') {
+        if (explained.holdReason === 'remaining_under_paid') {
+          counters = addLedgerLifecycleCounters(counters, {
+            ...emptyLedgerLifecycleCounters(),
+            skippedUnderCovered: 1,
+          });
+          logLifecycle('conta_azul_ledger_tombstone_skipped', {
+            installmentExternalId: input.installmentExternalId,
+            settlementExternalId: row.externalId,
+            reason: 'remaining_under_paid',
+          });
+        }
+        if (explained.decision !== 'confirmed_stale') {
           continue;
         }
         counters = addLedgerLifecycleCounters(counters, {

@@ -627,15 +627,18 @@ Campos físicos:
 * gross_amount = `valor_bruto` (quitação do título);
 * net_amount = `valor_liquido` (caixa oficial futuro);
 * interest/fine/discount/fee;
-* lifecycle_status ACTIVE|DELETED (CASH-8A: DELETED = settlement
-  confirmado stale pela regra R3; sem delete físico).
-  Tombstone automático default **false**. CASH-8B aplica nos dados reais.
+* lifecycle_status ACTIVE|DELETED (CASH-8A / Correção 10-C: DELETED =
+  settlement confirmado stale pela regra R3; sem delete físico).
+  Tombstone automático default **true** no fluxo padrão (guardrails R3/R4).
+  Override `autoTombstone: false` permanece para dry-run/backfill.
 
 CASH-7 (26/08/2026): bootstrap/backfill explícito e idempotente do ledger
 histórico (CLI local; tenant/integration obrigatórios; `--confirm=LOCAL`).
 Não dispara no worker nem no login. Não inventa baixa se `/baixa = []`.
 Não apaga ledger. CASH-8A: política R3 (stale confirmado → DELETED)
-e R4 (`[]` / parcela 404 = HOLD). Flag default false. CASH-8B pendente.
+e R4 (`[]` / parcela 404 = HOLD). Correção 10-C: flag default **true**
+no sync contínuo. Saneamento histórico pontual (ex.: Life) permanece
+operação controlada (não é backfill automático de produção nesta etapa).
 Produção ainda não executada.
 CASH-3A/3B leem esta tabela. Home visual e Relatórios/PDF/XLSX ainda não.
 

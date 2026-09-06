@@ -1100,10 +1100,11 @@ CASH-7 — Backfill/bootstrap explícito do ledger: IMPLEMENTADO LOCALMENTE
      Discovery: títulos locais `paid > 0`; skip se Σ gross ACTIVE = paid
      (DELETED não impede skip); senão GET `/baixa`. Idempotente.
      CASH-8A — Lifecycle R3/R4: IMPLEMENTADO (código + testes). Flag
-     `CONTA_AZUL_LEDGER_AUTO_TOMBSTONE` default false (detecta, não muta).
+     `CONTA_AZUL_LEDGER_AUTO_TOMBSTONE` default **true** (Correção 10-C):
+     detecta e muta no sync padrão com guardrails R3/R4.
      R3 confirma stale com GET `/parcelas/baixa/{id}` 404 + parcela viva.
      R4 `[]` / parcela 404 = HOLD. Sem delete físico. Reativação via upsert.
-     CASH-8B (aplicar R3 na Clínica Life) NÃO iniciado.
+     Saneamento histórico pontual de produção NÃO é executado nesta etapa.
      Produção: ordem operacional — backup manual → migrate ledger/transfers
      → deploy API/worker → CASH-7 report-only/dry-run por tenant → CASH-7
      → CASH-9C por tenant → validação → CASH-8B se necessário → CASH-4B.

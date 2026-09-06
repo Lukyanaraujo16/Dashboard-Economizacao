@@ -262,15 +262,21 @@ describe('CASH-9C transferências internas', () => {
     expect(monthlyBilling(flow)?.equals(0)).toBe(true);
   });
 
-  it('T5 T20 — ghost na origem usa a mesma regra e não vira despesa', async () => {
+  it('T5 T20 — DISBURSEMENT ghost na origem MATCHED e não vira despesa', async () => {
     const { tenant, integration } = await seedConnected('t5-ghost-origin');
-    await putSettlement(tenant.id, integration.id, {
-      id: 'settlement-origin',
-      installmentId: 'installment-origin',
-      data: '2026-08-12',
-      amount: '1313',
-      account: SRC,
-    });
+    await putSettlement(
+      tenant.id,
+      integration.id,
+      {
+        id: 'settlement-origin',
+        installmentId: 'installment-origin',
+        tipo: 'DESPESA',
+        data: '2026-08-12',
+        amount: '1313',
+        account: SRC,
+      },
+      'PAYABLE',
+    );
     await syncWindow(
       tenant.id,
       integration.id,
@@ -290,28 +296,74 @@ describe('CASH-9C transferências internas', () => {
       where: { integrationId: integration.id, externalId: 'settlement-origin' },
     });
     expect(ghost?.lifecycleStatus).toBe('ACTIVE');
+    expect(ghost?.transactionType).toBe('DISBURSEMENT');
     expect(ghost?.financialTransferId).not.toBeNull();
     const flow = await augustFlow(tenant.id, integration.id);
     expect(flow.realized.inflows?.equals(0)).toBe(true);
     expect(flow.realized.outflows?.equals(0)).toBe(true);
   });
 
-  it('T6 — dois candidatos: AMBIGUOUS e nenhum excluído', async () => {
+  it('T5b — Life: RECEIPT operacional @ origem mesmo valor/data NÃO MATCHED (10-A)', async () => {
+    const { tenant, integration } = await seedConnected('t5b-life-receipt-origem');
+    await putSettlement(tenant.id, integration.id, {
+      id: 'mov-caixa-dinheiro',
+      installmentId: 'installment-caixa',
+      tipo: 'RECEITA',
+      data: '2026-08-12',
+      amount: '1313',
+      account: SRC,
+    });
+    await syncWindow(
+      tenant.id,
+      integration.id,
+      [
+        transferPayload({
+          id: TRANSFER_C,
+          data: '2026-08-12',
+          valor: 1313,
+          origin: SRC,
+          dest: DST,
+        }),
+      ],
+      new Date('2026-08-01T00:00:00.000Z'),
+      new Date('2026-08-31T00:00:00.000Z'),
+    );
+    const row = await prisma.financialTransaction.findFirst({
+      where: { integrationId: integration.id, externalId: 'mov-caixa-dinheiro' },
+    });
+    expect(row?.transactionType).toBe('RECEIPT');
+    expect(row?.financialTransferId).toBeNull();
+    const transfer = await prisma.financialTransfer.findFirst({
+      where: { integrationId: integration.id },
+    });
+    expect(transfer?.matchStatus).toBe('UNMATCHED');
+    const flow = await augustFlow(tenant.id, integration.id);
+    expect(flow.realized.inflows?.equals(new Prisma.Decimal('1313'))).toBe(true);
+  });
+
+  it('T6 — dois candidatos tipados: AMBIGUOUS e nenhum excluído', async () => {
     const { tenant, integration } = await seedConnected('t6-ambiguous');
     await putSettlement(tenant.id, integration.id, {
       id: 'cand-1',
       installmentId: 'inst-1',
+      tipo: 'RECEITA',
       data: '2026-08-20',
       amount: '10881',
       account: DST,
     });
-    await putSettlement(tenant.id, integration.id, {
-      id: 'cand-2',
-      installmentId: 'inst-2',
-      data: '2026-08-20',
-      amount: '10881',
-      account: SRC,
-    });
+    await putSettlement(
+      tenant.id,
+      integration.id,
+      {
+        id: 'cand-2',
+        installmentId: 'inst-2',
+        tipo: 'DESPESA',
+        data: '2026-08-20',
+        amount: '10881',
+        account: SRC,
+      },
+      'PAYABLE',
+    );
     await syncWindow(
       tenant.id,
       integration.id,
@@ -336,7 +388,8 @@ describe('CASH-9C transferências internas', () => {
     });
     expect(linked).toBe(0);
     const flow = await augustFlow(tenant.id, integration.id);
-    expect(flow.realized.inflows?.equals(new Prisma.Decimal('21762'))).toBe(true);
+    expect(flow.realized.inflows?.equals(new Prisma.Decimal('10881'))).toBe(true);
+    expect(flow.realized.outflows?.equals(new Prisma.Decimal('10881'))).toBe(true);
   });
 
   it('T7 T8 T9 — venda, PIX e rendimento não classificam', async () => {

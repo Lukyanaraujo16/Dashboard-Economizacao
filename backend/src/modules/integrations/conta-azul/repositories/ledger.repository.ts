@@ -158,7 +158,11 @@ export function createContaAzulLedgerRepository(prisma: PrismaClient): ContaAzul
           externalId,
           lifecycleStatus: 'ACTIVE',
         },
-        data: { lifecycleStatus: 'DELETED' },
+        data: {
+          lifecycleStatus: 'DELETED',
+          // Correção 10-C: libera vínculo CASH-9C; rematch posterior ignora DELETED.
+          financialTransferId: null,
+        },
       });
       return result.count > 0;
     },

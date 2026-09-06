@@ -34,7 +34,8 @@ CASH-4C — visualizações / leitura / gráficos da Home = caixa (sem competên
 CASH-4A = infra fetch/view-model. CASH-3A: domínio `MonthlyCashFlow`. CASH-3B:
 `GET /dashboard/monthly-cash-flow`. CASH-7: backfill LOCAL do ledger
 (Clínica Life) executado; produção NÃO. CASH-8A: R3/R4 no código;
-flag default false; CASH-8B não aplicado.
+Correção 10-C: flag default true no sync contínuo; saneamento histórico
+pontual de produção não executado nesta etapa.
 Semântica: `netAmount` / `occurredOn`.
 Faturamento oficial (Felipe, 26/08/2026): `realized.inflows + expected.receivables`.
 Despesas oficiais (Felipe, simétrico): `realized.outflows + expected.payables`.
@@ -821,9 +822,10 @@ CASH-7 (26/08/2026): bootstrap idempotente por tenant; cobertura
 segura = Σ gross ACTIVE = `paid` (DELETED não entra na soma nem bloqueia skip).
 Guard fail-closed: LOCAL exige `_dev`/`_test`; produção exige
 `NODE_ENV=production` + `--confirm=PRODUCTION` + banco real.
-CASH-8A: R3 stale confirmado pode ir a DELETED (flag default false).
-R4 `/baixa = []` ou parcela 404 = HOLD; não tombstona. Sem delete físico.
-Reativação: upsert força ACTIVE. CASH-8B pendente. Rollout produção
+CASH-8A: R3 stale confirmado pode ir a DELETED (Correção 10-C: flag
+default true no sync padrão). R4 `/baixa = []` ou parcela 404 = HOLD;
+não tombstona. Sem delete físico. Reativação: upsert força ACTIVE.
+Saneamento histórico pontual (ex.: Life) fora desta etapa.
 autorizado explicitamente (PRE-F13-PROD-BACKFILL-GUARD); execução manual
 tenant por tenant; homologação Felipe ainda pendente.
 CASH-9C: transferências internas fora de faturamento/despesas/resultado.

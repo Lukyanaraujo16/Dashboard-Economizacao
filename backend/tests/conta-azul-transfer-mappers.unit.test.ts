@@ -8,6 +8,10 @@ import { decideTransferMatches } from '../src/modules/integrations/conta-azul/do
 const SRC = '11111111-1111-4111-8111-111111111111';
 const DST = '22222222-2222-4222-8222-222222222222';
 const OTHER = '33333333-3333-4333-8333-333333333333';
+/** Conta "Dinheiro" do caso Life (origem da transferência). */
+const DINHEIRO = SRC;
+/** Conta Bradesco do caso Life (destino). */
+const BRADESCO = DST;
 
 function transferJson(overrides: Record<string, unknown> = {}) {
   return {
@@ -64,7 +68,7 @@ describe('Mapper de transferências Conta Azul (CASH-9C)', () => {
   });
 });
 
-describe('Match conservador transferência ↔ settlement (CASH-9C)', () => {
+describe('Match direcional transferência ↔ settlement (CASH-9C / 10-A)', () => {
   const transfer = {
     id: 't1',
     occurredOn: day('2026-08-20'),
@@ -78,7 +82,24 @@ describe('Match conservador transferência ↔ settlement (CASH-9C)', () => {
     expect(decision).toEqual({ transferId: 't1', status: 'UNMATCHED' });
   });
 
-  it('um candidato único na conta destino = MATCHED', () => {
+  it('1 — DISBURSEMENT @ origem único = MATCHED', () => {
+    const [decision] = decideTransferMatches(
+      [transfer],
+      [
+        {
+          id: 's-out',
+          occurredOn: day('2026-08-20'),
+          netAmount: dec('10881'),
+          financialAccountExternalId: SRC,
+          lifecycleStatus: 'ACTIVE',
+          transactionType: 'DISBURSEMENT',
+        },
+      ],
+    );
+    expect(decision).toEqual({ transferId: 't1', status: 'MATCHED', settlementId: 's-out' });
+  });
+
+  it('2 — RECEIPT @ destino único = MATCHED', () => {
     const [decision] = decideTransferMatches(
       [transfer],
       [
@@ -88,43 +109,72 @@ describe('Match conservador transferência ↔ settlement (CASH-9C)', () => {
           netAmount: dec('10881'),
           financialAccountExternalId: DST,
           lifecycleStatus: 'ACTIVE',
+          transactionType: 'RECEIPT',
         },
       ],
     );
     expect(decision).toEqual({ transferId: 't1', status: 'MATCHED', settlementId: 's1' });
   });
 
-  it('um candidato único na conta origem = MATCHED', () => {
+  it('3 — RECEIPT @ origem não é candidato (UNMATCHED)', () => {
     const [decision] = decideTransferMatches(
       [transfer],
       [
         {
-          id: 's-origin',
-          occurredOn: day('2026-08-12'),
+          id: 's-origin-receipt',
+          occurredOn: day('2026-08-20'),
           netAmount: dec('10881'),
           financialAccountExternalId: SRC,
           lifecycleStatus: 'ACTIVE',
+          transactionType: 'RECEIPT',
         },
       ],
     );
-    expect(decision?.status).toBe('UNMATCHED');
-    const originTransfer = { ...transfer, occurredOn: day('2026-08-12'), amount: dec('1313') };
-    const [matched] = decideTransferMatches(
-      [originTransfer],
-      [
-        {
-          id: 's-origin',
-          occurredOn: day('2026-08-12'),
-          netAmount: dec('1313'),
-          financialAccountExternalId: SRC,
-          lifecycleStatus: 'ACTIVE',
-        },
-      ],
-    );
-    expect(matched).toEqual({ transferId: 't1', status: 'MATCHED', settlementId: 's-origin' });
+    expect(decision).toEqual({ transferId: 't1', status: 'UNMATCHED' });
   });
 
-  it('dois candidatos = AMBIGUOUS', () => {
+  it('4 — DISBURSEMENT @ destino não é candidato (UNMATCHED)', () => {
+    const [decision] = decideTransferMatches(
+      [transfer],
+      [
+        {
+          id: 's-dest-out',
+          occurredOn: day('2026-08-20'),
+          netAmount: dec('10881'),
+          financialAccountExternalId: DST,
+          lifecycleStatus: 'ACTIVE',
+          transactionType: 'DISBURSEMENT',
+        },
+      ],
+    );
+    expect(decision).toEqual({ transferId: 't1', status: 'UNMATCHED' });
+  });
+
+  it('5 — Life R$ 1.313: RECEIPT operacional @ Dinheiro (origem) não MATCHED', () => {
+    const lifeTransfer = {
+      id: 't-life-1313',
+      occurredOn: day('2026-08-12'),
+      amount: dec('1313'),
+      sourceFinancialAccountExternalId: DINHEIRO,
+      destinationFinancialAccountExternalId: BRADESCO,
+    };
+    const [decision] = decideTransferMatches(
+      [lifeTransfer],
+      [
+        {
+          id: 'mov-caixa-dinheiro',
+          occurredOn: day('2026-08-12'),
+          netAmount: dec('1313'),
+          financialAccountExternalId: DINHEIRO,
+          lifecycleStatus: 'ACTIVE',
+          transactionType: 'RECEIPT',
+        },
+      ],
+    );
+    expect(decision).toEqual({ transferId: 't-life-1313', status: 'UNMATCHED' });
+  });
+
+  it('6 — dois candidatos tipados (DISBURSEMENT origem + RECEIPT destino) = AMBIGUOUS', () => {
     const [decision] = decideTransferMatches(
       [transfer],
       [
@@ -134,6 +184,7 @@ describe('Match conservador transferência ↔ settlement (CASH-9C)', () => {
           netAmount: dec('10881'),
           financialAccountExternalId: DST,
           lifecycleStatus: 'ACTIVE',
+          transactionType: 'RECEIPT',
         },
         {
           id: 's2',
@@ -141,13 +192,14 @@ describe('Match conservador transferência ↔ settlement (CASH-9C)', () => {
           netAmount: dec('10881'),
           financialAccountExternalId: SRC,
           lifecycleStatus: 'ACTIVE',
+          transactionType: 'DISBURSEMENT',
         },
       ],
     );
     expect(decision).toEqual({ transferId: 't1', status: 'AMBIGUOUS' });
   });
 
-  it('venda em outra conta no mesmo dia/valor não casa', () => {
+  it('7 — mesma data/valor em conta não relacionada = UNMATCHED', () => {
     const [decision] = decideTransferMatches(
       [transfer],
       [
@@ -157,14 +209,15 @@ describe('Match conservador transferência ↔ settlement (CASH-9C)', () => {
           netAmount: dec('10881'),
           financialAccountExternalId: OTHER,
           lifecycleStatus: 'ACTIVE',
+          transactionType: 'RECEIPT',
         },
       ],
     );
     expect(decision).toEqual({ transferId: 't1', status: 'UNMATCHED' });
   });
 
-  it('rendimento 0.32 e DELETED não casam', () => {
-    const decisions = decideTransferMatches(
+  it('8 — valor diferente = UNMATCHED', () => {
+    const [decision] = decideTransferMatches(
       [transfer],
       [
         {
@@ -173,20 +226,31 @@ describe('Match conservador transferência ↔ settlement (CASH-9C)', () => {
           netAmount: dec('0.32'),
           financialAccountExternalId: DST,
           lifecycleStatus: 'ACTIVE',
-        },
-        {
-          id: 'deleted',
-          occurredOn: day('2026-08-20'),
-          netAmount: dec('10881'),
-          financialAccountExternalId: DST,
-          lifecycleStatus: 'DELETED',
+          transactionType: 'RECEIPT',
         },
       ],
     );
-    expect(decisions).toEqual([{ transferId: 't1', status: 'UNMATCHED' }]);
+    expect(decision).toEqual({ transferId: 't1', status: 'UNMATCHED' });
   });
 
-  it('duas transferências disputando o mesmo settlement = AMBIGUOUS nos dois', () => {
+  it('9 — data diferente = UNMATCHED', () => {
+    const [decision] = decideTransferMatches(
+      [transfer],
+      [
+        {
+          id: 's1',
+          occurredOn: day('2026-08-21'),
+          netAmount: dec('10881'),
+          financialAccountExternalId: DST,
+          lifecycleStatus: 'ACTIVE',
+          transactionType: 'RECEIPT',
+        },
+      ],
+    );
+    expect(decision).toEqual({ transferId: 't1', status: 'UNMATCHED' });
+  });
+
+  it('10 — duas transferências disputando o mesmo settlement = AMBIGUOUS nos dois', () => {
     const other = {
       ...transfer,
       id: 't2',
@@ -198,8 +262,26 @@ describe('Match conservador transferência ↔ settlement (CASH-9C)', () => {
       netAmount: dec('10881'),
       financialAccountExternalId: DST,
       lifecycleStatus: 'ACTIVE' as const,
+      transactionType: 'RECEIPT' as const,
     };
     const decisions = decideTransferMatches([transfer, other], [settlement]);
     expect(decisions.every((row) => row.status === 'AMBIGUOUS')).toBe(true);
+  });
+
+  it('DELETED não casa mesmo tipado no destino', () => {
+    const [decision] = decideTransferMatches(
+      [transfer],
+      [
+        {
+          id: 'deleted',
+          occurredOn: day('2026-08-20'),
+          netAmount: dec('10881'),
+          financialAccountExternalId: DST,
+          lifecycleStatus: 'DELETED',
+          transactionType: 'RECEIPT',
+        },
+      ],
+    );
+    expect(decision).toEqual({ transferId: 't1', status: 'UNMATCHED' });
   });
 });

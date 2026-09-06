@@ -1,5 +1,5 @@
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
-import { buildDueDateWindows, ContaAzulDateError } from '../domain/conta-azul-dates.js';
+import { buildDueDateWindows, buildTransferSyncCivilWindow, ContaAzulDateError } from '../domain/conta-azul-dates.js';
 import {
   buildIncrementalWindow,
   splitAlterationChunks,
@@ -44,6 +44,7 @@ import type { ContaAzulIntegrationRepository } from '../repositories/integration
 import type { ContaAzulRateLimiter } from './conta-azul-rate-limiter.js';
 import type { ContaAzulCostCenterSyncService } from './conta-azul-cost-center-sync.service.js';
 import type { ContaAzulLedgerSyncService } from './conta-azul-ledger-sync.service.js';
+import type { ContaAzulTransferSyncService } from './conta-azul-transfer-sync.service.js';
 import type { LedgerInstallmentCandidate } from '../domain/conta-azul-settlement-mappers.js';
 import { captureActiveAccountBalanceSnapshots } from './conta-azul-balance-capture.js';
 
@@ -169,6 +170,7 @@ export function createContaAzulManualSyncEngine(deps: {
   readonly heartbeatMinIntervalMs?: number;
   readonly costCenterSync?: ContaAzulCostCenterSyncService;
   readonly ledgerSync?: ContaAzulLedgerSyncService;
+  readonly transferSync?: ContaAzulTransferSyncService;
 }): ContaAzulManualSyncEngine {
   const now = deps.clock ?? (() => new Date());
   const timeoutMs = deps.timeoutMs ?? CONTA_AZUL_SYNC_JOB_TIMEOUT_MS;
@@ -250,6 +252,13 @@ export function createContaAzulManualSyncEngine(deps: {
         balanceSnapshotsAttempted: 0,
         balanceSnapshotsUpserted: 0,
         balanceSnapshotsFailed: 0,
+        transferPages: 0,
+        transferFetched: 0,
+        transferUpserted: 0,
+        transferSkippedInvalid: 0,
+        transferMatched: 0,
+        transferUnmatched: 0,
+        transferAmbiguous: 0,
       };
 
       try {
@@ -563,6 +572,52 @@ export function createContaAzulManualSyncEngine(deps: {
           processed.ledgerSkippedInvalid = ledgerResult.skippedInvalid;
           processed.ledgerIdentityMismatches = ledgerResult.skippedIdentityMismatch;
           processed.ledgerParcelFailures = ledgerResult.parcelFailures;
+        }
+
+        // CASH-9C / 10-B: catálogo de transferências + rematch direcional (10-A).
+        // Depois do ledger para que ghosts tipados já existam quando applyMatches roda.
+        // Falha propaga como as demais etapas (não engolir).
+        if (deps.transferSync) {
+          const transferWindow = buildTransferSyncCivilWindow({
+            now: now(),
+            mode: incremental ? 'recurring' : 'full',
+            lookbackYears: CONTA_AZUL_SYNC_LOOKBACK_YEARS,
+            lookaheadYears: CONTA_AZUL_SYNC_LOOKAHEAD_YEARS,
+            recurringLookbackDays: CONTA_AZUL_SYNC_WINDOW_DAYS,
+          });
+          const transferResult = await deps.transferSync.sync({
+            scope: scopeOf(),
+            from: transferWindow.from,
+            to: transferWindow.to,
+            requestWithAuth,
+            gatedGet,
+            heartbeat,
+          });
+          processed.transferPages = transferResult.pages;
+          processed.transferFetched = transferResult.fetched;
+          processed.transferUpserted = transferResult.upserted;
+          processed.transferSkippedInvalid = transferResult.skippedInvalid;
+          processed.transferMatched = transferResult.matched;
+          processed.transferUnmatched = transferResult.unmatched;
+          processed.transferAmbiguous = transferResult.ambiguous;
+          process.stdout.write(
+            `${JSON.stringify({
+              event: 'conta_azul_transfer_sync',
+              tenantId: input.tenantId,
+              integrationId: input.integrationId,
+              syncRunId: runId,
+              mode: incremental ? 'recurring' : 'full',
+              from: transferResult.from,
+              to: transferResult.to,
+              pages: transferResult.pages,
+              fetched: transferResult.fetched,
+              upserted: transferResult.upserted,
+              skippedInvalid: transferResult.skippedInvalid,
+              matched: transferResult.matched,
+              unmatched: transferResult.unmatched,
+              ambiguous: transferResult.ambiguous,
+            })}\n`,
+          );
         }
 
         const tenantAgain = await deps.tenants.findById(input.tenantId);

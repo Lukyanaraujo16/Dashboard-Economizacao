@@ -269,6 +269,26 @@ export function createContaAzulLedgerSyncService(deps: {
         await input.heartbeat();
       }
 
+      process.stdout.write(
+        `${JSON.stringify({
+          event: 'conta_azul_ledger_lifecycle_summary',
+          tenantId: input.scope.tenantId,
+          integrationId: input.scope.integrationId,
+          mode: input.mode,
+          autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+          installmentsReconciled: lifecycle.checked,
+          tombstoned: lifecycle.deleted,
+          wouldTombstone: lifecycle.wouldDelete,
+          skippedUnderCovered: lifecycle.skippedUnderCovered,
+          skippedFetchFailure: lifecycle.skippedFetchFailure,
+          overCovered: lifecycle.overCovered,
+          underCovered: lifecycle.underCovered,
+          reactivated: lifecycle.reactivated,
+          confirmedStale: lifecycle.confirmedStale,
+          missingSettlement: lifecycle.missingSettlement,
+        })}\n`,
+      );
+
       return {
         candidates: list.length,
         fetched,

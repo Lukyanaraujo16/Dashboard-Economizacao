@@ -114,6 +114,37 @@ export function addUtcYears(date: Date, years: number): Date {
   return addCivilYears(date, years);
 }
 
+/**
+ * Janela civil de GET /transferencias (filtra por `data` = occurredOn, não alteração).
+ *
+ * - `full` (carga manual / onboarding): mesmo horizonte MVP do restante (5y+2y).
+ * - `recurring` (SCHEDULED): lookback rolante de CONTA_AZUL_SYNC_WINDOW_DAYS dias
+ *   inclusive até hoje — cobre transferências criadas hoje com data retroativa
+ *   dentro da janela (overlap estrutural; a API não expõe data_alteracao).
+ */
+export function buildTransferSyncCivilWindow(input: {
+  readonly now: Date;
+  readonly mode: 'full' | 'recurring';
+  readonly lookbackYears?: number;
+  readonly lookaheadYears?: number;
+  readonly recurringLookbackDays?: number;
+}): { readonly from: Date; readonly to: Date } {
+  const today = utcCivilDate(input.now);
+  if (input.mode === 'full') {
+    const lookbackYears = input.lookbackYears ?? 5;
+    const lookaheadYears = input.lookaheadYears ?? 2;
+    return {
+      from: addCivilYears(today, -lookbackYears),
+      to: addCivilYears(today, lookaheadYears),
+    };
+  }
+  const lookbackDays = input.recurringLookbackDays ?? 90;
+  return {
+    from: addUtcDays(today, -(lookbackDays - 1)),
+    to: today,
+  };
+}
+
 export type DueDateWindow = {
   readonly from: string;
   readonly to: string;

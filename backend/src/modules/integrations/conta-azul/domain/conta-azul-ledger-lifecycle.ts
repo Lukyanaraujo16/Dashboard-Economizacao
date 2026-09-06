@@ -13,6 +13,10 @@ export type LedgerLifecycleCounters = {
   readonly underCovered: number;
   readonly reactivated: number;
   readonly failure: number;
+  /** R3 hold: Σ upstream < valor_pago (tombstone causaria under_covered). */
+  readonly skippedUnderCovered: number;
+  /** Lista de baixas ou detalhe da parcela falhou/incompleto. */
+  readonly skippedFetchFailure: number;
 };
 
 export function emptyLedgerLifecycleCounters(): LedgerLifecycleCounters {
@@ -27,6 +31,8 @@ export function emptyLedgerLifecycleCounters(): LedgerLifecycleCounters {
     underCovered: 0,
     reactivated: 0,
     failure: 0,
+    skippedUnderCovered: 0,
+    skippedFetchFailure: 0,
   };
 }
 
@@ -45,6 +51,8 @@ export function addLedgerLifecycleCounters(
     underCovered: left.underCovered + right.underCovered,
     reactivated: left.reactivated + right.reactivated,
     failure: left.failure + right.failure,
+    skippedUnderCovered: left.skippedUnderCovered + right.skippedUnderCovered,
+    skippedFetchFailure: left.skippedFetchFailure + right.skippedFetchFailure,
   };
 }
 
@@ -81,8 +89,22 @@ export function isCoherentPaidStatus(status: string): boolean {
 
 export type R3Decision = 'confirmed_stale' | 'hold';
 
+export type R3HoldReason =
+  | 'list_not_ready'
+  | 'not_missing'
+  | 'settlement_still_present'
+  | 'settlement_lookup_error'
+  | 'parcela_unreadable'
+  | 'parcela_id_mismatch'
+  | 'status_not_paid_like'
+  | 'remaining_under_paid'
+  | 'remaining_over_paid'
+  | 'remaining_mismatch';
+
 /**
  * R3: missing local ACTIVE pode virar DELETED só se todas as checagens passarem.
+ * Identidade = conjunto atual de baixas da parcela + 404 no GET por id.
+ * Não deduplica por valor/data/conta isoladamente.
  */
 export function evaluateR3Tombstone(input: {
   readonly listOkNonEmpty: boolean;
@@ -92,23 +114,46 @@ export function evaluateR3Tombstone(input: {
   readonly remainingGross: Prisma.Decimal;
   readonly installmentExternalId: string;
 }): R3Decision {
+  return explainR3Tombstone(input).decision;
+}
+
+export function explainR3Tombstone(input: {
+  readonly listOkNonEmpty: boolean;
+  readonly missingFromList: boolean;
+  readonly settlementLookup: 'not_found' | 'found' | 'error';
+  readonly parcela: ParcelaIdentity;
+  readonly remainingGross: Prisma.Decimal;
+  readonly installmentExternalId: string;
+}): { readonly decision: R3Decision; readonly holdReason: R3HoldReason | null } {
   if (!input.listOkNonEmpty || !input.missingFromList) {
-    return 'hold';
+    return {
+      decision: 'hold',
+      holdReason: !input.missingFromList ? 'not_missing' : 'list_not_ready',
+    };
   }
-  if (input.settlementLookup !== 'not_found') {
-    return 'hold';
+  if (input.settlementLookup === 'found') {
+    return { decision: 'hold', holdReason: 'settlement_still_present' };
+  }
+  if (input.settlementLookup === 'error') {
+    return { decision: 'hold', holdReason: 'settlement_lookup_error' };
   }
   if (input.parcela.kind !== 'found') {
-    return 'hold';
+    return { decision: 'hold', holdReason: 'parcela_unreadable' };
   }
   if (input.parcela.id !== input.installmentExternalId) {
-    return 'hold';
+    return { decision: 'hold', holdReason: 'parcela_id_mismatch' };
   }
   if (!isCoherentPaidStatus(input.parcela.status)) {
-    return 'hold';
+    return { decision: 'hold', holdReason: 'status_not_paid_like' };
+  }
+  if (input.remainingGross.lessThan(input.parcela.valorPago)) {
+    return { decision: 'hold', holdReason: 'remaining_under_paid' };
+  }
+  if (input.remainingGross.greaterThan(input.parcela.valorPago)) {
+    return { decision: 'hold', holdReason: 'remaining_over_paid' };
   }
   if (!input.remainingGross.equals(input.parcela.valorPago)) {
-    return 'hold';
+    return { decision: 'hold', holdReason: 'remaining_mismatch' };
   }
-  return 'confirmed_stale';
+  return { decision: 'confirmed_stale', holdReason: null };
 }

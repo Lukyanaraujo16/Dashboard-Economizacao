@@ -14,6 +14,8 @@ export type SettlementMatchSource = {
   readonly netAmount: Prisma.Decimal;
   readonly financialAccountExternalId: string | null;
   readonly lifecycleStatus: 'ACTIVE' | 'DELETED';
+  /** Direção da baixa — obrigatória para candidatura tipada (CASH-9C / 10-A). */
+  readonly transactionType: 'RECEIPT' | 'DISBURSEMENT';
 };
 
 export type TransferMatchDecision =
@@ -25,17 +27,31 @@ function sameCivilDay(left: Date, right: Date): boolean {
   return left.getTime() === right.getTime();
 }
 
-function accountMatchesTransfer(
-  accountId: string | null,
+/**
+ * Ghost tipado: saída só na origem; entrada só no destino.
+ * RECEIPT @ origem e DISBURSEMENT @ destino nunca são candidatos.
+ */
+function directionMatchesTransfer(
+  settlement: SettlementMatchSource,
   transfer: TransferMatchSource,
 ): boolean {
+  const accountId = settlement.financialAccountExternalId;
   if (!accountId) {
     return false;
   }
-  return (
-    accountId === transfer.sourceFinancialAccountExternalId ||
-    accountId === transfer.destinationFinancialAccountExternalId
-  );
+  if (
+    accountId === transfer.sourceFinancialAccountExternalId &&
+    settlement.transactionType === 'DISBURSEMENT'
+  ) {
+    return true;
+  }
+  if (
+    accountId === transfer.destinationFinancialAccountExternalId &&
+    settlement.transactionType === 'RECEIPT'
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function isActiveCandidate(settlement: SettlementMatchSource, transfer: TransferMatchSource): boolean {
@@ -43,14 +59,15 @@ function isActiveCandidate(settlement: SettlementMatchSource, transfer: Transfer
     settlement.lifecycleStatus === 'ACTIVE' &&
     sameCivilDay(settlement.occurredOn, transfer.occurredOn) &&
     settlement.netAmount.eq(transfer.amount) &&
-    accountMatchesTransfer(settlement.financialAccountExternalId, transfer)
+    directionMatchesTransfer(settlement, transfer)
   );
 }
 
 /**
- * Associação 1:1 conservadora. Sem descrição, categoria, cliente ou ID hardcoded.
+ * Associação 1:1 conservadora e direcional (Correção 10-A).
+ * Sem descrição, categoria, cliente ou ID hardcoded.
  * 0 candidatos → UNMATCHED; >1 ou disputa entre transferências → AMBIGUOUS;
- * exatamente um de cada lado → MATCHED.
+ * exatamente um candidato tipado sem disputa → MATCHED.
  */
 export function decideTransferMatches(
   transfers: readonly TransferMatchSource[],

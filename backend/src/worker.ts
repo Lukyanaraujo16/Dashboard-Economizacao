@@ -22,9 +22,11 @@ import { createContaAzulOAuthService } from './modules/integrations/conta-azul/s
 import { createContaAzulRateLimiter } from './modules/integrations/conta-azul/services/conta-azul-rate-limiter.js';
 import { createContaAzulCostCenterSyncService } from './modules/integrations/conta-azul/services/conta-azul-cost-center-sync.service.js';
 import { createContaAzulLedgerSyncService } from './modules/integrations/conta-azul/services/conta-azul-ledger-sync.service.js';
+import { createContaAzulTransferSyncService } from './modules/integrations/conta-azul/services/conta-azul-transfer-sync.service.js';
 import { createContaAzulManualSyncEngine } from './modules/integrations/conta-azul/services/conta-azul-sync.engine.js';
 import { createContaAzulSyncReconciler } from './modules/integrations/conta-azul/services/conta-azul-sync-reconcile.js';
 import { createTenantRepository } from './modules/tenant/repositories/tenant.repository.js';
+import { createContaAzulTransferRepository } from './modules/integrations/conta-azul/repositories/transfer.repository.js';
 
 const rootEnvPath = resolve(process.cwd(), '../.env');
 const localEnvPath = resolve(process.cwd(), '.env');
@@ -57,6 +59,10 @@ const ledger = createContaAzulLedgerRepository(prisma);
 const ledgerSync = createContaAzulLedgerSyncService({
   prisma,
   ledger,
+  apiClient,
+});
+const transferSync = createContaAzulTransferSyncService({
+  transfers: createContaAzulTransferRepository(prisma),
   apiClient,
 });
 const cursors = createContaAzulSyncCursorRepository(prisma);
@@ -96,6 +102,7 @@ const engine = createContaAzulManualSyncEngine({
   apiClient,
   costCenterSync,
   ledgerSync,
+  transferSync,
   getValidAccessToken: (tenantId) => oauth.getValidAccessToken(tenantId),
   forceRefresh: (tenantId) => oauth.forceRefresh(tenantId),
   rateLimiter: createContaAzulRateLimiter(),

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Prisma } from '../src/generated/prisma/client.js';
 import {
   evaluateR3Tombstone,
+  explainR3Tombstone,
   isCoherentPaidStatus,
   readParcelaIdentity,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-ledger-lifecycle.js';
@@ -33,6 +34,15 @@ describe('evaluateR3Tombstone', () => {
         remainingGross: paid.add(paid),
       }),
     ).toBe('hold');
+  });
+
+  it('10-C — remaining < valor_pago é under_covered (hold)', () => {
+    expect(
+      explainR3Tombstone({
+        ...base,
+        remainingGross: paid.div(2),
+      }),
+    ).toEqual({ decision: 'hold', holdReason: 'remaining_under_paid' });
   });
 
   it('L20 — GET settlement 200 não tombstona', () => {
