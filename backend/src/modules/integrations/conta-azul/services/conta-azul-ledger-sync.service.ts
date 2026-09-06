@@ -1,5 +1,10 @@
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
-import { CONTA_AZUL_LEDGER_AUTO_TOMBSTONE } from '../domain/conta-azul-ledger.js';
+import {
+  CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+  LIFECYCLE_PROBE_OCCURRED_ON_LOOKBACK_DAYS,
+  MAX_LIFECYCLE_PROBE_CANDIDATES_PER_SYNC,
+} from '../domain/conta-azul-ledger.js';
+import { addUtcDays, utcCivilDate } from '../domain/conta-azul-dates.js';
 import { ContaAzulMappingError } from '../domain/conta-azul-mapping.js';
 import {
   extractSearchInstallmentIds,
@@ -197,6 +202,54 @@ export function createContaAzulLedgerSyncService(deps: {
             remember({ kind: 'PAYABLE', externalId: id });
           }
         }
+
+        // Correção 10-F: maintenance bounded (não trunca changed/multi).
+        const occurredOnFrom = addUtcDays(
+          utcCivilDate(new Date()),
+          -(LIFECYCLE_PROBE_OCCURRED_ON_LOOKBACK_DAYS - 1),
+        );
+        const maintenance = await deps.ledger.listBoundedLifecycleProbeCandidates(
+          {
+            tenantId: input.scope.tenantId,
+            integrationId: input.scope.integrationId,
+          },
+          {
+            occurredOnFrom,
+            limit: MAX_LIFECYCLE_PROBE_CANDIDATES_PER_SYNC,
+          },
+        );
+        let neverChecked = 0;
+        let previouslyChecked = 0;
+        let queued = 0;
+        let deduped = 0;
+        for (const row of maintenance) {
+          if (row.lastLifecycleCheckedAt === null) {
+            neverChecked += 1;
+          } else {
+            previouslyChecked += 1;
+          }
+          const key = `${row.kind}:${row.externalId}`;
+          if (candidates.has(key)) {
+            deduped += 1;
+            continue;
+          }
+          remember({ kind: row.kind, externalId: row.externalId });
+          queued += 1;
+        }
+        process.stdout.write(
+          `${JSON.stringify({
+            event: 'conta_azul_ledger_lifecycle_maintenance_candidates',
+            tenantId: input.scope.tenantId,
+            integrationId: input.scope.integrationId,
+            discovered: maintenance.length,
+            neverChecked,
+            previouslyChecked,
+            queued,
+            deduped,
+            limit: MAX_LIFECYCLE_PROBE_CANDIDATES_PER_SYNC,
+            lookbackDays: LIFECYCLE_PROBE_OCCURRED_ON_LOOKBACK_DAYS,
+          })}\n`,
+        );
       }
 
       const list = [...candidates.values()];
@@ -250,21 +303,32 @@ export function createContaAzulLedgerSyncService(deps: {
           if (row) {
             reconciliations.push(row);
           }
-          lifecycle = addLedgerLifecycleCounters(
-            lifecycle,
-            await lifecycleService.reconcileInstallment({
-              scope: input.scope,
-              installmentExternalId: candidate.externalId,
-              installmentKind: candidate.kind,
-              previousRows,
-              upstreamItems: forThisParcel,
-              listWasEmpty: Array.isArray(payload) && payload.length === 0,
-              listOk: true,
-              autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
-              requestWithAuth: input.requestWithAuth,
-              gatedGet: input.gatedGet,
-            }),
-          );
+          const lifecycleResult = await lifecycleService.reconcileInstallment({
+            scope: input.scope,
+            installmentExternalId: candidate.externalId,
+            installmentKind: candidate.kind,
+            previousRows,
+            upstreamItems: forThisParcel,
+            listWasEmpty: Array.isArray(payload) && payload.length === 0,
+            listOk: true,
+            autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+            requestWithAuth: input.requestWithAuth,
+            gatedGet: input.gatedGet,
+          });
+          lifecycle = addLedgerLifecycleCounters(lifecycle, lifecycleResult.counters);
+          if (lifecycleResult.probeConclusive) {
+            await deps.ledger.touchLifecycleCheckpoint(
+              {
+                tenantId: input.scope.tenantId,
+                integrationId: input.scope.integrationId,
+              },
+              {
+                installmentKind: candidate.kind,
+                installmentExternalId: candidate.externalId,
+                checkedAt: new Date(),
+              },
+            );
+          }
         } catch (error) {
           if (isAbortingApiError(error)) {
             throw error;
@@ -272,21 +336,20 @@ export function createContaAzulLedgerSyncService(deps: {
           if (error instanceof ContaAzulApiError || error instanceof ContaAzulMappingError) {
             parcelFailures += 1;
             if (error instanceof ContaAzulApiError) {
-              lifecycle = addLedgerLifecycleCounters(
-                lifecycle,
-                await lifecycleService.reconcileInstallment({
-                  scope: input.scope,
-                  installmentExternalId: candidate.externalId,
-                  installmentKind: candidate.kind,
-                  previousRows,
-                  upstreamItems: [],
-                  listWasEmpty: false,
-                  listOk: false,
-                  autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
-                  requestWithAuth: input.requestWithAuth,
-                  gatedGet: input.gatedGet,
-                }),
-              );
+              const lifecycleResult = await lifecycleService.reconcileInstallment({
+                scope: input.scope,
+                installmentExternalId: candidate.externalId,
+                installmentKind: candidate.kind,
+                previousRows,
+                upstreamItems: [],
+                listWasEmpty: false,
+                listOk: false,
+                autoTombstone: CONTA_AZUL_LEDGER_AUTO_TOMBSTONE,
+                requestWithAuth: input.requestWithAuth,
+                gatedGet: input.gatedGet,
+              });
+              lifecycle = addLedgerLifecycleCounters(lifecycle, lifecycleResult.counters);
+              // listOk=false → probeConclusive=false: não avança checkpoint.
             }
           } else {
             throw error;
@@ -312,6 +375,11 @@ export function createContaAzulLedgerSyncService(deps: {
           reactivated: lifecycle.reactivated,
           confirmedStale: lifecycle.confirmedStale,
           missingSettlement: lifecycle.missingSettlement,
+          confirmedUpstreamOrphan: lifecycle.confirmedUpstreamOrphan,
+          orphanWouldTombstone: lifecycle.orphanWouldTombstone,
+          orphanTombstoned: lifecycle.orphanTombstoned,
+          orphanProbeFailed: lifecycle.orphanProbeFailed,
+          upstreamEmpty: lifecycle.upstreamEmpty,
         })}\n`,
       );
 

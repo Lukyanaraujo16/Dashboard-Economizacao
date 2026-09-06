@@ -176,7 +176,7 @@ async function runLifecycle(input: {
     autoTombstone: input.autoTombstone,
     requestWithAuth: async (work) => work('token'),
     gatedGet: async (work) => work(),
-  });
+  }).then((result) => result.counters);
 }
 
 describe('CASH-8A lifecycle do ledger', () => {
@@ -280,7 +280,7 @@ describe('CASH-8A lifecycle do ledger', () => {
     ).toBe(true);
   });
 
-  it('L4 / fixture 9c880 — lista [] não tombstona mesmo com flag true', async () => {
+  it('L4 / fixture 9c880 — lista [] com parcela ainda existente continua R4 HOLD', async () => {
     const { tenant, integration } = await seedConnected('l4');
     const parcela = '9c880f8e-0168-4673-a243-f7f6fa8ada84';
     await financial.upsertReceivables(
@@ -308,7 +308,8 @@ describe('CASH-8A lifecycle do ledger', () => {
       client: lifecycleClient({
         list: [],
         byId: { [item.externalId]: { kind: 'not_found' } },
-        detailError: new ContaAzulApiError('unavailable', '404', { httpStatus: 404 }),
+        // Parcela ainda existe → R4 HOLD (10-F exige parcela 404 para orphan).
+        detail: { id: parcela, status: 'QUITADO', valor_pago: 10881 },
       }),
     });
     const row = await prisma.financialTransaction.findFirstOrThrow({
@@ -317,6 +318,7 @@ describe('CASH-8A lifecycle do ledger', () => {
     expect(row.lifecycleStatus).toBe('ACTIVE');
     expect(counters.upstreamEmpty).toBe(1);
     expect(counters.deleted).toBe(0);
+    expect(counters.confirmedUpstreamOrphan).toBe(0);
   });
 
   it('L5/L6 — erro de lista ou 5xx no GET individual não muta', async () => {
@@ -819,7 +821,9 @@ describe('CASH-8A lifecycle do ledger', () => {
     );
     const client = lifecycleClient({
       list: [],
-      detailError: new ContaAzulApiError('unavailable', '404', { httpStatus: 404 }),
+      // Parcela viva → R4 HOLD (órfão 10-F exige parcela 404).
+      detail: { id: parcela, status: 'QUITADO', valor_pago: 10881 },
+      byId: { [item.externalId]: { kind: 'not_found' } },
     });
     const backfill = createContaAzulLedgerBackfillService({ prisma, ledger, apiClient: client });
     const summary = await backfill.run({
@@ -832,6 +836,7 @@ describe('CASH-8A lifecycle do ledger', () => {
     expect(summary.skippedCovered).toBe(0);
     expect(summary.lifecycle.upstreamEmpty).toBe(1);
     expect(summary.lifecycle.deleted).toBe(0);
+    expect(summary.lifecycle.confirmedUpstreamOrphan).toBe(0);
     expect(
       (
         await prisma.financialTransaction.findFirstOrThrow({

@@ -161,7 +161,7 @@ async function runLifecycle(input: {
     ledger,
     apiClient: input.client,
   });
-  return service.reconcileInstallment({
+  const result = await service.reconcileInstallment({
     scope: { tenantId: input.tenantId, integrationId: input.integrationId, syncedAt: new Date() },
     installmentExternalId: input.installmentId,
     installmentKind: input.kind ?? 'PAYABLE',
@@ -173,6 +173,7 @@ async function runLifecycle(input: {
     requestWithAuth: async (work) => work('token'),
     gatedGet: async (work) => work(),
   });
+  return result.counters;
 }
 
 async function statusOf(integrationId: string, externalId: string) {

@@ -57,6 +57,7 @@ model Tenant {
   financialTransactions FinancialTransaction[]
   financialTransfers    FinancialTransfer[]
   financialAccountBalanceSnapshots FinancialAccountBalanceSnapshot[]
+  financialInstallmentLifecycleCheckpoints FinancialInstallmentLifecycleCheckpoint[]
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
 
@@ -217,6 +218,7 @@ model Integration {
   financialTransactions FinancialTransaction[]
   financialTransfers    FinancialTransfer[]
   financialAccountBalanceSnapshots FinancialAccountBalanceSnapshot[]
+  financialInstallmentLifecycleCheckpoints FinancialInstallmentLifecycleCheckpoint[]
   syncRuns              SyncRun[]
   syncCursors           IntegrationSyncCursor[]
 
@@ -619,6 +621,26 @@ model FinancialTransaction {
   @@index([tenantId, installmentExternalId], map: "idx_financial_transactions_tenant_installment")
   @@index([tenantId, transactionType, occurredOn], map: "idx_financial_transactions_tenant_type_occurred_on")
   @@map("financial_transactions")
+}
+
+/// Correção 10-F: watermark de probe de lifecycle por parcela (discovery bounded).
+/// Ausência de row = nunca verificado. NÃO é evidência de tombstone.
+model FinancialInstallmentLifecycleCheckpoint {
+  id                     String                              @id @default(uuid()) @db.Uuid
+  tenantId               String                              @map("tenant_id") @db.Uuid
+  integrationId          String                              @map("integration_id") @db.Uuid
+  installmentKind        FinancialTransactionInstallmentKind @map("installment_kind")
+  installmentExternalId  String                              @map("installment_external_id")
+  lastLifecycleCheckedAt DateTime                            @map("last_lifecycle_checked_at") @db.Timestamptz(3)
+  createdAt              DateTime                            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime                            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                 Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  integration            Integration                         @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, installmentKind, installmentExternalId], map: "uq_filc_integration_kind_installment")
+  @@index([tenantId], map: "idx_filc_tenant_id")
+  @@index([integrationId, lastLifecycleCheckedAt], map: "idx_filc_integration_checked_at")
+  @@map("financial_installment_lifecycle_checkpoints")
 }
 
 /// CASH-9C: um objeto origem/destino = uma transferência entre contas próprias.

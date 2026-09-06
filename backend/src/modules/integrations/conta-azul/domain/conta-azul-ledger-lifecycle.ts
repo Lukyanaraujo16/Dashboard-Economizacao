@@ -17,6 +17,11 @@ export type LedgerLifecycleCounters = {
   readonly skippedUnderCovered: number;
   /** Lista de baixas ou detalhe da parcela falhou/incompleto. */
   readonly skippedFetchFailure: number;
+  /** R4b: órfão upstream confirmado ([] + baixas 404 + parcela 404). */
+  readonly confirmedUpstreamOrphan: number;
+  readonly orphanWouldTombstone: number;
+  readonly orphanTombstoned: number;
+  readonly orphanProbeFailed: number;
 };
 
 export function emptyLedgerLifecycleCounters(): LedgerLifecycleCounters {
@@ -33,6 +38,10 @@ export function emptyLedgerLifecycleCounters(): LedgerLifecycleCounters {
     failure: 0,
     skippedUnderCovered: 0,
     skippedFetchFailure: 0,
+    confirmedUpstreamOrphan: 0,
+    orphanWouldTombstone: 0,
+    orphanTombstoned: 0,
+    orphanProbeFailed: 0,
   };
 }
 
@@ -53,6 +62,10 @@ export function addLedgerLifecycleCounters(
     failure: left.failure + right.failure,
     skippedUnderCovered: left.skippedUnderCovered + right.skippedUnderCovered,
     skippedFetchFailure: left.skippedFetchFailure + right.skippedFetchFailure,
+    confirmedUpstreamOrphan: left.confirmedUpstreamOrphan + right.confirmedUpstreamOrphan,
+    orphanWouldTombstone: left.orphanWouldTombstone + right.orphanWouldTombstone,
+    orphanTombstoned: left.orphanTombstoned + right.orphanTombstoned,
+    orphanProbeFailed: left.orphanProbeFailed + right.orphanProbeFailed,
   };
 }
 
@@ -156,4 +169,52 @@ export function explainR3Tombstone(input: {
     return { decision: 'hold', holdReason: 'remaining_mismatch' };
   }
   return { decision: 'confirmed_stale', holdReason: null };
+}
+
+export type R4bDecision = 'confirmed_orphan' | 'hold';
+
+export type R4bHoldReason =
+  | 'list_not_ready'
+  | 'no_active_locals'
+  | 'settlement_still_present'
+  | 'settlement_lookup_error'
+  | 'parcela_still_present'
+  | 'parcela_lookup_error';
+
+export type R4bSettlementLookup = 'not_found' | 'found' | 'error';
+export type R4bParcelaLookup = 'not_found' | 'found' | 'error';
+
+/**
+ * R4b: lista vazia só tombstona com evidência conclusiva de desaparecimento upstream.
+ * Idade / descrição / valor NÃO entram nesta decisão.
+ */
+export function evaluateR4bOrphan(input: {
+  readonly listOk: boolean;
+  readonly listWasEmpty: boolean;
+  readonly hasActiveLocals: boolean;
+  readonly settlementLookups: readonly R4bSettlementLookup[];
+  readonly parcela: R4bParcelaLookup;
+}): { readonly decision: R4bDecision; readonly holdReason: R4bHoldReason | null } {
+  if (!input.listOk || !input.listWasEmpty) {
+    return { decision: 'hold', holdReason: 'list_not_ready' };
+  }
+  if (!input.hasActiveLocals || input.settlementLookups.length === 0) {
+    return { decision: 'hold', holdReason: 'no_active_locals' };
+  }
+  if (input.settlementLookups.some((lookup) => lookup === 'error')) {
+    return { decision: 'hold', holdReason: 'settlement_lookup_error' };
+  }
+  if (input.settlementLookups.some((lookup) => lookup === 'found')) {
+    return { decision: 'hold', holdReason: 'settlement_still_present' };
+  }
+  if (input.settlementLookups.some((lookup) => lookup !== 'not_found')) {
+    return { decision: 'hold', holdReason: 'settlement_lookup_error' };
+  }
+  if (input.parcela === 'error') {
+    return { decision: 'hold', holdReason: 'parcela_lookup_error' };
+  }
+  if (input.parcela === 'found') {
+    return { decision: 'hold', holdReason: 'parcela_still_present' };
+  }
+  return { decision: 'confirmed_orphan', holdReason: null };
 }

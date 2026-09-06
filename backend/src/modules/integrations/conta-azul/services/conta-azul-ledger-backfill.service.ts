@@ -183,21 +183,19 @@ export function createContaAzulLedgerBackfillService(deps: {
             installmentKind: candidate.kind,
             upstreamExternalIds: forThisParcel.map((item) => item.externalId),
           });
-          lifecycle = addLedgerLifecycleCounters(
-            lifecycle,
-            await lifecycleService.reconcileInstallment({
-              scope: input.scope,
-              installmentExternalId: candidate.externalId,
-              installmentKind: candidate.kind,
-              previousRows,
-              upstreamItems: forThisParcel,
-              listWasEmpty,
-              listOk: true,
-              autoTombstone,
-              requestWithAuth: input.requestWithAuth,
-              gatedGet: input.gatedGet,
-            }),
-          );
+          const lifecycleResult = await lifecycleService.reconcileInstallment({
+            scope: input.scope,
+            installmentExternalId: candidate.externalId,
+            installmentKind: candidate.kind,
+            previousRows,
+            upstreamItems: forThisParcel,
+            listWasEmpty,
+            listOk: true,
+            autoTombstone,
+            requestWithAuth: input.requestWithAuth,
+            gatedGet: input.gatedGet,
+          });
+          lifecycle = addLedgerLifecycleCounters(lifecycle, lifecycleResult.counters);
         } catch (error) {
           if (isAbortingApiError(error)) {
             throw error;
@@ -211,21 +209,19 @@ export function createContaAzulLedgerBackfillService(deps: {
             if (error.httpStatus === 404) {
               notFound += 1;
             }
-            lifecycle = addLedgerLifecycleCounters(
-              lifecycle,
-              await lifecycleService.reconcileInstallment({
-                scope: input.scope,
-                installmentExternalId: candidate.externalId,
-                installmentKind: candidate.kind,
-                previousRows,
-                upstreamItems: [],
-                listWasEmpty: false,
-                listOk: false,
-                autoTombstone,
-                requestWithAuth: input.requestWithAuth,
-                gatedGet: input.gatedGet,
-              }),
-            );
+            const lifecycleResult = await lifecycleService.reconcileInstallment({
+              scope: input.scope,
+              installmentExternalId: candidate.externalId,
+              installmentKind: candidate.kind,
+              previousRows,
+              upstreamItems: [],
+              listWasEmpty: false,
+              listOk: false,
+              autoTombstone,
+              requestWithAuth: input.requestWithAuth,
+              gatedGet: input.gatedGet,
+            });
+            lifecycle = addLedgerLifecycleCounters(lifecycle, lifecycleResult.counters);
           } else if (error instanceof ContaAzulMappingError) {
             parcelFailures += 1;
           } else {

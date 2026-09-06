@@ -28,6 +28,12 @@ export type LedgerMultiActiveInstallment = {
   readonly activeCount: number;
 };
 
+export type LedgerLifecycleProbeCandidate = {
+  readonly kind: 'RECEIVABLE' | 'PAYABLE';
+  readonly externalId: string;
+  readonly lastLifecycleCheckedAt: Date | null;
+};
+
 export type ContaAzulLedgerRepository = {
   listPaidInstallments(scope: {
     readonly tenantId: string;
@@ -41,6 +47,32 @@ export type ContaAzulLedgerRepository = {
     readonly tenantId: string;
     readonly integrationId: string;
   }): Promise<LedgerMultiActiveInstallment[]>;
+  /**
+   * Correção 10-F: fila bounded de maintenance/probe.
+   * Ordena neverChecked primeiro, depois lastLifecycleCheckedAt ASC.
+   * NÃO trunca changedInstallments / multiActive no sync — só candidates adicionais.
+   */
+  listBoundedLifecycleProbeCandidates(
+    scope: {
+      readonly tenantId: string;
+      readonly integrationId: string;
+    },
+    input: {
+      readonly occurredOnFrom: Date;
+      readonly limit: number;
+    },
+  ): Promise<LedgerLifecycleProbeCandidate[]>;
+  touchLifecycleCheckpoint(
+    scope: {
+      readonly tenantId: string;
+      readonly integrationId: string;
+    },
+    input: {
+      readonly installmentKind: 'RECEIVABLE' | 'PAYABLE';
+      readonly installmentExternalId: string;
+      readonly checkedAt: Date;
+    },
+  ): Promise<void>;
   listByInstallment(
     scope: { readonly tenantId: string; readonly integrationId: string },
     installmentExternalId: string,
@@ -121,6 +153,94 @@ export function createContaAzulLedgerRepository(prisma: PrismaClient): ContaAzul
         externalId: row.installmentExternalId,
         activeCount: row._count._all,
       }));
+    },
+
+    async listBoundedLifecycleProbeCandidates(scope, input) {
+      if (input.limit <= 0) {
+        return [];
+      }
+      const groups = await prisma.financialTransaction.groupBy({
+        by: ['installmentKind', 'installmentExternalId'],
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          lifecycleStatus: 'ACTIVE',
+          occurredOn: { gte: input.occurredOnFrom },
+        },
+      });
+      if (groups.length === 0) {
+        return [];
+      }
+      const checkpoints = await prisma.financialInstallmentLifecycleCheckpoint.findMany({
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          OR: groups.map((row) => ({
+            installmentKind: row.installmentKind,
+            installmentExternalId: row.installmentExternalId,
+          })),
+        },
+        select: {
+          installmentKind: true,
+          installmentExternalId: true,
+          lastLifecycleCheckedAt: true,
+        },
+      });
+      const checkedAtByKey = new Map(
+        checkpoints.map((row) => [
+          `${row.installmentKind}:${row.installmentExternalId}`,
+          row.lastLifecycleCheckedAt,
+        ]),
+      );
+      const ranked = groups
+        .map((row) => ({
+          kind: row.installmentKind,
+          externalId: row.installmentExternalId,
+          lastLifecycleCheckedAt:
+            checkedAtByKey.get(`${row.installmentKind}:${row.installmentExternalId}`) ?? null,
+        }))
+        .sort((left, right) => {
+          if (left.lastLifecycleCheckedAt === null && right.lastLifecycleCheckedAt !== null) {
+            return -1;
+          }
+          if (left.lastLifecycleCheckedAt !== null && right.lastLifecycleCheckedAt === null) {
+            return 1;
+          }
+          if (left.lastLifecycleCheckedAt && right.lastLifecycleCheckedAt) {
+            const byTime =
+              left.lastLifecycleCheckedAt.getTime() - right.lastLifecycleCheckedAt.getTime();
+            if (byTime !== 0) {
+              return byTime;
+            }
+          }
+          if (left.kind !== right.kind) {
+            return left.kind < right.kind ? -1 : 1;
+          }
+          return left.externalId < right.externalId ? -1 : left.externalId > right.externalId ? 1 : 0;
+        });
+      return ranked.slice(0, input.limit);
+    },
+
+    async touchLifecycleCheckpoint(scope, input) {
+      await prisma.financialInstallmentLifecycleCheckpoint.upsert({
+        where: {
+          integrationId_installmentKind_installmentExternalId: {
+            integrationId: scope.integrationId,
+            installmentKind: input.installmentKind,
+            installmentExternalId: input.installmentExternalId,
+          },
+        },
+        create: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          installmentKind: input.installmentKind,
+          installmentExternalId: input.installmentExternalId,
+          lastLifecycleCheckedAt: input.checkedAt,
+        },
+        update: {
+          lastLifecycleCheckedAt: input.checkedAt,
+        },
+      });
     },
 
     async listByInstallment(scope, installmentExternalId) {

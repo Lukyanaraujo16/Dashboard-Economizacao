@@ -520,7 +520,7 @@ describe('Correção 10-C — candidatos multi-ACTIVE no incremental', () => {
     expect(summary.lifecycle.deleted).toBe(1);
   });
 
-  it('sem multi-ACTIVE e sem changedInstallments => candidates=0 (incremental preservado)', async () => {
+  it('sem multi-ACTIVE e sem changedInstallments — 10-F maintenance ainda pode enfileirar single ACTIVE', async () => {
     const { tenant, integration } = await seedConnected('10c-ma-noop');
     const parcela = 'parcela-single';
     await financial.upsertPayables(
@@ -548,12 +548,13 @@ describe('Correção 10-C — candidatos multi-ACTIVE no incremental', () => {
       }),
     });
 
-    expect(summary.candidates).toBe(0);
-    expect(fetched).toBe(0);
+    // 10-C: sem multi-ACTIVE. 10-F: maintenance bounded pode reconciliar single ACTIVE ≤90d.
+    expect(summary.candidates).toBe(1);
+    expect(fetched).toBe(1);
     expect(summary.lifecycle.deleted).toBe(0);
   });
 
-  it('idempotência — segundo incremental após tombstone não reprocessa a parcela', async () => {
+  it('idempotência — segundo incremental após tombstone não re-tombstona', async () => {
     const { tenant, integration } = await seedConnected('10c-ma-idem');
     const parcela = 'parcela-idem';
     await financial.upsertPayables(
@@ -601,8 +602,9 @@ describe('Correção 10-C — candidatos multi-ACTIVE no incremental', () => {
         },
       },
     });
-    expect(second.candidates).toBe(0);
-    expect(fetched).toBe(0);
+    // 10-F: maintenance pode revisitar a parcela (ainda há ACTIVE live), mas sem novo tombstone.
+    expect(second.candidates).toBeGreaterThanOrEqual(1);
+    expect(fetched).toBeGreaterThanOrEqual(1);
     expect(second.lifecycle.deleted).toBe(0);
   });
 });
