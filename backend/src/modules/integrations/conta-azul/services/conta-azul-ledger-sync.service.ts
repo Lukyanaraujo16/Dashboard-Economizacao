@@ -147,6 +147,32 @@ export function createContaAzulLedgerSyncService(deps: {
         for (const item of input.changedInstallments) {
           remember(item);
         }
+        // Gap 10-C: sync recorrente não traz parcelas antigas em changedInstallments.
+        // Multi-ACTIVE local é só fila de reconciliação; R3/R4 decidem tombstone.
+        const multiActive = await deps.ledger.listMultiActiveInstallments({
+          tenantId: input.scope.tenantId,
+          integrationId: input.scope.integrationId,
+        });
+        let multiActiveRemembered = 0;
+        for (const row of multiActive) {
+          const key = `${row.kind}:${row.externalId}`;
+          if (!candidates.has(key)) {
+            multiActiveRemembered += 1;
+          }
+          remember({ kind: row.kind, externalId: row.externalId });
+        }
+        if (multiActive.length > 0) {
+          process.stdout.write(
+            `${JSON.stringify({
+              event: 'conta_azul_ledger_multi_active_candidates',
+              tenantId: input.scope.tenantId,
+              integrationId: input.scope.integrationId,
+              multiActiveGroups: multiActive.length,
+              newlyQueued: multiActiveRemembered,
+              alreadyInChanged: multiActive.length - multiActiveRemembered,
+            })}\n`,
+          );
+        }
         if (input.paymentDiscoveryWindow) {
           const arIds = await discoverPaymentCandidates({
             kind: 'RECEIVABLE',

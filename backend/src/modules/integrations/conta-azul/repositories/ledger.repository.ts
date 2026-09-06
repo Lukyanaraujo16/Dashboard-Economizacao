@@ -22,11 +22,25 @@ export type LedgerReconciliationRow = {
   readonly knownMissingFromUpstream: number;
 };
 
+export type LedgerMultiActiveInstallment = {
+  readonly kind: 'RECEIVABLE' | 'PAYABLE';
+  readonly externalId: string;
+  readonly activeCount: number;
+};
+
 export type ContaAzulLedgerRepository = {
   listPaidInstallments(scope: {
     readonly tenantId: string;
     readonly integrationId: string;
   }): Promise<LedgerInstallmentPaid[]>;
+  /**
+   * Correção 10-C (gap incremental): parcelas com mais de um settlement ACTIVE
+   * no mesmo tenant/integration. Só sinaliza fila de reconciliação — não tombstona.
+   */
+  listMultiActiveInstallments(scope: {
+    readonly tenantId: string;
+    readonly integrationId: string;
+  }): Promise<LedgerMultiActiveInstallment[]>;
   listByInstallment(
     scope: { readonly tenantId: string; readonly integrationId: string },
     installmentExternalId: string,
@@ -80,6 +94,33 @@ export function createContaAzulLedgerRepository(prisma: PrismaClient): ContaAzul
           paid: row.paid,
         })),
       ];
+    },
+
+    async listMultiActiveInstallments(scope) {
+      const groups = await prisma.financialTransaction.groupBy({
+        by: ['installmentKind', 'installmentExternalId'],
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          lifecycleStatus: 'ACTIVE',
+        },
+        _count: { _all: true },
+        having: {
+          installmentExternalId: {
+            _count: {
+              gt: 1,
+            },
+          },
+        },
+        orderBy: {
+          installmentExternalId: 'asc',
+        },
+      });
+      return groups.map((row) => ({
+        kind: row.installmentKind,
+        externalId: row.installmentExternalId,
+        activeCount: row._count._all,
+      }));
     },
 
     async listByInstallment(scope, installmentExternalId) {
