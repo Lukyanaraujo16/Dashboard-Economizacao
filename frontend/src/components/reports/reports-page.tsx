@@ -136,6 +136,8 @@ export function ReportsPage() {
     catalogLoadGenerationRef.current += 1;
     const generation = catalogLoadGenerationRef.current;
     const tenantId = operationalTenantId;
+    const from = fromKey;
+    const to = toKey;
     const controller = new AbortController();
 
     setFiltersLoading(true);
@@ -143,7 +145,7 @@ export function ReportsPage() {
       try {
         const [categoryResult, costCenterResult] = await Promise.all([
           getDashboardCategories(),
-          getDashboardCostCenters(),
+          getDashboardCostCenters({ fromKey: from, toKey: to }),
         ]);
         if (
           controller.signal.aborted ||
@@ -180,7 +182,7 @@ export function ReportsPage() {
       controller.abort();
       catalogLoadGenerationRef.current += 1;
     };
-  }, [canQuery, operationalTenantId]);
+  }, [canQuery, fromKey, operationalTenantId, toKey]);
 
   useEffect(() => {
     if (operationalTenantId === null) {

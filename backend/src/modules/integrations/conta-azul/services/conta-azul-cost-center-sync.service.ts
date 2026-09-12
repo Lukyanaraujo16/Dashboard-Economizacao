@@ -1,6 +1,12 @@
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
 import { normalizeInstallmentCostCenterAllocations } from '../domain/conta-azul-cost-center-allocation-normalize.js';
 import {
+  emptyCostCenterCatalogUpsertCounters,
+  mergeCostCenterCatalogUpsertCounters,
+  type CostCenterCatalogReconcileCounters,
+  type CostCenterCatalogUpsertCounters,
+} from '../domain/conta-azul-cost-center-catalog-metrics.js';
+import {
   COST_CENTER_DETAIL_RULE_VERSION,
   detailStatusFromNormalizeKind,
   emptyCostCenterEnrichmentCounters,
@@ -12,7 +18,10 @@ import {
   reconcileCostCenterAllocationAmounts,
 } from '../domain/conta-azul-cost-center-mappers.js';
 import { ContaAzulMappingError } from '../domain/conta-azul-mapping.js';
-import { CONTA_AZUL_SYNC_PAGE_SIZE } from '../domain/conta-azul-sync.js';
+import {
+  CONTA_AZUL_COST_CENTER_CATALOG_MAX_PAGES,
+  CONTA_AZUL_SYNC_PAGE_SIZE,
+} from '../domain/conta-azul-sync.js';
 import type { FinancialSyncScope } from '../repositories/financial.repository.js';
 import type {
   ContaAzulCostCenterRepository,
@@ -43,7 +52,65 @@ function isAbortingApiError(error: unknown): boolean {
   );
 }
 
-function logReconcile(input: {
+/** Qualquer falha de fetch/parse/paginação aborta reconcile de ausência. */
+function isCatalogAbortError(error: unknown): boolean {
+  if (error instanceof ContaAzulMappingError) {
+    return true;
+  }
+  if (!(error instanceof ContaAzulApiError)) {
+    return false;
+  }
+  return (
+    error.kind === 'unauthorized' ||
+    error.kind === 'rate_limited' ||
+    error.kind === 'timeout' ||
+    error.kind === 'invalid_response' ||
+    error.kind === 'unavailable'
+  );
+}
+
+function isPaginationInconsistent(input: {
+  readonly pageItemCount: number;
+  readonly processed: number;
+  readonly totalItems: number | null;
+  readonly pageSize: number;
+}): boolean {
+  const { pageItemCount, processed, totalItems, pageSize } = input;
+  if (pageItemCount > pageSize) {
+    return true;
+  }
+  if (totalItems === null) {
+    return false;
+  }
+  if (totalItems < 0) {
+    return true;
+  }
+  // totalItems é sanity check: se processamos mais do que o total alegado, snapshot não é confiável.
+  if (processed > totalItems) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Fim de snapshot só por evidência da própria página.
+ * Página cheia (=== pageSize) NUNCA encerra — mesmo se totalItems diga o contrário.
+ */
+function snapshotExhausted(input: {
+  readonly pageItemCount: number;
+  readonly pageSize: number;
+}): boolean {
+  return input.pageItemCount < input.pageSize;
+}
+
+export class ContaAzulCostCenterCatalogPaginationError extends ContaAzulMappingError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ContaAzulCostCenterCatalogPaginationError';
+  }
+}
+
+function logAllocationReconcile(input: {
   readonly kind: 'RECEIVABLE' | 'PAYABLE';
   readonly installmentExternalId: string;
   readonly status: string;
@@ -62,6 +129,34 @@ function logReconcile(input: {
       total: input.total,
       allocated: input.allocated,
       upstreamSum: input.upstreamSum,
+    })}\n`,
+  );
+}
+
+function logCatalogReconcile(
+  input: CostCenterCatalogReconcileCounters & {
+    readonly tenantId: string;
+    readonly integrationId: string;
+    readonly durationMs: number;
+  },
+): void {
+  process.stdout.write(
+    `${JSON.stringify({
+      event: 'conta_azul_cost_center_catalog_reconcile',
+      tenantId: input.tenantId,
+      integrationId: input.integrationId,
+      fetched: input.fetched,
+      created: input.created,
+      updated: input.updated,
+      reactivated: input.reactivated,
+      inactivatedByUpstream: input.inactivatedByUpstream,
+      inactivatedByAbsence: input.inactivatedByAbsence,
+      alreadyInactive: input.alreadyInactive,
+      activeUpstream: input.activeUpstream,
+      inactiveUpstream: input.inactiveUpstream,
+      reconcileExecuted: input.reconcileExecuted,
+      reconcileSkipped: input.reconcileSkipped,
+      durationMs: input.durationMs,
     })}\n`,
   );
 }
@@ -96,35 +191,131 @@ function logEnrichmentSummary(counters: CostCenterEnrichmentCounters, durationMs
   );
 }
 
+function buildSkippedCounters(
+  upsert: CostCenterCatalogUpsertCounters,
+  fetched: number,
+  activeUpstream: number,
+  inactiveUpstream: number,
+): CostCenterCatalogReconcileCounters {
+  return {
+    fetched,
+    created: upsert.created,
+    updated: upsert.updated,
+    reactivated: upsert.reactivated,
+    inactivatedByUpstream: upsert.inactivatedByUpstream,
+    inactivatedByAbsence: 0,
+    alreadyInactive: upsert.alreadyInactive,
+    reconcileExecuted: false,
+    reconcileSkipped: true,
+    activeUpstream,
+    inactiveUpstream,
+  };
+}
+
 export function createContaAzulCostCenterSyncService(deps: {
   readonly costCenters: ContaAzulCostCenterRepository;
   readonly apiClient: ContaAzulApiClient;
 }): ContaAzulCostCenterSyncService {
   return {
     async syncCatalog(input) {
+      const startedAt = Date.now();
       let pagina = 1;
       let processed = 0;
-      for (;;) {
-        const payload = await input.requestWithAuth((accessToken) =>
-          input.gatedGet(() =>
-            deps.apiClient.getCostCenters(accessToken, {
-              pagina,
-              filtroRapido: 'TODOS',
-            }),
-          ),
-        );
-        const page = mapCostCenterPage(payload);
-        await deps.costCenters.upsertCostCenters(input.scope, page.items);
-        processed += page.items.length;
-        await input.heartbeat();
-        const exhausted =
-          page.items.length === 0 ||
-          page.items.length < CONTA_AZUL_SYNC_PAGE_SIZE ||
-          (page.totalItems !== null && processed >= page.totalItems);
-        if (exhausted) {
-          return processed;
+      let upsert = emptyCostCenterCatalogUpsertCounters();
+      let activeUpstream = 0;
+      let inactiveUpstream = 0;
+      const presentExternalIds = new Set<string>();
+
+      try {
+        for (;;) {
+          const payload = await input.requestWithAuth((accessToken) =>
+            input.gatedGet(() =>
+              deps.apiClient.getCostCenters(accessToken, {
+                pagina,
+                filtroRapido: 'TODOS',
+              }),
+            ),
+          );
+          const page = mapCostCenterPage(payload);
+
+          if (
+            isPaginationInconsistent({
+              pageItemCount: page.items.length,
+              processed: processed + page.items.length,
+              totalItems: page.totalItems,
+              pageSize: CONTA_AZUL_SYNC_PAGE_SIZE,
+            })
+          ) {
+            throw new ContaAzulCostCenterCatalogPaginationError(
+              'Paginação de centros de custo inconsistente com itens_totais.',
+            );
+          }
+
+          for (const item of page.items) {
+            presentExternalIds.add(item.externalId);
+            if (item.active) {
+              activeUpstream += 1;
+            } else {
+              inactiveUpstream += 1;
+            }
+          }
+
+          const pageUpsert = await deps.costCenters.upsertCostCenters(input.scope, page.items);
+          upsert = mergeCostCenterCatalogUpsertCounters(upsert, pageUpsert);
+          processed += page.items.length;
+          await input.heartbeat();
+
+          if (
+            snapshotExhausted({
+              pageItemCount: page.items.length,
+              pageSize: CONTA_AZUL_SYNC_PAGE_SIZE,
+            })
+          ) {
+            // Snapshot completo e bem-sucedido → reconcile de ausência.
+            const inactivatedByAbsence = await deps.costCenters.markAbsentInactive({
+              tenantId: input.scope.tenantId,
+              integrationId: input.scope.integrationId,
+              presentExternalIds: [...presentExternalIds],
+              syncedAt: input.scope.syncedAt,
+            });
+
+            logCatalogReconcile({
+              tenantId: input.scope.tenantId,
+              integrationId: input.scope.integrationId,
+              fetched: processed,
+              created: upsert.created,
+              updated: upsert.updated,
+              reactivated: upsert.reactivated,
+              inactivatedByUpstream: upsert.inactivatedByUpstream,
+              inactivatedByAbsence,
+              alreadyInactive: upsert.alreadyInactive,
+              activeUpstream,
+              inactiveUpstream,
+              reconcileExecuted: true,
+              reconcileSkipped: false,
+              durationMs: Date.now() - startedAt,
+            });
+            return processed;
+          }
+
+          if (pagina >= CONTA_AZUL_COST_CENTER_CATALOG_MAX_PAGES) {
+            throw new ContaAzulCostCenterCatalogPaginationError(
+              `Catálogo de centros de custo excedeu o limite de ${CONTA_AZUL_COST_CENTER_CATALOG_MAX_PAGES} páginas sem página terminal.`,
+            );
+          }
+
+          pagina += 1;
         }
-        pagina += 1;
+      } catch (error) {
+        if (isCatalogAbortError(error)) {
+          logCatalogReconcile({
+            tenantId: input.scope.tenantId,
+            integrationId: input.scope.integrationId,
+            ...buildSkippedCounters(upsert, processed, activeUpstream, inactiveUpstream),
+            durationMs: Date.now() - startedAt,
+          });
+        }
+        throw error;
       }
     },
 
@@ -245,7 +436,7 @@ export function createContaAzulCostCenterSyncService(deps: {
             total: installment.total,
             allocated,
           });
-          logReconcile({
+          logAllocationReconcile({
             kind: installment.kind,
             installmentExternalId: installment.externalId,
             status,

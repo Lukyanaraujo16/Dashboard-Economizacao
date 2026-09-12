@@ -66,7 +66,10 @@ export const REVENUE_GOAL_HISTORY_MONTHS = 6;
 export const CASH_MOVEMENT_HISTORY_MONTHS = 12;
 
 export type DashboardOverviewFacade = {
-  listCostCenters(auth: AuthenticatedRequestContext): Promise<DashboardCostCentersResponse>;
+  listCostCenters(
+    auth: AuthenticatedRequestContext,
+    period: { readonly from: Date; readonly to: Date },
+  ): Promise<DashboardCostCentersResponse>;
   listCategories(auth: AuthenticatedRequestContext): Promise<DashboardCategoriesResponse>;
   getOverview(
     auth: AuthenticatedRequestContext,
@@ -193,9 +196,9 @@ export function createDashboardOverviewFacade(
   deps: DashboardOverviewFacadeDependencies,
 ): DashboardOverviewFacade {
   return {
-    async listCostCenters(auth) {
+    async listCostCenters(auth, period) {
       const tenantId = requireOperationalTenantId(auth);
-      const items = await deps.costCenters.listByTenant(tenantId);
+      const items = await deps.costCenters.listVisibleForPeriod(tenantId, period);
       return { items };
     },
 

@@ -168,7 +168,7 @@ function installment(input: {
 }
 
 describe('GET /dashboard/cost-centers', () => {
-  it('lista ativos primeiro e depois por nome; rejeita sem sessão', async () => {
+  it('lista ativos primeiro e depois por nome; rejeita sem sessão; oculta inactive sem movimento no mês', async () => {
     const app = await buildTestApp();
     const unauth = await app.inject({ method: 'GET', url: '/dashboard/cost-centers' });
     expect(unauth.statusCode).toBe(401);
@@ -215,17 +215,111 @@ describe('GET /dashboard/cost-centers', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: '/dashboard/cost-centers',
+      url: '/dashboard/cost-centers?month=2026-09',
       headers: { cookie },
     });
     expect(response.statusCode).toBe(200);
     const body = response.json() as {
       items: Array<{ id: string; name: string; code: string | null; active: boolean }>;
     };
-    expect(body.items.map((item) => item.name)).toEqual(['Bravo', 'Charlie', 'Alpha']);
-    expect(body.items[0]?.active).toBe(true);
-    expect(body.items[2]?.active).toBe(false);
-    expect(body.items[2]?.code).toBeNull();
+    // Alpha inactive sem allocation no período não aparece
+    expect(body.items.map((item) => item.name)).toEqual(['Bravo', 'Charlie']);
+    expect(body.items.every((item) => item.active)).toBe(true);
+  });
+
+  it('inclui inactive com allocation no período e exclui fora do período', async () => {
+    const app = await buildTestApp();
+    const seeded = await seedConnected('cc-period');
+    await createUser({
+      email: 'user@cc-period.test',
+      role: 'USER',
+      tenantId: seeded.tenant.id,
+    });
+    const cookie = await loginAs(app, 'user@cc-period.test');
+    const syncedAt = new Date();
+
+    const active = await prisma.costCenter.create({
+      data: {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'cc-active',
+        code: null,
+        name: 'Ativo Sem Movimento',
+        active: true,
+        syncedAt,
+      },
+    });
+    const hist = await prisma.costCenter.create({
+      data: {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'cc-hist',
+        code: null,
+        name: 'Historico Ago',
+        active: false,
+        syncedAt,
+      },
+    });
+    await prisma.costCenter.create({
+      data: {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'cc-ghost',
+        code: null,
+        name: 'Fantasma',
+        active: false,
+        syncedAt,
+      },
+    });
+
+    await financial.upsertReceivables(
+      {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        syncedAt,
+      },
+      [
+        installment({
+          externalId: 'r-aug',
+          status: 'OPEN',
+          total: '100',
+          competenceDate: new Date(Date.UTC(2026, 7, 10)),
+          dueDate: new Date(Date.UTC(2026, 7, 10)),
+        }),
+      ],
+    );
+    const receivable = await prisma.receivable.findFirstOrThrow({
+      where: { tenantId: seeded.tenant.id, externalId: 'r-aug' },
+    });
+    await prisma.installmentCostCenterAllocation.create({
+      data: {
+        tenantId: seeded.tenant.id,
+        costCenterId: hist.id,
+        receivableId: receivable.id,
+        amount: new Prisma.Decimal('100'),
+        syncedAt,
+      },
+    });
+
+    const aug = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cost-centers?month=2026-08',
+      headers: { cookie },
+    });
+    expect(aug.statusCode).toBe(200);
+    const augBody = aug.json() as { items: Array<{ id: string; name: string; active: boolean }> };
+    expect(augBody.items.map((item) => item.id).sort()).toEqual([active.id, hist.id].sort());
+    expect(augBody.items.find((item) => item.id === hist.id)?.active).toBe(false);
+
+    const sep = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cost-centers?month=2026-09',
+      headers: { cookie },
+    });
+    expect(sep.statusCode).toBe(200);
+    const sepBody = sep.json() as { items: Array<{ id: string; name: string }> };
+    expect(sepBody.items.map((item) => item.id)).toEqual([active.id]);
+    expect(sepBody.items.some((item) => item.id === hist.id)).toBe(false);
   });
 });
 

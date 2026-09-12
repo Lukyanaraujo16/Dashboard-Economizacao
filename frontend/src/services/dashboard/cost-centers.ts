@@ -73,11 +73,15 @@ function toFailure(response: Response, body: unknown): DashboardCostCentersReque
   );
 }
 
-export async function getDashboardCostCenters(): Promise<DashboardCostCentersResponse> {
+export async function getDashboardCostCenters(options?: {
+  readonly monthKey?: string | null;
+  readonly fromKey?: string | null;
+  readonly toKey?: string | null;
+}): Promise<DashboardCostCentersResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardCostCentersPath(), {
+    response = await fetch(dashboardCostCentersPath(options), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

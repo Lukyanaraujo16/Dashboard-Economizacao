@@ -1,5 +1,12 @@
 export const CONTA_AZUL_SYNC_PAGE_SIZE = 100;
 
+/**
+ * Teto defensivo de páginas no sync de catálogo de centros de custo (11-A).
+ * pageSize=100 → até 5_000 centros. Muito acima de qualquer tenant real;
+ * ao atingir sem página terminal, skip reconcile (nunca marcar ausência).
+ */
+export const CONTA_AZUL_COST_CENTER_CATALOG_MAX_PAGES = 50;
+
 /** Margem abaixo do teto oficial de 10 req/s (~8 req/s). */
 export const CONTA_AZUL_SYNC_MIN_INTERVAL_MS = 125;
 

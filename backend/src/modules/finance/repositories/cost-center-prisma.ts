@@ -58,7 +58,7 @@ export type AllocationWithPayableRow = InstallmentCostCenterAllocationRow & {
 };
 
 type CostCenterFindManyArgs = {
-  readonly where?: { readonly tenantId?: string; readonly id?: string; readonly active?: boolean };
+  readonly where?: Record<string, unknown>;
   readonly orderBy?: readonly Record<string, 'asc' | 'desc'>[] | Record<string, 'asc' | 'desc'>;
   readonly select?: Record<string, boolean>;
 };

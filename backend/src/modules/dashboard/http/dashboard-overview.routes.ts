@@ -24,6 +24,7 @@ import { createDashboardOverviewFacade } from '../services/dashboard-overview.fa
 import { assertNoCashBalanceAnalyticsFilters } from './assert-no-cash-balance-analytics-filters.js';
 import { assertNoTenantIdQuery } from './assert-no-tenant-id-query.js';
 import { parseDashboardCategoryQuery } from './parse-dashboard-category-query.js';
+import { parseDashboardCostCenterListPeriod } from './parse-dashboard-cost-center-list-period.js';
 import { parseDashboardCostCenterQuery } from './parse-dashboard-cost-center-query.js';
 import { parseDashboardMonth } from './parse-dashboard-month.js';
 import { parseDashboardRevenueGoalBody } from './parse-dashboard-revenue-goal-body.js';
@@ -85,7 +86,11 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      const body = await dashboard.listCostCenters(auth);
+      const period = parseDashboardCostCenterListPeriod(request.query);
+      const body = await dashboard.listCostCenters(auth, {
+        from: period.from,
+        to: period.to,
+      });
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

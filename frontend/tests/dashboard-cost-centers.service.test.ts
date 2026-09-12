@@ -35,7 +35,7 @@ describe('dashboard cost-centers service', () => {
     expect(isDashboardCostCentersResponse({ items: 'nope' })).toBe(false);
   });
 
-  it('busca com credentials e path canônico', async () => {
+  it('busca com credentials e path canônico com month', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -43,13 +43,15 @@ describe('dashboard cost-centers service', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await getDashboardCostCenters();
-    expect(fetchMock).toHaveBeenCalledWith(dashboardCostCentersPath(), {
+    const result = await getDashboardCostCenters({ monthKey: '2026-08' });
+    expect(fetchMock).toHaveBeenCalledWith(dashboardCostCentersPath({ monthKey: '2026-08' }), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
     });
-    expect(dashboardCostCentersPath()).toBe('/dashboard/cost-centers');
+    expect(dashboardCostCentersPath({ monthKey: '2026-08' })).toBe(
+      '/dashboard/cost-centers?month=2026-08',
+    );
     expect(result.items).toHaveLength(2);
     expect(result.items[0]?.name).toBe('Operações');
   });

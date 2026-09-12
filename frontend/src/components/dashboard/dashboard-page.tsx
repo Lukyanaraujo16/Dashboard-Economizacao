@@ -466,6 +466,7 @@ export function DashboardPage() {
   operationalTenantIdRef.current = operationalTenantId;
   const catalogTenantIdRef = useRef<string | null>(null);
   const catalogLoadGenerationRef = useRef(0);
+  const costCenterLoadGenerationRef = useRef(0);
 
   const loadOverview = useCallback(
     async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
@@ -852,10 +853,7 @@ export function DashboardPage() {
 
     void (async () => {
       try {
-        const [categoryResult, costCenterResult] = await Promise.all([
-          getDashboardCategories(),
-          getDashboardCostCenters(),
-        ]);
+        const categoryResult = await getDashboardCategories();
         if (
           controller.signal.aborted ||
           catalogLoadGenerationRef.current !== generation ||
@@ -864,7 +862,6 @@ export function DashboardPage() {
           return;
         }
         setCategories(categoryResult.items);
-        setCostCenters(costCenterResult.items);
         catalogTenantIdRef.current = tenantId;
       } catch {
         if (
@@ -875,7 +872,6 @@ export function DashboardPage() {
           return;
         }
         setCategories([]);
-        setCostCenters([]);
         setCategoriesError(true);
       } finally {
         if (
@@ -884,7 +880,6 @@ export function DashboardPage() {
           operationalTenantIdRef.current === tenantId
         ) {
           setCategoriesLoading(false);
-          setCostCentersLoading(false);
         }
       }
     })();
@@ -902,6 +897,58 @@ export function DashboardPage() {
     () => resolveSelectedDashboardMonthKey(searchParams, todayMonthKey),
     [searchParams, todayMonthKey],
   );
+
+  useEffect(() => {
+    if (status !== 'authenticated' || operationalTenantId === null) {
+      setCostCenters([]);
+      setCostCentersLoading(false);
+      return;
+    }
+
+    setCostCenters([]);
+    setCostCentersLoading(true);
+    costCenterLoadGenerationRef.current += 1;
+    const generation = costCenterLoadGenerationRef.current;
+    const tenantId = operationalTenantId;
+    const monthKey = selectedMonthKey;
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        const costCenterResult = await getDashboardCostCenters({ monthKey });
+        if (
+          controller.signal.aborted ||
+          costCenterLoadGenerationRef.current !== generation ||
+          operationalTenantIdRef.current !== tenantId
+        ) {
+          return;
+        }
+        setCostCenters(costCenterResult.items);
+      } catch {
+        if (
+          controller.signal.aborted ||
+          costCenterLoadGenerationRef.current !== generation ||
+          operationalTenantIdRef.current !== tenantId
+        ) {
+          return;
+        }
+        setCostCenters([]);
+      } finally {
+        if (
+          !controller.signal.aborted &&
+          costCenterLoadGenerationRef.current === generation &&
+          operationalTenantIdRef.current === tenantId
+        ) {
+          setCostCentersLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+      costCenterLoadGenerationRef.current += 1;
+    };
+  }, [operationalTenantId, selectedMonthKey, status]);
 
   const selectedCostCenterId = useMemo(
     () => resolveSelectedDashboardCostCenterId(searchParams),
