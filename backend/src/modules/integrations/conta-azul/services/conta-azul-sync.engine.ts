@@ -6,7 +6,6 @@ import {
   type InstantWindow,
 } from '../domain/conta-azul-incremental.js';
 import {
-  mapFinancialCategoryPage,
   mapPartyPage,
   mapPayablePage,
   mapReceivablePage,
@@ -47,6 +46,7 @@ import type { ContaAzulTransferSyncService } from './conta-azul-transfer-sync.se
 import type { LedgerInstallmentCandidate } from '../domain/conta-azul-settlement-mappers.js';
 import { captureActiveAccountBalanceSnapshots } from './conta-azul-balance-capture.js';
 import { createContaAzulFinancialAccountCatalogSyncService } from './conta-azul-financial-account-catalog-sync.service.js';
+import { createContaAzulFinancialCategoryCatalogSyncService } from './conta-azul-financial-category-catalog-sync.service.js';
 
 export class ContaAzulSyncExecutionError extends Error {
   readonly code: ContaAzulSyncErrorCode;
@@ -355,11 +355,16 @@ export function createContaAzulManualSyncEngine(deps: {
           }
         }
 
-        processed.categories = await paginate({
-          fetchPage: (pagina) =>
-            requestWithAuth((accessToken) => deps.apiClient.getCategories(accessToken, { pagina })),
-          mapPage: mapFinancialCategoryPage,
-          persist: (items) => deps.financial.upsertCategories(scopeOf(), items),
+        // 11-C: catálogo de categorias com paginação segura + reconcile de ausência
+        // (antes de contas/parcelas que referenciam categoryExternalIds).
+        const financialCategoryCatalogSync = createContaAzulFinancialCategoryCatalogSyncService({
+          financial: deps.financial,
+          apiClient: deps.apiClient,
+        });
+        processed.categories = await financialCategoryCatalogSync.syncCatalog({
+          scope: scopeOf(),
+          requestWithAuth,
+          gatedGet,
           heartbeat,
         });
 

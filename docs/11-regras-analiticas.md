@@ -583,6 +583,43 @@ Lifecycle (Correção 11-B) e cohort histórico:
 
 ⸻
 
+13.1 Categorias financeiras — lifecycle e seletor (Correção 11-C)
+
+Status: IMPLEMENTADA (fechamento do lifecycle dos catálogos Conta Azul).
+
+Fonte upstream: `GET /v1/categorias` com `permite_apenas_filhos=false`
+(catálogo amplo; pais + filhos). A API **não** expõe campo `ativo`/`status`;
+o lifecycle é presença/ausência em snapshot **completo e seguro**.
+
+Regras:
+
+* Item no snapshot completo → `FinancialCategory.active = true`
+  (cria, atualiza name/type/parent/version, reativa se estava inactive).
+* Ausente do snapshot completo (mesmo `tenantId` + `integrationId`) →
+  `active = false`. Sem hard-delete. Sem cruzar integrações.
+* Snapshot vazio / paginação falha / `processed > itens_totais` /
+  MAX_PAGES sem página terminal → **não** reconcilia ausência
+  (`skipReason` estruturado; métrica
+  `conta_azul_financial_category_catalog_reconcile`).
+* `categoria_pai` é só metadado (`parentExternalId`); IDs de pai ausentes
+  do catálogo **não** geram registro artificial nem lifecycle.
+
+Visibilidade do seletor (`GET /dashboard/categories`) — mesma filosofia 11-A.1:
+
+* Home mês civil atual/futuro (`America/Sao_Paulo`) → `active_only`.
+* Home mês passado → `historical` (active ∨ usada no período).
+* Relatórios `from`/`to` → sempre `historical`.
+* “Usada no período” = `categoryExternalIds` em AR/AP com competence ou due
+  no intervalo, ou settlement cash (`lifecycleStatus=ACTIVE`,
+  `financialTransferId=null`, `occurredOn` no intervalo), chave
+  `(integrationId, categoryExternalId)`.
+* Lookups analíticos (`findByIdForTenant`, `findByTenantAndExternalIds`)
+  **não** filtram `active`; inactive permanece resolvível.
+
+Não altera CASH-4B, transferências, ledger, centros de custo nem contas.
+
+⸻
+
 14. Despesas fixas e variáveis
 
 Status: FORA DO PRIMEIRO RECORTE.

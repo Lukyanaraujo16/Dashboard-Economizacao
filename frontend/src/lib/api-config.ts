@@ -210,8 +210,25 @@ export function dashboardCostCentersPath(options?: {
     : `${DASHBOARD_API_PREFIX}/cost-centers`;
 }
 
-export function dashboardCategoriesPath(): string {
-  return `${DASHBOARD_API_PREFIX}/categories`;
+export function dashboardCategoriesPath(options?: {
+  readonly monthKey?: string | null;
+  readonly fromKey?: string | null;
+  readonly toKey?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  const monthKey = options?.monthKey?.trim();
+  const fromKey = options?.fromKey?.trim();
+  const toKey = options?.toKey?.trim();
+  if (monthKey) {
+    params.set('month', monthKey);
+  } else if (fromKey && toKey) {
+    params.set('from', fromKey);
+    params.set('to', toKey);
+  }
+  const qs = params.toString();
+  return qs
+    ? `${DASHBOARD_API_PREFIX}/categories?${qs}`
+    : `${DASHBOARD_API_PREFIX}/categories`;
 }
 
 export function dashboardOverviewPath(costCenterId?: string | null): string {

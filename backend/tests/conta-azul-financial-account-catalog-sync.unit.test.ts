@@ -39,6 +39,7 @@ function createRepoMock(
 ): ContaAzulFinancialRepository {
   return {
     upsertCategories: vi.fn(async () => undefined),
+    markAbsentCategoriesInactive: vi.fn(async () => 0),
     upsertAccounts: vi.fn(async (_scope, items) => ({
       ...emptyFinancialAccountCatalogUpsertCounters(),
       created: items.length,

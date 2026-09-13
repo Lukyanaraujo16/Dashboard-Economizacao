@@ -106,7 +106,13 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      const body = await dashboard.listCategories(auth);
+      const period = parseDashboardCostCenterListPeriod(request.query);
+      const body = await dashboard.listCategories(auth, {
+        from: period.from,
+        to: period.to,
+        monthKey: period.monthKey,
+        context: period.context,
+      });
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

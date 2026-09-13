@@ -33,7 +33,7 @@ describe('dashboard categories service', () => {
     expect(isDashboardCategoriesResponse({ items: 'nope' })).toBe(false);
   });
 
-  it('busca com credentials e path canônico', async () => {
+  it('busca com credentials e path canônico (mês Home)', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -41,12 +41,18 @@ describe('dashboard categories service', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const result = await getDashboardCategories();
-    expect(fetchMock).toHaveBeenCalledWith(dashboardCategoriesPath(), {
+    const result = await getDashboardCategories({ monthKey: '2026-08' });
+    expect(fetchMock).toHaveBeenCalledWith(dashboardCategoriesPath({ monthKey: '2026-08' }), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
     });
+    expect(dashboardCategoriesPath({ monthKey: '2026-08' })).toBe(
+      '/dashboard/categories?month=2026-08',
+    );
+    expect(dashboardCategoriesPath({ fromKey: '2026-01', toKey: '2026-03' })).toBe(
+      '/dashboard/categories?from=2026-01&to=2026-03',
+    );
     expect(dashboardCategoriesPath()).toBe('/dashboard/categories');
     expect(result.items).toHaveLength(2);
     expect(result.items[0]?.name).toBe('Serviços');

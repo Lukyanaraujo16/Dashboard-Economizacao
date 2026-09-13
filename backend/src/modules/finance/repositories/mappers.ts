@@ -45,5 +45,6 @@ export function mapFinancialCategoryReadRecord(
     name: row.name,
     type: row.type,
     parentExternalId: row.parentExternalId,
+    active: row.active,
   };
 }

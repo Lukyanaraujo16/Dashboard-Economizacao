@@ -477,7 +477,7 @@ Histórico de conta posteriormente inativa permanece (não é apagado).
 
 7.2 financial_categories
 
-Representa categorias financeiras.
+Representa categorias financeiras sincronizadas da Conta Azul.
 
 Campos conceituais:
 
@@ -485,12 +485,16 @@ Campos conceituais:
 * tenant_id;
 * integration_id;
 * external_id;
-* parent_id opcional;
+* parent_external_id (metadado upstream; não materializa pai ausente);
 * name;
-* category_type;
-* status;
-* external_updated_at;
+* type (REVENUE / EXPENSE / UNKNOWN);
+* active (lifecycle 11-C: presença no snapshot completo);
+* upstream_version;
 * synced_at.
+
+Lifecycle: soft-inactive por ausência no snapshot `GET /v1/categorias`
+(`permite_apenas_filhos=false`). Sem hard-delete. Reativação se reaparecer.
+Isolamento: tenant_id + integration_id.
 
 Tipos conceituais:
 

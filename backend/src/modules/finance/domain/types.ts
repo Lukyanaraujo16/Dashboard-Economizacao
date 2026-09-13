@@ -51,4 +51,5 @@ export type FinancialCategoryReadRecord = {
   readonly name: string;
   readonly type: FinancialCategoryType;
   readonly parentExternalId: string | null;
+  readonly active: boolean;
 };

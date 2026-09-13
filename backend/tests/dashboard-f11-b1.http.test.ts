@@ -174,7 +174,7 @@ async function categoryId(tenantId: string, externalId: string): Promise<string>
 }
 
 describe('GET /dashboard/categories', () => {
-  it('lista só o tenant, ordena de forma estável e não vaza externalId', async () => {
+  it('lista só o tenant, ordena de forma estável e não vaza externalId/active', async () => {
     const a = await seedConnected('cat-a');
     const b = await seedConnected('cat-b');
     const syncedAt = new Date();
@@ -212,6 +212,7 @@ describe('GET /dashboard/categories', () => {
     expect(body.items.map((item) => item.name)).toEqual(['Alpha', 'Beta', 'Zebra', 'Misc']);
     expect(body.items.map((item) => item.type)).toEqual(['REVENUE', 'REVENUE', 'EXPENSE', 'UNKNOWN']);
     expect(JSON.stringify(body)).not.toContain('externalId');
+    expect(JSON.stringify(body)).not.toContain('"active"');
     expect(JSON.stringify(body)).not.toContain('Outro Tenant');
     expect(body.items[0]).toEqual({
       id: expect.any(String),
@@ -239,6 +240,118 @@ describe('GET /dashboard/categories', () => {
     });
     expect(ok.statusCode).toBe(200);
     expect(ok.json()).toEqual({ items: [] });
+  });
+
+  it('11-C: mês atual/futuro active_only; passado historical; reports always historical', async () => {
+    const seeded = await seedConnected('cat-11c');
+    await createUser({ email: 'user@cat-11c.test', role: 'USER', tenantId: seeded.tenant.id });
+    const app = await buildTestApp();
+    const cookie = await loginAs(app, 'user@cat-11c.test');
+    const syncedAt = new Date();
+
+    const active = await prisma.financialCategory.create({
+      data: {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'live',
+        name: 'Ativa',
+        type: 'REVENUE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+        active: true,
+        syncedAt,
+      },
+    });
+    const hist = await prisma.financialCategory.create({
+      data: {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'old',
+        name: 'Historica',
+        type: 'EXPENSE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+        active: false,
+        syncedAt,
+      },
+    });
+    await financial.upsertReceivables(
+      { tenantId: seeded.tenant.id, integrationId: seeded.integration.id, syncedAt },
+      [
+        {
+          externalId: 'r-aug',
+          description: 'r',
+          dueDate: new Date(Date.UTC(2026, 7, 10)),
+          competenceDate: new Date(Date.UTC(2026, 7, 10)),
+          upstreamCreatedAt: null,
+          upstreamUpdatedAt: null,
+          status: 'OPEN',
+          upstreamStatus: 'OPEN',
+          total: new Prisma.Decimal('100'),
+          paid: new Prisma.Decimal('0'),
+          unpaid: new Prisma.Decimal('100'),
+          externalPartyId: null,
+          categoryExternalIds: ['old'],
+        },
+      ],
+    );
+
+    const current = await app.inject({
+      method: 'GET',
+      url: '/dashboard/categories?month=2026-09',
+      headers: { cookie },
+    });
+    expect(current.statusCode).toBe(200);
+    expect((current.json() as { items: Array<{ id: string }> }).items.map((i) => i.id)).toEqual([
+      active.id,
+    ]);
+
+    const future = await app.inject({
+      method: 'GET',
+      url: '/dashboard/categories?month=2026-10',
+      headers: { cookie },
+    });
+    expect(future.statusCode).toBe(200);
+    expect((future.json() as { items: Array<{ id: string }> }).items.map((i) => i.id)).toEqual([
+      active.id,
+    ]);
+
+    const past = await app.inject({
+      method: 'GET',
+      url: '/dashboard/categories?month=2026-08',
+      headers: { cookie },
+    });
+    expect(past.statusCode).toBe(200);
+    expect(
+      (past.json() as { items: Array<{ id: string }> }).items.map((i) => i.id).sort(),
+    ).toEqual([active.id, hist.id].sort());
+
+    const reportsCurrent = await app.inject({
+      method: 'GET',
+      url: '/dashboard/categories?from=2026-09&to=2026-09',
+      headers: { cookie },
+    });
+    expect(reportsCurrent.statusCode).toBe(200);
+    // Reports = historical mesmo no mês atual; inactive sem uso em set → só active.
+    expect(
+      (reportsCurrent.json() as { items: Array<{ id: string }> }).items.map((i) => i.id),
+    ).toEqual([active.id]);
+
+    const reportsAug = await app.inject({
+      method: 'GET',
+      url: '/dashboard/categories?from=2026-08&to=2026-08',
+      headers: { cookie },
+    });
+    expect(
+      (reportsAug.json() as { items: Array<{ id: string }> }).items.map((i) => i.id).sort(),
+    ).toEqual([active.id, hist.id].sort());
+
+    const invalid = await app.inject({
+      method: 'GET',
+      url: '/dashboard/categories?month=2026-13',
+      headers: { cookie },
+    });
+    expect(invalid.statusCode).toBe(400);
   });
 });
 

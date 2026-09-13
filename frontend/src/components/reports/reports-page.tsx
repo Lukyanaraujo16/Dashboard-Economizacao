@@ -144,7 +144,7 @@ export function ReportsPage() {
     void (async () => {
       try {
         const [categoryResult, costCenterResult] = await Promise.all([
-          getDashboardCategories(),
+          getDashboardCategories({ fromKey: from, toKey: to }),
           getDashboardCostCenters({ fromKey: from, toKey: to }),
         ]);
         if (

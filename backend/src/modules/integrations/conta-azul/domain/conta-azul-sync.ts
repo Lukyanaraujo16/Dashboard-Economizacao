@@ -13,13 +13,19 @@ export const CONTA_AZUL_COST_CENTER_CATALOG_MAX_PAGES = 50;
  */
 export const CONTA_AZUL_FINANCIAL_ACCOUNT_CATALOG_MAX_PAGES = 50;
 
+/**
+ * Teto defensivo de páginas no sync de catálogo de categorias financeiras (11-C).
+ * pageSize=100 → até 5_000 categorias. Ao atingir sem página terminal, skip reconcile.
+ */
+export const CONTA_AZUL_FINANCIAL_CATEGORY_CATALOG_MAX_PAGES = 50;
+
 /** Margem abaixo do teto oficial de 10 req/s (~8 req/s). */
 export const CONTA_AZUL_SYNC_MIN_INTERVAL_MS = 125;
 
 /**
- * Hipótese técnica pendente de homologação real.
- * `permite_apenas_filhos` é required na documentação oficial (2026-08-18).
- * `false` pede a árvore completa (pais + filhos).
+ * Catálogo amplo para lifecycle (11-C): `false` = pais + filhos.
+ * Auditoria live confirmou paridade local ↔ upstream com este valor.
+ * NÃO usar `true` (somente-filhos) para reconciliação de ausência.
  */
 export const CONTA_AZUL_CATEGORIES_ONLY_CHILDREN = false;
 

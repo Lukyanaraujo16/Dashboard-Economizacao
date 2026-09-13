@@ -843,17 +843,37 @@ export function DashboardPage() {
     setCostCenters([]);
     setCategoriesError(false);
     catalogTenantIdRef.current = null;
+    setCategoriesLoading(true);
+    setCostCentersLoading(true);
+  }, [operationalTenantId, status]);
+
+  const todayMonthKey =
+    view.kind === 'ready' ? view.data.today.slice(0, 7) : currentDashboardMonthKey();
+
+  const selectedMonthKey = useMemo(
+    () => resolveSelectedDashboardMonthKey(searchParams, todayMonthKey),
+    [searchParams, todayMonthKey],
+  );
+
+  useEffect(() => {
+    if (status !== 'authenticated' || operationalTenantId === null) {
+      setCategories([]);
+      setCategoriesLoading(false);
+      return;
+    }
+
+    setCategories([]);
+    setCategoriesError(false);
+    setCategoriesLoading(true);
     catalogLoadGenerationRef.current += 1;
     const generation = catalogLoadGenerationRef.current;
     const tenantId = operationalTenantId;
-
+    const monthKey = selectedMonthKey;
     const controller = new AbortController();
-    setCategoriesLoading(true);
-    setCostCentersLoading(true);
 
     void (async () => {
       try {
-        const categoryResult = await getDashboardCategories();
+        const categoryResult = await getDashboardCategories({ monthKey });
         if (
           controller.signal.aborted ||
           catalogLoadGenerationRef.current !== generation ||
@@ -888,15 +908,7 @@ export function DashboardPage() {
       controller.abort();
       catalogLoadGenerationRef.current += 1;
     };
-  }, [operationalTenantId, status]);
-
-  const todayMonthKey =
-    view.kind === 'ready' ? view.data.today.slice(0, 7) : currentDashboardMonthKey();
-
-  const selectedMonthKey = useMemo(
-    () => resolveSelectedDashboardMonthKey(searchParams, todayMonthKey),
-    [searchParams, todayMonthKey],
-  );
+  }, [operationalTenantId, selectedMonthKey, status]);
 
   useEffect(() => {
     if (status !== 'authenticated' || operationalTenantId === null) {
