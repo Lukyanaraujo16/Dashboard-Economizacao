@@ -4,16 +4,18 @@ import { parseDashboardCostCenterListPeriod } from '../src/modules/dashboard/htt
 import { ValidationError } from '../src/shared/errors/application-error.js';
 
 describe('parseDashboardCostCenterListPeriod', () => {
-  it('aceita month=YYYY-MM', () => {
+  it('aceita month=YYYY-MM como dashboard_month', () => {
     const period = parseDashboardCostCenterListPeriod({ month: '2026-08' });
     expect(period.monthKey).toBe('2026-08');
+    expect(period.context).toBe('dashboard_month');
     expect(period.from.toISOString()).toBe('2026-08-01T00:00:00.000Z');
     expect(period.to.toISOString()).toBe('2026-08-31T00:00:00.000Z');
   });
 
-  it('aceita from/to inclusivos', () => {
+  it('aceita from/to inclusivos como reports_range', () => {
     const period = parseDashboardCostCenterListPeriod({ from: '2026-07', to: '2026-09' });
     expect(period.monthKey).toBeNull();
+    expect(period.context).toBe('reports_range');
     expect(period.fromKey).toBe('2026-07');
     expect(period.toKey).toBe('2026-09');
     expect(period.from.toISOString()).toBe('2026-07-01T00:00:00.000Z');

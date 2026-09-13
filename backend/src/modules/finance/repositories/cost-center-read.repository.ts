@@ -1,4 +1,5 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
+import type { CostCenterListVisibilityOptions } from '../domain/cost-center-visibility.js';
 import { assertTenantId } from './read-query.js';
 import { asCostCenterPrisma, type CostCenterRow } from './cost-center-prisma.js';
 
@@ -17,12 +18,17 @@ export type CostCenterPeriodBounds = {
 export type CostCenterReadRepository = {
   listByTenant(tenantId: string): Promise<readonly CostCenterReadRecord[]>;
   /**
-   * Catálogo visível no seletor (11-A):
-   * active=true
-   * OR allocation com parcela competenceDate no período
-   * OR allocation com parcela dueDate no período
-   * OR allocation cuja parcela tem settlement ACTIVE (não-transfer)
-   *    com occurredOn no período (AR RECEIVABLE / AP PAYABLE).
+   * Catálogo visível no seletor.
+   *
+   * visibility=active_only (Dashboard mês atual/futuro, 11-A.1):
+   *   somente active=true
+   *
+   * visibility=historical (Dashboard mês passado / Relatórios):
+   *   active=true
+   *   OR allocation com parcela competenceDate no período
+   *   OR allocation com parcela dueDate no período
+   *   OR allocation cuja parcela tem settlement ACTIVE (não-transfer)
+   *      com occurredOn no período (AR RECEIVABLE / AP PAYABLE).
    *
    * FinancialTransaction não tem FK Prisma para AR/AP; o vínculo é
    * (integrationId, installmentExternalId, installmentKind).
@@ -30,6 +36,7 @@ export type CostCenterReadRepository = {
   listVisibleForPeriod(
     tenantId: string,
     period: CostCenterPeriodBounds,
+    options: CostCenterListVisibilityOptions,
   ): Promise<readonly CostCenterReadRecord[]>;
   findByIdForTenant(tenantId: string, costCenterId: string): Promise<CostCenterReadRecord | null>;
 };
@@ -52,10 +59,24 @@ export function createCostCenterReadRepository(prisma: PrismaClient): CostCenter
       return rows.map(mapCostCenter);
     },
 
-    async listVisibleForPeriod(tenantId, period) {
+    async listVisibleForPeriod(tenantId, period, options) {
       assertTenantId(tenantId);
       if (period.from.getTime() > period.to.getTime()) {
         return [];
+      }
+
+      if (options.visibility === 'active_only') {
+        const rows = await client.costCenter.findMany({
+          where: { tenantId, active: true },
+          orderBy: [{ active: 'desc' }, { name: 'asc' }, { id: 'asc' }],
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            active: true,
+          },
+        });
+        return rows.map(mapCostCenter);
       }
 
       const installmentDateInPeriod = {

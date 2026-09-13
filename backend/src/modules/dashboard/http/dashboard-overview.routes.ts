@@ -90,6 +90,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       const body = await dashboard.listCostCenters(auth, {
         from: period.from,
         to: period.to,
+        monthKey: period.monthKey,
+        context: period.context,
       });
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },

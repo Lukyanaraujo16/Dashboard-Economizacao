@@ -8,16 +8,19 @@ import { ValidationError } from '../../../shared/errors/application-error.js';
 
 /**
  * Período civil para listagem de cost centers.
- * Preferência: `month=YYYY-MM` (Dashboard).
- * Relatórios: `from`+`to` (YYYY-MM), mesma convenção de Relatórios.
- * Ausente: mês civil atual em America/Sao_Paulo.
+ * - `dashboard_month`: Home com `month=YYYY-MM` (regra temporal 11-A.1).
+ * - `reports_range`: Relatórios com `from`+`to` (histórico completo no range).
+ * Ausente: mês civil atual em America/Sao_Paulo como dashboard_month.
  */
+export type DashboardCostCenterListContext = 'dashboard_month' | 'reports_range';
+
 export type DashboardCostCenterListPeriod = {
   readonly from: Date;
   readonly to: Date;
   readonly monthKey: string | null;
   readonly fromKey: string;
   readonly toKey: string;
+  readonly context: DashboardCostCenterListContext;
 };
 
 export function parseDashboardCostCenterListPeriod(query: unknown): DashboardCostCenterListPeriod {
@@ -45,6 +48,7 @@ export function parseDashboardCostCenterListPeriod(query: unknown): DashboardCos
       monthKey: bounds.monthKey,
       fromKey: bounds.monthKey,
       toKey: bounds.monthKey,
+      context: 'dashboard_month',
     };
   }
 
@@ -69,6 +73,7 @@ export function parseDashboardCostCenterListPeriod(query: unknown): DashboardCos
       monthKey: null,
       fromKey: from,
       toKey: to,
+      context: 'reports_range',
     };
   }
 
@@ -83,6 +88,7 @@ function defaultCurrentMonthPeriod(): DashboardCostCenterListPeriod {
     monthKey: bounds.monthKey,
     fromKey: bounds.monthKey,
     toKey: bounds.monthKey,
+    context: 'dashboard_month',
   };
 }
 

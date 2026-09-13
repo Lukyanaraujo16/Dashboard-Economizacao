@@ -212,7 +212,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
     });
     await linkAllocation({ tenantId: tenant.id, costCenterId: center.id, receivableId: r.id });
 
-    const items = await costCenters.listVisibleForPeriod(tenant.id, aug);
+    const items = await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' });
     expect(items.map((i) => i.id)).toEqual([center.id]);
   });
 
@@ -228,7 +228,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
     });
     await linkAllocation({ tenantId: tenant.id, costCenterId: center.id, receivableId: r.id });
 
-    const items = await costCenters.listVisibleForPeriod(tenant.id, aug);
+    const items = await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' });
     expect(items.map((i) => i.id)).toEqual([center.id]);
   });
 
@@ -253,7 +253,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
       externalId: 'ft-1',
     });
 
-    const items = await costCenters.listVisibleForPeriod(tenant.id, aug);
+    const items = await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' });
     expect(items.map((i) => i.id)).toEqual([center.id]);
   });
 
@@ -278,7 +278,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
       externalId: 'ft-1',
     });
 
-    const items = await costCenters.listVisibleForPeriod(tenant.id, aug);
+    const items = await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' });
     expect(items).toEqual([]);
   });
 
@@ -302,7 +302,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
       occurredOn: new Date(Date.UTC(2026, 7, 5)),
       externalId: 'ft-r',
     });
-    expect((await costCenters.listVisibleForPeriod(tenant.id, aug)).map((i) => i.id)).toEqual([
+    expect((await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' })).map((i) => i.id)).toEqual([
       center.id,
     ]);
   });
@@ -327,7 +327,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
       occurredOn: new Date(Date.UTC(2026, 7, 5)),
       externalId: 'ft-p',
     });
-    expect((await costCenters.listVisibleForPeriod(tenant.id, aug)).map((i) => i.id)).toEqual([
+    expect((await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' })).map((i) => i.id)).toEqual([
       center.id,
     ]);
   });
@@ -335,7 +335,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
   it('7) ativo sem movimento → aparece', async () => {
     const { tenant, integration } = await seedConnected('vis-active');
     const center = await createActiveCenter(tenant.id, integration.id, 'cc', 'Ativo');
-    expect((await costCenters.listVisibleForPeriod(tenant.id, aug)).map((i) => i.id)).toEqual([
+    expect((await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' })).map((i) => i.id)).toEqual([
       center.id,
     ]);
   });
@@ -343,7 +343,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
   it('8) inactive sem competência/due/occurredOn no período → não aparece', async () => {
     const { tenant, integration } = await seedConnected('vis-ghost');
     await createInactiveCenter(tenant.id, integration.id, 'cc', 'Ghost');
-    expect(await costCenters.listVisibleForPeriod(tenant.id, aug)).toEqual([]);
+    expect(await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' })).toEqual([]);
   });
 
   it('9) múltiplas condições → uma ocorrência', async () => {
@@ -367,7 +367,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
       externalId: 'ft-m',
     });
 
-    const items = await costCenters.listVisibleForPeriod(tenant.id, aug);
+    const items = await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' });
     expect(items).toHaveLength(1);
     expect(items[0]?.id).toBe(center.id);
   });
@@ -393,10 +393,10 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
       externalId: 'ft-m',
     });
 
-    expect((await costCenters.listVisibleForPeriod(tenant.id, aug)).map((i) => i.id)).toEqual([
+    expect((await costCenters.listVisibleForPeriod(tenant.id, aug, { visibility: 'historical' })).map((i) => i.id)).toEqual([
       center.id,
     ]);
-    expect(await costCenters.listVisibleForPeriod(tenant.id, sep)).toEqual([]);
+    expect(await costCenters.listVisibleForPeriod(tenant.id, sep, { visibility: 'historical' })).toEqual([]);
   });
 
   it('11) range multi-mês inclui settlement em um dos meses', async () => {
@@ -424,7 +424,7 @@ describe('listVisibleForPeriod — semântica 11-A (competence/due/occurredOn)',
       from: civilMonthBoundsFromKey('2026-08').from,
       to: civilMonthBoundsFromKey('2026-09').to,
     };
-    expect((await costCenters.listVisibleForPeriod(tenant.id, range)).map((i) => i.id)).toEqual([
+    expect((await costCenters.listVisibleForPeriod(tenant.id, range, { visibility: 'historical' })).map((i) => i.id)).toEqual([
       center.id,
     ]);
   });

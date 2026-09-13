@@ -14,6 +14,7 @@ import type { DashboardCategoryFilter } from '../../analytics/domain/dashboard-h
 import type { DashboardSituation } from '../../analytics/domain/dashboard-home-filters.js';
 import { ForbiddenError, NotFoundError } from '../../../shared/errors/application-error.js';
 import { resolveOperationalTenantId } from '../domain/operational-tenant.js';
+import { resolveCostCenterListVisibility } from '../domain/resolve-cost-center-list-visibility.js';
 import {
   calculateRevenueGoalProgress,
   listRevenueGoalHistoryMonthKeys,
@@ -68,7 +69,12 @@ export const CASH_MOVEMENT_HISTORY_MONTHS = 12;
 export type DashboardOverviewFacade = {
   listCostCenters(
     auth: AuthenticatedRequestContext,
-    period: { readonly from: Date; readonly to: Date },
+    period: {
+      readonly from: Date;
+      readonly to: Date;
+      readonly monthKey: string | null;
+      readonly context: 'dashboard_month' | 'reports_range';
+    },
   ): Promise<DashboardCostCentersResponse>;
   listCategories(auth: AuthenticatedRequestContext): Promise<DashboardCategoriesResponse>;
   getOverview(
@@ -198,7 +204,12 @@ export function createDashboardOverviewFacade(
   return {
     async listCostCenters(auth, period) {
       const tenantId = requireOperationalTenantId(auth);
-      const items = await deps.costCenters.listVisibleForPeriod(tenantId, period);
+      const visibility = resolveCostCenterListVisibility(period);
+      const items = await deps.costCenters.listVisibleForPeriod(
+        tenantId,
+        { from: period.from, to: period.to },
+        { visibility },
+      );
       return { items };
     },
 
