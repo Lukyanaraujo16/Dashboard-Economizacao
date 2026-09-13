@@ -24,13 +24,21 @@ export type CashBalanceHistoryService = {
 /**
  * Read model de saldo bancário a partir de snapshots reais (não ledger).
  *
- * Cohort MVP: contas com `active=true` agora.
- * Dia consolidável só se TODAS as contas do cohort tiverem saldo conhecido
- * (snapshot do dia ou carry-forward após o primeiro snapshot da conta).
- * Sem backfill antes do primeiro snapshot; soma incompleta nunca vira ponto.
+ * 11-B / 08-C — conta participa do dia D se:
+ * - firstSnapshot <= D
+ * - E (active=true hoje OU D <= lastSnapshot)
  *
- * Limitação: schema sem active-at-date histórico; `accountActiveAtCapture`
- * registra o estado na captura, mas o consolidado usa o cohort ativo atual.
+ * Conta ativa: carry-forward aberto após o primeiro snapshot.
+ * Conta inativa: janela [firstSnapshot, lastSnapshot]; sem carry depois.
+ *
+ * Dia consolidável só se TODAS as participantes daquele dia tiverem saldo conhecido.
+ * Conta cujo firstSnapshot é posterior a D simplesmente não participa (não invalida D).
+ * Gaps nunca viram zero. Sem retroatividade antes do primeiro snapshot.
+ *
+ * `availableFrom` = data do primeiro dia consolidado publicado (metadata),
+ * NÃO gate prévio baseado em ativas atuais.
+ *
+ * `accountsIncluded`: contas distintas na janela diária do mês selecionado.
  */
 export function createCashBalanceHistoryService(deps: {
   readonly snapshots: ContaAzulBalanceSnapshotRepository;
@@ -45,12 +53,11 @@ export function createCashBalanceHistoryService(deps: {
       const monthlyFrom = civilMonthBoundsFromKey(startMonthKey).from;
       const dailyTo = dailyBounds.to.getTime() > today.getTime() ? today : dailyBounds.to;
 
-      const activeAccounts = await deps.snapshots.listActiveAccountsByTenant(input.tenantId);
-      const accountsIncluded = activeAccounts.length;
-      const activeIds = [...activeAccounts.map((account) => account.id)];
+      const accounts = await deps.snapshots.listAccountsByTenant(input.tenantId);
+      const accountById = new Map(accounts.map((account) => [account.id, account] as const));
 
-      if (accountsIncluded === 0) {
-        return emptyResponse(today, accountsIncluded);
+      if (accounts.length === 0) {
+        return emptyResponse(today, 0);
       }
 
       const allSnapshots = await deps.snapshots.listByTenantAndDateRange({
@@ -60,15 +67,20 @@ export function createCashBalanceHistoryService(deps: {
       });
 
       const firstMsByAccount = new Map<string, number>();
+      const lastMsByAccount = new Map<string, number>();
       const snapshotsByDate = new Map<string, Map<string, Prisma.Decimal>>();
 
       for (const snap of allSnapshots) {
-        if (!activeIds.includes(snap.financialAccountId)) {
+        if (!accountById.has(snap.financialAccountId)) {
           continue;
         }
-        const prev = firstMsByAccount.get(snap.financialAccountId);
-        if (prev === undefined || snap.balanceDate.getTime() < prev) {
+        const prevFirst = firstMsByAccount.get(snap.financialAccountId);
+        if (prevFirst === undefined || snap.balanceDate.getTime() < prevFirst) {
           firstMsByAccount.set(snap.financialAccountId, snap.balanceDate.getTime());
+        }
+        const prevLast = lastMsByAccount.get(snap.financialAccountId);
+        if (prevLast === undefined || snap.balanceDate.getTime() > prevLast) {
+          lastMsByAccount.set(snap.financialAccountId, snap.balanceDate.getTime());
         }
         const dateKey = serializeCivilDate(snap.balanceDate);
         const dayMap = snapshotsByDate.get(dateKey) ?? new Map();
@@ -76,25 +88,19 @@ export function createCashBalanceHistoryService(deps: {
         snapshotsByDate.set(dateKey, dayMap);
       }
 
-      for (const accountId of activeIds) {
-        if (!firstMsByAccount.has(accountId)) {
-          return emptyResponse(today, accountsIncluded);
-        }
+      if (firstMsByAccount.size === 0) {
+        return emptyResponse(today, 0);
       }
 
-      const availableFromDate = new Date(
-        Math.max(...[...firstMsByAccount.values()]),
-      );
-      const earliestAccountDate = new Date(
-        Math.min(...[...firstMsByAccount.values()]),
-      );
+      const earliestAccountDate = new Date(Math.min(...[...firstMsByAccount.values()]));
       const availableToDate = dailyTo;
 
       const lastByAccount = new Map<string, Prisma.Decimal>();
       const daily: { date: string; balance: string }[] = [];
       const lastCompleteByMonth = new Map<string, Prisma.Decimal>();
+      const participatedIds = new Set<string>();
+      let firstPublishedMs: number | null = null;
 
-      // Aquecer carry-forward desde o primeiro snapshot individual (antes de availableFrom).
       let walk = earliestAccountDate;
       while (walk.getTime() <= dailyTo.getTime()) {
         const dateKey = serializeCivilDate(walk);
@@ -105,15 +111,19 @@ export function createCashBalanceHistoryService(deps: {
           }
         }
 
-        let complete = true;
+        const participants = accounts.filter((account) =>
+          participatesOnDay({
+            active: account.active,
+            firstMs: firstMsByAccount.get(account.id),
+            lastMs: lastMsByAccount.get(account.id),
+            dayMs: walk.getTime(),
+          }),
+        );
+
+        let complete = participants.length > 0;
         let sum = new Prisma.Decimal(0);
-        for (const accountId of activeIds) {
-          const firstMs = firstMsByAccount.get(accountId);
-          if (firstMs === undefined || walk.getTime() < firstMs) {
-            complete = false;
-            break;
-          }
-          const known = lastByAccount.get(accountId);
+        for (const account of participants) {
+          const known = lastByAccount.get(account.id);
           if (known === undefined) {
             complete = false;
             break;
@@ -121,12 +131,18 @@ export function createCashBalanceHistoryService(deps: {
           sum = sum.plus(known);
         }
 
-        if (complete && walk.getTime() >= availableFromDate.getTime()) {
+        if (complete) {
+          if (firstPublishedMs === null) {
+            firstPublishedMs = walk.getTime();
+          }
           lastCompleteByMonth.set(civilMonthKey(walk), sum);
           if (
             walk.getTime() >= dailyBounds.from.getTime() &&
             walk.getTime() <= dailyTo.getTime()
           ) {
+            for (const account of participants) {
+              participatedIds.add(account.id);
+            }
             daily.push({ date: dateKey, balance: serializeDecimal(sum) });
           }
         }
@@ -143,31 +159,53 @@ export function createCashBalanceHistoryService(deps: {
       }
 
       const pointCount = daily.length + monthly.length;
-      const dailyWindowFrom =
-        availableFromDate.getTime() > dailyBounds.from.getTime()
-          ? availableFromDate
-          : dailyBounds.from;
-      const dailyExpectedDays = countCivilDaysInclusive(dailyWindowFrom, dailyTo);
-      const coverage = resolveCoverage({
-        pointCount,
-        availableFrom: availableFromDate,
-        rangeFrom: monthlyFrom,
-        dailyExpectedDays,
-        dailyPoints: daily.length,
-      });
+      if (pointCount === 0 || firstPublishedMs === null) {
+        return emptyResponse(today, 0);
+      }
+
+      const availableFromDate = new Date(firstPublishedMs);
+      const monthDailyStartMs = Math.max(
+        availableFromDate.getTime(),
+        dailyBounds.from.getTime(),
+      );
+      const dailyExpectedDays =
+        monthDailyStartMs > dailyTo.getTime()
+          ? 0
+          : countCivilDaysInclusive(new Date(monthDailyStartMs), dailyTo);
 
       return {
         today: serializeCivilDate(today),
         availableFrom: serializeCivilDate(availableFromDate),
         availableTo: serializeCivilDate(availableToDate),
         pointCount,
-        accountsIncluded,
-        coverage,
+        accountsIncluded: participatedIds.size,
+        coverage: resolveCoverage({
+          pointCount,
+          availableFrom: availableFromDate,
+          rangeFrom: monthlyFrom,
+          dailyExpectedDays,
+          dailyPoints: daily.length,
+        }),
         daily,
         monthly,
       };
     },
   };
+}
+
+function participatesOnDay(input: {
+  readonly active: boolean;
+  readonly firstMs: number | undefined;
+  readonly lastMs: number | undefined;
+  readonly dayMs: number;
+}): boolean {
+  if (input.firstMs === undefined || input.dayMs < input.firstMs) {
+    return false;
+  }
+  if (input.active) {
+    return true;
+  }
+  return input.lastMs !== undefined && input.dayMs <= input.lastMs;
 }
 
 function emptyResponse(

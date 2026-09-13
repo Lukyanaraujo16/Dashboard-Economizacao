@@ -348,7 +348,7 @@ describe('GET /dashboard/cash-balance-history', () => {
     expect(body.monthly.some((m: { monthKey: string }) => m.monthKey === '2026-07')).toBe(false);
   });
 
-  it('múltiplas contas: consolidado completo; conta faltante não gera ponto incompleto', async () => {
+  it('múltiplas contas: conta sem firstSnapshot não participa; dia completa só com participantes', async () => {
     const seeded = await seedConnected('cbh-multi');
     await createUser({ email: 'cbh-multi@example.com', role: 'USER', tenantId: seeded.tenant.id });
     const app = await buildTestApp();
@@ -374,14 +374,20 @@ describe('GET /dashboard/cash-balance-history', () => {
       balance: '100',
       balanceDate: d10,
     });
-    // a2 ainda sem snapshot → nenhum consolidado
+    // a2 ainda sem snapshot → a1 sozinha publica o dia (não invalida)
     let response = await app.inject({
       method: 'GET',
       url: '/dashboard/cash-balance-history?month=2026-08',
       headers: { cookie },
     });
-    expect(response.json().coverage).toBe('none');
-    expect(response.json().daily).toEqual([]);
+    let body = response.json();
+    expect(body.coverage).not.toBe('none');
+    expect(body.availableFrom).toBe('2026-08-10');
+    expect(body.accountsIncluded).toBe(1);
+    expect(body.daily.find((p: { date: string }) => p.date === '2026-08-10')).toEqual({
+      date: '2026-08-10',
+      balance: '100',
+    });
 
     await putSnapshot({
       tenantId: seeded.tenant.id,
@@ -397,17 +403,20 @@ describe('GET /dashboard/cash-balance-history', () => {
       url: '/dashboard/cash-balance-history?month=2026-08',
       headers: { cookie },
     });
-    const body = response.json();
-    expect(body.availableFrom).toBe('2026-08-11');
+    body = response.json();
+    expect(body.availableFrom).toBe('2026-08-10');
     expect(body.accountsIncluded).toBe(2);
-    expect(body.daily.find((p: { date: string }) => p.date === '2026-08-10')).toBeUndefined();
+    expect(body.daily.find((p: { date: string }) => p.date === '2026-08-10')).toEqual({
+      date: '2026-08-10',
+      balance: '100',
+    });
     expect(body.daily.find((p: { date: string }) => p.date === '2026-08-11')).toEqual({
       date: '2026-08-11',
       balance: '140',
     });
   });
 
-  it('conta inativa sai do cohort atual; snapshot histórico permanece no banco', async () => {
+  it('conta inativa preserva contribuição histórica até o último snapshot; não carrega depois', async () => {
     const seeded = await seedConnected('cbh-inactive');
     await createUser({
       email: 'cbh-inactive@example.com',
@@ -426,14 +435,14 @@ describe('GET /dashboard/cash-balance-history', () => {
       integrationId: seeded.integration.id,
       externalId: 'dead',
     });
-    const day = new Date(Date.UTC(2026, 7, 15));
+    const dayAug = new Date(Date.UTC(2026, 7, 15));
     await putSnapshot({
       tenantId: seeded.tenant.id,
       integrationId: seeded.integration.id,
       accountId: live.id,
       externalId: 'live',
       balance: '10',
-      balanceDate: day,
+      balanceDate: dayAug,
     });
     await putSnapshot({
       tenantId: seeded.tenant.id,
@@ -441,7 +450,7 @@ describe('GET /dashboard/cash-balance-history', () => {
       accountId: dead.id,
       externalId: 'dead',
       balance: '90',
-      balanceDate: day,
+      balanceDate: dayAug,
     });
 
     await prisma.financialAccount.update({
@@ -449,21 +458,42 @@ describe('GET /dashboard/cash-balance-history', () => {
       data: { active: false },
     });
 
-    const response = await app.inject({
+    const aug = await app.inject({
       method: 'GET',
       url: '/dashboard/cash-balance-history?month=2026-08',
       headers: { cookie },
     });
-    const body = response.json();
-    expect(body.accountsIncluded).toBe(1);
-    expect(body.daily.find((p: { date: string }) => p.date === '2026-08-15')).toEqual({
+    const augBody = aug.json();
+    expect(augBody.accountsIncluded).toBe(2);
+    expect(augBody.daily.find((p: { date: string }) => p.date === '2026-08-15')).toEqual({
       date: '2026-08-15',
-      balance: '10',
+      balance: '100',
     });
     const stored = await prisma.financialAccountBalanceSnapshot.count({
       where: { tenantId: seeded.tenant.id },
     });
     expect(stored).toBe(2);
+
+    // Após último snapshot de dead (15/08), setembro não carrega 90 indefinidamente.
+    await putSnapshot({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      accountId: live.id,
+      externalId: 'live',
+      balance: '12',
+      balanceDate: new Date(Date.UTC(2026, 8, 2)),
+    });
+    const sep = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cash-balance-history?month=2026-09',
+      headers: { cookie },
+    });
+    const sepBody = sep.json();
+    expect(sepBody.daily.find((p: { date: string }) => p.date === '2026-09-02')).toEqual({
+      date: '2026-09-02',
+      balance: '12',
+    });
+    expect(sepBody.accountsIncluded).toBe(1);
   });
 
   it('serializa decimal como string e cobre virada de mês/ano', async () => {
@@ -509,5 +539,384 @@ describe('GET /dashboard/cash-balance-history', () => {
       balance: '15.67',
     });
     expect(civilMonthKey(civilTodayInSaoPaulo(new Date())).length).toBe(7);
+  });
+
+  describe('11-B blockers — availableFrom / early-return', () => {
+    it('A) ativa com first após o mês não invalida histórico de inactive em agosto', async () => {
+      const seeded = await seedConnected('cbh-11b-a');
+      await createUser({ email: 'cbh-11b-a@example.com', role: 'USER', tenantId: seeded.tenant.id });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'cbh-11b-a@example.com');
+
+      const a = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'a-old',
+        active: false,
+      });
+      const b = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'b-new',
+        active: true,
+      });
+
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: a.id,
+        externalId: 'a-old',
+        balance: '50',
+        balanceDate: new Date(Date.UTC(2026, 7, 1)),
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: a.id,
+        externalId: 'a-old',
+        balance: '55',
+        balanceDate: new Date(Date.UTC(2026, 7, 31)),
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: b.id,
+        externalId: 'b-new',
+        balance: '200',
+        balanceDate: new Date(Date.UTC(2026, 8, 10)),
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/dashboard/cash-balance-history?month=2026-08',
+        headers: { cookie },
+      });
+      const body = response.json();
+      expect(body.coverage).not.toBe('none');
+      expect(body.availableFrom).toBe('2026-08-01');
+      expect(body.accountsIncluded).toBe(1);
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-08-01')).toEqual({
+        date: '2026-08-01',
+        balance: '50',
+      });
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-08-31')).toEqual({
+        date: '2026-08-31',
+        balance: '55',
+      });
+      expect(body.monthly.find((m: { monthKey: string }) => m.monthKey === '2026-08')).toEqual({
+        monthKey: '2026-08',
+        balance: '55',
+      });
+    });
+
+    it('B) somente inativas: histórico de agosto permanece', async () => {
+      const seeded = await seedConnected('cbh-11b-b');
+      await createUser({ email: 'cbh-11b-b@example.com', role: 'USER', tenantId: seeded.tenant.id });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'cbh-11b-b@example.com');
+
+      const a = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'ia',
+        active: false,
+      });
+      const b = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'ib',
+        active: false,
+      });
+      const day = new Date(Date.UTC(2026, 7, 20));
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: a.id,
+        externalId: 'ia',
+        balance: '10',
+        balanceDate: day,
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: b.id,
+        externalId: 'ib',
+        balance: '30',
+        balanceDate: day,
+      });
+
+      const body = (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/cash-balance-history?month=2026-08',
+          headers: { cookie },
+        })
+      ).json();
+      expect(body.coverage).not.toBe('none');
+      expect(body.accountsIncluded).toBe(2);
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-08-20')).toEqual({
+        date: '2026-08-20',
+        balance: '40',
+      });
+    });
+
+    it('C) conta nova no meio do mês: dias anteriores só com A', async () => {
+      const seeded = await seedConnected('cbh-11b-c');
+      await createUser({ email: 'cbh-11b-c@example.com', role: 'USER', tenantId: seeded.tenant.id });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'cbh-11b-c@example.com');
+
+      const a = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'a',
+        active: false,
+      });
+      const b = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'b',
+        active: true,
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: a.id,
+        externalId: 'a',
+        balance: '100',
+        balanceDate: new Date(Date.UTC(2026, 7, 1)),
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: a.id,
+        externalId: 'a',
+        balance: '110',
+        balanceDate: new Date(Date.UTC(2026, 7, 31)),
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: b.id,
+        externalId: 'b',
+        balance: '40',
+        balanceDate: new Date(Date.UTC(2026, 7, 15)),
+      });
+
+      const body = (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/cash-balance-history?month=2026-08',
+          headers: { cookie },
+        })
+      ).json();
+      expect(body.availableFrom).toBe('2026-08-01');
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-08-01')).toEqual({
+        date: '2026-08-01',
+        balance: '100',
+      });
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-08-14')).toEqual({
+        date: '2026-08-14',
+        balance: '100',
+      });
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-08-15')).toEqual({
+        date: '2026-08-15',
+        balance: '140',
+      });
+      expect(body.accountsIncluded).toBe(2);
+    });
+
+    it('D) active futura após a janela não invalida o mês', async () => {
+      const seeded = await seedConnected('cbh-11b-d');
+      await createUser({ email: 'cbh-11b-d@example.com', role: 'USER', tenantId: seeded.tenant.id });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'cbh-11b-d@example.com');
+
+      const hist = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'hist',
+        active: false,
+      });
+      await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'future',
+        active: true,
+      });
+      // Sem snapshot da future no range de agosto (first depois da janela).
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: hist.id,
+        externalId: 'hist',
+        balance: '7',
+        balanceDate: new Date(Date.UTC(2026, 7, 5)),
+      });
+
+      const body = (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/cash-balance-history?month=2026-08',
+          headers: { cookie },
+        })
+      ).json();
+      expect(body.coverage).not.toBe('none');
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-08-05')).toEqual({
+        date: '2026-08-05',
+        balance: '7',
+      });
+      expect(body.accountsIncluded).toBe(1);
+    });
+
+    it('E) período anterior a qualquer firstSnapshot → coverage none', async () => {
+      const seeded = await seedConnected('cbh-11b-e');
+      await createUser({ email: 'cbh-11b-e@example.com', role: 'USER', tenantId: seeded.tenant.id });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'cbh-11b-e@example.com');
+
+      const account = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'late',
+        active: true,
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: account.id,
+        externalId: 'late',
+        balance: '9',
+        balanceDate: new Date(Date.UTC(2026, 8, 1)),
+      });
+
+      const body = (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/cash-balance-history?month=2026-07',
+          headers: { cookie },
+        })
+      ).json();
+      expect(body.coverage).toBe('none');
+      expect(body.availableFrom).toBeNull();
+      expect(body.daily).toEqual([]);
+      expect(body.pointCount).toBe(0);
+    });
+
+    it('F) inativa encerra em lastSnapshot inclusive; não carrega depois', async () => {
+      const seeded = await seedConnected('cbh-11b-f');
+      await createUser({ email: 'cbh-11b-f@example.com', role: 'USER', tenantId: seeded.tenant.id });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'cbh-11b-f@example.com');
+
+      const live = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'live',
+        active: true,
+      });
+      const dead = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'dead',
+        active: false,
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: live.id,
+        externalId: 'live',
+        balance: '10',
+        balanceDate: new Date(Date.UTC(2026, 8, 1)),
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: dead.id,
+        externalId: 'dead',
+        balance: '90',
+        balanceDate: new Date(Date.UTC(2026, 8, 10)),
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: live.id,
+        externalId: 'live',
+        balance: '11',
+        balanceDate: new Date(Date.UTC(2026, 8, 11)),
+      });
+
+      const body = (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/cash-balance-history?month=2026-09',
+          headers: { cookie },
+        })
+      ).json();
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-09-10')).toEqual({
+        date: '2026-09-10',
+        balance: '100',
+      });
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-09-11')).toEqual({
+        date: '2026-09-11',
+        balance: '11',
+      });
+    });
+
+    it('G) reativação abre participação; sem duplicar snapshot', async () => {
+      const seeded = await seedConnected('cbh-11b-g');
+      await createUser({ email: 'cbh-11b-g@example.com', role: 'USER', tenantId: seeded.tenant.id });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'cbh-11b-g@example.com');
+
+      const account = await upsertAccount({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'rev',
+        active: false,
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: account.id,
+        externalId: 'rev',
+        balance: '5',
+        balanceDate: new Date(Date.UTC(2026, 7, 10)),
+      });
+
+      await prisma.financialAccount.update({
+        where: { id: account.id },
+        data: { active: true },
+      });
+      await putSnapshot({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        accountId: account.id,
+        externalId: 'rev',
+        balance: '8',
+        balanceDate: new Date(Date.UTC(2026, 8, 5)),
+      });
+
+      const body = (
+        await app.inject({
+          method: 'GET',
+          url: '/dashboard/cash-balance-history?month=2026-09',
+          headers: { cookie },
+        })
+      ).json();
+      expect(body.monthly.find((m: { monthKey: string }) => m.monthKey === '2026-08')).toEqual({
+        monthKey: '2026-08',
+        balance: '5',
+      });
+      expect(body.daily.find((p: { date: string }) => p.date === '2026-09-05')).toEqual({
+        date: '2026-09-05',
+        balance: '8',
+      });
+      expect(
+        await prisma.financialAccountBalanceSnapshot.count({
+          where: { tenantId: seeded.tenant.id, financialAccountId: account.id },
+        }),
+      ).toBe(2);
+    });
   });
 });

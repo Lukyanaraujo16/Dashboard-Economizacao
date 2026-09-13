@@ -7,6 +7,12 @@ export const CONTA_AZUL_SYNC_PAGE_SIZE = 100;
  */
 export const CONTA_AZUL_COST_CENTER_CATALOG_MAX_PAGES = 50;
 
+/**
+ * Teto defensivo de páginas no sync de catálogo de contas financeiras (11-B).
+ * pageSize=100 → até 5_000 contas. Ao atingir sem página terminal, skip reconcile.
+ */
+export const CONTA_AZUL_FINANCIAL_ACCOUNT_CATALOG_MAX_PAGES = 50;
+
 /** Margem abaixo do teto oficial de 10 req/s (~8 req/s). */
 export const CONTA_AZUL_SYNC_MIN_INTERVAL_MS = 125;
 

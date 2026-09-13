@@ -1,4 +1,8 @@
 import type { PrismaClient } from '../../../../generated/prisma/client.js';
+import {
+  emptyFinancialAccountCatalogUpsertCounters,
+  type FinancialAccountCatalogUpsertCounters,
+} from '../domain/conta-azul-financial-account-catalog-metrics.js';
 import type {
   MappedFinancialAccount,
   MappedFinancialCategory,
@@ -25,7 +29,18 @@ export type ContaAzulFinancialRepository = {
   upsertAccounts(
     scope: FinancialSyncScope,
     items: readonly MappedFinancialAccount[],
-  ): Promise<void>;
+  ): Promise<FinancialAccountCatalogUpsertCounters>;
+  /**
+   * Soft-inativa contas ativas da integration ausentes do snapshot completo.
+   * presentExternalIds vazio → no-op (11-B: nunca mass-inactivate em empty snapshot).
+   * Idempotente: rows já inactive não são tocadas.
+   */
+  markAbsentInactive(input: {
+    readonly tenantId: string;
+    readonly integrationId: string;
+    readonly presentExternalIds: readonly string[];
+    readonly syncedAt: Date;
+  }): Promise<number>;
   upsertParties(scope: FinancialSyncScope, items: readonly MappedParty[]): Promise<void>;
   upsertReceivables(scope: FinancialSyncScope, items: readonly MappedInstallment[]): Promise<void>;
   upsertPayables(scope: FinancialSyncScope, items: readonly MappedInstallment[]): Promise<void>;
@@ -98,8 +113,41 @@ export function createContaAzulFinancialRepository(
 
     async upsertAccounts(scope, items) {
       if (items.length === 0) {
-        return;
+        return emptyFinancialAccountCatalogUpsertCounters();
       }
+
+      const externalIds = items.map((item) => item.externalId);
+      const existing = await prisma.financialAccount.findMany({
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          externalId: { in: externalIds },
+        },
+        select: { externalId: true, active: true },
+      });
+      const existingByExternal = new Map(existing.map((row) => [row.externalId, row.active]));
+
+      let created = 0;
+      let updated = 0;
+      let reactivated = 0;
+      let inactivatedByUpstream = 0;
+      let alreadyInactive = 0;
+
+      for (const item of items) {
+        const priorActive = existingByExternal.get(item.externalId);
+        if (priorActive === undefined) {
+          created += 1;
+        } else if (priorActive === false && item.active) {
+          reactivated += 1;
+        } else if (priorActive === true && !item.active) {
+          inactivatedByUpstream += 1;
+        } else if (priorActive === false && !item.active) {
+          alreadyInactive += 1;
+        } else {
+          updated += 1;
+        }
+      }
+
       await prisma.$transaction(
         items.map((item) =>
           prisma.financialAccount.upsert({
@@ -127,6 +175,35 @@ export function createContaAzulFinancialRepository(
           }),
         ),
       );
+
+      return {
+        created,
+        updated,
+        reactivated,
+        inactivatedByUpstream,
+        alreadyInactive,
+      };
+    },
+
+    async markAbsentInactive(input) {
+      const present = [...new Set(input.presentExternalIds.filter(Boolean))];
+      // 11-B: present vazio nunca mass-inativa (empty snapshot conservador).
+      if (present.length === 0) {
+        return 0;
+      }
+      const result = await prisma.financialAccount.updateMany({
+        where: {
+          tenantId: input.tenantId,
+          integrationId: input.integrationId,
+          active: true,
+          externalId: { notIn: present },
+        },
+        data: {
+          active: false,
+          syncedAt: input.syncedAt,
+        },
+      });
+      return result.count;
     },
 
     async upsertParties(scope, items) {

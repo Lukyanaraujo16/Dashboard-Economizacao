@@ -560,13 +560,26 @@ Read model: `GET /dashboard/cash-balance-history` (sem category/costCenter).
   permitido só após o primeiro snapshot disponível.
 * Monthly: último consolidado disponível no mês (mês atual até hoje).
 * Consolidado = soma por conta no read model (não snapshot consolidado
-  persistido). Dia incompleto (conta ativa sem cobertura) não gera ponto.
+  persistido). Dia incompleto (participante sem cobertura) não gera ponto.
 * Category / cost center **não** filtram saldo; na UI futura a linha será
   ocultada se esses filtros estiverem ativos.
 
-Limitação MVP: sem `active-at-date` histórico completo no schema legado;
-`accountActiveAtCapture` registra o estado na captura, mas o cohort do
-consolidado usa contas `active=true` agora.
+Lifecycle (Correção 11-B) e cohort histórico:
+
+* `FinancialAccount.active` controla **captura futura** (`saldo-atual` só
+  para `active=true`) e o fim da participação aberta.
+* Inativação **não** apaga snapshots nem remove contribuição histórica.
+* Conta **ativa**: participa desde o primeiro snapshot; carry-forward aberto.
+* Conta **inativa**: participa somente em `[firstSnapshot, lastSnapshot]`;
+  sem carry após o último snapshot; sem inventar saldo antes do primeiro.
+* Sem retroatividade fabricada; sem ledger; gaps ≠ zero.
+* Conta cujo `firstSnapshot` é posterior ao dia D **não participa** de D
+  e **não** invalida o consolidado daquele dia.
+* `availableFrom` = data do primeiro dia consolidado publicado (metadata
+  derivada da série); **não** é `max(first)` das ativas atuais nem gate
+  prévio de publicação.
+* `accountsIncluded` = contas distintas que entraram em ao menos um dia
+  consolidado da janela **diária do mês selecionado**.
 
 ⸻
 

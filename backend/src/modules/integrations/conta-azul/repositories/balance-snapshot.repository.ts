@@ -36,6 +36,8 @@ export type PersistedBalanceSnapshot = {
 export type ContaAzulBalanceSnapshotRepository = {
   listActiveAccounts(scope: BalanceSnapshotSyncScope): Promise<readonly PersistedFinancialAccountForBalance[]>;
   listActiveAccountsByTenant(tenantId: string): Promise<readonly PersistedFinancialAccountForBalance[]>;
+  /** Todas as contas do tenant (ativas e inativas) — cohort histórico 11-B / 08-C. */
+  listAccountsByTenant(tenantId: string): Promise<readonly PersistedFinancialAccountForBalance[]>;
   upsertDailyBalanceSnapshot(input: UpsertDailyBalanceSnapshotInput): Promise<void>;
   listByTenantAndDateRange(input: {
     readonly tenantId: string;
@@ -64,6 +66,14 @@ export function createContaAzulBalanceSnapshotRepository(
     async listActiveAccountsByTenant(tenantId) {
       return prisma.financialAccount.findMany({
         where: { tenantId, active: true },
+        select: { id: true, externalId: true, active: true },
+        orderBy: { externalId: 'asc' },
+      });
+    },
+
+    async listAccountsByTenant(tenantId) {
+      return prisma.financialAccount.findMany({
+        where: { tenantId },
         select: { id: true, externalId: true, active: true },
         orderBy: { externalId: 'asc' },
       });
