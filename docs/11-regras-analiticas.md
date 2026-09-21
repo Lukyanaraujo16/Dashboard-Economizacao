@@ -620,6 +620,40 @@ Não altera CASH-4B, transferências, ledger, centros de custo nem contas.
 
 ⸻
 
+13.2 Pessoas (parties) — lifecycle (Correção 11-D)
+
+Status: IMPLEMENTADA (validação local; homologação multi-tenant pendente).
+
+Fonte upstream: `GET /v1/pessoas`.
+
+Dois caminhos coexistentes:
+
+* **Incremental** (`data_alteracao_de`/`ate`): ingestão de criação, alteração,
+  `ativo=false` e reativação. Ausência na janela **não** inativa.
+* **Snapshot completo** (sem janela de alteração): única evidência autoritativa
+  de ausência. Paginação segura (`items.length === pageSize` continua;
+  `items.length < pageSize` encerra; `itens_totais` só sanity check).
+
+Regras:
+
+* Presente no snapshot → upsert com `active` mapeado (`ativo !== false`).
+* Ausente do snapshot completo seguro (mesmo `tenantId` + `integrationId`) →
+  `Party.active = false`. Sem hard-delete.
+* Snapshot vazio / página falha / `processed > itens_totais` / MAX_PAGES /
+  duplicatas conflitantes → **não** reconcilia ausência
+  (`conta_azul_party_catalog_reconcile`, `skipReason`).
+* Upstream pode repetir o mesmo `externalId` no snapshot: duplicatas
+  semanticamente equivalentes são deduplicadas; conflitantes (active/name/
+  document/profiles) tornam o snapshot não confiável para ausência.
+* Lookups históricos (`party-read`) **não** filtram `active`.
+
+MANUAL/full usa só o snapshot completo. SCHEDULED: incremental → cursor
+PEOPLE → snapshot de catálogo.
+
+Não altera frontend, CASH-4B, transferências nem ledger.
+
+⸻
+
 14. Despesas fixas e variáveis
 
 Status: FORA DO PRIMEIRO RECORTE.

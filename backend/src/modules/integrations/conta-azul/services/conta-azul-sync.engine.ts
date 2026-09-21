@@ -47,6 +47,7 @@ import type { LedgerInstallmentCandidate } from '../domain/conta-azul-settlement
 import { captureActiveAccountBalanceSnapshots } from './conta-azul-balance-capture.js';
 import { createContaAzulFinancialAccountCatalogSyncService } from './conta-azul-financial-account-catalog-sync.service.js';
 import { createContaAzulFinancialCategoryCatalogSyncService } from './conta-azul-financial-category-catalog-sync.service.js';
+import { createContaAzulPartyCatalogSyncService } from './conta-azul-party-catalog-sync.service.js';
 
 export class ContaAzulSyncExecutionError extends Error {
   readonly code: ContaAzulSyncErrorCode;
@@ -421,17 +422,8 @@ export function createContaAzulManualSyncEngine(deps: {
           });
         }
 
-        async function peopleWindow(window: InstantWindow | null): Promise<number> {
-          if (!window) {
-            return paginate({
-              fetchPage: (pagina) =>
-                requestWithAuth((accessToken) => deps.apiClient.getPeople(accessToken, { pagina })),
-              mapPage: mapPartyPage,
-              persist: (items) => deps.financial.upsertParties(scopeOf(), items),
-              heartbeat,
-              annotateError: annotatePeopleError,
-            });
-          }
+        // Incremental only: janela com data_alteracao_* NÃO é evidência de ausência (11-D).
+        async function peopleWindow(window: InstantWindow): Promise<number> {
           let count = 0;
           for (const chunk of splitAlterationChunks(window)) {
             count += await paginate({
@@ -444,13 +436,20 @@ export function createContaAzulManualSyncEngine(deps: {
                   }),
                 ),
               mapPage: mapPartyPage,
-              persist: (items) => deps.financial.upsertParties(scopeOf(), items),
+              persist: async (items) => {
+                await deps.financial.upsertParties(scopeOf(), items);
+              },
               heartbeat,
               annotateError: annotatePeopleError,
             });
           }
           return count;
         }
+
+        const partyCatalogSync = createContaAzulPartyCatalogSyncService({
+          financial: deps.financial,
+          apiClient: deps.apiClient,
+        });
 
         async function installmentWindows(
           kind: 'receivables' | 'payables',
@@ -512,6 +511,14 @@ export function createContaAzulManualSyncEngine(deps: {
           });
           processed.parties = await peopleWindow(peopleRange);
           await advanceCursor('PEOPLE', peopleRange.to, externalAccountId);
+          // Snapshot completo após incremental+cursor: ausência só aqui (11-D).
+          // Falha do snapshot não retroage o upsert incremental já persistido.
+          await partyCatalogSync.syncCatalog({
+            scope: scopeOf(),
+            requestWithAuth,
+            gatedGet,
+            heartbeat,
+          });
 
           const receivablesRange = buildIncrementalWindow({
             cursorAt: cursorByResource(existingCursors, 'RECEIVABLES')?.cursorAt ?? null,
@@ -529,7 +536,13 @@ export function createContaAzulManualSyncEngine(deps: {
           processed.payables = await installmentWindows('payables', payablesRange);
           await advanceCursor('PAYABLES', payablesRange.to, externalAccountId);
         } else {
-          processed.parties = await peopleWindow(null);
+          // MANUAL/full: um único snapshot completo (substitui peopleWindow(null)).
+          processed.parties = await partyCatalogSync.syncCatalog({
+            scope: scopeOf(),
+            requestWithAuth,
+            gatedGet,
+            heartbeat,
+          });
           processed.receivables = await installmentWindows('receivables', null);
           processed.payables = await installmentWindows('payables', null);
         }

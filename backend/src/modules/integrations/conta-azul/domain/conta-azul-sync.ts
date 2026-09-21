@@ -19,6 +19,12 @@ export const CONTA_AZUL_FINANCIAL_ACCOUNT_CATALOG_MAX_PAGES = 50;
  */
 export const CONTA_AZUL_FINANCIAL_CATEGORY_CATALOG_MAX_PAGES = 50;
 
+/**
+ * Teto defensivo de páginas no sync de catálogo de pessoas (11-D).
+ * pageSize=100 → até 5_000 pessoas. Ao atingir sem página terminal, skip reconcile.
+ */
+export const CONTA_AZUL_PARTY_CATALOG_MAX_PAGES = 50;
+
 /** Margem abaixo do teto oficial de 10 req/s (~8 req/s). */
 export const CONTA_AZUL_SYNC_MIN_INTERVAL_MS = 125;
 

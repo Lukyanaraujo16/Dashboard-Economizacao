@@ -7,6 +7,10 @@ import {
   emptyFinancialCategoryCatalogUpsertCounters,
   type FinancialCategoryCatalogUpsertCounters,
 } from '../domain/conta-azul-financial-category-catalog-metrics.js';
+import {
+  emptyPartyCatalogUpsertCounters,
+  type PartyCatalogUpsertCounters,
+} from '../domain/conta-azul-party-catalog-metrics.js';
 import type {
   MappedFinancialAccount,
   MappedFinancialCategory,
@@ -55,7 +59,20 @@ export type ContaAzulFinancialRepository = {
     readonly presentExternalIds: readonly string[];
     readonly syncedAt: Date;
   }): Promise<number>;
-  upsertParties(scope: FinancialSyncScope, items: readonly MappedParty[]): Promise<void>;
+  upsertParties(
+    scope: FinancialSyncScope,
+    items: readonly MappedParty[],
+  ): Promise<PartyCatalogUpsertCounters>;
+  /**
+   * Soft-inativa parties ativas da integration ausentes do snapshot completo.
+   * presentExternalIds vazio → no-op (11-D: nunca mass-inactivate em empty snapshot).
+   * Idempotente: rows já inactive não são tocadas. Não altera syncedAt.
+   */
+  markAbsentPartiesInactive(input: {
+    readonly tenantId: string;
+    readonly integrationId: string;
+    readonly presentExternalIds: readonly string[];
+  }): Promise<number>;
   upsertReceivables(scope: FinancialSyncScope, items: readonly MappedInstallment[]): Promise<void>;
   upsertPayables(scope: FinancialSyncScope, items: readonly MappedInstallment[]): Promise<void>;
   /** Contas ativas do escopo — captura de saldo-atual (08-C1). */
@@ -279,8 +296,41 @@ export function createContaAzulFinancialRepository(
 
     async upsertParties(scope, items) {
       if (items.length === 0) {
-        return;
+        return emptyPartyCatalogUpsertCounters();
       }
+
+      const externalIds = items.map((item) => item.externalId);
+      const existing = await prisma.party.findMany({
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          externalId: { in: externalIds },
+        },
+        select: { externalId: true, active: true },
+      });
+      const existingByExternal = new Map(existing.map((row) => [row.externalId, row.active]));
+
+      let created = 0;
+      let updated = 0;
+      let reactivated = 0;
+      let inactivatedByUpstream = 0;
+      let alreadyInactive = 0;
+
+      for (const item of items) {
+        const priorActive = existingByExternal.get(item.externalId);
+        if (priorActive === undefined) {
+          created += 1;
+        } else if (priorActive === false && item.active) {
+          reactivated += 1;
+        } else if (priorActive === true && !item.active) {
+          inactivatedByUpstream += 1;
+        } else if (priorActive === false && !item.active) {
+          alreadyInactive += 1;
+        } else {
+          updated += 1;
+        }
+      }
+
       await prisma.$transaction(
         items.map((item) =>
           prisma.party.upsert({
@@ -310,6 +360,34 @@ export function createContaAzulFinancialRepository(
           }),
         ),
       );
+
+      return {
+        created,
+        updated,
+        reactivated,
+        inactivatedByUpstream,
+        alreadyInactive,
+      };
+    },
+
+    async markAbsentPartiesInactive(input) {
+      const present = [...new Set(input.presentExternalIds.filter(Boolean))];
+      // 11-D: present vazio nunca mass-inativa (empty snapshot conservador).
+      if (present.length === 0) {
+        return 0;
+      }
+      const result = await prisma.party.updateMany({
+        where: {
+          tenantId: input.tenantId,
+          integrationId: input.integrationId,
+          active: true,
+          externalId: { notIn: present },
+        },
+        data: {
+          active: false,
+        },
+      });
+      return result.count;
     },
 
     async upsertReceivables(scope, items) {

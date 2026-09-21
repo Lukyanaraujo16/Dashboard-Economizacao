@@ -211,6 +211,24 @@ describe('Mappers financeiros', () => {
     });
     expect(page.totalItems).toBe(1);
     expect(page.items[0]?.profiles).toEqual(['CUSTOMER', 'SUPPLIER']);
+    expect(page.items[0]?.active).toBe(true);
+  });
+
+  it('P) mapper ativo=false → active=false; true → true; ausente → true', () => {
+    const inactive = mapPartyPage({
+      items: [{ id: 'p-off', nome: 'Off', ativo: false }],
+    });
+    expect(inactive.items[0]?.active).toBe(false);
+
+    const active = mapPartyPage({
+      items: [{ id: 'p-on', nome: 'On', ativo: true }],
+    });
+    expect(active.items[0]?.active).toBe(true);
+
+    const missing = mapPartyPage({
+      items: [{ id: 'p-miss', nome: 'Miss' }],
+    });
+    expect(missing.items[0]?.active).toBe(true);
   });
 
   it('trata items null de pessoas como lista vazia', () => {

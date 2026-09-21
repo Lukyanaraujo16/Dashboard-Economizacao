@@ -520,9 +520,12 @@ Campos conceituais:
 * external_id;
 * name;
 * document_identifier quando aplicável;
-* status;
-* external_updated_at;
+* active (lifecycle 11-D: `ativo` upstream + ausência em snapshot completo);
+* profiles (cliente/fornecedor);
 * synced_at.
+
+Inativação por ausência ou `ativo=false` **não** apaga a Party nem quebra
+resolução histórica de nomes em AR/AP.
 
 ⸻
 
