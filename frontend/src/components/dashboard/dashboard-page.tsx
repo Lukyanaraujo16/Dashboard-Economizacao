@@ -91,8 +91,6 @@ import expectedReceivableStyles from './expected-receivable-details-panel.module
 import { ExpectedPayableDetailsPanel } from './expected-payable-details-panel';
 import expectedPayableStyles from './expected-payable-details-panel.module.css';
 import {
-  countNonZeroDailyPoints,
-  formatPayableDueDaysCaption,
   formatPeakDayLabel,
   peakNonZeroDailyPoint,
 } from './dashboard-cash-modal-view';
@@ -162,7 +160,6 @@ import {
   formatCompactBrl,
   revenueGoalStatusLabel,
   signedSharePercent,
-  subtractDecimalStrings,
   type CashMonthlyGroupedBarsBucket,
   type DailyPoint,
   type ExecutiveKpiState,
@@ -1507,11 +1504,6 @@ export function DashboardPage() {
     () => (cashFlowModel ? cashExpectedPayablesSeries(cashFlowModel) : undefined),
     [cashFlowModel],
   );
-  const payableDueDaysNote =
-    cashFlowModel && payableSlot.state === 'ready' && cashFlowModel.payable !== null
-      ? formatPayableDueDaysCaption(expectedPayables)
-      : undefined;
-
   const dailySeries =
     dailyMode === 'realized'
       ? { inflows: realizedInflows, outflows: realizedOutflows }
@@ -1816,9 +1808,6 @@ export function DashboardPage() {
             sparklineCaption={CASH_PAYABLE_SPARKLINE_CAPTION}
             expandable={canExpandPayable}
             onExpand={canExpandPayable ? () => setExpandKind('payable') : undefined}
-            footer={
-              payableDueDaysNote ? <p className={styles.kpiNote}>{payableDueDaysNote}</p> : undefined
-            }
           />
           <ExecutiveKpiCard
             title="Resultado"
@@ -2302,19 +2291,8 @@ export function DashboardPage() {
                 <dt className={styles.statsLabel}>Total a receber</dt>
                 <dd className={styles.statsValue}>{formatMoneyBrl(cashFlowModel.receivable)}</dd>
               </div>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Vencidos</dt>
-                <dd className={styles.statsValue}>não entram neste total</dd>
-              </div>
-              {expectedReceivables ? (
-                <>
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>Dias com vencimento</dt>
-                    <dd className={styles.statsValue}>
-                      {String(countNonZeroDailyPoints(expectedReceivables))}
-                    </dd>
-                  </div>
-                  {(() => {
+              {expectedReceivables
+                ? (() => {
                     const peak = peakNonZeroDailyPoint(expectedReceivables);
                     return peak ? (
                       <div className={styles.statsItem}>
@@ -2324,9 +2302,8 @@ export function DashboardPage() {
                         </dd>
                       </div>
                     ) : null;
-                  })()}
-                </>
-              ) : null}
+                  })()
+                : null}
             </dl>
             {expectedReceivables && expectedReceivables.length > 0 ? (
               <CompetenceDailyBars
@@ -2380,19 +2357,8 @@ export function DashboardPage() {
                 <dt className={styles.statsLabel}>Total a pagar</dt>
                 <dd className={styles.statsValue}>{formatMoneyBrl(cashFlowModel.payable)}</dd>
               </div>
-              <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Vencidos</dt>
-                <dd className={styles.statsValue}>não entram neste total</dd>
-              </div>
-              {expectedPayables ? (
-                <>
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>Dias com vencimento</dt>
-                    <dd className={styles.statsValue}>
-                      {String(countNonZeroDailyPoints(expectedPayables))}
-                    </dd>
-                  </div>
-                  {(() => {
+              {expectedPayables
+                ? (() => {
                     const peak = peakNonZeroDailyPoint(expectedPayables);
                     return peak ? (
                       <div className={styles.statsItem}>
@@ -2402,9 +2368,8 @@ export function DashboardPage() {
                         </dd>
                       </div>
                     ) : null;
-                  })()}
-                </>
-              ) : null}
+                  })()
+                : null}
             </dl>
             {expectedPayables && expectedPayables.length > 0 ? (
               <CompetenceDailyBars
@@ -2557,59 +2522,6 @@ export function DashboardPage() {
                 <p className={styles.expandFormulaValue}>
                   {formatMoneyBrl(cashFlowModel.managerialResult)}
                 </p>
-              </div>
-            </div>
-            <div className={styles.expandSplit}>
-              <div>
-                <p className={styles.expandLabel}>Realizado</p>
-                <dl className={styles.statsRow}>
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>Resultado realizado</dt>
-                    <dd className={styles.statsValue}>
-                      {moneyOrDashCash(cashFlowModel.realizedResult)}
-                    </dd>
-                  </div>
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>Entradas realizadas</dt>
-                    <dd className={styles.statsValue}>
-                      {moneyOrDashCash(cashFlowModel.realizedInflows)}
-                    </dd>
-                  </div>
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>Saídas realizadas</dt>
-                    <dd className={styles.statsValue}>
-                      {moneyOrDashCash(cashFlowModel.realizedOutflows)}
-                    </dd>
-                  </div>
-                </dl>
-              </div>
-              <div>
-                <p className={styles.expandLabel}>Previsto restante</p>
-                <dl className={styles.statsRow}>
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>A receber</dt>
-                    <dd className={styles.statsValue}>
-                      {moneyOrDashCash(cashFlowModel.receivable)}
-                    </dd>
-                  </div>
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>A pagar</dt>
-                    <dd className={styles.statsValue}>{moneyOrDashCash(cashFlowModel.payable)}</dd>
-                  </div>
-                  <div className={styles.statsItem}>
-                    <dt className={styles.statsLabel}>Previsto líquido restante</dt>
-                    <dd className={styles.statsValue}>
-                      {moneyOrDashCash(
-                        cashFlowModel.receivable !== null && cashFlowModel.payable !== null
-                          ? subtractDecimalStrings(
-                              cashFlowModel.receivable,
-                              cashFlowModel.payable,
-                            )
-                          : null,
-                      )}
-                    </dd>
-                  </div>
-                </dl>
               </div>
             </div>
             {resultComposed ? (

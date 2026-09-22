@@ -280,19 +280,20 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     expect(kpiScope('Faturamento').queryByText(/R\$\s*0,00/)).toBeNull();
   });
 
-  it('CORREÇÃO 05.1 — Contas a pagar exibe dias com vencimento no rodapé', async () => {
+  it('CORREÇÃO 05.1 — Contas a pagar sem rodapé de dias com vencimento', async () => {
     await renderReadyDashboard();
     const payableCard = kpiScope('Contas a pagar');
     await waitFor(() => {
       expect(payableCard.getByText(/R\$\s*28\.289,80/)).toBeTruthy();
     });
-    expect(payableCard.getByText('1 dia com vencimento')).toBeTruthy();
+    expect(payableCard.queryByText(/dias? com vencimento/i)).toBeNull();
+    expect(payableCard.queryByText('Sem vencimentos previstos')).toBeNull();
     expect(payableCard.queryByText(/% do faturamento/i)).toBeNull();
     expect(kpiScope('Faturamento').getByText('Recebido')).toBeTruthy();
     expect(kpiScope('Faturamento').getByText('A receber')).toBeTruthy();
   });
 
-  it('CORREÇÃO 05.1 — plural no rodapé de Contas a pagar', async () => {
+  it('CORREÇÃO 05.1 — Contas a pagar sem rodapé mesmo com vários dias na série', async () => {
     getMonthlyCashFlow.mockResolvedValue({
       ...lifeCashFlow,
       expected: { receivables: '10511.20', payables: '300.00', result: '10211.20' },
@@ -308,12 +309,13 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     await renderReadyDashboard();
     const payableCard = kpiScope('Contas a pagar');
     await waitFor(() => {
-      expect(payableCard.getByText('3 dias com vencimento')).toBeTruthy();
+      expect(payableCard.getByText(/R\$\s*300,00/)).toBeTruthy();
     });
+    expect(payableCard.queryByText(/dias? com vencimento/i)).toBeNull();
     expect(payableCard.queryByText(/% do faturamento/i)).toBeNull();
   });
 
-  it('CORREÇÃO 05.1 — sem dias com vencimento na série', async () => {
+  it('CORREÇÃO 05.1 — Contas a pagar sem rodapé quando série sem vencimentos', async () => {
     getMonthlyCashFlow.mockResolvedValue({
       ...lifeCashFlow,
       expected: { receivables: '10511.20', payables: '100.00', result: '10411.20' },
@@ -329,7 +331,8 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     await waitFor(() => {
       expect(payableCard.getByText(/R\$\s*100,00/)).toBeTruthy();
     });
-    expect(payableCard.getByText('Sem vencimentos previstos')).toBeTruthy();
+    expect(payableCard.queryByText('Sem vencimentos previstos')).toBeNull();
+    expect(payableCard.queryByText(/dias? com vencimento/i)).toBeNull();
     expect(payableCard.queryByText(/% do faturamento/i)).toBeNull();
   });
 });

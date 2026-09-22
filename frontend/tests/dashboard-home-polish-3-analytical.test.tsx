@@ -217,7 +217,8 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     expect(
       within(dialog).queryByText(/Composição por categoria do previsto não disponível/i),
     ).toBeNull();
-    expect(within(dialog).getByText('Dias com vencimento')).toBeTruthy();
+    expect(within(dialog).queryByText('Dias com vencimento')).toBeNull();
+    expect(within(dialog).queryByText(/não entram neste total/i)).toBeNull();
   });
 
   it('P3-7/P3-8/P3-9 — Despesas ranking realized outflows', async () => {
@@ -228,7 +229,7 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     expect(within(dialog).queryByText(/222\.222,22.*Salários/)).toBeNull();
   });
 
-  it('P3-10/P3-11/P3-12 — Resultado explica billing − despesas e blocos', async () => {
+  it('P3-10/P3-11/P3-12 — Resultado explica billing − despesas e quadro superior', async () => {
     const dialog = await openKpiExpand('Resultado');
     expect(within(dialog).getByText('Faturamento')).toBeTruthy();
     expect(within(dialog).getByText('(−) Despesas')).toBeTruthy();
@@ -236,10 +237,9 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     expect(within(dialog).getAllByText(/R\$\s*999\.999,99/).length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText(/R\$\s*133\.333,33/).length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText(/R\$\s*866\.666,66/).length).toBeGreaterThan(0);
-    expect(within(dialog).getByText('Realizado')).toBeTruthy();
-    expect(within(dialog).getByText('Previsto restante')).toBeTruthy();
-    expect(within(dialog).getByText('Resultado realizado')).toBeTruthy();
-    expect(within(dialog).getByText(/R\$\s*777\.777,77/)).toBeTruthy();
+    expect(within(dialog).queryByText('Realizado')).toBeNull();
+    expect(within(dialog).queryByText('Previsto restante')).toBeNull();
+    expect(within(dialog).queryByText('Resultado realizado')).toBeNull();
   });
 
   it('P3-13/P3-14/P3-15 — Movimentação financeira no principal; rankings ficam nos donuts', async () => {

@@ -104,7 +104,7 @@ describe('CASH-4B — KPIs de caixa (view)', () => {
     const view = toMonthlyCashFlowView(lifeAugust());
     expect(toCashReceivedKpi(view).meta.toLowerCase()).toContain('caixa');
     expect(toCashReceivedKpi(view).meta.toLowerCase()).not.toContain('competência');
-    expect(toCashReceivableKpi(view, 'current').meta.toLowerCase()).toContain('caixa');
-    expect(toCashPayableKpi(view, 'current').meta.toLowerCase()).toContain('prazo');
+    expect(toCashReceivableKpi(view, 'current').meta).toBe('');
+    expect(toCashPayableKpi(view, 'current').meta).toBe('');
   });
 });

@@ -252,7 +252,9 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getByRole('heading', { name: 'A receber' })).toBeTruthy();
     expect(within(dialog).getByText('Total a receber')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*111\.111,11/).length).toBeGreaterThan(0);
-    expect(within(dialog).getByText(/não entram neste total/i)).toBeTruthy();
+    expect(within(dialog).queryByText(/não entram neste total/i)).toBeNull();
+    expect(within(dialog).queryByText(/Dias com vencimento/i)).toBeNull();
+    expect(within(dialog).queryByText(/Vencidos/i)).toBeNull();
     expect(within(dialog).queryByText(/R\$\s*1,00/)).toBeNull();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
     await waitFor(() => {
@@ -270,6 +272,9 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getByRole('heading', { name: 'Contas a pagar' })).toBeTruthy();
     expect(within(dialog).getByText('Total a pagar')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*22\.222,22/).length).toBeGreaterThan(0);
+    expect(within(dialog).queryByText(/não entram neste total/i)).toBeNull();
+    expect(within(dialog).queryByText(/Dias com vencimento/i)).toBeNull();
+    expect(within(dialog).queryByText(/Vencidos/i)).toBeNull();
     await waitFor(() => {
       expect(getExpectedPayableDetails).toHaveBeenCalled();
     });
@@ -307,8 +312,8 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getByText('Resultado projetado')).toBeTruthy();
     // billing 999999.99 − monthlyExpenses (111111.11+22222.22) = 866666.66
     expect(within(dialog).getAllByText(/R\$\s*866\.666,66/).length).toBeGreaterThan(0);
-    expect(within(dialog).getByText('Resultado realizado')).toBeTruthy();
-    expect(within(dialog).getAllByText(/R\$\s*777\.777,77/).length).toBeGreaterThan(0);
+    expect(within(dialog).queryByText('Resultado realizado')).toBeNull();
+    expect(within(dialog).queryByText('Previsto restante')).toBeNull();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 

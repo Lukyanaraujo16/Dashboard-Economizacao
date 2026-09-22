@@ -75,10 +75,7 @@ export function toCashBillingKpi(
     title,
     state: 'ready',
     value: formatMoneyBrl(view.billing),
-    meta:
-      phase === 'future'
-        ? 'Previsto para entrar no caixa no mês'
-        : 'Recebido no caixa + a receber ainda no prazo',
+    meta: '',
   };
 }
 
@@ -102,9 +99,7 @@ export function toCashReceivableKpi(
     'cash-receivable',
     'A receber',
     view.receivable,
-    phase === 'future'
-      ? 'Valores previstos para entrar no caixa no mês'
-      : 'Ainda previstos para entrar no caixa dentro do mês',
+    '',
     phase === 'future' ? 'Sem valores previstos no mês' : 'Sem valores a receber no prazo',
   );
 }
@@ -118,9 +113,7 @@ export function toCashPayableKpi(
     'cash-payable',
     'Contas a pagar',
     view.payable,
-    phase === 'future'
-      ? 'Valores previstos para sair do caixa no mês'
-      : 'A pagar ainda no prazo',
+    '',
     phase === 'future' ? 'Sem valores previstos no mês' : 'Sem contas a pagar no prazo',
   );
 }
@@ -134,9 +127,7 @@ export function toCashExpensesKpi(
     'cash-expenses',
     'Despesas',
     view.monthlyExpenses,
-    phase === 'future'
-      ? 'Previsto para sair do caixa no mês'
-      : 'Pago no caixa + a pagar ainda no prazo',
+    '',
     phase === 'future' ? 'Sem saídas previstas no mês' : 'Sem despesas de caixa no mês',
   );
 }
@@ -169,7 +160,7 @@ export function toCashManagerialResultKpi(view: MonthlyCashFlowView): MonthlyCon
     title: 'Resultado',
     state: 'ready',
     value: formatMoneyBrl(view.managerialResult),
-    meta: 'Faturamento − despesas (realizado + previsto no prazo)',
+    meta: '',
   };
 }
 
