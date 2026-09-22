@@ -654,6 +654,59 @@ Não altera frontend, CASH-4B, transferências nem ledger.
 
 ⸻
 
+13.3 Parcelas AR/AP — lifecycle de presença (Correção 11-E.1)
+
+Status: IMPLEMENTADA (validação local; homologação multi-tenant pendente).
+
+Status financeiro (`FinancialInstallmentStatus`) e lifecycle de presença
+(`InstallmentPresenceLifecycle`: `ACTIVE` | `DELETED`) são dimensões ortogonais.
+Não existe `DELETED` no status financeiro.
+
+Evidência conclusiva de desaparecimento upstream:
+
+* `GET /v1/financeiro/eventos-financeiros/parcelas/{id}` → HTTP 404 explícito
+  → `lifecycleStatus=DELETED`, `lifecycleDeletedAt=now`.
+* Timeout, 401/403, 429, 5xx, invalid response → HOLD conceitual (permanece
+  `ACTIVE`; checkpoint **não** avança).
+
+Upsert legítimo (full ou incremental) sempre reativa:
+
+* `lifecycleStatus=ACTIVE`, `lifecycleDeletedAt=null`.
+
+Checkpoint persistente (`InstallmentPresenceCheckpoint`):
+
+* chave única `(integrationId, installmentKind, installmentExternalId)`;
+* `lastPresenceCheckedAt` só avança em resultado conclusivo (200 ou 404 com
+  mutação habilitada);
+* dry-run (`CONTA_AZUL_INSTALLMENT_PRESENCE_AUTO_TOMBSTONE` ausente/`false`):
+  404 conta `wouldTombstone`, **não** muta e **não** avança checkpoint;
+  200 conclusivo ainda avança checkpoint;
+* mutação só com env explicitamente `true`/`1`/`yes` (restart do worker;
+  sem rebuild);
+* candidatos: analiticamente ativos (`ACTIVE` lifecycle + status em
+  `ACTIVE_INSTALLMENT_STATUSES`), nunca verificados primeiro, depois oldest
+  checked, desempate por `externalId`; limite
+  `MAX_INSTALLMENT_PRESENCE_PROBE_CANDIDATES_PER_KIND=50` por kind/ciclo.
+* Tombstone somente `ContaAzulApiError` kind=`unavailable` + httpStatus=404;
+  `invalid_response` (mesmo com status 404) é inconclusivo.
+
+Ausência no full (±5y/+2y) ou no incremental **não** tombstona.
+
+Read models:
+
+* ESTOQUE / PREVISTO (`buildActiveInstallmentWhere`, competence, delinquency,
+  upcoming, forecast, CC enrich queue) → somente `lifecycleStatus=ACTIVE`.
+* HISTÓRICO / REALIZADO → ledger `FinancialTransaction` é autoridade;
+  `findByExternalIds` e joins históricos **podem** resolver parcela `DELETED`.
+
+CASH-4B: fórmula inalterada; parte prevista deixa de considerar parcelas
+tombstonadas; parte realizada não muda por tombstone de parcela.
+
+Não altera matcher 10-A, `FinancialTransfer`, lifecycle do ledger, catálogos
+nem frontend.
+
+⸻
+
 14. Despesas fixas e variáveis
 
 Status: FORA DO PRIMEIRO RECORTE.

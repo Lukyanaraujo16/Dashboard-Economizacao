@@ -105,6 +105,12 @@ function mapCounts(value: Prisma.JsonValue | null): ContaAzulSyncCounts | null {
     transferMatched: nonNegativeInt(record.transferMatched) ?? 0,
     transferUnmatched: nonNegativeInt(record.transferUnmatched) ?? 0,
     transferAmbiguous: nonNegativeInt(record.transferAmbiguous) ?? 0,
+    installmentPresenceProbed: nonNegativeInt(record.installmentPresenceProbed) ?? 0,
+    installmentPresenceTombstoned: nonNegativeInt(record.installmentPresenceTombstoned) ?? 0,
+    installmentPresenceWouldTombstone:
+      nonNegativeInt(record.installmentPresenceWouldTombstone) ?? 0,
+    installmentPresenceFound: nonNegativeInt(record.installmentPresenceFound) ?? 0,
+    installmentPresenceFailed: nonNegativeInt(record.installmentPresenceFailed) ?? 0,
   };
 }
 

@@ -331,6 +331,7 @@ export function createContaAzulCostCenterRepository(
           where: {
             tenantId: scope.tenantId,
             integrationId: scope.integrationId,
+            lifecycleStatus: 'ACTIVE',
           },
           select,
         }),
@@ -338,6 +339,7 @@ export function createContaAzulCostCenterRepository(
           where: {
             tenantId: scope.tenantId,
             integrationId: scope.integrationId,
+            lifecycleStatus: 'ACTIVE',
           },
           select,
         }),

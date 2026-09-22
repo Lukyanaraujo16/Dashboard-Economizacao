@@ -48,6 +48,7 @@ import { captureActiveAccountBalanceSnapshots } from './conta-azul-balance-captu
 import { createContaAzulFinancialAccountCatalogSyncService } from './conta-azul-financial-account-catalog-sync.service.js';
 import { createContaAzulFinancialCategoryCatalogSyncService } from './conta-azul-financial-category-catalog-sync.service.js';
 import { createContaAzulPartyCatalogSyncService } from './conta-azul-party-catalog-sync.service.js';
+import type { ContaAzulInstallmentPresenceSyncService } from './conta-azul-installment-presence-sync.service.js';
 
 export class ContaAzulSyncExecutionError extends Error {
   readonly code: ContaAzulSyncErrorCode;
@@ -172,6 +173,12 @@ export function createContaAzulManualSyncEngine(deps: {
   readonly costCenterSync?: ContaAzulCostCenterSyncService;
   readonly ledgerSync?: ContaAzulLedgerSyncService;
   readonly transferSync?: ContaAzulTransferSyncService;
+  readonly installmentPresenceSync?: ContaAzulInstallmentPresenceSyncService;
+  /**
+   * 11-E.1 — valor já resolvido do EnvironmentFile.
+   * Default seguro no serviço = false quando omitido.
+   */
+  readonly installmentPresenceAutoTombstone?: boolean;
 }): ContaAzulManualSyncEngine {
   const now = deps.clock ?? (() => new Date());
   const timeoutMs = deps.timeoutMs ?? CONTA_AZUL_SYNC_JOB_TIMEOUT_MS;
@@ -260,6 +267,11 @@ export function createContaAzulManualSyncEngine(deps: {
         transferMatched: 0,
         transferUnmatched: 0,
         transferAmbiguous: 0,
+        installmentPresenceProbed: 0,
+        installmentPresenceTombstoned: 0,
+        installmentPresenceWouldTombstone: 0,
+        installmentPresenceFound: 0,
+        installmentPresenceFailed: 0,
       };
 
       try {
@@ -545,6 +557,27 @@ export function createContaAzulManualSyncEngine(deps: {
           });
           processed.receivables = await installmentWindows('receivables', null);
           processed.payables = await installmentWindows('payables', null);
+        }
+
+        // 11-E.1: manutenção bounded de presença AR/AP (GET /parcelas/{id}).
+        // Após upserts (reativam) e antes do enrich CC, para não re-enriquecer DELETED.
+        // Ausência no full/incremental NÃO tombstona — só HTTP 404 explícito.
+        if (deps.installmentPresenceSync) {
+          for (const kind of ['RECEIVABLE', 'PAYABLE'] as const) {
+            const presence = await deps.installmentPresenceSync.maintainPresence({
+              scope: scopeOf(),
+              kind,
+              requestWithAuth,
+              gatedGet,
+              heartbeat,
+              autoTombstone: deps.installmentPresenceAutoTombstone ?? false,
+            });
+            processed.installmentPresenceProbed += presence.candidatesQueued;
+            processed.installmentPresenceTombstoned += presence.tombstoned;
+            processed.installmentPresenceWouldTombstone += presence.wouldTombstone;
+            processed.installmentPresenceFound += presence.found200;
+            processed.installmentPresenceFailed += presence.probeFailed;
+          }
         }
 
         if (deps.costCenterSync) {

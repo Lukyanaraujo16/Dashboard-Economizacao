@@ -1,4 +1,5 @@
 import { parseIntegrationEncryptionKey } from '../infrastructure/crypto/secret-box.js';
+import { resolveContaAzulInstallmentPresenceAutoTombstone } from '../modules/integrations/conta-azul/domain/conta-azul-installment-presence.js';
 import { parseAutoSyncIntervalMinutes } from '../modules/integrations/conta-azul/domain/conta-azul-sync.js';
 
 const nodeEnvironments = ['development', 'test', 'production'] as const;
@@ -27,6 +28,8 @@ export interface Environment {
   storagePath: string;
   storageProvider: StorageProvider;
   autoSyncIntervalMinutes: number;
+  /** 11-E.1 — dry-run seguro quando ausente/false; mutação só com true explícito. */
+  installmentPresenceAutoTombstone: boolean;
 }
 
 const TEST_INTEGRATION_ENCRYPTION_KEY = '0'.repeat(64);
@@ -246,6 +249,9 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
     storageProvider: parseStorageProvider(source.STORAGE_PROVIDER),
     autoSyncIntervalMinutes: parseAutoSyncIntervalMinutes(
       source.CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES,
+    ),
+    installmentPresenceAutoTombstone: resolveContaAzulInstallmentPresenceAutoTombstone(
+      source.CONTA_AZUL_INSTALLMENT_PRESENCE_AUTO_TOMBSTONE,
     ),
   };
 }

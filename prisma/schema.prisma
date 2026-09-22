@@ -58,6 +58,7 @@ model Tenant {
   financialTransfers    FinancialTransfer[]
   financialAccountBalanceSnapshots FinancialAccountBalanceSnapshot[]
   financialInstallmentLifecycleCheckpoints FinancialInstallmentLifecycleCheckpoint[]
+  installmentPresenceCheckpoints InstallmentPresenceCheckpoint[]
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
 
@@ -219,6 +220,7 @@ model Integration {
   financialTransfers    FinancialTransfer[]
   financialAccountBalanceSnapshots FinancialAccountBalanceSnapshot[]
   financialInstallmentLifecycleCheckpoints FinancialInstallmentLifecycleCheckpoint[]
+  installmentPresenceCheckpoints InstallmentPresenceCheckpoint[]
   syncRuns              SyncRun[]
   syncCursors           IntegrationSyncCursor[]
 
@@ -312,6 +314,15 @@ enum FinancialTransactionLifecycle {
   DELETED
 
   @@map("financial_transaction_lifecycle")
+}
+
+/// Correção 11-E.1: lifecycle de presença upstream de parcelas AR/AP.
+/// Ortogonal ao FinancialInstallmentStatus (estado financeiro).
+enum InstallmentPresenceLifecycle {
+  ACTIVE
+  DELETED
+
+  @@map("installment_presence_lifecycle")
 }
 
 enum FinancialTransactionInstallmentKind {
@@ -474,6 +485,9 @@ model Receivable {
   costCenterDetailStatus CostCenterDetailStatus @default(UNKNOWN) @map("cost_center_detail_status")
   costCenterDetailSyncedAt DateTime? @map("cost_center_detail_synced_at") @db.Timestamptz(3)
   costCenterDetailRuleVersion Int @default(0) @map("cost_center_detail_rule_version")
+  /// 11-E.1: presença upstream. Ortogonal ao status financeiro.
+  lifecycleStatus    InstallmentPresenceLifecycle @default(ACTIVE) @map("lifecycle_status")
+  lifecycleDeletedAt DateTime?                   @map("lifecycle_deleted_at") @db.Timestamptz(3)
   syncedAt           DateTime                    @map("synced_at") @db.Timestamptz(3)
   createdAt          DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -487,10 +501,12 @@ model Receivable {
   @@index([tenantId, dueDate], map: "idx_receivables_tenant_due_date")
   @@index([tenantId, status], map: "idx_receivables_tenant_status")
   @@index([tenantId, costCenterDetailStatus], map: "idx_receivables_tenant_cc_detail_status")
+  @@index([tenantId, lifecycleStatus, status], map: "idx_receivables_tenant_lifecycle_status")
+  @@index([tenantId, lifecycleStatus, dueDate], map: "idx_receivables_tenant_lifecycle_due_date")
   @@map("receivables")
 }
 
-/// Parcela a pagar. Sem tombstone.
+/// Parcela a pagar. Soft-tombstone de presença (11-E.1); sem hard-delete.
 model Payable {
   id                 String                      @id @default(uuid()) @db.Uuid
   tenantId           String                      @map("tenant_id") @db.Uuid
@@ -513,6 +529,9 @@ model Payable {
   costCenterDetailStatus CostCenterDetailStatus @default(UNKNOWN) @map("cost_center_detail_status")
   costCenterDetailSyncedAt DateTime? @map("cost_center_detail_synced_at") @db.Timestamptz(3)
   costCenterDetailRuleVersion Int @default(0) @map("cost_center_detail_rule_version")
+  /// 11-E.1: presença upstream. Ortogonal ao status financeiro.
+  lifecycleStatus    InstallmentPresenceLifecycle @default(ACTIVE) @map("lifecycle_status")
+  lifecycleDeletedAt DateTime?                   @map("lifecycle_deleted_at") @db.Timestamptz(3)
   syncedAt           DateTime                    @map("synced_at") @db.Timestamptz(3)
   createdAt          DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -526,6 +545,8 @@ model Payable {
   @@index([tenantId, dueDate], map: "idx_payables_tenant_due_date")
   @@index([tenantId, status], map: "idx_payables_tenant_status")
   @@index([tenantId, costCenterDetailStatus], map: "idx_payables_tenant_cc_detail_status")
+  @@index([tenantId, lifecycleStatus, status], map: "idx_payables_tenant_lifecycle_status")
+  @@index([tenantId, lifecycleStatus, dueDate], map: "idx_payables_tenant_lifecycle_due_date")
   @@map("payables")
 }
 
@@ -646,6 +667,26 @@ model FinancialInstallmentLifecycleCheckpoint {
   @@index([tenantId], map: "idx_filc_tenant_id")
   @@index([integrationId, lastLifecycleCheckedAt], map: "idx_filc_integration_checked_at")
   @@map("financial_installment_lifecycle_checkpoints")
+}
+
+/// Correção 11-E.1: watermark de probe de presença AR/AP (manutenção bounded).
+/// Ausência de row = nunca verificado. NÃO é evidência de tombstone.
+model InstallmentPresenceCheckpoint {
+  id                      String                              @id @default(uuid()) @db.Uuid
+  tenantId                String                              @map("tenant_id") @db.Uuid
+  integrationId           String                              @map("integration_id") @db.Uuid
+  installmentKind         FinancialTransactionInstallmentKind @map("installment_kind")
+  installmentExternalId   String                              @map("installment_external_id")
+  lastPresenceCheckedAt   DateTime                            @map("last_presence_checked_at") @db.Timestamptz(3)
+  createdAt               DateTime                            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime                            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant                  Tenant                              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  integration             Integration                         @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, installmentKind, installmentExternalId], map: "uq_ipc_integration_kind_installment")
+  @@index([tenantId], map: "idx_ipc_tenant_id")
+  @@index([integrationId, lastPresenceCheckedAt], map: "idx_ipc_integration_checked_at")
+  @@map("installment_presence_checkpoints")
 }
 
 /// CASH-9C: um objeto origem/destino = uma transferência entre contas próprias.

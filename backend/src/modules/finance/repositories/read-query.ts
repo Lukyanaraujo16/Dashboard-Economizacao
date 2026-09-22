@@ -14,6 +14,7 @@ export function buildActiveInstallmentWhere(
 ): Prisma.ReceivableWhereInput & Prisma.PayableWhereInput {
   const where: Prisma.ReceivableWhereInput & Prisma.PayableWhereInput = {
     tenantId: scope.tenantId,
+    lifecycleStatus: 'ACTIVE',
     status: { in: [...ACTIVE_INSTALLMENT_STATUSES] },
   };
   if (scope.integrationId !== undefined && scope.integrationId.trim() !== '') {
@@ -29,6 +30,7 @@ export function buildMonthlyCompetenceWhere(
 ): Prisma.ReceivableWhereInput & Prisma.PayableWhereInput {
   const where: Prisma.ReceivableWhereInput & Prisma.PayableWhereInput = {
     tenantId: scope.tenantId,
+    lifecycleStatus: 'ACTIVE',
     status: { in: [...MONTHLY_COMPETENCE_REVENUE_STATUSES] },
     competenceDate: { not: null, gte: from, lte: to },
   };

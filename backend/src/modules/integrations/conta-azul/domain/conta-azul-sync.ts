@@ -123,6 +123,12 @@ export type ContaAzulSyncCounts = {
   readonly transferMatched: number;
   readonly transferUnmatched: number;
   readonly transferAmbiguous: number;
+  /** 11-E.1 — probes de presença AR/AP nesta execução. */
+  readonly installmentPresenceProbed: number;
+  readonly installmentPresenceTombstoned: number;
+  readonly installmentPresenceWouldTombstone: number;
+  readonly installmentPresenceFound: number;
+  readonly installmentPresenceFailed: number;
 };
 
 export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
@@ -157,6 +163,11 @@ export const EMPTY_SYNC_COUNTS: ContaAzulSyncCounts = {
   transferMatched: 0,
   transferUnmatched: 0,
   transferAmbiguous: 0,
+  installmentPresenceProbed: 0,
+  installmentPresenceTombstoned: 0,
+  installmentPresenceWouldTombstone: 0,
+  installmentPresenceFound: 0,
+  installmentPresenceFailed: 0,
 };
 
 export type ContaAzulSyncTrigger = 'MANUAL' | 'SCHEDULED';

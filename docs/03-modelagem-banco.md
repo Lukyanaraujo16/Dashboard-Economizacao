@@ -566,13 +566,16 @@ Campos conceituais:
 * original_amount;
 * open_amount;
 * received_amount;
-* status;
+* status (financeiro: OPEN|OVERDUE|PARTIALLY_PAID|PAID|…);
+* lifecycle_status (11-E.1: ACTIVE|DELETED — presença upstream);
+* lifecycle_deleted_at (quando DELETED);
 * received_at;
 * external_created_at;
 * external_updated_at;
 * synced_at.
 
-Estados serão normalizados após análise da API oficial.
+Soft-tombstone de presença (Correção 11-E.1): sem hard-delete; status financeiro
+original preservado. Estoque/previsto lê só `lifecycle_status=ACTIVE`.
 
 ⸻
 
@@ -595,11 +598,15 @@ Campos conceituais:
 * original_amount;
 * open_amount;
 * paid_amount;
-* status;
+* status (financeiro);
+* lifecycle_status (11-E.1: ACTIVE|DELETED);
+* lifecycle_deleted_at;
 * paid_at;
 * external_created_at;
 * external_updated_at;
 * synced_at.
+
+Mesma semântica de presença que receivables (11-E.1).
 
 ⸻
 
@@ -682,6 +689,9 @@ Campos por parcela (semântica de sync, não de analytics):
 
 UNKNOWN ≠ NO_ALLOCATION. Segundo sync sem mudança upstream não re-GET.
 
+Fila `listInstallmentsNeedingAllocationSync` (11-E.1): somente
+`lifecycle_status=ACTIVE` — parcela tombstonada não reentra no enrich.
+
 Campos físicos:
 
 * id; tenant_id; cost_center_id;
@@ -691,6 +701,22 @@ Campos físicos:
 
 `amount` é a fonte oficial do filtro por centro — nunca duplicar o título
 inteiro nem ratear igualmente.
+
+⸻
+
+7.7.2c installment_presence_checkpoints (11-E.1)
+
+Watermark de verificação conclusiva de presença AR/AP:
+
+* tenant_id;
+* integration_id;
+* installment_kind (RECEIVABLE|PAYABLE);
+* installment_external_id;
+* last_presence_checked_at;
+* created_at / updated_at.
+
+Unicidade: `(integration_id, installment_kind, installment_external_id)`.
+Ausência de row = nunca verificado. Não é evidência de tombstone.
 
 ⸻
 

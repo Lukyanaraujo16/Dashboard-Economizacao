@@ -23,10 +23,12 @@ import { createContaAzulRateLimiter } from './modules/integrations/conta-azul/se
 import { createContaAzulCostCenterSyncService } from './modules/integrations/conta-azul/services/conta-azul-cost-center-sync.service.js';
 import { createContaAzulLedgerSyncService } from './modules/integrations/conta-azul/services/conta-azul-ledger-sync.service.js';
 import { createContaAzulTransferSyncService } from './modules/integrations/conta-azul/services/conta-azul-transfer-sync.service.js';
+import { createContaAzulInstallmentPresenceSyncService } from './modules/integrations/conta-azul/services/conta-azul-installment-presence-sync.service.js';
 import { createContaAzulManualSyncEngine } from './modules/integrations/conta-azul/services/conta-azul-sync.engine.js';
 import { createContaAzulSyncReconciler } from './modules/integrations/conta-azul/services/conta-azul-sync-reconcile.js';
 import { createTenantRepository } from './modules/tenant/repositories/tenant.repository.js';
 import { createContaAzulTransferRepository } from './modules/integrations/conta-azul/repositories/transfer.repository.js';
+import { createContaAzulInstallmentPresenceRepository } from './modules/integrations/conta-azul/repositories/installment-presence.repository.js';
 
 const rootEnvPath = resolve(process.cwd(), '../.env');
 const localEnvPath = resolve(process.cwd(), '.env');
@@ -63,6 +65,10 @@ const ledgerSync = createContaAzulLedgerSyncService({
 });
 const transferSync = createContaAzulTransferSyncService({
   transfers: createContaAzulTransferRepository(prisma),
+  apiClient,
+});
+const installmentPresenceSync = createContaAzulInstallmentPresenceSyncService({
+  presence: createContaAzulInstallmentPresenceRepository(prisma),
   apiClient,
 });
 const cursors = createContaAzulSyncCursorRepository(prisma);
@@ -103,6 +109,8 @@ const engine = createContaAzulManualSyncEngine({
   costCenterSync,
   ledgerSync,
   transferSync,
+  installmentPresenceSync,
+  installmentPresenceAutoTombstone: environment.installmentPresenceAutoTombstone,
   getValidAccessToken: (tenantId) => oauth.getValidAccessToken(tenantId),
   forceRefresh: (tenantId) => oauth.forceRefresh(tenantId),
   rateLimiter: createContaAzulRateLimiter(),

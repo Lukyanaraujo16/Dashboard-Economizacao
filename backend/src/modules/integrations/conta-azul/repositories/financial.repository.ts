@@ -399,6 +399,16 @@ export function createContaAzulFinancialRepository(
         scope.integrationId,
         items.map((item) => item.externalPartyId ?? ''),
       );
+      const externalIds = items.map((item) => item.externalId);
+      const previouslyDeleted = await prisma.receivable.findMany({
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          externalId: { in: externalIds },
+          lifecycleStatus: 'DELETED',
+        },
+        select: { externalId: true },
+      });
       await prisma.$transaction(
         items.map((item) =>
           prisma.receivable.upsert({
@@ -425,6 +435,8 @@ export function createContaAzulFinancialRepository(
               externalCustomerId: item.externalPartyId,
               partyId: item.externalPartyId ? (partyIds.get(item.externalPartyId) ?? null) : null,
               categoryExternalIds: item.categoryExternalIds,
+              lifecycleStatus: 'ACTIVE',
+              lifecycleDeletedAt: null,
               syncedAt: scope.syncedAt,
             },
             update: {
@@ -441,11 +453,24 @@ export function createContaAzulFinancialRepository(
               externalCustomerId: item.externalPartyId,
               partyId: item.externalPartyId ? (partyIds.get(item.externalPartyId) ?? null) : null,
               categoryExternalIds: item.categoryExternalIds,
+              lifecycleStatus: 'ACTIVE',
+              lifecycleDeletedAt: null,
               syncedAt: scope.syncedAt,
             },
           }),
         ),
       );
+      if (previouslyDeleted.length > 0) {
+        process.stdout.write(
+          `${JSON.stringify({
+            event: 'conta_azul_installment_presence_reactivate',
+            kind: 'RECEIVABLE',
+            tenantId: scope.tenantId,
+            integrationId: scope.integrationId,
+            reactivated: previouslyDeleted.length,
+          })}\n`,
+        );
+      }
     },
 
     async upsertPayables(scope, items) {
@@ -457,6 +482,16 @@ export function createContaAzulFinancialRepository(
         scope.integrationId,
         items.map((item) => item.externalPartyId ?? ''),
       );
+      const externalIds = items.map((item) => item.externalId);
+      const previouslyDeleted = await prisma.payable.findMany({
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          externalId: { in: externalIds },
+          lifecycleStatus: 'DELETED',
+        },
+        select: { externalId: true },
+      });
       await prisma.$transaction(
         items.map((item) =>
           prisma.payable.upsert({
@@ -483,6 +518,8 @@ export function createContaAzulFinancialRepository(
               externalSupplierId: item.externalPartyId,
               partyId: item.externalPartyId ? (partyIds.get(item.externalPartyId) ?? null) : null,
               categoryExternalIds: item.categoryExternalIds,
+              lifecycleStatus: 'ACTIVE',
+              lifecycleDeletedAt: null,
               syncedAt: scope.syncedAt,
             },
             update: {
@@ -499,11 +536,24 @@ export function createContaAzulFinancialRepository(
               externalSupplierId: item.externalPartyId,
               partyId: item.externalPartyId ? (partyIds.get(item.externalPartyId) ?? null) : null,
               categoryExternalIds: item.categoryExternalIds,
+              lifecycleStatus: 'ACTIVE',
+              lifecycleDeletedAt: null,
               syncedAt: scope.syncedAt,
             },
           }),
         ),
       );
+      if (previouslyDeleted.length > 0) {
+        process.stdout.write(
+          `${JSON.stringify({
+            event: 'conta_azul_installment_presence_reactivate',
+            kind: 'PAYABLE',
+            tenantId: scope.tenantId,
+            integrationId: scope.integrationId,
+            reactivated: previouslyDeleted.length,
+          })}\n`,
+        );
+      }
     },
   };
 }
