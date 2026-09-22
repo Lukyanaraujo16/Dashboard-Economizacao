@@ -1,14 +1,15 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   EXPECTED_PAYABLE_CATEGORY_FALLBACK,
   EXPECTED_PAYABLE_DESCRIPTION_FALLBACK,
   EXPECTED_PAYABLE_SUPPLIER_FALLBACK,
+  EXPECTED_PAYABLE_TITLE_FALLBACK,
   ExpectedPayableDetailsPanel,
   formatExpectedPayableCategories,
   formatExpectedPayableDescription,
-  formatExpectedPayableSupplierName,
+  resolveExpectedPayableTitlePresentation,
 } from '../src/components/dashboard/expected-payable-details-panel';
 
 describe('ExpectedPayableDetailsPanel', () => {
@@ -16,51 +17,149 @@ describe('ExpectedPayableDetailsPanel', () => {
     cleanup();
   });
 
-  const item = {
+  const base = {
     id: 'id-1',
     externalId: 'ext-1',
-    dueDate: '2026-08-31',
-    amount: '1250',
-    description: 'Honorários contábeis',
-    supplierName: 'Fornecedor XYZ',
-    categoryNames: ['Contabilidade'],
+    dueDate: '2026-09-24',
+    amount: '1004.86',
+    description: '13/365 - Conta de Luz - Jacaraípe',
+    supplierName: 'Fornecedor ABC' as string | null,
+    categoryNames: ['Energia Elétrica'] as readonly string[],
   };
 
-  it('com supplierName presente mostra o nome real do fornecedor', () => {
-    render(<ExpectedPayableDetailsPanel items={[item]} />);
-    expect(screen.getByText('Fornecedor XYZ')).toBeTruthy();
-    expect(screen.queryByText(EXPECTED_PAYABLE_SUPPLIER_FALLBACK)).toBeNull();
-    expect(screen.getByText('R$ 1.250,00')).toBeTruthy();
-    expect(screen.getByText(/31\/08\/2026 · Honorários contábeis/)).toBeTruthy();
-    expect(screen.getByText('Contabilidade')).toBeTruthy();
-  });
-
-  it('com supplierName null mostra fallback sem afetar descrição, categoria, valor e vencimento', () => {
+  it('CASO 1 — fornecedor + categoria: título fornecedor e categoria abaixo', () => {
     render(
       <ExpectedPayableDetailsPanel
         items={[
           {
-            ...item,
-            supplierName: null,
-            description: 'Aluguel',
-            amount: '3267.32',
-            dueDate: '2026-09-03',
-            categoryNames: ['Consultas'],
+            ...base,
+            supplierName: 'Fornecedor ABC',
+            categoryNames: ['Energia Elétrica'],
           },
         ]}
       />,
     );
-    expect(screen.getByText(EXPECTED_PAYABLE_SUPPLIER_FALLBACK)).toBeTruthy();
-    expect(screen.getByText('R$ 3.267,32')).toBeTruthy();
-    expect(screen.getByText(/03\/09\/2026 · Aluguel/)).toBeTruthy();
-    expect(screen.getByText('Consultas')).toBeTruthy();
+    const item = screen.getByRole('listitem');
+    expect(within(item).getByText('Fornecedor ABC')).toBeTruthy();
+    expect(within(item).getByText('Energia Elétrica')).toBeTruthy();
+    expect(screen.queryByText(EXPECTED_PAYABLE_SUPPLIER_FALLBACK)).toBeNull();
+    expect(screen.getByText('R$ 1.004,86')).toBeTruthy();
   });
 
-  it('fallbacks honestos', () => {
-    expect(formatExpectedPayableSupplierName(null)).toBe(EXPECTED_PAYABLE_SUPPLIER_FALLBACK);
-    expect(formatExpectedPayableSupplierName('')).toBe(EXPECTED_PAYABLE_SUPPLIER_FALLBACK);
-    expect(formatExpectedPayableSupplierName('  ')).toBe(EXPECTED_PAYABLE_SUPPLIER_FALLBACK);
-    expect(formatExpectedPayableSupplierName('Fornecedor XYZ')).toBe('Fornecedor XYZ');
+  it('CASO 2 — sem fornecedor + categoria: título categoria sem duplicar abaixo', () => {
+    render(
+      <ExpectedPayableDetailsPanel
+        items={[
+          {
+            ...base,
+            supplierName: null,
+            categoryNames: ['Energia Elétrica'],
+          },
+        ]}
+      />,
+    );
+    const item = screen.getByRole('listitem');
+    expect(within(item).getByText('Energia Elétrica')).toBeTruthy();
+    expect(within(item).queryByText(EXPECTED_PAYABLE_SUPPLIER_FALLBACK)).toBeNull();
+    expect(screen.queryByText(EXPECTED_PAYABLE_SUPPLIER_FALLBACK)).toBeNull();
+    // Uma única ocorrência do nome da categoria (título), sem linha terciária.
+    expect(within(item).getAllByText('Energia Elétrica')).toHaveLength(1);
+    expect(item.querySelectorAll('p')).toHaveLength(1); // só secondary (data · descrição)
+  });
+
+  it('CASO 3 — sem fornecedor + Salário dos Colaboradores como título', () => {
+    render(
+      <ExpectedPayableDetailsPanel
+        items={[
+          {
+            ...base,
+            supplierName: null,
+            description: '6/365 - Salário Ana Paula Gomes Margon - Estagiária',
+            amount: '1107.10',
+            dueDate: '2026-09-25',
+            categoryNames: ['Salário dos Colaboradores'],
+          },
+        ]}
+      />,
+    );
+    const item = screen.getByRole('listitem');
+    expect(within(item).getByText('Salário dos Colaboradores')).toBeTruthy();
+    expect(within(item).getAllByText('Salário dos Colaboradores')).toHaveLength(1);
+    expect(screen.queryByText(EXPECTED_PAYABLE_SUPPLIER_FALLBACK)).toBeNull();
+  });
+
+  it('CASO 4 — sem fornecedor nem categoria: Pagamento previsto', () => {
+    render(
+      <ExpectedPayableDetailsPanel
+        items={[
+          {
+            ...base,
+            supplierName: null,
+            categoryNames: [],
+          },
+        ]}
+      />,
+    );
+    const item = screen.getByRole('listitem');
+    expect(within(item).getByText(EXPECTED_PAYABLE_TITLE_FALLBACK)).toBeTruthy();
+    expect(screen.queryByText(EXPECTED_PAYABLE_SUPPLIER_FALLBACK)).toBeNull();
+    expect(screen.queryByText(EXPECTED_PAYABLE_CATEGORY_FALLBACK)).toBeNull();
+    expect(item.querySelectorAll('p')).toHaveLength(1);
+  });
+
+  it('CASO 5 — fornecedor vazio/espaços + categoria válida → título categoria', () => {
+    render(
+      <ExpectedPayableDetailsPanel
+        items={[
+          {
+            ...base,
+            supplierName: '   ',
+            categoryNames: ['Energia Elétrica'],
+          },
+        ]}
+      />,
+    );
+    const item = screen.getByRole('listitem');
+    expect(within(item).getByText('Energia Elétrica')).toBeTruthy();
+    expect(within(item).getAllByText('Energia Elétrica')).toHaveLength(1);
+    expect(screen.queryByText(EXPECTED_PAYABLE_SUPPLIER_FALLBACK)).toBeNull();
+  });
+
+  it('CASO 6 — fornecedor válido + categoria vazia: sem linha terciária', () => {
+    render(
+      <ExpectedPayableDetailsPanel
+        items={[
+          {
+            ...base,
+            supplierName: 'Fornecedor XYZ',
+            categoryNames: ['  ', ''],
+          },
+        ]}
+      />,
+    );
+    const item = screen.getByRole('listitem');
+    expect(within(item).getByText('Fornecedor XYZ')).toBeTruthy();
+    expect(screen.queryByText(EXPECTED_PAYABLE_CATEGORY_FALLBACK)).toBeNull();
+    expect(item.querySelectorAll('p')).toHaveLength(1);
+  });
+
+  it('helpers de formatação e resolução de título', () => {
+    expect(
+      resolveExpectedPayableTitlePresentation({
+        supplierName: null,
+        categoryNames: [],
+      }).title,
+    ).toBe(EXPECTED_PAYABLE_TITLE_FALLBACK);
+    expect(
+      resolveExpectedPayableTitlePresentation({
+        supplierName: '  Fornecedor ABC  ',
+        categoryNames: ['Energia Elétrica'],
+      }),
+    ).toEqual({
+      title: 'Fornecedor ABC',
+      showCategoryBelow: true,
+      categoryBelow: 'Energia Elétrica',
+    });
     expect(formatExpectedPayableDescription(null)).toBe(EXPECTED_PAYABLE_DESCRIPTION_FALLBACK);
     expect(formatExpectedPayableCategories([])).toBe(EXPECTED_PAYABLE_CATEGORY_FALLBACK);
     expect(formatExpectedPayableCategories(['A', 'B'])).toBe('A · B');
