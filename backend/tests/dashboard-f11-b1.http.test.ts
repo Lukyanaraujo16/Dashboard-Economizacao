@@ -626,6 +626,14 @@ describe('F11-B1 situation/category contract', () => {
         syncedAt,
       },
     });
+    await prisma.receivable.update({
+      where: { id: receivables[0]!.id },
+      data: {
+        costCenterDetailStatus: 'FETCHED',
+        costCenterDetailSyncedAt: syncedAt,
+        costCenterDetailRuleVersion: 1,
+      },
+    });
 
     const combo = await app.inject({
       method: 'GET',

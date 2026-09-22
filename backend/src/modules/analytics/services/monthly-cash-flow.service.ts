@@ -150,12 +150,12 @@ export function createMonthlyCashFlowService(
       ] = await Promise.all([
         allocations.findActiveReceivableAllocations({ ...scope, costCenterId }),
         allocations.findActivePayableAllocations({ ...scope, costCenterId }),
-        allocations.findReceivableAllocationsByExternalIds({
+        allocations.findHistoricalReceivableAllocationsByExternalIds({
           ...scope,
           costCenterId,
           externalIds: receivableIds,
         }),
-        allocations.findPayableAllocationsByExternalIds({
+        allocations.findHistoricalPayableAllocationsByExternalIds({
           ...scope,
           costCenterId,
           externalIds: payableIds,

@@ -287,6 +287,16 @@ describe('MonthlyCashFlowService (persistência CASH-3A)', () => {
       ],
       scope.syncedAt,
     );
+    await costCenters.markReceivableCostCenterDetailState(seeded.tenant.id, full.id, {
+      status: 'FETCHED',
+      syncedAt: scope.syncedAt,
+      ruleVersion: 1,
+    });
+    await costCenters.markReceivableCostCenterDetailState(seeded.tenant.id, partial.id, {
+      status: 'FETCHED',
+      syncedAt: scope.syncedAt,
+      ruleVersion: 1,
+    });
     await ledgerWrite.upsertSettlements(scope, 'RECEIVABLE', [
       baixa({ id: 'full-b', installmentId: 'full', data: '2026-08-10', bruto: '80', liquido: '80' }),
       baixa({ id: 'part-b', installmentId: 'partial', data: '2026-08-10', bruto: '400', liquido: '400' }),
@@ -333,6 +343,11 @@ describe('MonthlyCashFlowService (persistência CASH-3A)', () => {
       [{ costCenterId: ids.get('cc-1')!, amount: new Prisma.Decimal('80') }],
       scope.syncedAt,
     );
+    await costCenters.markReceivableCostCenterDetailState(seeded.tenant.id, full.id, {
+      status: 'FETCHED',
+      syncedAt: scope.syncedAt,
+      ruleVersion: 1,
+    });
     await ledgerWrite.upsertSettlements(scope, 'RECEIVABLE', [
       baixa({ id: 'full-b', installmentId: 'full', data: '2026-08-10', bruto: '80', liquido: '80' }),
     ]);

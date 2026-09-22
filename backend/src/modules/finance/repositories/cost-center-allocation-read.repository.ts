@@ -14,8 +14,8 @@ import {
 } from './cost-center-prisma.js';
 import {
   assertTenantId,
-  buildActiveInstallmentWhere,
-  buildMonthlyCompetenceWhere,
+  buildActiveInstallmentWhereForConfirmedCostCenterAllocation,
+  buildMonthlyCompetenceWhereForConfirmedCostCenterAllocation,
 } from './read-query.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
 
@@ -25,31 +25,38 @@ export type CostCenterAllocationInstallment = {
 };
 
 export type CostCenterAllocationReadRepository = {
+  /** CURRENT competência — só rateio com detalhe confirmado (FETCHED). */
   findReceivableAllocationsForCompetence(
     query: CompetenceDateRangeQuery & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
   findPayableAllocationsForCompetence(
     query: CompetenceDateRangeQuery & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
+  /** CURRENT/stock — ACTIVE + detalhe confirmado. */
   findActiveReceivableAllocations(
     scope: FinanceReadScope & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
   findActivePayableAllocations(
     scope: FinanceReadScope & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
+  /** CURRENT/forecast por dueDate — ACTIVE + detalhe confirmado. */
   findActiveReceivableAllocationsByDueDate(
     query: DueDateRangeQuery & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
   findActivePayableAllocationsByDueDate(
     query: DueDateRangeQuery & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
-  findReceivableAllocationsByExternalIds(
+  /**
+   * REALIZED/HISTORICAL (CASH-4B): último rateio persistido por externalId.
+   * Não exige FETCHED nem lifecycle ACTIVE — classificação histórica do ledger.
+   */
+  findHistoricalReceivableAllocationsByExternalIds(
     query: FinanceReadScope & {
       readonly costCenterId: string;
       readonly externalIds: readonly string[];
     },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
-  findPayableAllocationsByExternalIds(
+  findHistoricalPayableAllocationsByExternalIds(
     query: FinanceReadScope & {
       readonly costCenterId: string;
       readonly externalIds: readonly string[];
@@ -72,7 +79,11 @@ export function createCostCenterAllocationReadRepository(
           tenantId: query.tenantId,
           costCenterId: query.costCenterId,
           receivableId: { not: null },
-          receivable: buildMonthlyCompetenceWhere(query, query.from, query.to),
+          receivable: buildMonthlyCompetenceWhereForConfirmedCostCenterAllocation(
+            query,
+            query.from,
+            query.to,
+          ),
         },
         include: { receivable: true },
         orderBy: [{ id: 'asc' }],
@@ -93,7 +104,11 @@ export function createCostCenterAllocationReadRepository(
           tenantId: query.tenantId,
           costCenterId: query.costCenterId,
           payableId: { not: null },
-          payable: buildMonthlyCompetenceWhere(query, query.from, query.to),
+          payable: buildMonthlyCompetenceWhereForConfirmedCostCenterAllocation(
+            query,
+            query.from,
+            query.to,
+          ),
         },
         include: { payable: true },
         orderBy: [{ id: 'asc' }],
@@ -111,7 +126,7 @@ export function createCostCenterAllocationReadRepository(
           tenantId: scope.tenantId,
           costCenterId: scope.costCenterId,
           receivableId: { not: null },
-          receivable: buildActiveInstallmentWhere(scope),
+          receivable: buildActiveInstallmentWhereForConfirmedCostCenterAllocation(scope),
         },
         include: { receivable: true },
         orderBy: [{ id: 'asc' }],
@@ -129,7 +144,7 @@ export function createCostCenterAllocationReadRepository(
           tenantId: scope.tenantId,
           costCenterId: scope.costCenterId,
           payableId: { not: null },
-          payable: buildActiveInstallmentWhere(scope),
+          payable: buildActiveInstallmentWhereForConfirmedCostCenterAllocation(scope),
         },
         include: { payable: true },
         orderBy: [{ id: 'asc' }],
@@ -151,7 +166,7 @@ export function createCostCenterAllocationReadRepository(
           costCenterId: query.costCenterId,
           receivableId: { not: null },
           receivable: {
-            ...buildActiveInstallmentWhere(query),
+            ...buildActiveInstallmentWhereForConfirmedCostCenterAllocation(query),
             dueDate: { gte: query.from, lte: query.to },
           },
         },
@@ -175,7 +190,7 @@ export function createCostCenterAllocationReadRepository(
           costCenterId: query.costCenterId,
           payableId: { not: null },
           payable: {
-            ...buildActiveInstallmentWhere(query),
+            ...buildActiveInstallmentWhereForConfirmedCostCenterAllocation(query),
             dueDate: { gte: query.from, lte: query.to },
           },
         },
@@ -188,7 +203,7 @@ export function createCostCenterAllocationReadRepository(
       }));
     },
 
-    async findReceivableAllocationsByExternalIds(query) {
+    async findHistoricalReceivableAllocationsByExternalIds(query) {
       assertTenantId(query.tenantId);
       const unique = [...new Set(query.externalIds.filter((id) => id.trim() !== ''))];
       if (unique.length === 0) {
@@ -217,7 +232,7 @@ export function createCostCenterAllocationReadRepository(
       }));
     },
 
-    async findPayableAllocationsByExternalIds(query) {
+    async findHistoricalPayableAllocationsByExternalIds(query) {
       assertTenantId(query.tenantId);
       const unique = [...new Set(query.externalIds.filter((id) => id.trim() !== ''))];
       if (unique.length === 0) {

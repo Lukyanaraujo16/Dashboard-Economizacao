@@ -446,11 +446,8 @@ export function createContaAzulCostCenterSyncService(deps: {
             upstreamSum: normalized.upstreamSum.toFixed(),
           });
         } catch (error) {
-          if (isAbortingApiError(error)) {
-            throw error;
-          }
-          if (error instanceof ContaAzulApiError || error instanceof ContaAzulMappingError) {
-            counters.errors += 1;
+          const markAttemptedParcelError = async () => {
+            // 11-E.3: tentativa já iniciada — invalidar confirmação CURRENT sem apagar rows.
             const errorState = {
               status: 'ERROR' as const,
               syncedAt: input.scope.syncedAt,
@@ -469,6 +466,16 @@ export function createContaAzulCostCenterSyncService(deps: {
                 errorState,
               );
             }
+          };
+
+          if (isAbortingApiError(error)) {
+            await markAttemptedParcelError();
+            counters.errors += 1;
+            throw error;
+          }
+          if (error instanceof ContaAzulApiError || error instanceof ContaAzulMappingError) {
+            counters.errors += 1;
+            await markAttemptedParcelError();
           } else {
             throw error;
           }

@@ -426,6 +426,15 @@ describe('GET /dashboard/monthly-revenue?costCenter=', () => {
         },
       ],
     });
+    // 11-E.3: CURRENT analytics exige detalhe confirmado (FETCHED).
+    await prisma.receivable.updateMany({
+      where: { id: { in: receivables.map((row) => row.id) } },
+      data: {
+        costCenterDetailStatus: 'FETCHED',
+        costCenterDetailSyncedAt: syncedAt,
+        costCenterDetailRuleVersion: 1,
+      },
+    });
 
     const consolidated = await app.inject({
       method: 'GET',

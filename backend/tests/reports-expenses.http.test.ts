@@ -670,6 +670,14 @@ describe('GET /reports/expenses', () => {
         syncedAt: scopeA.syncedAt,
       },
     });
+    await prisma.payable.update({
+      where: { id: payable.id },
+      data: {
+        costCenterDetailStatus: 'FETCHED',
+        costCenterDetailSyncedAt: scopeA.syncedAt,
+        costCenterDetailRuleVersion: 1,
+      },
+    });
 
     await createUser({ email: 'user@re-cc.test', role: 'USER', tenantId: a.tenant.id });
     await createUser({ email: 'admin@re-cc.test', role: 'ADMIN' });
