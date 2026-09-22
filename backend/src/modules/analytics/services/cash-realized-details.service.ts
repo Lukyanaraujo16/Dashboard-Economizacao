@@ -3,23 +3,41 @@ import type { CostCenterAllocationReadRepository } from '../../finance/repositor
 import type { FinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import type { LedgerReadRepository } from '../../finance/repositories/ledger-read.repository.js';
 import type { PayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
+import type { PartyReadRepository } from '../../finance/repositories/party-read.repository.js';
 import type { ReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import type { FinancialInstallmentReadRecord } from '../../finance/domain/types.js';
 import { civilTodayInSaoPaulo } from '../domain/analytical-timezone.js';
 import { collectCashCategoryExternalIds } from '../domain/cash-realized-category-composition.js';
-import { civilMonthBounds, civilMonthBoundsFromKey } from '../domain/civil-calendar.js';
-import { calculateMonthlyCashFlow } from '../domain/monthly-cash-flow.js';
-import type { GetMonthlyCashFlowInput, MonthlyCashFlow } from '../domain/types.js';
+import {
+  buildCashRealizedDetails,
+  type CashRealizedCategoryKind,
+  type CashRealizedDetails,
+  type CashRealizedDetailsDirection,
+} from '../domain/cash-realized-details.js';
+import { civilMonthBounds, civilMonthBoundsFromKey, civilMonthKey } from '../domain/civil-calendar.js';
+import type { GetMonthlyCashFlowInput } from '../domain/types.js';
 
-export type MonthlyCashFlowService = {
-  getMonthlyCashFlow(input: GetMonthlyCashFlowInput): Promise<MonthlyCashFlow>;
+export const CASH_REALIZED_DETAILS_DEFAULT_LIMIT = 100;
+export const CASH_REALIZED_DETAILS_MAX_LIMIT = 200;
+
+export type GetCashRealizedDetailsInput = GetMonthlyCashFlowInput & {
+  readonly direction: CashRealizedDetailsDirection;
+  readonly categoryKey: string;
+  readonly categoryKind?: CashRealizedCategoryKind | null;
+  readonly limit?: number;
+  readonly offset?: number;
 };
 
-export type MonthlyCashFlowServiceDependencies = {
+export type CashRealizedDetailsService = {
+  getCashRealizedDetails(input: GetCashRealizedDetailsInput): Promise<CashRealizedDetails>;
+};
+
+export type CashRealizedDetailsServiceDependencies = {
   readonly ledger: LedgerReadRepository;
   readonly receivables: ReceivableReadRepository;
   readonly payables: PayableReadRepository;
   readonly categories: FinancialCategoryReadRepository;
+  readonly parties: PartyReadRepository;
   readonly costCenterAllocations?: CostCenterAllocationReadRepository;
 };
 
@@ -28,6 +46,7 @@ function resolveMonth(input: GetMonthlyCashFlowInput): {
   readonly today: Date;
   readonly from: Date;
   readonly to: Date;
+  readonly monthKey: string;
   readonly scope: { readonly tenantId: string; readonly integrationId?: string };
   readonly costCenterId: string | undefined;
 } {
@@ -39,6 +58,7 @@ function resolveMonth(input: GetMonthlyCashFlowInput): {
     today,
     from: bounds.from,
     to: bounds.to,
+    monthKey: input.monthKey ?? civilMonthKey(bounds.from),
     scope: {
       tenantId: input.tenantId.trim(),
       ...(input.integrationId !== undefined && input.integrationId.trim() !== ''
@@ -61,7 +81,7 @@ function installmentMap(
 }
 
 function requireAllocations(
-  deps: MonthlyCashFlowServiceDependencies,
+  deps: CashRealizedDetailsServiceDependencies,
 ): CostCenterAllocationReadRepository {
   if (!deps.costCenterAllocations) {
     throw new Error('Repositório de alocações de centro de custo é obrigatório para filtrar por centro.');
@@ -69,13 +89,35 @@ function requireAllocations(
   return deps.costCenterAllocations;
 }
 
-export function createMonthlyCashFlowService(
-  deps: MonthlyCashFlowServiceDependencies,
-): MonthlyCashFlowService {
+function clampLimit(limit: number | undefined): number {
+  if (limit === undefined || Number.isNaN(limit)) {
+    return CASH_REALIZED_DETAILS_DEFAULT_LIMIT;
+  }
+  return Math.min(Math.max(0, Math.trunc(limit)), CASH_REALIZED_DETAILS_MAX_LIMIT);
+}
+
+function clampOffset(offset: number | undefined): number {
+  if (offset === undefined || Number.isNaN(offset)) {
+    return 0;
+  }
+  return Math.max(0, Math.trunc(offset));
+}
+
+/**
+ * Detalhe read-only das baixas realizadas por categoryKey.
+ * Mesma carga/filtros do MonthlyCashFlowService (ledger autoridade; AR/AP metadata).
+ */
+export function createCashRealizedDetailsService(
+  deps: CashRealizedDetailsServiceDependencies,
+): CashRealizedDetailsService {
   return {
-    async getMonthlyCashFlow(input) {
-      const { tenantId, today, from, to, scope, costCenterId } = resolveMonth(input);
-      const categoryFilter = input.categoryFilter;
+    async getCashRealizedDetails(input) {
+      const { tenantId, today, from, to, monthKey, scope, costCenterId } = resolveMonth(input);
+      const categoryFilter = input.categoryFilter ?? null;
+      const categoryKey = input.categoryKey.trim();
+      const categoryKind = input.categoryKind ?? null;
+      const limit = clampLimit(input.limit);
+      const offset = clampOffset(input.offset);
 
       const [settlements, receivables, payables] = await Promise.all([
         deps.ledger.listActiveByOccurredOn({ ...scope, from, to }),
@@ -107,7 +149,6 @@ export function createMonthlyCashFlowService(
         ),
       ];
 
-      // CASH-4C-CAT: join sempre — composição D8 precisa de PAID e de parcelas filtradas.
       const [realizedReceivables, realizedPayables] = await Promise.all([
         deps.receivables.findByExternalIds(scope, receivableIds),
         deps.payables.findByExternalIds(scope, payableIds),
@@ -133,32 +174,39 @@ export function createMonthlyCashFlowService(
               externalIds: categoryIds,
             });
 
+      const partyIds = [
+        ...new Set(
+          [...realizedInstallments.values()]
+            .map((row) => row.partyId)
+            .filter((id): id is string => typeof id === 'string' && id.trim() !== ''),
+        ),
+      ];
+      const partyNames = await deps.parties.findNamesByIds(scope, partyIds);
+
       const base = {
         tenantId,
         today,
         from,
         to,
+        monthKey,
+        direction: input.direction,
+        categoryKey,
+        categoryKind,
         settlements: settlementSources,
-        receivables,
-        payables,
         realizedInstallments,
         categories,
-        categoryFilter: categoryFilter ?? null,
+        partyNames,
+        categoryFilter,
+        limit,
+        offset,
       };
 
       if (costCenterId === undefined) {
-        return calculateMonthlyCashFlow(base);
+        return buildCashRealizedDetails(base);
       }
 
       const allocations = requireAllocations(deps);
-      const [
-        expectedReceivables,
-        expectedPayables,
-        realizedReceivableAllocations,
-        realizedPayableAllocations,
-      ] = await Promise.all([
-        allocations.findActiveReceivableAllocations({ ...scope, costCenterId }),
-        allocations.findActivePayableAllocations({ ...scope, costCenterId }),
+      const [realizedReceivableAllocations, realizedPayableAllocations] = await Promise.all([
         allocations.findHistoricalReceivableAllocationsByExternalIds({
           ...scope,
           costCenterId,
@@ -171,11 +219,11 @@ export function createMonthlyCashFlowService(
         }),
       ]);
 
-      return calculateMonthlyCashFlow({
+      return buildCashRealizedDetails({
         ...base,
         costCenter: {
-          expectedReceivables,
-          expectedPayables,
+          expectedReceivables: [],
+          expectedPayables: [],
           realizedReceivables: realizedReceivableAllocations,
           realizedPayables: realizedPayableAllocations,
         },

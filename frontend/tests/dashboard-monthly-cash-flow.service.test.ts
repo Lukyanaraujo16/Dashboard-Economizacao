@@ -24,7 +24,7 @@ const body = {
   },
   coverage: '0.8',
   realizedByCategory: {
-    inflows: { total: '80000', classified: '80000', uncategorized: '0', imprecise: '0', coverageRate: '100', items: [{ kind: 'category', name: 'Serviços', amount: '80000', percentage: '100' }] },
+    inflows: { total: '80000', classified: '80000', uncategorized: '0', imprecise: '0', coverageRate: '100', items: [{ kind: 'category', key: 'cat-fixture', name: 'Serviços', amount: '80000', percentage: '100' }] },
     outflows: { total: '0', classified: '0', uncategorized: '0', imprecise: '0', coverageRate: null, items: [] },
   },
   daily: {

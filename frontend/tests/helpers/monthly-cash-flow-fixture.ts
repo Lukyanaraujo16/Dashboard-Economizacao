@@ -18,6 +18,7 @@ export function emptyCashCategoryComposition(
         : [
             {
               kind: 'uncategorized',
+              key: 'uncategorized',
               name: 'Sem categoria',
               amount: total,
               percentage: '100',
@@ -36,7 +37,7 @@ export function singleCashCategoryComposition(
     uncategorized: '0',
     imprecise: '0',
     coverageRate: '100',
-    items: [{ kind: 'category', name, amount, percentage: '100' }],
+    items: [{ kind: 'category', key: `cat:${name}`, name, amount, percentage: '100' }],
   };
 }
 

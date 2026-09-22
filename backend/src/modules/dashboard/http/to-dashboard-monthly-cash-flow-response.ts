@@ -28,6 +28,7 @@ function serializeCategoryComposition(
     coverageRate: serializeNullableDecimal(composition.coverageRate),
     items: composition.items.map((item) => ({
       kind: item.kind,
+      key: item.key,
       name: item.name,
       amount: serializeDecimal(item.amount),
       percentage: serializeDecimal(item.percentage),

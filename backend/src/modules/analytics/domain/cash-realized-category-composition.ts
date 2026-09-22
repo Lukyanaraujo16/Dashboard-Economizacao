@@ -24,6 +24,53 @@ export type CashRealizedCategoryBucket = {
   readonly amount: Prisma.Decimal;
 };
 
+/** Identidade estável do bucket D8 (externalId nominal ou uncategorized/imprecise). */
+export type CashRealizedCategoryIdentity = {
+  readonly kind: PayableCompositionBucketKind;
+  readonly key: string;
+  readonly name: string;
+};
+
+/**
+ * Resolve o bucket D8 de uma baixa já atribuída — mesma regra de
+ * `classifyCashAmountsByCategory` (sem inventar segundo algoritmo).
+ */
+export function resolveCashAttributedCategoryBucket(
+  categoryExternalIds: readonly string[],
+  categories: readonly CategoryLookup[],
+  expectedType: CompositionCategoryType,
+): CashRealizedCategoryIdentity {
+  const catalog = new Map(categories.map((category) => [category.externalId, category]));
+  const ids = uniqueCategoryIds(categoryExternalIds);
+  if (ids.length === 0) {
+    return {
+      kind: 'uncategorized',
+      key: 'uncategorized',
+      name: UNCATEGORIZED_PAYABLE_BUCKET_NAME,
+    };
+  }
+  if (ids.length > 1) {
+    return {
+      kind: 'imprecise',
+      key: 'imprecise',
+      name: IMPRECISE_PAYABLE_BUCKET_NAME,
+    };
+  }
+  const category = catalog.get(ids[0]!);
+  if (!category || category.type !== expectedType) {
+    return {
+      kind: 'imprecise',
+      key: 'imprecise',
+      name: IMPRECISE_PAYABLE_BUCKET_NAME,
+    };
+  }
+  return {
+    kind: 'category',
+    key: category.externalId,
+    name: category.name,
+  };
+}
+
 export type CashRealizedCategoryCompositionItem = CashRealizedCategoryBucket & {
   readonly percentage: Prisma.Decimal;
 };
@@ -50,7 +97,6 @@ export function classifyCashAmountsByCategory(
   categories: readonly CategoryLookup[],
   expectedType: CompositionCategoryType,
 ): CashRealizedCategoryComposition {
-  const catalog = new Map(categories.map((category) => [category.externalId, category]));
   const named = new Map<string, CashRealizedCategoryBucket>();
   let uncategorized = ZERO;
   let imprecise = ZERO;
@@ -58,25 +104,24 @@ export function classifyCashAmountsByCategory(
 
   for (const row of rows) {
     total = total.plus(row.amount);
-    const ids = uniqueCategoryIds(row.categoryExternalIds);
-    if (ids.length === 0) {
+    const bucket = resolveCashAttributedCategoryBucket(
+      row.categoryExternalIds,
+      categories,
+      expectedType,
+    );
+    if (bucket.kind === 'uncategorized') {
       uncategorized = uncategorized.plus(row.amount);
       continue;
     }
-    if (ids.length > 1) {
+    if (bucket.kind === 'imprecise') {
       imprecise = imprecise.plus(row.amount);
       continue;
     }
-    const category = catalog.get(ids[0]!);
-    if (!category || category.type !== expectedType) {
-      imprecise = imprecise.plus(row.amount);
-      continue;
-    }
-    const current = named.get(category.externalId);
-    named.set(category.externalId, {
+    const current = named.get(bucket.key);
+    named.set(bucket.key, {
       kind: 'category',
-      key: category.externalId,
-      name: category.name,
+      key: bucket.key,
+      name: bucket.name,
       amount: (current?.amount ?? ZERO).plus(row.amount),
     });
   }

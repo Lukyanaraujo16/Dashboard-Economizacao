@@ -71,6 +71,7 @@ function isCategoryItem(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.kind === 'string' &&
+    typeof value.key === 'string' &&
     typeof value.name === 'string' &&
     typeof value.amount === 'string' &&
     typeof value.percentage === 'string'

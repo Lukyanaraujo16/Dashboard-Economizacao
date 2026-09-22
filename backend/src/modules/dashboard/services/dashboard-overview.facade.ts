@@ -6,6 +6,14 @@ import { monthlyBilling } from '../../analytics/domain/monthly-cash-flow.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import type { ExpectedReceivableDetailsService } from '../../analytics/services/expected-receivable-details.service.js';
 import type { ExpectedPayableDetailsService } from '../../analytics/services/expected-payable-details.service.js';
+import type {
+  CashRealizedDetailsService,
+  GetCashRealizedDetailsInput,
+} from '../../analytics/services/cash-realized-details.service.js';
+import type {
+  CashRealizedCategoryKind,
+  CashRealizedDetailsDirection,
+} from '../../analytics/domain/cash-realized-details.js';
 import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import type { ContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
 import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
@@ -36,6 +44,7 @@ import type {
   DashboardMonthlyCashFlowResponse,
   DashboardExpectedReceivableDetailsResponse,
   DashboardExpectedPayableDetailsResponse,
+  DashboardCashRealizedDetailsResponse,
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyRevenueResponse,
   DashboardRevenueGoalResponse,
@@ -48,6 +57,7 @@ import { toDashboardMonthEndCashPressureResponse } from '../http/to-dashboard-mo
 import { toDashboardExpenseCompositionResponse } from '../http/to-dashboard-expense-composition-response.js';
 import { toDashboardExpectedReceivableDetailsResponse } from '../http/to-dashboard-expected-receivable-details-response.js';
 import { toDashboardExpectedPayableDetailsResponse } from '../http/to-dashboard-expected-payable-details-response.js';
+import { toDashboardCashRealizedDetailsResponse } from '../http/to-dashboard-cash-realized-details-response.js';
 import { toDashboardMonthlyCashFlowResponse } from '../http/to-dashboard-monthly-cash-flow-response.js';
 import { toDashboardCashMovementHistoryResponse } from '../http/to-dashboard-cash-movement-history-response.js';
 import { toDashboardMonthlyExpenseResponse } from '../http/to-dashboard-monthly-expense-response.js';
@@ -166,6 +176,19 @@ export type DashboardOverviewFacade = {
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardExpectedPayableDetailsResponse>;
+  getCashRealizedDetails(
+    auth: AuthenticatedRequestContext,
+    input: {
+      readonly monthKey: string | null;
+      readonly direction: CashRealizedDetailsDirection;
+      readonly categoryKey: string;
+      readonly categoryKind?: CashRealizedCategoryKind | null;
+      readonly costCenterId?: string | null;
+      readonly categoryId?: string | null;
+      readonly limit?: number;
+      readonly offset?: number;
+    },
+  ): Promise<DashboardCashRealizedDetailsResponse>;
   getMonthlyExecutiveInsights(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
@@ -203,6 +226,8 @@ export type DashboardOverviewFacadeDependencies = {
   readonly expectedReceivableDetails?: ExpectedReceivableDetailsService;
   /** Detalhe lazy de Contas a pagar (CASH-5 payable details). */
   readonly expectedPayableDetails?: ExpectedPayableDetailsService;
+  /** 12-B — detalhe lazy de baixas realizadas por categoryKey. */
+  readonly cashRealizedDetails?: CashRealizedDetailsService;
   /** 08-C2 — histórico de saldo bancário por snapshots. */
   readonly cashBalanceHistory?: CashBalanceHistoryService;
 };
@@ -463,6 +488,27 @@ export function createDashboardOverviewFacade(
       return toDashboardExpectedPayableDetailsResponse(details);
     },
 
+    async getCashRealizedDetails(auth, input) {
+      const detailsService = requireCashRealizedDetails(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, input.costCenterId ?? null);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, input.categoryId ?? null);
+      const details = await detailsService.getCashRealizedDetails({
+        tenantId,
+        direction: input.direction,
+        categoryKey: input.categoryKey,
+        ...(input.categoryKind === undefined || input.categoryKind === null
+          ? {}
+          : { categoryKind: input.categoryKind }),
+        ...(input.monthKey === null ? {} : { monthKey: input.monthKey }),
+        ...costCenterFilter(resolved),
+        ...categoryFilterSpread(categoryFilter),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.offset === undefined ? {} : { offset: input.offset }),
+      } satisfies GetCashRealizedDetailsInput);
+      return toDashboardCashRealizedDetailsResponse(details);
+    },
+
     async getMonthlyExecutiveInsights(
       auth,
       monthKey,
@@ -647,6 +693,17 @@ function requireExpectedPayableDetails(
     );
   }
   return deps.expectedPayableDetails;
+}
+
+function requireCashRealizedDetails(
+  deps: DashboardOverviewFacadeDependencies,
+): CashRealizedDetailsService {
+  if (!deps.cashRealizedDetails) {
+    throw new Error(
+      'CashRealizedDetailsService é obrigatório para cash-realized/details.',
+    );
+  }
+  return deps.cashRealizedDetails;
 }
 
 function requireCashFlow(deps: DashboardOverviewFacadeDependencies): MonthlyCashFlowService {

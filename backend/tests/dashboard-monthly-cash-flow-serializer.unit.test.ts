@@ -35,6 +35,7 @@ function flow(overrides: Partial<MonthlyCashFlow> = {}): MonthlyCashFlow {
           {
             kind: 'category',
             key: 'cat-rev',
+            key: 'cat-rev',
             name: 'Serviços',
             amount: dec('80000'),
             percentage: dec('100'),
@@ -81,6 +82,13 @@ describe('dashboard monthly cash flow serializer', () => {
     expect(dto.expected.receivables).toBe('20000');
     expect(dto.overdue.receivables).toBe('0');
     expect(dto.costCenterCashSplit).toBe(true);
+    expect(dto.realizedByCategory.inflows?.items[0]).toEqual({
+      kind: 'category',
+      key: 'cat-rev',
+      name: 'Serviços',
+      amount: '80000',
+      percentage: '100',
+    });
     expect(dto.daily.realized).toEqual([
       { date: '2026-08-05', inflows: '80000', outflows: '0', result: '80000' },
     ]);

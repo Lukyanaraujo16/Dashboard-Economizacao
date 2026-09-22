@@ -4,6 +4,7 @@ import type { FinanceReadScope } from '../domain/types.js';
 import { assertTenantId } from './read-query.js';
 
 export type LedgerSettlementReadRecord = {
+  readonly externalId: string;
   readonly installmentExternalId: string;
   readonly installmentKind: 'RECEIVABLE' | 'PAYABLE';
   readonly transactionType: 'RECEIPT' | 'DISBURSEMENT';
@@ -40,6 +41,7 @@ export function createLedgerReadRepository(prisma: PrismaClient): LedgerReadRepo
       const rows = await prisma.financialTransaction.findMany({
         where,
         select: {
+          externalId: true,
           installmentExternalId: true,
           installmentKind: true,
           transactionType: true,

@@ -78,6 +78,7 @@ import { StateWrapper } from '../financial';
 import { Badge, Button, Typography } from '../ui';
 import { UI_ICON_STROKE } from '../ui/icons';
 import { CashCategoryRanking } from './cash-category-ranking';
+import { CashCategoryDrilldown } from './cash-category-drilldown';
 import { CashRealizedCategoryPanel } from './cash-realized-category-panel';
 import { ExpectedReceivableDetailsPanel } from './expected-receivable-details-panel';
 import expectedReceivableStyles from './expected-receivable-details-panel.module.css';
@@ -140,7 +141,6 @@ import {
 import { CategoryDonutChart } from './category-donut-chart';
 import { presentTopCategoryDonutSlices } from './category-donut-view';
 import {
-  CategoryRanking,
   CashMonthlyGroupedBars,
   CompetenceDailyBars,
   ExecutiveKpiCard,
@@ -156,7 +156,6 @@ import {
   signedSharePercent,
   subtractDecimalStrings,
   type CashMonthlyGroupedBarsBucket,
-  type CategoryRankingItem,
   type DailyPoint,
   type ExecutiveKpiState,
 } from './v2';
@@ -247,16 +246,6 @@ type DailyCashMode = 'realized' | 'expected';
 
 /** Granularidade temporal da Movimentação financeira (Correção 08-B). */
 type PeriodMode = 'daily' | 'monthly';
-
-function toRankingItems(
-  items: readonly { readonly name: string; readonly amount: string; readonly percentage: string }[],
-): readonly CategoryRankingItem[] {
-  return items.map((item) => ({
-    name: item.name,
-    amount: item.amount,
-    percentage: item.percentage,
-  }));
-}
 
 function zeroSeriesLike(points: readonly DailyPoint[]): readonly DailyPoint[] {
   return points.map((point) => ({ date: point.date, amount: '0' }));
@@ -2017,31 +2006,19 @@ export function DashboardPage() {
                 </div>
               </>
             ) : null}
-            {expectedReceivables && expectedReceivables.length > 0 ? (
-              <>
-                <p className={styles.expandLabel}>A receber restante por vencimento (no prazo)</p>
-                <div className={styles.expandChart}>
-                  <Sparkline
-                    points={expectedReceivables}
-                    colorVar="--color-series-receivable"
-                    interactive
-                    ariaLabel="A receber por dia de vencimento no prazo"
-                    valueCaption="previsto no prazo"
-                  />
-                </div>
-              </>
-            ) : (
-              <p className={styles.expandLabel}>Sem valores a receber no prazo neste mês.</p>
-            )}
             {cashFlowModel.realizedInflowsByCategory &&
-            cashFlowModel.realizedInflowsByCategory.items.length > 0 ? (
+            cashFlowModel.realizedInflowsByCategory.items.length > 0 &&
+            operationalTenantId !== null ? (
               <>
-                <p className={styles.expandLabel}>
-                  Maiores categorias das entradas realizadas
-                </p>
-                <CashCategoryRanking
+                <p className={styles.expandLabel}>Categorias das entradas realizadas</p>
+                <CashCategoryDrilldown
                   composition={cashFlowModel.realizedInflowsByCategory}
-                  sectionTitle="Maiores categorias das entradas realizadas"
+                  direction="inflows"
+                  monthKey={selectedMonthKey}
+                  tenantId={operationalTenantId}
+                  costCenterId={selectedCostCenterId}
+                  categoryId={selectedCategoryId}
+                  sectionTitle="Categorias das entradas realizadas"
                   colorVar="--color-series-revenue"
                   emptyMessage="Sem entradas categorizadas neste mês."
                 />
@@ -2422,12 +2399,19 @@ export function DashboardPage() {
               interactive
               size="md"
             />
-            <CategoryRanking
-              items={toRankingItems(cashFlowModel.realizedInflowsByCategory.items)}
-              maxItems={cashFlowModel.realizedInflowsByCategory.items.length}
-              colorVar="--color-series-revenue"
-              emptyMessage={CASH_CATEGORY_EMPTY}
-            />
+            {operationalTenantId !== null ? (
+              <CashCategoryDrilldown
+                composition={cashFlowModel.realizedInflowsByCategory}
+                direction="inflows"
+                monthKey={selectedMonthKey}
+                tenantId={operationalTenantId}
+                costCenterId={selectedCostCenterId}
+                categoryId={selectedCategoryId}
+                sectionTitle="Receitas por categoria"
+                colorVar="--color-series-revenue"
+                emptyMessage={CASH_CATEGORY_EMPTY}
+              />
+            ) : null}
           </div>
         </WidgetExpandDialog>
       ) : null}
@@ -2461,12 +2445,19 @@ export function DashboardPage() {
               interactive
               size="md"
             />
-            <CategoryRanking
-              items={toRankingItems(cashFlowModel.realizedOutflowsByCategory.items)}
-              maxItems={cashFlowModel.realizedOutflowsByCategory.items.length}
-              colorVar="--color-series-expense"
-              emptyMessage={CASH_CATEGORY_EMPTY}
-            />
+            {operationalTenantId !== null ? (
+              <CashCategoryDrilldown
+                composition={cashFlowModel.realizedOutflowsByCategory}
+                direction="outflows"
+                monthKey={selectedMonthKey}
+                tenantId={operationalTenantId}
+                costCenterId={selectedCostCenterId}
+                categoryId={selectedCategoryId}
+                sectionTitle="Despesas por categoria"
+                colorVar="--color-series-expense"
+                emptyMessage={CASH_CATEGORY_EMPTY}
+              />
+            ) : null}
           </div>
         </WidgetExpandDialog>
       ) : null}

@@ -305,6 +305,8 @@ export type DashboardMonthlyCashFlowDailyExpectedPoint = {
  */
 export type DashboardCashRealizedCategoryItem = {
   readonly kind: 'category' | 'other' | 'uncategorized' | 'imprecise';
+  /** Identidade estável (externalId ou uncategorized/imprecise). */
+  readonly key: string;
   readonly name: string;
   readonly amount: string;
   readonly percentage: string;
@@ -425,4 +427,38 @@ export type DashboardExpectedPayableDetailsResponse = {
   readonly available: boolean;
   readonly total: string | null;
   readonly items: readonly DashboardExpectedPayableDetailItem[];
+};
+
+/** GET /dashboard/cash-realized/details — detalhe lazy de baixas por categoryKey (12-B). */
+export type DashboardCashRealizedDetailItem = {
+  readonly settlementExternalId: string;
+  readonly installmentExternalId: string;
+  readonly installmentKind: 'RECEIVABLE' | 'PAYABLE';
+  readonly occurredOn: string;
+  readonly netAmount: string;
+  readonly attributedAmount: string;
+  readonly description: string | null;
+  readonly partyName: string | null;
+  readonly categoryNames: readonly string[];
+  readonly categoryExternalIds: readonly string[];
+  readonly categoryKey: string;
+  readonly categoryKind: 'category' | 'other' | 'uncategorized' | 'imprecise';
+  readonly categoryName: string;
+};
+
+export type DashboardCashRealizedDetailsResponse = {
+  readonly today: string;
+  readonly monthKey: string;
+  readonly from: string;
+  readonly to: string;
+  readonly direction: 'inflows' | 'outflows';
+  readonly categoryKey: string;
+  readonly categoryKind: 'category' | 'other' | 'uncategorized' | 'imprecise' | null;
+  readonly available: boolean;
+  /** Σ attributedAmount de todos os itens da categoria (não só a página). */
+  readonly total: string | null;
+  readonly itemCount: number;
+  readonly limit: number;
+  readonly offset: number;
+  readonly items: readonly DashboardCashRealizedDetailItem[];
 };

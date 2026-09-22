@@ -35,6 +35,8 @@ export type DashboardMonthlyCashFlowDailyExpectedPoint = {
 
 export type DashboardCashRealizedCategoryItem = {
   readonly kind: 'category' | 'other' | 'uncategorized' | 'imprecise';
+  /** Identidade estável (externalId ou uncategorized/imprecise). */
+  readonly key: string;
   readonly name: string;
   readonly amount: string;
   readonly percentage: string;

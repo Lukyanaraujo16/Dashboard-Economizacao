@@ -341,6 +341,42 @@ export function dashboardExpectedPayableDetailsPath(
   })}`;
 }
 
+/** 12-B/12-C — detalhe lazy de baixas realizadas por kind+key. */
+export function dashboardCashRealizedDetailsPath(options: {
+  readonly monthKey?: string | null;
+  readonly costCenterId?: string | null;
+  readonly categoryId?: string | null;
+  readonly direction: 'inflows' | 'outflows';
+  readonly categoryKey: string;
+  readonly categoryKind: string;
+  readonly limit?: number;
+  readonly offset?: number;
+}): string {
+  const params = new URLSearchParams();
+  const monthKey = options.monthKey?.trim();
+  if (monthKey) {
+    params.set('month', monthKey);
+  }
+  const costCenterId = options.costCenterId?.trim();
+  if (costCenterId) {
+    params.set('costCenter', costCenterId);
+  }
+  const categoryId = options.categoryId?.trim();
+  if (categoryId) {
+    params.set('category', categoryId);
+  }
+  params.set('direction', options.direction);
+  params.set('categoryKey', options.categoryKey);
+  params.set('categoryKind', options.categoryKind);
+  if (options.limit !== undefined) {
+    params.set('limit', String(options.limit));
+  }
+  if (options.offset !== undefined) {
+    params.set('offset', String(options.offset));
+  }
+  return `${DASHBOARD_API_PREFIX}/cash-realized/details?${params.toString()}`;
+}
+
 export function dashboardExecutiveInsightsPath(
   monthKey?: string | null,
   costCenterId?: string | null,

@@ -32,6 +32,8 @@ const ZERO = new Prisma.Decimal(0);
 const MONEY_EPS = new Prisma.Decimal('0.0001');
 
 export type CashSettlementSource = {
+  /** External ID da baixa no ledger (financial_transactions.external_id). */
+  readonly settlementExternalId?: string;
   readonly installmentExternalId: string;
   readonly installmentKind: 'RECEIVABLE' | 'PAYABLE';
   readonly transactionType: 'RECEIPT' | 'DISBURSEMENT';
@@ -42,6 +44,18 @@ export type CashSettlementSource = {
 export type CashCostCenterAllocationSource = {
   readonly amount: Prisma.Decimal;
   readonly installment: FinancialInstallmentReadRecord;
+};
+
+/** Baixa já atribuída ao mês (net ou share CC) — mesma população do realizado. */
+export type AttributedCashSettlement = {
+  readonly settlement: CashSettlementSource;
+  readonly attributedAmount: Prisma.Decimal;
+  readonly categoryExternalIds: readonly string[];
+};
+
+export type CollectAttributedCashSettlementsResult = {
+  readonly available: boolean;
+  readonly rows: readonly AttributedCashSettlement[];
 };
 
 export type CalculateMonthlyCashFlowInput = {
@@ -156,6 +170,88 @@ export function attributeSettlementNetToCostCenter(input: {
   return input.netAmount.mul(input.allocationAmount).div(input.installmentTotal);
 }
 
+/**
+ * Enumera baixas atribuídas do mês (mesma população monetária do MonthlyCashFlow).
+ * Ledger = autoridade; AR/AP só metadata/categoria/CC.
+ */
+export function collectAttributedCashSettlements(
+  input: Pick<
+    CalculateMonthlyCashFlowInput,
+    | 'today'
+    | 'from'
+    | 'to'
+    | 'settlements'
+    | 'realizedInstallments'
+    | 'categoryFilter'
+    | 'costCenter'
+  >,
+): CollectAttributedCashSettlementsResult {
+  const categoryFilter = input.categoryFilter ?? null;
+  const realizedLookup = input.realizedInstallments;
+  const rows: AttributedCashSettlement[] = [];
+  let available = true;
+
+  const categoryIdsFor = (settlement: CashSettlementSource): readonly string[] => {
+    const installment = realizedLookup?.get(
+      installmentKey(settlement.installmentKind, settlement.installmentExternalId),
+    );
+    return installment?.categoryExternalIds ?? [];
+  };
+
+  const push = (settlement: CashSettlementSource, amount: Prisma.Decimal) => {
+    rows.push({
+      settlement,
+      attributedAmount: amount,
+      categoryExternalIds: categoryIdsFor(settlement),
+    });
+  };
+
+  if (input.costCenter) {
+    const realizedAr = allocationByExternalId(input.costCenter.realizedReceivables);
+    const realizedAp = allocationByExternalId(input.costCenter.realizedPayables);
+    for (const settlement of input.settlements) {
+      if (!isCivilDateInInclusiveRange(settlement.occurredOn, input.from, input.to)) {
+        continue;
+      }
+      if (!matchesSettlementCategory(settlement, categoryFilter, realizedLookup)) {
+        continue;
+      }
+      const table =
+        settlement.installmentKind === 'RECEIVABLE' ? realizedAr : realizedAp;
+      const allocation = table.get(settlement.installmentExternalId);
+      if (!allocation) {
+        continue;
+      }
+      const share = attributeSettlementNetToCostCenter({
+        netAmount: settlement.netAmount,
+        allocationAmount: allocation.amount,
+        installmentTotal: allocation.installment.total,
+        paid: allocation.installment.paid,
+        unpaid: allocation.installment.unpaid,
+        dueDate: allocation.installment.dueDate,
+        today: input.today,
+      });
+      if (share === 'UNAVAILABLE') {
+        available = false;
+        continue;
+      }
+      push(settlement, share);
+    }
+  } else {
+    for (const settlement of input.settlements) {
+      if (!isCivilDateInInclusiveRange(settlement.occurredOn, input.from, input.to)) {
+        continue;
+      }
+      if (!matchesSettlementCategory(settlement, categoryFilter, realizedLookup)) {
+        continue;
+      }
+      push(settlement, settlement.netAmount);
+    }
+  }
+
+  return { available, rows };
+}
+
 function sumUnpaid(rows: readonly Pick<FinancialInstallmentReadRecord, 'unpaid'>[]): Prisma.Decimal {
   return rows.reduce((acc, row) => acc.plus(row.unpaid), ZERO);
 }
@@ -229,79 +325,41 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
   const realizedByDay = new Map<number, { inflows: Prisma.Decimal; outflows: Prisma.Decimal }>();
   const expectedByDay = new Map<number, { receivables: Prisma.Decimal; payables: Prisma.Decimal }>();
 
-  const categoryIdsFor = (settlement: CashSettlementSource): readonly string[] => {
-    const installment = realizedLookup?.get(
-      installmentKey(settlement.installmentKind, settlement.installmentExternalId),
-    );
-    return installment?.categoryExternalIds ?? [];
-  };
+  const attributed = collectAttributedCashSettlements({
+    today: input.today,
+    from: input.from,
+    to: input.to,
+    settlements: input.settlements,
+    realizedInstallments: realizedLookup,
+    categoryFilter,
+    costCenter: input.costCenter,
+  });
+  realizedAvailable = attributed.available;
 
-  const addRealizedDay = (occurredOn: Date, field: 'inflows' | 'outflows', amount: Prisma.Decimal) => {
+  for (const row of attributed.rows) {
+    const amount = row.attributedAmount;
+    const categoryRow = {
+      amount,
+      categoryExternalIds: row.categoryExternalIds,
+    };
+    if (row.settlement.transactionType === 'RECEIPT') {
+      inflows = inflows.plus(amount);
+      inflowRows.push(categoryRow);
+      addRealizedDay(row.settlement.occurredOn, 'inflows', amount);
+    } else {
+      outflows = outflows.plus(amount);
+      outflowRows.push(categoryRow);
+      addRealizedDay(row.settlement.occurredOn, 'outflows', amount);
+    }
+  }
+
+  function addRealizedDay(occurredOn: Date, field: 'inflows' | 'outflows', amount: Prisma.Decimal) {
     if (!isCivilDateInInclusiveRange(occurredOn, input.from, input.to)) {
       return;
     }
     const current = realizedByDay.get(occurredOn.getTime()) ?? { inflows: ZERO, outflows: ZERO };
     current[field] = current[field].plus(amount);
     realizedByDay.set(occurredOn.getTime(), current);
-  };
-
-  const addAttributed = (
-    settlement: CashSettlementSource,
-    amount: Prisma.Decimal,
-  ) => {
-    const row = { amount, categoryExternalIds: categoryIdsFor(settlement) };
-    if (settlement.transactionType === 'RECEIPT') {
-      inflows = inflows.plus(amount);
-      inflowRows.push(row);
-      addRealizedDay(settlement.occurredOn, 'inflows', amount);
-    } else {
-      outflows = outflows.plus(amount);
-      outflowRows.push(row);
-      addRealizedDay(settlement.occurredOn, 'outflows', amount);
-    }
-  };
-
-  if (input.costCenter) {
-    const realizedAr = allocationByExternalId(input.costCenter.realizedReceivables);
-    const realizedAp = allocationByExternalId(input.costCenter.realizedPayables);
-    for (const settlement of input.settlements) {
-      if (!isCivilDateInInclusiveRange(settlement.occurredOn, input.from, input.to)) {
-        continue;
-      }
-      if (!matchesSettlementCategory(settlement, categoryFilter, realizedLookup)) {
-        continue;
-      }
-      const table =
-        settlement.installmentKind === 'RECEIVABLE' ? realizedAr : realizedAp;
-      const allocation = table.get(settlement.installmentExternalId);
-      if (!allocation) {
-        continue;
-      }
-      const share = attributeSettlementNetToCostCenter({
-        netAmount: settlement.netAmount,
-        allocationAmount: allocation.amount,
-        installmentTotal: allocation.installment.total,
-        paid: allocation.installment.paid,
-        unpaid: allocation.installment.unpaid,
-        dueDate: allocation.installment.dueDate,
-        today: input.today,
-      });
-      if (share === 'UNAVAILABLE') {
-        realizedAvailable = false;
-        continue;
-      }
-      addAttributed(settlement, share);
-    }
-  } else {
-    for (const settlement of input.settlements) {
-      if (!isCivilDateInInclusiveRange(settlement.occurredOn, input.from, input.to)) {
-        continue;
-      }
-      if (!matchesSettlementCategory(settlement, categoryFilter, realizedLookup)) {
-        continue;
-      }
-      addAttributed(settlement, settlement.netAmount);
-    }
   }
 
   const expectedReceivableRows = input.costCenter

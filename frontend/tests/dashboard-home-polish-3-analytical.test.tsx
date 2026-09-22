@@ -201,8 +201,9 @@ afterEach(() => {
 describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
   it('P3-1/P3-2/P3-3/P3-4 — Faturamento ranking realized inflows, título explícito', async () => {
     const dialog = await openKpiExpand('Faturamento');
-    expect(within(dialog).getByText('Maiores categorias das entradas realizadas')).toBeTruthy();
+    expect(within(dialog).getByText('Categorias das entradas realizadas')).toBeTruthy();
     expect(within(dialog).queryByText(/Maiores categorias do faturamento/i)).toBeNull();
+    expect(within(dialog).queryByText(/A receber restante por vencimento/i)).toBeNull();
     expect(within(dialog).getByText('Entradas realizadas')).toBeTruthy();
     expect(within(dialog).getByText('Serviços')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*888\.888,88/).length).toBeGreaterThan(0);

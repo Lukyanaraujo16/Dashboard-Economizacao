@@ -62,6 +62,7 @@ function flow(
               items: [
                 {
                   kind: 'category',
+                  key: 'cat-fixture',
                   name: 'Serviços',
                   amount: overrides.realized?.inflows ?? '80000',
                   percentage: '100',
@@ -77,6 +78,7 @@ function flow(
               items: [
                 {
                   kind: 'category',
+                  key: 'cat-fixture',
                   name: 'Operacional',
                   amount: overrides.realized?.outflows ?? '40000',
                   percentage: '100',
