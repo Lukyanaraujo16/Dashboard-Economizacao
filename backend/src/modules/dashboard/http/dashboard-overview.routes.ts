@@ -6,6 +6,7 @@ import { createAnalyticsService } from '../../analytics/services/analytics.servi
 import { createExpectedReceivableDetailsService } from '../../analytics/services/expected-receivable-details.service.js';
 import { createExpectedPayableDetailsService } from '../../analytics/services/expected-payable-details.service.js';
 import { createCashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
+import { createCashExpectedHorizonService } from '../../analytics/services/cash-expected-horizon.service.js';
 import { createMonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
@@ -31,6 +32,7 @@ import { parseDashboardMonth } from './parse-dashboard-month.js';
 import { parseDashboardRevenueGoalBody } from './parse-dashboard-revenue-goal-body.js';
 import { parseDashboardSituationQuery } from './parse-dashboard-situation-query.js';
 import { parseDashboardUpcomingDays } from './parse-dashboard-upcoming-days.js';
+import { parseCashExpectedHorizonQuery } from './parse-cash-expected-horizon-query.js';
 import {
   parseCashRealizedDetailsCategoryKey,
   parseCashRealizedDetailsCategoryKind,
@@ -62,6 +64,11 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       receivables,
       payables,
       categories,
+      costCenterAllocations,
+    }),
+    cashExpectedHorizon: createCashExpectedHorizonService({
+      receivables,
+      payables,
       costCenterAllocations,
     }),
     expectedReceivableDetails: createExpectedReceivableDetailsService({
@@ -284,6 +291,30 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       const categoryId = parseDashboardCategoryQuery(request.query);
       parseDashboardSituationQuery(request.query);
       const body = await dashboard.getCashMovementHistory(auth, monthKey, costCenterId, categoryId);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
+    '/dashboard/cash-expected-horizon',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const monthKey = parseDashboardMonth(request.query);
+      const horizon = parseCashExpectedHorizonQuery(request.query);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      parseDashboardSituationQuery(request.query);
+      const body = await dashboard.getCashExpectedHorizon(auth, {
+        monthKey,
+        horizon,
+        costCenterId,
+        categoryId,
+      });
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

@@ -42,6 +42,10 @@ export type CashMonthlyGroupedBarsProps = {
   readonly balanceByMonthKey?: ReadonlyMap<string, string>;
   readonly balanceLabel?: string;
   readonly balanceCoverageNote?: string | null;
+  /** Labels das séries (default = realizado 08-B). */
+  readonly inflowLabel?: string;
+  readonly outflowLabel?: string;
+  readonly resultLabel?: string;
 };
 
 /** OUT/25 — eixo denso e título do tooltip. */
@@ -128,6 +132,9 @@ export function CashMonthlyGroupedBars({
   balanceByMonthKey,
   balanceLabel = 'Saldo bancário',
   balanceCoverageNote = null,
+  inflowLabel = 'Entradas',
+  outflowLabel = 'Saídas',
+  resultLabel = 'Resultado',
 }: CashMonthlyGroupedBarsProps) {
   const plotRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -192,11 +199,11 @@ export function CashMonthlyGroupedBars({
       <ul className={styles.legend}>
         <li className={styles.legendItem}>
           <span className={cx(styles.swatch, styles.inflowSwatch)} aria-hidden="true" />
-          Entradas
+          {inflowLabel}
         </li>
         <li className={styles.legendItem}>
           <span className={cx(styles.swatch, styles.outflowSwatch)} aria-hidden="true" />
-          Saídas
+          {outflowLabel}
         </li>
         {showBalance ? (
           <li className={styles.legendItem}>
@@ -230,9 +237,9 @@ export function CashMonthlyGroupedBars({
                     data-dimmed={activeIndex >= 0 && !activeBucket ? 'true' : undefined}
                     onMouseEnter={() => setActiveIndex(index)}
                     onFocus={() => setActiveIndex(index)}
-                    aria-label={`${formatMonthKeyPtBr(bucket.monthKey)}: entradas ${moneyOrDash(
+                    aria-label={`${formatMonthKeyPtBr(bucket.monthKey)}: ${inflowLabel.toLowerCase()} ${moneyOrDash(
                       bucket.inflows,
-                    )}, saídas ${moneyOrDash(bucket.outflows)}, resultado ${moneyOrDash(
+                    )}, ${outflowLabel.toLowerCase()} ${moneyOrDash(bucket.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(
                       bucket.result,
                     )}${
                       showBalance
@@ -319,16 +326,16 @@ export function CashMonthlyGroupedBars({
             <p className={styles.tooltipMonth}>{axisMonthLabel(active.monthKey)}</p>
             <p className={styles.tooltipRow}>
               <span className={cx(styles.swatch, styles.inflowSwatch)} aria-hidden="true" />
-              Entradas
+              {inflowLabel}
               <span className={styles.tooltipValue}>{moneyOrDash(active.inflows)}</span>
             </p>
             <p className={styles.tooltipRow}>
               <span className={cx(styles.swatch, styles.outflowSwatch)} aria-hidden="true" />
-              Saídas
+              {outflowLabel}
               <span className={styles.tooltipValue}>{moneyOrDash(active.outflows)}</span>
             </p>
             <p className={styles.tooltipRow}>
-              Resultado
+              {resultLabel}
               <span className={styles.tooltipValue}>{moneyOrDash(active.result)}</span>
             </p>
             {showBalance ? (
@@ -350,7 +357,7 @@ export function CashMonthlyGroupedBars({
 
       <span className={styles.liveRegion} aria-live="polite">
         {active
-          ? `${axisMonthLabel(active.monthKey)}: entradas ${moneyOrDash(active.inflows)}, saídas ${moneyOrDash(active.outflows)}, resultado ${moneyOrDash(active.result)}${
+          ? `${axisMonthLabel(active.monthKey)}: ${inflowLabel.toLowerCase()} ${moneyOrDash(active.inflows)}, ${outflowLabel.toLowerCase()} ${moneyOrDash(active.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(active.result)}${
               showBalance
                 ? `, saldo final ${activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}`
                 : ''

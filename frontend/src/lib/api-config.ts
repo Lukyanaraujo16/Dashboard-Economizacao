@@ -309,6 +309,30 @@ export function dashboardCashMovementHistoryPath(
   })}`;
 }
 
+/** Previsto multi-mês à frente (Diária → Previsto → 3|6|12). */
+export function dashboardCashExpectedHorizonPath(options: {
+  readonly monthKey?: string | null;
+  readonly horizon: 3 | 6 | 12;
+  readonly costCenterId?: string | null;
+  readonly categoryId?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  const monthKey = options.monthKey?.trim();
+  if (monthKey) {
+    params.set('month', monthKey);
+  }
+  params.set('horizon', String(options.horizon));
+  const costCenterId = options.costCenterId?.trim();
+  if (costCenterId) {
+    params.set('costCenter', costCenterId);
+  }
+  const categoryId = options.categoryId?.trim();
+  if (categoryId) {
+    params.set('category', categoryId);
+  }
+  return `${DASHBOARD_API_PREFIX}/cash-expected-horizon?${params.toString()}`;
+}
+
 /** Correção 08-C2 — histórico de saldo bancário (snapshots). Sem category/costCenter. */
 export function dashboardCashBalanceHistoryPath(monthKey?: string | null): string {
   return `${DASHBOARD_API_PREFIX}/cash-balance-history${dashboardQueryString({

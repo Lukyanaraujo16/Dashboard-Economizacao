@@ -14,6 +14,11 @@ import type {
   CashRealizedCategoryKind,
   CashRealizedDetailsDirection,
 } from '../../analytics/domain/cash-realized-details.js';
+import type {
+  CashExpectedHorizonService,
+  GetCashExpectedHorizonInput,
+} from '../../analytics/services/cash-expected-horizon.service.js';
+import type { CashExpectedHorizonMonths } from '../../analytics/domain/cash-expected-horizon.js';
 import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import type { ContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
 import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
@@ -34,6 +39,7 @@ import type {
   DashboardCashFlowForecastResponse,
   DashboardCashBalanceHistoryResponse,
   DashboardCashMovementHistoryResponse,
+  DashboardCashExpectedHorizonResponse,
   DashboardCategoriesResponse,
   DashboardCostCentersResponse,
   DashboardExecutiveInsightsResponse,
@@ -60,6 +66,7 @@ import { toDashboardExpectedPayableDetailsResponse } from '../http/to-dashboard-
 import { toDashboardCashRealizedDetailsResponse } from '../http/to-dashboard-cash-realized-details-response.js';
 import { toDashboardMonthlyCashFlowResponse } from '../http/to-dashboard-monthly-cash-flow-response.js';
 import { toDashboardCashMovementHistoryResponse } from '../http/to-dashboard-cash-movement-history-response.js';
+import { toDashboardCashExpectedHorizonResponse } from '../http/to-dashboard-cash-expected-horizon-response.js';
 import { toDashboardMonthlyExpenseResponse } from '../http/to-dashboard-monthly-expense-response.js';
 import { toDashboardMonthlyRevenueResponse } from '../http/to-dashboard-monthly-revenue-response.js';
 import { toDashboardOverviewResponse } from '../http/to-dashboard-overview-response.js';
@@ -160,6 +167,15 @@ export type DashboardOverviewFacade = {
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardCashMovementHistoryResponse>;
+  getCashExpectedHorizon(
+    auth: AuthenticatedRequestContext,
+    input: {
+      readonly monthKey: string | null;
+      readonly horizon: CashExpectedHorizonMonths;
+      readonly costCenterId?: string | null;
+      readonly categoryId?: string | null;
+    },
+  ): Promise<DashboardCashExpectedHorizonResponse>;
   getCashBalanceHistory(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
@@ -222,6 +238,8 @@ export type DashboardOverviewFacadeDependencies = {
   readonly categories: FinancialCategoryReadRepository;
   /** CASH-3B. Ausente nas rotas de Relatórios, que não expõem caixa. */
   readonly cashFlow?: MonthlyCashFlowService;
+  /** Previsto multi-mês à frente (horizonte 3|6|12). */
+  readonly cashExpectedHorizon?: CashExpectedHorizonService;
   /** Detalhe lazy do A receber (CASH-4 receivable details). */
   readonly expectedReceivableDetails?: ExpectedReceivableDetailsService;
   /** Detalhe lazy de Contas a pagar (CASH-5 payable details). */
@@ -449,6 +467,22 @@ export function createDashboardOverviewFacade(
         ),
       );
       return toDashboardCashMovementHistoryResponse(flows);
+    },
+
+    async getCashExpectedHorizon(auth, input) {
+      const service = requireCashExpectedHorizon(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, input.costCenterId ?? null);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, input.categoryId ?? null);
+      const horizonInput: GetCashExpectedHorizonInput = {
+        tenantId,
+        horizon: input.horizon,
+        ...(input.monthKey === null ? {} : { monthKey: input.monthKey }),
+        ...costCenterFilter(resolved),
+        ...categoryFilterSpread(categoryFilter),
+      };
+      const result = await service.getCashExpectedHorizon(horizonInput);
+      return toDashboardCashExpectedHorizonResponse(result);
     },
 
     async getCashBalanceHistory(auth, monthKey) {
@@ -713,6 +747,17 @@ function requireCashFlow(deps: DashboardOverviewFacadeDependencies): MonthlyCash
     );
   }
   return deps.cashFlow;
+}
+
+function requireCashExpectedHorizon(
+  deps: DashboardOverviewFacadeDependencies,
+): CashExpectedHorizonService {
+  if (!deps.cashExpectedHorizon) {
+    throw new Error(
+      'CashExpectedHorizonService é obrigatório para cash-expected-horizon.',
+    );
+  }
+  return deps.cashExpectedHorizon;
 }
 
 function requireCashBalanceHistory(

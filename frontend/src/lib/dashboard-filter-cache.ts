@@ -52,6 +52,17 @@ export function dashboardCashFlowCacheKey(
  */
 export const dashboardCashMovementHistoryCacheKey = dashboardCashFlowCacheKey;
 
+/** Previsto multi-mês: tenant × âncora × horizon × centro × categoria. */
+export function dashboardCashExpectedHorizonCacheKey(
+  tenantId: string,
+  monthKey: string,
+  horizon: 3 | 6 | 12,
+  costCenterId: string | null,
+  categoryId: string | null = null,
+): string {
+  return `${tenantId}|${monthKey}|${horizon}|${costCenterId ?? ''}|${categoryId ?? ''}`;
+}
+
 /**
  * Cash-balance-history (Correção 08-C): tenant × month.
  * Category/CC não entram — endpoint rejeita esses filtros; UI só oculta a linha.

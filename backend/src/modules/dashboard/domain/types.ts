@@ -387,6 +387,31 @@ export type DashboardCashMovementHistoryResponse = {
   readonly months: readonly DashboardCashMovementHistoryMonth[];
 };
 
+/**
+ * GET /dashboard/cash-expected-horizon — Previsto multi-mês à frente (âncora + horizon).
+ * Mesma regra CASH-3B (`selectExpectedOpen*`); sem ledger/realizado.
+ */
+export type DashboardCashExpectedHorizonMoney = {
+  readonly receivables: string | null;
+  readonly payables: string | null;
+  readonly result: string | null;
+};
+
+export type DashboardCashExpectedHorizonMonth = {
+  readonly monthKey: string;
+  readonly expected: DashboardCashExpectedHorizonMoney;
+};
+
+export type DashboardCashExpectedHorizonResponse = {
+  readonly today: string;
+  readonly startMonth: string;
+  readonly endMonth: string;
+  readonly horizon: 3 | 6 | 12;
+  readonly costCenterCashSplit: boolean;
+  readonly totals: DashboardCashExpectedHorizonMoney;
+  readonly months: readonly DashboardCashExpectedHorizonMonth[];
+};
+
 /** GET /dashboard/receivables/expected-details — itens do KPI A receber (lazy). */
 export type DashboardExpectedReceivableDetailItem = {
   readonly id: string;

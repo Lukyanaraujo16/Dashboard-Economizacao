@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 import { isPlatformRole, useAuth } from '../../auth';
@@ -30,6 +30,7 @@ import {
 import {
   createDashboardFilterCache,
   dashboardCashBalanceHistoryCacheKey,
+  dashboardCashExpectedHorizonCacheKey,
   dashboardCashFlowCacheKey,
   dashboardCashMovementHistoryCacheKey,
   dashboardOverviewCacheKey,
@@ -37,6 +38,11 @@ import {
 import { getDashboardCashBalanceHistory } from '../../services/dashboard/cash-balance-history';
 import type { DashboardCashBalanceHistoryResponse } from '../../services/dashboard/cash-balance-history.types';
 import { DashboardCashBalanceHistoryRequestError } from '../../services/dashboard/cash-balance-history.types';
+import { getDashboardCashExpectedHorizon } from '../../services/dashboard/cash-expected-horizon';
+import {
+  DashboardCashExpectedHorizonRequestError,
+  type DashboardCashExpectedHorizonResponse,
+} from '../../services/dashboard/cash-expected-horizon.types';
 import { getDashboardCostCenters } from '../../services/dashboard/cost-centers';
 import type { DashboardCostCenterItem } from '../../services/dashboard/cost-centers.types';
 import { getDashboardCategories } from '../../services/dashboard/categories';
@@ -106,10 +112,12 @@ import {
 import {
   CASH_DAILY_EXPECTED_CAPTION,
   CASH_DAILY_REALIZED_CAPTION,
+  CASH_EXPECTED_HORIZON_CAPTION,
   CASH_EXPENSES_SPARKLINE_CAPTION,
   CASH_MONTHLY_REALIZED_CAPTION,
   CASH_RESULT_SPARKLINE_CAPTION,
   cashBillingCoverageRatio,
+  cashExpectedHorizonSubtitle,
   cashExpectedPayablesSeries,
   cashExpectedReceivablesSeries,
   cashExpensesComposedSeries,
@@ -200,6 +208,13 @@ type CashMovementHistoryView =
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly data: DashboardCashMovementHistoryResponse };
 
+/** Previsto multi-mês à frente (Diária → Previsto → 3|6|12). */
+type CashExpectedHorizonView =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'ready'; readonly data: DashboardCashExpectedHorizonResponse };
+
 /** Saldo bancário por snapshots (Correção 08-C). Erro não derruba barras. */
 type CashBalanceHistoryView =
   | { readonly kind: 'idle' }
@@ -247,6 +262,9 @@ type DailyCashMode = 'realized' | 'expected';
 /** Granularidade temporal da Movimentação financeira (Correção 08-B). */
 type PeriodMode = 'daily' | 'monthly';
 
+/** Horizonte do Previsto (Diária → Previsto). 1 = Mês atual (série diária). */
+type ExpectedHorizon = 1 | 3 | 6 | 12;
+
 function zeroSeriesLike(points: readonly DailyPoint[]): readonly DailyPoint[] {
   return points.map((point) => ({ date: point.date, amount: '0' }));
 }
@@ -259,6 +277,16 @@ const DAILY_MODES: readonly { readonly id: DailyCashMode; readonly label: string
 const PERIOD_MODES: readonly { readonly id: PeriodMode; readonly label: string }[] = [
   { id: 'daily', label: 'Diária' },
   { id: 'monthly', label: 'Mensal' },
+];
+
+const EXPECTED_HORIZON_MODES: readonly {
+  readonly id: ExpectedHorizon;
+  readonly label: string;
+}[] = [
+  { id: 1, label: 'Mês atual' },
+  { id: 3, label: '3 meses' },
+  { id: 6, label: '6 meses' },
+  { id: 12, label: '12 meses' },
 ];
 
 /** Mantém dados anteriores / cache enquanto busca (troca de filtro CC1.3.1). */
@@ -399,6 +427,9 @@ export function DashboardPage() {
   });
   const [cashMovementHistoryView, setCashMovementHistoryView] =
     useState<CashMovementHistoryView>({ kind: 'idle' });
+  const [cashExpectedHorizonView, setCashExpectedHorizonView] = useState<CashExpectedHorizonView>({
+    kind: 'idle',
+  });
   const [cashBalanceHistoryView, setCashBalanceHistoryView] = useState<CashBalanceHistoryView>({
     kind: 'idle',
   });
@@ -418,6 +449,9 @@ export function DashboardPage() {
     useState<ExpectedPayableDetailsView>({ kind: 'idle' });
   const [dailyMode, setDailyMode] = useState<DailyCashMode>('realized');
   const [periodMode, setPeriodMode] = useState<PeriodMode>('daily');
+  const [expectedHorizon, setExpectedHorizon] = useState<ExpectedHorizon>(1);
+  const expectedHorizonLabelId = useId();
+  const expectedHorizonExpandLabelId = useId();
 
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -425,6 +459,8 @@ export function DashboardPage() {
   monthlyCashFlowViewRef.current = monthlyCashFlowView;
   const cashMovementHistoryViewRef = useRef(cashMovementHistoryView);
   cashMovementHistoryViewRef.current = cashMovementHistoryView;
+  const cashExpectedHorizonViewRef = useRef(cashExpectedHorizonView);
+  cashExpectedHorizonViewRef.current = cashExpectedHorizonView;
   const cashBalanceHistoryViewRef = useRef(cashBalanceHistoryView);
   cashBalanceHistoryViewRef.current = cashBalanceHistoryView;
 
@@ -432,6 +468,9 @@ export function DashboardPage() {
   const cashFlowCacheRef = useRef(createDashboardFilterCache<DashboardMonthlyCashFlowResponse>());
   const cashMovementHistoryCacheRef = useRef(
     createDashboardFilterCache<DashboardCashMovementHistoryResponse>(),
+  );
+  const cashExpectedHorizonCacheRef = useRef(
+    createDashboardFilterCache<DashboardCashExpectedHorizonResponse>(),
   );
   const cashBalanceHistoryCacheRef = useRef(
     createDashboardFilterCache<DashboardCashBalanceHistoryResponse>(),
@@ -738,6 +777,65 @@ export function DashboardPage() {
             ? error.message
             : 'Não foi possível carregar o histórico de movimentação.';
         setCashMovementHistoryView({ kind: 'error', message });
+      }
+    },
+    [],
+  );
+
+  /** Previsto multi-mês — Diária → Previsto → horizonte 3|6|12. */
+  const loadCashExpectedHorizon = useCallback(
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      horizon: 3 | 6 | 12,
+      costCenterId: string | null,
+      categoryId: string | null,
+      options?: SoftLoadOptions,
+    ) => {
+      const tenantId = operationalTenantIdRef.current;
+      if (tenantId === null) {
+        return;
+      }
+      const soft = options?.soft === true;
+      const cacheKey = dashboardCashExpectedHorizonCacheKey(
+        tenantId,
+        monthKey,
+        horizon,
+        costCenterId,
+        categoryId,
+      );
+      const cached = cashExpectedHorizonCacheRef.current.get(cacheKey);
+      if (soft && cached) {
+        setCashExpectedHorizonView({ kind: 'ready', data: cached });
+      } else if (!(soft && cashExpectedHorizonViewRef.current.kind === 'ready')) {
+        setCashExpectedHorizonView({ kind: 'loading' });
+      }
+      try {
+        const data = await getDashboardCashExpectedHorizon({
+          monthKey: monthKey === todayMonthKey ? null : monthKey,
+          horizon,
+          costCenterId,
+          categoryId,
+          signal,
+        });
+        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
+          return;
+        }
+        cashExpectedHorizonCacheRef.current.set(cacheKey, data);
+        setCashExpectedHorizonView({ kind: 'ready', data });
+      } catch (error) {
+        if (signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+          return;
+        }
+        if (soft && cashExpectedHorizonViewRef.current.kind === 'ready') {
+          return;
+        }
+        const message =
+          error instanceof DashboardCashExpectedHorizonRequestError
+            ? error.message
+            : 'Não foi possível carregar a previsão do horizonte.';
+        setCashExpectedHorizonView({ kind: 'error', message });
       }
     },
     [],
@@ -1090,6 +1188,41 @@ export function DashboardPage() {
   ]);
 
   useEffect(() => {
+    const wantsHorizon =
+      periodMode === 'daily' &&
+      dailyMode === 'expected' &&
+      (expectedHorizon === 3 || expectedHorizon === 6 || expectedHorizon === 12);
+    if (!wantsHorizon || view.kind !== 'ready') {
+      if (!wantsHorizon) {
+        setCashExpectedHorizonView({ kind: 'idle' });
+      }
+      return;
+    }
+    const controller = new AbortController();
+    const soft = cashExpectedHorizonViewRef.current.kind === 'ready';
+    void loadCashExpectedHorizon(
+      controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
+      expectedHorizon,
+      selectedCostCenterId,
+      selectedCategoryId,
+      { soft },
+    );
+    return () => controller.abort();
+  }, [
+    dailyMode,
+    expectedHorizon,
+    loadCashExpectedHorizon,
+    periodMode,
+    selectedCategoryId,
+    selectedCostCenterId,
+    selectedMonthKey,
+    todayMonthKey,
+    view.kind,
+  ]);
+
+  useEffect(() => {
     if (view.kind !== 'ready') {
       setCashBalanceHistoryView({ kind: 'idle' });
       return;
@@ -1232,6 +1365,19 @@ export function DashboardPage() {
       new AbortController().signal,
       selectedMonthKey,
       todayMonthKey,
+      selectedCostCenterId,
+      selectedCategoryId,
+    );
+  };
+  const retryCashExpectedHorizon = () => {
+    if (expectedHorizon === 1) {
+      return;
+    }
+    void loadCashExpectedHorizon(
+      new AbortController().signal,
+      selectedMonthKey,
+      todayMonthKey,
+      expectedHorizon,
       selectedCostCenterId,
       selectedCategoryId,
     );
@@ -1400,6 +1546,35 @@ export function DashboardPage() {
     }));
   }, [historyData, historyMonthsUnavailable]);
 
+  const showExpectedHorizon =
+    periodMode === 'daily' && dailyMode === 'expected' && expectedHorizon !== 1;
+  const horizonError =
+    cashExpectedHorizonView.kind === 'error' ? cashExpectedHorizonView.message : null;
+  const horizonPending =
+    cashExpectedHorizonView.kind === 'idle' || cashExpectedHorizonView.kind === 'loading';
+  const horizonData =
+    cashExpectedHorizonView.kind === 'ready' ? cashExpectedHorizonView.data : null;
+  const horizonUnavailable =
+    horizonData !== null &&
+    (!horizonData.costCenterCashSplit ||
+      horizonData.months.some(
+        (month) =>
+          month.expected.receivables === null ||
+          month.expected.payables === null ||
+          month.expected.result === null,
+      ));
+  const expectedHorizonBuckets = useMemo<readonly CashMonthlyGroupedBarsBucket[] | null>(() => {
+    if (horizonData === null || horizonUnavailable) {
+      return null;
+    }
+    return horizonData.months.map((month) => ({
+      monthKey: month.monthKey,
+      inflows: month.expected.receivables,
+      outflows: month.expected.payables,
+      result: month.expected.result,
+    }));
+  }, [horizonData, horizonUnavailable]);
+
   /** Linha de saldo: só Realizado (diário) / Mensal, sem category/CC, com pontos reais. */
   const balanceFiltersClear = selectedCategoryId === null && selectedCostCenterId === null;
   const balanceData =
@@ -1444,7 +1619,9 @@ export function DashboardPage() {
   const canExpandMovement =
     gate === 'ready' &&
     (periodMode === 'daily'
-      ? dailySeriesReady
+      ? showExpectedHorizon
+        ? expectedHorizonBuckets !== null && expectedHorizonBuckets.length > 0
+        : dailySeriesReady
       : monthlyHistoryBuckets !== null && monthlyHistoryBuckets.length > 0);
   const canExpandCashDetail = gate === 'ready' && cashHasSplit && cashFlowModel !== null;
   const canExpandBilling =
@@ -1701,7 +1878,7 @@ export function DashboardPage() {
               ? `Entradas e saídas realizadas · 12 meses até ${monthLabel}`
               : dailyMode === 'realized'
                 ? 'Entradas e saídas por dia de baixa'
-                : 'A receber e a pagar por dia de vencimento'
+                : cashExpectedHorizonSubtitle(expectedHorizon)
           }
           expandable={canExpandMovement}
           onExpand={canExpandMovement ? () => setExpandKind('daily') : undefined}
@@ -1744,12 +1921,54 @@ export function DashboardPage() {
               ))}
             </div>
           ) : null}
+          {periodMode === 'daily' && dailyMode === 'expected' ? (
+            <div className={styles.expectedHorizonControl} data-stop-expand>
+              <p id={expectedHorizonLabelId} className={styles.expectedHorizonLabel}>
+                Horizonte da previsão
+              </p>
+              <div
+                className={styles.segmented}
+                role="group"
+                aria-labelledby={expectedHorizonLabelId}
+              >
+                {EXPECTED_HORIZON_MODES.map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    className={styles.segmentedOption}
+                    aria-pressed={expectedHorizon === mode.id}
+                    onClick={() => setExpectedHorizon(mode.id)}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <WidgetBody
             gate={gate}
             loadingLabel="Carregando movimentação financeira"
-            error={periodMode === 'monthly' ? historyError : cashFlowError}
-            onRetry={periodMode === 'monthly' ? retryCashMovementHistory : retryCashFlow}
-            pending={periodMode === 'monthly' ? historyPending : cashFlowPending}
+            error={
+              periodMode === 'monthly'
+                ? historyError
+                : showExpectedHorizon
+                  ? horizonError
+                  : cashFlowError
+            }
+            onRetry={
+              periodMode === 'monthly'
+                ? retryCashMovementHistory
+                : showExpectedHorizon
+                  ? retryCashExpectedHorizon
+                  : retryCashFlow
+            }
+            pending={
+              periodMode === 'monthly'
+                ? historyPending
+                : showExpectedHorizon
+                  ? horizonPending
+                  : cashFlowPending
+            }
           >
             {periodMode === 'monthly' ? (
               monthlyHistoryBuckets ? (
@@ -1761,6 +1980,48 @@ export function DashboardPage() {
                   balanceByMonthKey={monthlyBalanceMap}
                   balanceCoverageNote={showMonthlyBalanceLine ? balanceCoverageNote : null}
                 />
+              ) : (
+                <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
+              )
+            ) : showExpectedHorizon ? (
+              expectedHorizonBuckets && horizonData ? (
+                <>
+                  <dl className={`${styles.statsRow} ${styles.expectedHorizonSummary}`}>
+                    <div className={styles.statsItem}>
+                      <dt className={styles.statsLabel}>A receber</dt>
+                      <dd className={styles.statsValue}>
+                        {horizonData.totals.receivables === null
+                          ? '—'
+                          : formatMoneyBrl(horizonData.totals.receivables)}
+                      </dd>
+                    </div>
+                    <div className={styles.statsItem}>
+                      <dt className={styles.statsLabel}>A pagar</dt>
+                      <dd className={styles.statsValue}>
+                        {horizonData.totals.payables === null
+                          ? '—'
+                          : formatMoneyBrl(horizonData.totals.payables)}
+                      </dd>
+                    </div>
+                    <div className={styles.statsItem}>
+                      <dt className={styles.statsLabel}>Saldo previsto</dt>
+                      <dd className={styles.statsValue}>
+                        {horizonData.totals.result === null
+                          ? '—'
+                          : formatMoneyBrl(horizonData.totals.result)}
+                      </dd>
+                    </div>
+                  </dl>
+                  <CashMonthlyGroupedBars
+                    buckets={expectedHorizonBuckets}
+                    ariaLabel={cashExpectedHorizonSubtitle(expectedHorizon)}
+                    caption={CASH_EXPECTED_HORIZON_CAPTION}
+                    emptyMessage="Sem vencimentos previstos no prazo neste horizonte."
+                    inflowLabel="A receber"
+                    outflowLabel="A pagar"
+                    resultLabel="Saldo previsto"
+                  />
+                </>
               ) : (
                 <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
               )
@@ -2563,11 +2824,9 @@ export function DashboardPage() {
           subtitle={
             periodMode === 'monthly'
               ? `Entradas e saídas realizadas · 12 meses até ${monthLabel}`
-              : `${monthLabel} · ${
-                  dailyMode === 'realized'
-                    ? CASH_DAILY_REALIZED_CAPTION
-                    : CASH_DAILY_EXPECTED_CAPTION
-                }`
+              : dailyMode === 'realized'
+                ? `${monthLabel} · ${CASH_DAILY_REALIZED_CAPTION}`
+                : `${monthLabel} · ${cashExpectedHorizonSubtitle(expectedHorizon)}`
           }
           onClose={closeExpand}
         >
@@ -2610,7 +2869,89 @@ export function DashboardPage() {
                     </button>
                   ))}
                 </div>
-                {dailySeries.inflows && dailySeries.outflows ? (
+                {dailyMode === 'expected' ? (
+                  <div className={styles.expectedHorizonControl} data-stop-expand>
+                    <p id={expectedHorizonExpandLabelId} className={styles.expectedHorizonLabel}>
+                      Horizonte da previsão
+                    </p>
+                    <div
+                      className={styles.segmented}
+                      role="group"
+                      aria-labelledby={expectedHorizonExpandLabelId}
+                    >
+                      {EXPECTED_HORIZON_MODES.map((mode) => (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          className={styles.segmentedOption}
+                          aria-pressed={expectedHorizon === mode.id}
+                          onClick={() => setExpectedHorizon(mode.id)}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {showExpectedHorizon ? (
+                  horizonPending ? (
+                    <StateWrapper
+                      state="loading"
+                      loadingLabel="Carregando movimentação financeira"
+                    />
+                  ) : horizonError ? (
+                    <StateWrapper
+                      state="error"
+                      errorMessage={horizonError}
+                      onRetry={retryCashExpectedHorizon}
+                      align="start"
+                    />
+                  ) : expectedHorizonBuckets && horizonData ? (
+                    <>
+                      <dl className={`${styles.statsRow} ${styles.expectedHorizonSummary}`}>
+                        <div className={styles.statsItem}>
+                          <dt className={styles.statsLabel}>A receber</dt>
+                          <dd className={styles.statsValue}>
+                            {horizonData.totals.receivables === null
+                              ? '—'
+                              : formatMoneyBrl(horizonData.totals.receivables)}
+                          </dd>
+                        </div>
+                        <div className={styles.statsItem}>
+                          <dt className={styles.statsLabel}>A pagar</dt>
+                          <dd className={styles.statsValue}>
+                            {horizonData.totals.payables === null
+                              ? '—'
+                              : formatMoneyBrl(horizonData.totals.payables)}
+                          </dd>
+                        </div>
+                        <div className={styles.statsItem}>
+                          <dt className={styles.statsLabel}>Saldo previsto</dt>
+                          <dd className={styles.statsValue}>
+                            {horizonData.totals.result === null
+                              ? '—'
+                              : formatMoneyBrl(horizonData.totals.result)}
+                          </dd>
+                        </div>
+                      </dl>
+                      <CashMonthlyGroupedBars
+                        buckets={expectedHorizonBuckets}
+                        ariaLabel={cashExpectedHorizonSubtitle(expectedHorizon)}
+                        caption={CASH_EXPECTED_HORIZON_CAPTION}
+                        emptyMessage="Sem vencimentos previstos no prazo neste horizonte."
+                        inflowLabel="A receber"
+                        outflowLabel="A pagar"
+                        resultLabel="Saldo previsto"
+                      />
+                    </>
+                  ) : (
+                    <StateWrapper
+                      state="empty"
+                      emptyMessage={CASH_SERIES_UNAVAILABLE}
+                      align="start"
+                    />
+                  )
+                ) : dailySeries.inflows && dailySeries.outflows ? (
                   <CompetenceDailyBars
                     revenueDaily={dailySeries.inflows}
                     expenseDaily={dailySeries.outflows}

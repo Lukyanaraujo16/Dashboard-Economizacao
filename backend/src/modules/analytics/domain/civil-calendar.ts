@@ -64,6 +64,32 @@ export function isValidMonthKey(monthKey: string): boolean {
   return MONTH_KEY_PATTERN.test(monthKey);
 }
 
+/** Desloca um `YYYY-MM` por `offset` meses civis (pode cruzar ano). */
+export function shiftCivilMonthKey(monthKey: string, offset: number): string {
+  const match = MONTH_KEY_PATTERN.exec(monthKey);
+  if (!match) {
+    throw new Error('monthKey inválido.');
+  }
+  const shifted = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1 + offset, 1));
+  return civilMonthKey(shifted);
+}
+
+/**
+ * `count` monthKeys inclusivos a partir da âncora (0 = âncora, 1 = próximo, …).
+ * Ex.: âncora 2026-09 + count 6 → SET…FEV/2027.
+ */
+export function listForwardInclusiveMonthKeys(
+  anchorMonthKey: string,
+  count: number,
+): readonly string[] {
+  const total = Math.max(1, Math.trunc(count));
+  const keys: string[] = [];
+  for (let offset = 0; offset < total; offset += 1) {
+    keys.push(shiftCivilMonthKey(anchorMonthKey, offset));
+  }
+  return keys;
+}
+
 /** Teto V1 de Relatórios (F12-A): amplitude inclusiva máxima de meses civis. */
 export const MAX_REPORT_INCLUSIVE_MONTHS = 24;
 
