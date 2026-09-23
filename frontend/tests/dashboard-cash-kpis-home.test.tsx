@@ -194,6 +194,10 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     expect(kpiScope('Despesas').getByText(/R\$\s*127\.231,32/)).toBeTruthy();
     expect(kpiScope('Contas a pagar').getByText(/R\$\s*28\.389,80/)).toBeTruthy();
     expect(kpiScope('Contas a pagar').getByText('Vencidos')).toBeTruthy();
+    expect(
+      kpiScope('Contas a pagar').getByRole('img', { name: 'A pagar no prazo por dia de vencimento' }),
+    ).toBeTruthy();
+    expect(kpiScope('Contas a pagar').queryByText('Sem movimento')).toBeNull();
     expect(kpiScope('Despesas').getByText(/^Pago$/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/R\$\s*98\.941,52/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/^A pagar$/)).toBeTruthy();
@@ -327,6 +331,44 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     });
     expect(payableCard.queryByText(/dias? com vencimento/i)).toBeNull();
     expect(payableCard.queryByText(/% do faturamento/i)).toBeNull();
+  });
+
+  it('Contas a pagar só com vencidos não mostra Sem movimento', async () => {
+    getMonthlyCashFlow.mockResolvedValue({
+      ...lifeCashFlow,
+      today: '2026-09-23',
+      monthKey: '2026-09',
+      from: '2026-09-01',
+      to: '2026-09-30',
+      expected: { receivables: '10511.20', payables: '0', result: '10511.20' },
+      stock: {
+        receivables: { open: '14711.20', overdue: '4200.00', dueToday: '0', upcoming: '10511.20' },
+        payables: { open: '1614.04', overdue: '1614.04', dueToday: '0', upcoming: '0' },
+      },
+      daily: {
+        realized: lifeCashFlow.daily.realized,
+        expected: [
+          { date: '2026-09-30', receivables: '10511.20', payables: '0', result: '10511.20' },
+        ],
+      },
+    });
+    await renderReadyDashboard();
+    const payableCard = kpiScope('Contas a pagar');
+    await waitFor(() => {
+      expect(payableCard.getAllByText(/R\$\s*1\.614,04/).length).toBeGreaterThan(1);
+    });
+    expect(payableCard.getByText('Vencidos')).toBeTruthy();
+    expect(payableCard.getByText('Hoje')).toBeTruthy();
+    expect(payableCard.getByText('A vencer')).toBeTruthy();
+    expect(payableCard.getAllByText(/R\$\s*0,00/).length).toBeGreaterThanOrEqual(2);
+    expect(payableCard.queryByText('Sem movimento')).toBeNull();
+    expect(
+      payableCard.queryByRole('img', { name: 'A pagar no prazo por dia de vencimento' }),
+    ).toBeNull();
+    expect(
+      kpiScope('A receber').getByRole('img', { name: 'A receber no prazo por dia de vencimento' }),
+    ).toBeTruthy();
+    expect(kpiScope('A receber').queryByText('Sem movimento')).toBeNull();
   });
 
   it('CORREÇÃO 05.1 — Contas a pagar sem rodapé quando série sem vencimentos', async () => {

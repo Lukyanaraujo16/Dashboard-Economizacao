@@ -153,6 +153,7 @@ import {
   WidgetShell,
   accumulate,
   formatCompactBrl,
+  isFlatSeries,
   revenueGoalStatusLabel,
   signedSharePercent,
   type CashMonthlyGroupedBarsBucket,
@@ -1800,7 +1801,9 @@ export function DashboardPage() {
             value={payableSlot.value}
             meta={payableSlot.meta}
             emptyMessage={payableSlot.emptyMessage}
-            sparklinePoints={payableDaily}
+            sparklinePoints={
+              payableDaily !== undefined && !isFlatSeries(payableDaily) ? payableDaily : undefined
+            }
             sparklineAriaLabel={CASH_PAYABLE_SPARKLINE_CAPTION}
             sparklineCaption={CASH_PAYABLE_SPARKLINE_CAPTION}
             expandable={canExpandPayable}

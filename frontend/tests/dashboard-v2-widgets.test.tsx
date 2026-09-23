@@ -22,6 +22,7 @@ import {
   receivedSeries,
   resultDailySeries,
   signedSharePercent,
+  Sparkline,
   subtractDecimalStrings,
   svgBaselineY,
   toAreaPath,
@@ -127,7 +128,40 @@ describe('chart-math', () => {
     ).toBe(true);
     expect(isFlatSeries([{ date: '2026-08-01', amount: '0.01' }])).toBe(false);
   });
+});
 
+describe('Sparkline', () => {
+  it('série zerada continua exibindo Sem movimento no fallback compartilhado', () => {
+    render(
+      <ThemeProvider>
+        <Sparkline
+          points={[
+            { date: '2026-09-01', amount: '0' },
+            { date: '2026-09-30', amount: '0.00' },
+          ]}
+          ariaLabel="A receber no prazo por dia de vencimento"
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText('Sem movimento')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Sem movimento no período' })).toBeTruthy();
+  });
+
+  it('série válida renderiza o gráfico e não mostra Sem movimento', () => {
+    render(
+      <ThemeProvider>
+        <Sparkline
+          points={[{ date: '2026-09-24', amount: '80' }]}
+          ariaLabel="A pagar no prazo por dia de vencimento"
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.getByRole('img', { name: 'A pagar no prazo por dia de vencimento' })).toBeTruthy();
+    expect(screen.queryByText('Sem movimento')).toBeNull();
+  });
+});
+
+describe('chart-math alignment', () => {
   it('alignDailySeries preenche dias ausentes com zero em ambos os lados', () => {
     const aligned = alignDailySeries(
       [{ date: '2026-08-02', amount: '10' }],
