@@ -1,3 +1,4 @@
+import { civilTodayInSaoPaulo } from '../../../analytics/domain/analytical-timezone.js';
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
 import {
   resolveContaAzulInstallmentPresenceAutoTombstone,
@@ -131,10 +132,12 @@ export function createContaAzulInstallmentPresenceSyncService(deps: {
         kind: input.kind,
       });
 
+      const today = civilTodayInSaoPaulo(now());
       const candidates = await deps.presence.listBoundedPresenceProbeCandidates({
         tenantId: input.scope.tenantId,
         integrationId: input.scope.integrationId,
         kind: input.kind,
+        today,
         limit,
       });
 

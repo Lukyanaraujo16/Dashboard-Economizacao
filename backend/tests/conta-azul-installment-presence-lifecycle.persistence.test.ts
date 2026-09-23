@@ -159,23 +159,42 @@ describe('Correção 11-E.1 — installment presence lifecycle (persistência)',
     expect(revived?.lifecycleDeletedAt).toBeNull();
   });
 
-  it('ordenação never-checked → oldest; limite bounded; sem starvation AR/AP', async () => {
+  it('ordenação temporal never-checked; limite 50; isolamento tenant; sem starvation AR/AP', async () => {
     const { tenant, integration } = await seedConnected('11e1-order');
+    const other = await seedConnected('11e1-order-other');
     const syncedAt = new Date();
     const scope = { tenantId: tenant.id, integrationId: integration.id, syncedAt };
+    const today = new Date('2026-09-23T00:00:00.000Z');
 
     await financial.upsertReceivables(scope, [
-      installment({ externalId: 'ar-c' }),
-      installment({ externalId: 'ar-b' }),
-      installment({ externalId: 'ar-a' }),
-      installment({ externalId: 'ar-old' }),
-      installment({ externalId: 'ar-newer' }),
+      installment({ externalId: 'ar-c', dueDate: '2026-09-25' }),
+      installment({ externalId: 'ar-b', dueDate: '2026-09-25' }),
+      installment({ externalId: 'ar-a', dueDate: '2026-09-25' }),
+      installment({ externalId: 'ar-old', dueDate: '2026-09-25' }),
+      installment({ externalId: 'ar-newer', dueDate: '2026-09-25' }),
+    ]);
+    await financial.upsertPayables(scope, [
+      installment({ externalId: 'ap-overdue', dueDate: '2026-09-10', unpaid: '40' }),
+      installment({ externalId: 'ap-month', dueDate: '2026-09-28', unpaid: '15' }),
+      installment({ externalId: 'ap-next', dueDate: '2026-10-12', unpaid: '8' }),
+      installment({
+        externalId: 'ap-zero',
+        dueDate: '2026-09-10',
+        unpaid: '0',
+        paid: '5',
+        total: '5',
+      }),
+      ...Array.from({ length: 51 }, (_, i) =>
+        installment({
+          externalId: `ap-far-${String(i).padStart(3, '0')}`,
+          dueDate: '2027-03-01',
+          unpaid: '3',
+        }),
+      ),
     ]);
     await financial.upsertPayables(
-      scope,
-      Array.from({ length: 55 }, (_, i) =>
-        installment({ externalId: `ap-${String(i).padStart(3, '0')}` }),
-      ),
+      { tenantId: other.tenant.id, integrationId: other.integration.id, syncedAt },
+      [installment({ externalId: 'ap-other-overdue', dueDate: '2026-09-01', unpaid: '99' })],
     );
 
     await presenceRepo.touchPresenceCheckpoint({
@@ -196,6 +215,7 @@ describe('Correção 11-E.1 — installment presence lifecycle (persistência)',
     const ar = await presenceRepo.listBoundedPresenceProbeCandidates({
       ...scope,
       kind: 'RECEIVABLE',
+      today,
       limit: MAX_INSTALLMENT_PRESENCE_PROBE_CANDIDATES_PER_KIND,
     });
     expect(ar.map((row) => row.externalId)).toEqual([
@@ -209,11 +229,21 @@ describe('Correção 11-E.1 — installment presence lifecycle (persistência)',
     const ap = await presenceRepo.listBoundedPresenceProbeCandidates({
       ...scope,
       kind: 'PAYABLE',
+      today,
       limit: MAX_INSTALLMENT_PRESENCE_PROBE_CANDIDATES_PER_KIND,
     });
     expect(ap).toHaveLength(50);
     expect(ap.every((row) => row.kind === 'PAYABLE')).toBe(true);
-    expect(ap[0]?.externalId).toBe('ap-000');
+    expect(ap.map((row) => row.externalId).slice(0, 5)).toEqual([
+      'ap-overdue',
+      'ap-month',
+      'ap-next',
+      'ap-zero',
+      'ap-far-000',
+    ]);
+    expect(ap.some((row) => row.externalId === 'ap-other-overdue')).toBe(false);
+    expect(ap.some((row) => row.externalId === 'ap-far-050')).toBe(false);
+    expect(ap[ap.length - 1]?.externalId).toBe('ap-far-045');
   });
 
   it('estoque/previsto exclui DELETED; histórico e ledger realizado intactos; CC enrich exclui', async () => {

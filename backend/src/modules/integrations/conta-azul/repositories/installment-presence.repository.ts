@@ -11,6 +11,8 @@ export type InstallmentPresenceCandidate = {
   readonly kind: InstallmentPresenceKind;
   readonly externalId: string;
   readonly lastPresenceCheckedAt: Date | null;
+  readonly dueDate: Date;
+  readonly unpaidPositive: boolean;
 };
 
 export type ContaAzulInstallmentPresenceRepository = {
@@ -18,6 +20,7 @@ export type ContaAzulInstallmentPresenceRepository = {
     readonly tenantId: string;
     readonly integrationId: string;
     readonly kind: InstallmentPresenceKind;
+    readonly today: Date;
     readonly limit?: number;
   }): Promise<readonly InstallmentPresenceCandidate[]>;
   countAnalyticalActivePresent(input: {
@@ -56,15 +59,16 @@ export function createContaAzulInstallmentPresenceRepository(
         lifecycleStatus: 'ACTIVE' as const,
         status: { in: [...ACTIVE_INSTALLMENT_STATUSES] },
       };
+      const select = { externalId: true, dueDate: true, unpaid: true } as const;
       const rows =
         input.kind === 'RECEIVABLE'
           ? await prisma.receivable.findMany({
               where,
-              select: { externalId: true },
+              select,
             })
           : await prisma.payable.findMany({
               where,
-              select: { externalId: true },
+              select,
             });
       if (rows.length === 0) {
         return [];
@@ -89,7 +93,10 @@ export function createContaAzulInstallmentPresenceRepository(
           kind: input.kind,
           externalId: row.externalId,
           lastPresenceCheckedAt: checkedAtByExternal.get(row.externalId) ?? null,
+          dueDate: row.dueDate,
+          unpaidPositive: row.unpaid.greaterThan(0),
         })),
+        input.today,
       );
       return ranked.slice(0, limit);
     },

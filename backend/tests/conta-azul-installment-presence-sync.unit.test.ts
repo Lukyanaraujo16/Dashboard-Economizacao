@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContaAzulApiError } from '../src/modules/integrations/conta-azul/connector/conta-azul-api-client.js';
+import { civilTodayInSaoPaulo } from '../src/modules/analytics/domain/analytical-timezone.js';
 import {
+  installmentPresenceTemporalTier,
   MAX_INSTALLMENT_PRESENCE_PROBE_CANDIDATES_PER_KIND,
   rankInstallmentPresenceCandidates,
   resolveContaAzulInstallmentPresenceAutoTombstone,
@@ -25,11 +27,31 @@ const scope = {
   syncedAt: new Date('2026-09-21T12:00:00.000Z'),
 };
 
+function civil(isoDate: string): Date {
+  return new Date(`${isoDate}T00:00:00.000Z`);
+}
+
+function rankRow(input: {
+  readonly externalId: string;
+  readonly lastPresenceCheckedAt?: Date | null;
+  readonly dueDate: string;
+  readonly unpaidPositive?: boolean;
+}) {
+  return {
+    externalId: input.externalId,
+    lastPresenceCheckedAt: input.lastPresenceCheckedAt === undefined ? null : input.lastPresenceCheckedAt,
+    dueDate: civil(input.dueDate),
+    unpaidPositive: input.unpaidPositive ?? true,
+  };
+}
+
 function candidate(externalId: string, lastPresenceCheckedAt: Date | null = null) {
   return {
     kind: 'RECEIVABLE' as const,
     externalId,
     lastPresenceCheckedAt,
+    dueDate: civil('2026-09-25'),
+    unpaidPositive: true,
   };
 }
 
@@ -95,15 +117,169 @@ describe('11-E.1 installment presence constants / ranking / flag', () => {
     expect(resolveContaAzulInstallmentPresenceAutoTombstone('true')).toBe(true);
   });
 
-  it('nunca verificados primeiro; oldest checked depois; desempate externalId', () => {
-    const ranked = rankInstallmentPresenceCandidates([
-      { externalId: 'c', lastPresenceCheckedAt: new Date('2026-09-20T00:00:00.000Z') },
-      { externalId: 'b', lastPresenceCheckedAt: null },
-      { externalId: 'a', lastPresenceCheckedAt: null },
-      { externalId: 'd', lastPresenceCheckedAt: new Date('2026-09-19T00:00:00.000Z') },
-      { externalId: 'e', lastPresenceCheckedAt: new Date('2026-09-19T00:00:00.000Z') },
-    ]);
+  it('nunca verificados primeiro; already-checked por checkpoint; desempate externalId', () => {
+    const today = civil('2026-09-23');
+    const ranked = rankInstallmentPresenceCandidates(
+      [
+        rankRow({
+          externalId: 'c',
+          lastPresenceCheckedAt: new Date('2026-09-20T00:00:00.000Z'),
+          dueDate: '2026-09-25',
+        }),
+        rankRow({ externalId: 'b', dueDate: '2026-09-25' }),
+        rankRow({ externalId: 'a', dueDate: '2026-09-25' }),
+        rankRow({
+          externalId: 'd',
+          lastPresenceCheckedAt: new Date('2026-09-19T00:00:00.000Z'),
+          dueDate: '2026-09-25',
+        }),
+        rankRow({
+          externalId: 'e',
+          lastPresenceCheckedAt: new Date('2026-09-19T00:00:00.000Z'),
+          dueDate: '2026-09-25',
+        }),
+      ],
+      today,
+    );
     expect(ranked.map((row) => row.externalId)).toEqual(['a', 'b', 'd', 'e', 'c']);
+  });
+
+  it('never-checked do mês atual vence never-checked futuro distante', () => {
+    const ranked = rankInstallmentPresenceCandidates(
+      [
+        rankRow({ externalId: 'aaa-far', dueDate: '2027-03-15' }),
+        rankRow({ externalId: 'zzz-month', dueDate: '2026-09-28' }),
+      ],
+      civil('2026-09-23'),
+    );
+    expect(ranked.map((row) => row.externalId)).toEqual(['zzz-month', 'aaa-far']);
+  });
+
+  it('never-checked vencido vence never-checked do mês atual', () => {
+    const ranked = rankInstallmentPresenceCandidates(
+      [
+        rankRow({ externalId: 'month', dueDate: '2026-09-28' }),
+        rankRow({ externalId: 'overdue', dueDate: '2026-09-10' }),
+      ],
+      civil('2026-09-23'),
+    );
+    expect(ranked.map((row) => row.externalId)).toEqual(['overdue', 'month']);
+  });
+
+  it('never-checked futuro continua acima de already-checked vencido', () => {
+    const ranked = rankInstallmentPresenceCandidates(
+      [
+        rankRow({
+          externalId: 'checked-overdue',
+          lastPresenceCheckedAt: new Date('2026-09-01T00:00:00.000Z'),
+          dueDate: '2026-08-01',
+        }),
+        rankRow({ externalId: 'never-far', dueDate: '2027-06-01' }),
+      ],
+      civil('2026-09-23'),
+    );
+    expect(ranked.map((row) => row.externalId)).toEqual(['never-far', 'checked-overdue']);
+  });
+
+  it('already-checked: checkpoint mais antigo vence o mais recente', () => {
+    const ranked = rankInstallmentPresenceCandidates(
+      [
+        rankRow({
+          externalId: 'newer',
+          lastPresenceCheckedAt: new Date('2026-09-20T00:00:00.000Z'),
+          dueDate: '2026-09-10',
+        }),
+        rankRow({
+          externalId: 'older',
+          lastPresenceCheckedAt: new Date('2026-09-01T00:00:00.000Z'),
+          dueDate: '2026-12-01',
+        }),
+      ],
+      civil('2026-09-23'),
+    );
+    expect(ranked.map((row) => row.externalId)).toEqual(['older', 'newer']);
+  });
+
+  it('futuro never-checked entra após esgotar tiers mais urgentes', () => {
+    const ranked = rankInstallmentPresenceCandidates(
+      [
+        rankRow({ externalId: 'far-b', dueDate: '2027-02-01' }),
+        rankRow({ externalId: 'overdue', dueDate: '2026-09-01' }),
+        rankRow({ externalId: 'month', dueDate: '2026-09-24' }),
+        rankRow({ externalId: 'next', dueDate: '2026-10-05' }),
+        rankRow({ externalId: 'far-a', dueDate: '2027-02-01' }),
+      ],
+      civil('2026-09-23'),
+    );
+    expect(ranked.map((row) => row.externalId)).toEqual([
+      'overdue',
+      'month',
+      'next',
+      'far-a',
+      'far-b',
+    ]);
+  });
+
+  it('unpaid=0 não ganha prioridade de estoque sobre unpaid>0 relevante', () => {
+    const ranked = rankInstallmentPresenceCandidates(
+      [
+        rankRow({ externalId: 'zero-overdue-date', dueDate: '2026-09-01', unpaidPositive: false }),
+        rankRow({ externalId: 'open-month', dueDate: '2026-09-28', unpaidPositive: true }),
+      ],
+      civil('2026-09-23'),
+    );
+    expect(ranked.map((row) => row.externalId)).toEqual(['open-month', 'zero-overdue-date']);
+  });
+
+  it('empate completo (never-checked, mesmo tier e dueDate) termina em externalId', () => {
+    const ranked = rankInstallmentPresenceCandidates(
+      [
+        rankRow({ externalId: 'm', dueDate: '2026-09-25' }),
+        rankRow({ externalId: 'a', dueDate: '2026-09-25' }),
+        rankRow({ externalId: 'j', dueDate: '2026-09-25' }),
+      ],
+      civil('2026-09-23'),
+    );
+    expect(ranked.map((row) => row.externalId)).toEqual(['a', 'j', 'm']);
+  });
+
+  it('PAYABLE e RECEIVABLE compartilham o mesmo rank', () => {
+    const today = civil('2026-09-23');
+    const rows = [
+      rankRow({ externalId: 'far', dueDate: '2027-01-10' }),
+      rankRow({ externalId: 'due', dueDate: '2026-09-20' }),
+    ];
+    expect(rankInstallmentPresenceCandidates(rows, today).map((row) => row.externalId)).toEqual([
+      'due',
+      'far',
+    ]);
+  });
+
+  it('limites civis: ontem/hoje, mês atual/próximo, dezembro/janeiro', () => {
+    const lateSep = civil('2026-09-23');
+    expect(installmentPresenceTemporalTier(rankRow({ externalId: 'y', dueDate: '2026-09-22' }), lateSep)).toBe(
+      0,
+    );
+    expect(installmentPresenceTemporalTier(rankRow({ externalId: 't', dueDate: '2026-09-23' }), lateSep)).toBe(
+      1,
+    );
+    expect(installmentPresenceTemporalTier(rankRow({ externalId: 'n', dueDate: '2026-10-01' }), lateSep)).toBe(
+      2,
+    );
+    expect(installmentPresenceTemporalTier(rankRow({ externalId: 'f', dueDate: '2026-11-01' }), lateSep)).toBe(
+      3,
+    );
+
+    const newYearEve = civil('2026-12-31');
+    expect(
+      installmentPresenceTemporalTier(rankRow({ externalId: 'dec', dueDate: '2026-12-31' }), newYearEve),
+    ).toBe(1);
+    expect(
+      installmentPresenceTemporalTier(rankRow({ externalId: 'jan', dueDate: '2027-01-15' }), newYearEve),
+    ).toBe(2);
+    expect(
+      installmentPresenceTemporalTier(rankRow({ externalId: 'feb', dueDate: '2027-02-01' }), newYearEve),
+    ).toBe(3);
   });
 });
 
@@ -340,6 +516,7 @@ describe('11-E.1 maintainPresence probes', () => {
         tenantId: scope.tenantId,
         integrationId: scope.integrationId,
         kind: 'RECEIVABLE',
+        today: civilTodayInSaoPaulo(new Date('2026-09-21T15:00:00.000Z')),
         limit: MAX_INSTALLMENT_PRESENCE_PROBE_CANDIDATES_PER_KIND,
       }),
     );
