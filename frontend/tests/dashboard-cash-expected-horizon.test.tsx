@@ -412,21 +412,27 @@ describe('Movimentação financeira — horizonte Previsto', () => {
     expect(scope.queryByText('Saldo previsto')).toBeNull();
 
     const plot = scope.getByRole('img', { name: /Previsão dos próximos 3 meses/ });
-    expect(plot.querySelectorAll('circle').length).toBe(3);
+    expect(plot.querySelector('[data-monthly-bars-plot]')?.querySelectorAll('circle').length).toBe(
+      0,
+    );
+    expect(plot.querySelector('[data-projected-balance-band]')).toBeTruthy();
+    expect(plot.querySelectorAll('[data-projected-balance-band] circle').length).toBe(3);
 
     fireEvent.click(scope.getByRole('button', { name: '6 meses' }));
     await waitFor(() => expect(scope.getByText('FEV/27')).toBeTruthy());
-    expect(
-      scope.getByRole('img', { name: /Previsão dos próximos 6 meses/ }).querySelectorAll('circle')
-        .length,
-    ).toBe(6);
+    const plot6 = scope.getByRole('img', { name: /Previsão dos próximos 6 meses/ });
+    expect(plot6.querySelector('[data-monthly-bars-plot]')?.querySelectorAll('circle').length).toBe(
+      0,
+    );
+    expect(plot6.querySelectorAll('[data-projected-balance-band] circle').length).toBe(6);
 
     fireEvent.click(scope.getByRole('button', { name: '12 meses' }));
     await waitFor(() => expect(scope.getByText('AGO/27')).toBeTruthy());
-    expect(
-      scope.getByRole('img', { name: /Previsão dos próximos 12 meses/ }).querySelectorAll('circle')
-        .length,
-    ).toBe(12);
+    const plot12 = scope.getByRole('img', { name: /Previsão dos próximos 12 meses/ });
+    expect(plot12.querySelector('[data-monthly-bars-plot]')?.querySelectorAll('circle').length).toBe(
+      0,
+    );
+    expect(plot12.querySelectorAll('[data-projected-balance-band] circle').length).toBe(12);
   });
 
   it('38 — sem base não desenha linha e mantém expected', async () => {

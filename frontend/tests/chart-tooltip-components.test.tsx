@@ -349,7 +349,7 @@ describe('ChartTooltip nos componentes V2', () => {
     expect(tip.textContent).toMatch(/Resultado/);
   });
 
-  it('36/37 — linha projetada assinada: tooltip reconcilia e saldo negativo permanece visível', () => {
+  it('36/37 — faixa projetada: tooltip do saldo e negativo abaixo do zero', () => {
     const balanceByMonthKey = new Map<string, string>([
       ['2026-09', '110000'],
       ['2026-10', '-20000'],
@@ -364,6 +364,7 @@ describe('ChartTooltip nos componentes V2', () => {
         balanceLabel="Saldo bancário projetado"
         balanceTooltipLabel="Saldo projetado"
         balanceScale="signed"
+        balanceLayout="band"
         balanceBaseNote="Projeção a partir do saldo oficial em 23/09/2026."
         buckets={[
           { monthKey: '2026-09', inflows: '20000', outflows: '10000', result: '10000' },
@@ -375,25 +376,29 @@ describe('ChartTooltip nos componentes V2', () => {
     );
     expect(screen.getByText('Saldo bancário projetado')).toBeTruthy();
     const plot = screen.getByRole('img', { name: 'Projeção assinada' });
-    const dots = plot.querySelectorAll('circle');
+    expect(plot.querySelector('[data-monthly-bars-plot]')?.querySelectorAll('circle').length).toBe(
+      0,
+    );
+    const band = plot.querySelector('[data-projected-balance-band]') as HTMLElement;
+    expect(band).toBeTruthy();
+    const dots = band.querySelectorAll('circle');
     expect(dots).toHaveLength(3);
+    const zeroY = Number(band.querySelector('line')?.getAttribute('y1'));
     const octY = Number(dots[1]?.getAttribute('cy'));
     const sepY = Number(dots[0]?.getAttribute('cy'));
-    expect(octY).toBeGreaterThan(sepY);
-    expect(octY).toBeLessThan(100);
-    expect(octY).toBeGreaterThan(0);
-    expect(octY).not.toBe(0);
+    expect(octY).toBeGreaterThan(zeroY);
+    expect(sepY).toBeLessThan(zeroY);
 
-    mockPlotRect(plot, 420, 120);
-    fireEvent.mouseMove(plot, { clientX: 210, clientY: 40 });
+    const balancePlot = band.querySelector('[class*="balancePlot"]') as HTMLElement;
+    mockPlotRect(plot, 420, 180);
+    mockPlotRect(balancePlot, 420, 52);
+    fireEvent.mouseMove(balancePlot, { clientX: 210, clientY: 20 });
     const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
     expect(tip.textContent).toMatch(/OUT\/26/);
-    expect(tip.textContent).toMatch(/A receber/);
-    expect(tip.textContent).toMatch(/A pagar/);
-    expect(tip.textContent).toMatch(/Resultado previsto/);
     expect(tip.textContent).toMatch(/Saldo projetado/);
     expect(tip.textContent).toMatch(/-R\$\s*20\.000,00|-R\$\s*20.000,00|R\$\s*-20\.000,00/);
     expect(tip.textContent).toMatch(/Projeção a partir do saldo oficial em 23\/09\/2026/);
+    expect(tip.textContent).not.toMatch(/A receber/);
     expect(tip.querySelector('[class*="tooltipValueNegative"]')).toBeTruthy();
   });
 });

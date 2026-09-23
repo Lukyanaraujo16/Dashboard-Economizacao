@@ -2041,6 +2041,7 @@ export function DashboardPage() {
                       balanceLabel={CASH_PROJECTED_BALANCE_LABEL}
                       balanceTooltipLabel="Saldo projetado"
                       balanceScale="signed"
+                      balanceLayout="band"
                       balanceBaseNote={
                         projection?.base
                           ? cashProjectedBalanceFromCopy(
@@ -2065,6 +2066,9 @@ export function DashboardPage() {
                   caption={CASH_MONTHLY_REALIZED_CAPTION}
                   emptyMessage={`Sem baixas de caixa nos 12 meses até ${monthLabel}.`}
                   balanceByMonthKey={monthlyBalanceMap}
+                  balanceLayout="band"
+                  balanceTooltipLabel="Saldo bancário"
+                  includeResultInTooltip={false}
                   balanceCoverageNote={showMonthlyBalanceLine ? balanceCoverageNote : null}
                 />
               ) : (
@@ -2900,6 +2904,7 @@ export function DashboardPage() {
                         balanceLabel={CASH_PROJECTED_BALANCE_LABEL}
                         balanceTooltipLabel="Saldo projetado"
                         balanceScale="signed"
+                        balanceLayout="band"
                         balanceBaseNote={
                           projection?.base
                             ? cashProjectedBalanceFromCopy(
@@ -2937,6 +2942,9 @@ export function DashboardPage() {
                     caption={CASH_MONTHLY_REALIZED_CAPTION}
                     emptyMessage={`Sem baixas de caixa nos 12 meses até ${monthLabel}.`}
                     balanceByMonthKey={monthlyBalanceMap}
+                    balanceLayout="band"
+                    balanceTooltipLabel="Saldo bancário"
+                    includeResultInTooltip={false}
                     balanceCoverageNote={showMonthlyBalanceLine ? balanceCoverageNote : null}
                   />
                 ) : (

@@ -286,10 +286,9 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
     expect(tip.textContent).toMatch(/AGO\/26/);
     expect(tip.textContent).toMatch(/Entradas/);
     expect(tip.textContent).toMatch(/Saídas/);
-    expect(tip.textContent).toMatch(/Resultado/);
     expect(tip.textContent).toMatch(/R\$\s*888\.888,88/);
     expect(tip.textContent).toMatch(/R\$\s*111\.111,11/);
-    expect(tip.textContent).toMatch(/R\$\s*777\.777,77/);
+    expect(tip.textContent).not.toMatch(/Saldo bancário/);
     expect(tip.style.transform).not.toBe('translateX(-50%)');
     expect(tip.style.bottom).toMatch(/calc\(100%/);
     expect(tip.style.top).toBe('auto');

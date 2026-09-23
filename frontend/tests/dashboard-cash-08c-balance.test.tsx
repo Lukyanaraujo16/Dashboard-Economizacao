@@ -292,7 +292,7 @@ describe('08-C3/C4 — linha de saldo bancário na Movimentação', () => {
     expect(within(card).queryByText('falha saldo')).toBeNull();
   });
 
-  it('Mensal usa monthly[] e tooltip inclui Saldo final', async () => {
+  it('Mensal Realizado usa faixa de saldo, não overlay', async () => {
     renderDashboard();
     const card = await waitFor(() => section('movimentacao-financeira'));
     fireEvent.click(within(card).getByRole('button', { name: 'Mensal' }));
@@ -301,11 +301,36 @@ describe('08-C3/C4 — linha de saldo bancário na Movimentação', () => {
     expect(within(card).getAllByText(/\/2[5-6]/).length).toBeGreaterThanOrEqual(12);
 
     const plot = within(card).getByRole('img');
-    mockPlotRect(plot, 480, 120);
-    fireEvent.mouseMove(plot, { clientX: 400, clientY: 40 });
-    const tooltip = await waitFor(() => screen.getByRole('tooltip', { hidden: true }));
-    expect(within(tooltip).getByText('Saldo final')).toBeTruthy();
-    expect(within(tooltip).getByText('Resultado')).toBeTruthy();
+    expect(plot.querySelector('[data-monthly-bars-plot] circle')).toBeNull();
+    expect(plot.querySelector('[data-monthly-bars-plot] polyline')).toBeNull();
+    const band = plot.querySelector('[data-projected-balance-band]');
+    expect(band).toBeTruthy();
+    expect(band?.textContent).toMatch(/^Saldo bancário/);
+    expect(plot.querySelectorAll('[data-projected-balance-band] circle').length).toBeGreaterThan(0);
+
+    const legend = within(card).getAllByRole('list')[0];
+    expect(legend).toBeTruthy();
+    expect(within(legend!).getByText('Entradas')).toBeTruthy();
+    expect(within(legend!).getByText('Saídas')).toBeTruthy();
+    expect(within(legend!).queryByText('Saldo bancário')).toBeNull();
+
+    mockPlotRect(plot, 480, 180);
+    const bars = plot.querySelector('[data-monthly-bars-plot]') as HTMLElement;
+    mockPlotRect(bars, 480, 100);
+    fireEvent.mouseMove(bars, { clientX: 400, clientY: 40 });
+    const barsTip = await waitFor(() => screen.getByRole('tooltip', { hidden: true }));
+    expect(barsTip.textContent).toMatch(/Entradas/);
+    expect(barsTip.textContent).toMatch(/Saídas/);
+    expect(barsTip.textContent).not.toMatch(/Saldo bancário/);
+
+    const balancePlot = plot.querySelector(
+      '[data-projected-balance-band] [class*="balancePlot"]',
+    ) as HTMLElement;
+    mockPlotRect(balancePlot, 480, 52);
+    fireEvent.mouseMove(balancePlot, { clientX: 400, clientY: 20 });
+    const saldoTip = await waitFor(() => screen.getByRole('tooltip', { hidden: true }));
+    expect(saldoTip.textContent).toMatch(/Saldo bancário/);
+    expect(saldoTip.textContent).not.toMatch(/Entradas/);
   });
 
   it('Mensal: category oculta saldo; barras e resultado permanecem', async () => {

@@ -20,9 +20,14 @@ import {
   visualBarPercent,
 } from '../dashboard-forecast-view';
 import { maxAbs, parseAmount } from './chart-math';
+import { dailyBalanceBandGeometry } from './daily-balance-band-geometry';
 import { anchorRatioFromIndex } from './chart-tooltip-placement';
 import { ChartTooltip } from './chart-tooltip';
 import styles from './cash-monthly-grouped-bars.module.css';
+
+const PROJECTED_BAND_WIDTH = 100;
+const PROJECTED_BAND_HEIGHT = 52;
+const PROJECTED_BAND_PAD = 6;
 
 export type CashMonthlyGroupedBarsBucket = {
   readonly monthKey: string;
@@ -46,10 +51,16 @@ export type CashMonthlyGroupedBarsProps = {
   readonly balanceCoverageNote?: string | null;
   /** `signed` permite saldo negativo na linha (projeção). Realizado permanece unsigned. */
   readonly balanceScale?: 'unsigned' | 'signed';
+  /**
+   * `overlay` = linha sobre as barras (legado).
+   * `band` = faixa própria abaixo das barras (Mensal Realizado e Previsto).
+   */
+  readonly balanceLayout?: 'overlay' | 'band';
   /** Labels das séries (default = realizado 08-B). */
   readonly inflowLabel?: string;
   readonly outflowLabel?: string;
   readonly resultLabel?: string;
+  readonly includeResultInTooltip?: boolean;
 };
 
 /** OUT/25 — eixo denso e título do tooltip. */
@@ -157,23 +168,44 @@ export function CashMonthlyGroupedBars({
   balanceBaseNote = null,
   balanceCoverageNote = null,
   balanceScale = 'unsigned',
+  balanceLayout = 'overlay',
   inflowLabel = 'Entradas',
   outflowLabel = 'Saídas',
   resultLabel = 'Resultado',
+  includeResultInTooltip = true,
 }: CashMonthlyGroupedBarsProps) {
   const plotRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [hoverZone, setHoverZone] = useState<'bars' | 'balance'>('bars');
 
   const forecastBuckets = toForecastShape(buckets);
   const count = buckets.length;
   const showBalance = balanceByMonthKey !== undefined && balanceByMonthKey.size > 0;
+  const showBalanceBand = showBalance && balanceLayout === 'band';
+  const showBalanceOverlay = showBalance && balanceLayout === 'overlay';
 
   const balanceGeom = useMemo(() => {
-    if (!showBalance || !balanceByMonthKey) {
+    if (!showBalanceOverlay || !balanceByMonthKey) {
       return null;
     }
     return monthlyBalanceGeometry(buckets, balanceByMonthKey, balanceScale);
-  }, [balanceByMonthKey, balanceScale, buckets, showBalance]);
+  }, [balanceByMonthKey, balanceScale, buckets, showBalanceOverlay]);
+
+  const projectedBand = useMemo(() => {
+    if (!showBalanceBand || !balanceByMonthKey || count === 0) {
+      return null;
+    }
+    return dailyBalanceBandGeometry(
+      buckets.map((bucket) => bucket.monthKey),
+      balanceByMonthKey,
+      PROJECTED_BAND_WIDTH / count,
+      {
+        width: PROJECTED_BAND_WIDTH,
+        height: PROJECTED_BAND_HEIGHT,
+        pad: PROJECTED_BAND_PAD,
+      },
+    );
+  }, [balanceByMonthKey, buckets, count, showBalanceBand]);
 
   const handleMove = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -218,9 +250,12 @@ export function CashMonthlyGroupedBars({
     showBalance && active && balanceByMonthKey
       ? balanceByMonthKey.get(active.monthKey)
       : undefined;
+  const showOverlayTooltip = showBalanceOverlay && showBalance;
+  const showBandBalanceTooltip = showBalanceBand && hoverZone === 'balance';
+  const showBandBarsTooltip = !showBalanceBand || hoverZone === 'bars';
 
   return (
-    <div className={cx(styles.root, className)}>
+    <div className={cx(styles.root, className)} data-balance-layout={balanceLayout}>
       <ul className={styles.legend}>
         <li className={styles.legendItem}>
           <span className={cx(styles.swatch, styles.inflowSwatch)} aria-hidden="true" />
@@ -230,7 +265,7 @@ export function CashMonthlyGroupedBars({
           <span className={cx(styles.swatch, styles.outflowSwatch)} aria-hidden="true" />
           {outflowLabel}
         </li>
-        {showBalance ? (
+        {showBalanceOverlay ? (
           <li className={styles.legendItem}>
             <span className={cx(styles.swatch, styles.balanceSwatch)} aria-hidden="true" />
             {balanceLabel}
@@ -244,13 +279,28 @@ export function CashMonthlyGroupedBars({
         role="img"
         aria-label={ariaLabel}
         tabIndex={0}
-        onMouseMove={handleMove}
+        onMouseMove={
+          showBalanceBand
+            ? undefined
+            : (event) => {
+                setHoverZone('bars');
+                handleMove(event);
+              }
+        }
         onMouseLeave={() => setActiveIndex(-1)}
         onBlur={() => setActiveIndex(-1)}
         onKeyDown={handleKeyDown}
       >
         <div className={styles.scroll}>
-          <div className={styles.chartFrame}>
+          <div className={styles.alignedStack}>
+          <div
+            className={styles.chartFrame}
+            data-monthly-bars-plot=""
+            onMouseMove={(event) => {
+              setHoverZone('bars');
+              handleMove(event);
+            }}
+          >
             <ul className={styles.chart}>
               {buckets.map((bucket, index) => {
                 const activeBucket = index === activeIndex;
@@ -267,7 +317,7 @@ export function CashMonthlyGroupedBars({
                     )}, ${outflowLabel.toLowerCase()} ${moneyOrDash(bucket.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(
                       bucket.result,
                     )}${
-                      showBalance
+                      showBalanceOverlay
                         ? `, ${balanceTooltipLabel.toLowerCase()} ${
                             balanceByMonthKey?.get(bucket.monthKey) !== undefined
                               ? formatMoneyBrl(balanceByMonthKey.get(bucket.monthKey)!)
@@ -306,7 +356,7 @@ export function CashMonthlyGroupedBars({
               })}
             </ul>
 
-            {balanceGeom ? (
+            {showBalanceOverlay && balanceGeom ? (
               <svg
                 className={styles.balanceOverlay}
                 viewBox="0 0 100 100"
@@ -336,9 +386,63 @@ export function CashMonthlyGroupedBars({
               </svg>
             ) : null}
           </div>
+
+            {showBalanceBand && projectedBand ? (
+              <div className={styles.balanceBand} data-projected-balance-band="">
+                <p className={styles.balanceBandLabel}>{balanceLabel}</p>
+                <div
+                  className={styles.balancePlot}
+                  onMouseMove={(event) => {
+                    setHoverZone('balance');
+                    handleMove(event);
+                  }}
+                >
+                  <svg
+                    className={styles.balanceBandSvg}
+                    viewBox={`0 0 ${PROJECTED_BAND_WIDTH} ${PROJECTED_BAND_HEIGHT}`}
+                    preserveAspectRatio="none"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <line
+                      className={styles.balanceZeroLine}
+                      x1={0}
+                      y1={projectedBand.zeroY}
+                      x2={PROJECTED_BAND_WIDTH}
+                      y2={projectedBand.zeroY}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    {projectedBand.areas.map((d) => (
+                      <path key={d} className={styles.balanceArea} d={d} />
+                    ))}
+                    {projectedBand.segments.map((points) => (
+                      <polyline
+                        key={points}
+                        className={styles.balanceLine}
+                        points={points}
+                        fill="none"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    ))}
+                    {projectedBand.points.map((point) => (
+                      <circle
+                        key={`pb-${point.index}`}
+                        className={styles.balanceDot}
+                        cx={point.x}
+                        cy={point.y}
+                        r={projectedBand.points.length === 1 ? 2.2 : 1.6}
+                        data-month-key={buckets[point.index]?.monthKey}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    ))}
+                  </svg>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        {active ? (
+        {active && (showBandBarsTooltip || showOverlayTooltip || showBandBalanceTooltip) ? (
           <ChartTooltip
             open
             verticalMode="floating-top"
@@ -349,21 +453,27 @@ export function CashMonthlyGroupedBars({
             aria-hidden="true"
           >
             <p className={styles.tooltipMonth}>{axisMonthLabel(active.monthKey)}</p>
-            <p className={styles.tooltipRow}>
-              <span className={cx(styles.swatch, styles.inflowSwatch)} aria-hidden="true" />
-              {inflowLabel}
-              <span className={styles.tooltipValue}>{moneyOrDash(active.inflows)}</span>
-            </p>
-            <p className={styles.tooltipRow}>
-              <span className={cx(styles.swatch, styles.outflowSwatch)} aria-hidden="true" />
-              {outflowLabel}
-              <span className={styles.tooltipValue}>{moneyOrDash(active.outflows)}</span>
-            </p>
-            <p className={styles.tooltipRow}>
-              {resultLabel}
-              <span className={styles.tooltipValue}>{moneyOrDash(active.result)}</span>
-            </p>
-            {showBalance ? (
+            {showBandBarsTooltip ? (
+              <>
+                <p className={styles.tooltipRow}>
+                  <span className={cx(styles.swatch, styles.inflowSwatch)} aria-hidden="true" />
+                  {inflowLabel}
+                  <span className={styles.tooltipValue}>{moneyOrDash(active.inflows)}</span>
+                </p>
+                <p className={styles.tooltipRow}>
+                  <span className={cx(styles.swatch, styles.outflowSwatch)} aria-hidden="true" />
+                  {outflowLabel}
+                  <span className={styles.tooltipValue}>{moneyOrDash(active.outflows)}</span>
+                </p>
+                {includeResultInTooltip ? (
+                  <p className={styles.tooltipRow}>
+                    {resultLabel}
+                    <span className={styles.tooltipValue}>{moneyOrDash(active.result)}</span>
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+            {showOverlayTooltip || showBandBalanceTooltip ? (
               <p className={styles.tooltipRow}>
                 <span className={cx(styles.swatch, styles.balanceSwatch)} aria-hidden="true" />
                 {balanceTooltipLabel}
@@ -379,7 +489,9 @@ export function CashMonthlyGroupedBars({
                 </span>
               </p>
             ) : null}
-            {balanceBaseNote ? <p className={styles.tooltipCaption}>{balanceBaseNote}</p> : null}
+            {showOverlayTooltip || showBandBalanceTooltip
+              ? balanceBaseNote && <p className={styles.tooltipCaption}>{balanceBaseNote}</p>
+              : null}
           </ChartTooltip>
         ) : null}
       </div>
