@@ -1,15 +1,17 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   EXPECTED_RECEIVABLE_CATEGORY_FALLBACK,
-  EXPECTED_RECEIVABLE_CUSTOMER_FALLBACK,
   EXPECTED_RECEIVABLE_DESCRIPTION_FALLBACK,
+  EXPECTED_RECEIVABLE_TITLE_FALLBACK,
   ExpectedReceivableDetailsPanel,
   formatExpectedReceivableCategories,
-  formatExpectedReceivableCustomerName,
   formatExpectedReceivableDescription,
+  resolveExpectedReceivableTitlePresentation,
 } from '../src/components/dashboard/expected-receivable-details-panel';
+
+const LEGACY_CUSTOMER_FALLBACK = 'Sem cliente vinculado no Conta Azul';
 
 describe('ExpectedReceivableDetailsPanel', () => {
   afterEach(() => {
@@ -22,20 +24,22 @@ describe('ExpectedReceivableDetailsPanel', () => {
     dueDate: '2026-08-31',
     amount: '978',
     description: 'Consulta',
-    customerName: 'Maria Silva',
-    categoryNames: ['Consultas'],
+    customerName: 'Maria Silva' as string | null,
+    categoryNames: ['Consultas'] as readonly string[],
   };
 
-  it('com customerName presente mostra o nome real do cliente', () => {
+  it('1/2 — customerName presente: título = cliente; categoria permanece abaixo', () => {
     render(<ExpectedReceivableDetailsPanel items={[item]} />);
-    expect(screen.getByText('Maria Silva')).toBeTruthy();
-    expect(screen.queryByText(EXPECTED_RECEIVABLE_CUSTOMER_FALLBACK)).toBeNull();
+    const row = screen.getByRole('listitem');
+    expect(within(row).getByText('Maria Silva')).toBeTruthy();
+    expect(within(row).getByText('Consultas')).toBeTruthy();
+    expect(within(row).getAllByText('Consultas')).toHaveLength(1);
+    expect(screen.queryByText(LEGACY_CUSTOMER_FALLBACK)).toBeNull();
     expect(screen.getByText('R$ 978,00')).toBeTruthy();
     expect(screen.getByText(/31\/08\/2026 · Consulta/)).toBeTruthy();
-    expect(screen.getByText('Consultas')).toBeTruthy();
   });
 
-  it('com customerName null mostra fallback sem afetar descrição, categoria, valor e vencimento', () => {
+  it('3/8/9 — customerName null + uma categoria: título = categoria, sem duplicar', () => {
     render(
       <ExpectedReceivableDetailsPanel
         items={[
@@ -46,21 +50,91 @@ describe('ExpectedReceivableDetailsPanel', () => {
             amount: '3267.32',
             dueDate: '2026-09-03',
             categoryNames: ['Consultas'],
+            situation: 'UPCOMING',
+            overdueDays: null,
           },
         ]}
       />,
     );
-    expect(screen.getByText(EXPECTED_RECEIVABLE_CUSTOMER_FALLBACK)).toBeTruthy();
+    const row = screen.getByRole('listitem');
+    expect(within(row).getByText('Consultas')).toBeTruthy();
+    expect(within(row).getAllByText('Consultas')).toHaveLength(1);
+    expect(row.querySelectorAll('p')).toHaveLength(1);
+    expect(screen.queryByText(LEGACY_CUSTOMER_FALLBACK)).toBeNull();
     expect(screen.getByText('R$ 3.267,32')).toBeTruthy();
+    expect(screen.getByText(/A vencer/)).toBeTruthy();
     expect(screen.getByText(/03\/09\/2026 · Recebimento - Rede Itaú/)).toBeTruthy();
-    expect(screen.getByText('Consultas')).toBeTruthy();
   });
 
-  it('fallbacks honestos', () => {
-    expect(formatExpectedReceivableCustomerName(null)).toBe(EXPECTED_RECEIVABLE_CUSTOMER_FALLBACK);
-    expect(formatExpectedReceivableCustomerName('')).toBe(EXPECTED_RECEIVABLE_CUSTOMER_FALLBACK);
-    expect(formatExpectedReceivableCustomerName('  ')).toBe(EXPECTED_RECEIVABLE_CUSTOMER_FALLBACK);
-    expect(formatExpectedReceivableCustomerName('Maria Silva')).toBe('Maria Silva');
+  it('4 — customerName vazio/espaços + uma categoria: título = categoria', () => {
+    render(
+      <ExpectedReceivableDetailsPanel
+        items={[{ ...item, customerName: '   ', categoryNames: ['Consultas'] }]}
+      />,
+    );
+    const row = screen.getByRole('listitem');
+    expect(within(row).getByText('Consultas')).toBeTruthy();
+    expect(within(row).getAllByText('Consultas')).toHaveLength(1);
+    expect(screen.queryByText(LEGACY_CUSTOMER_FALLBACK)).toBeNull();
+  });
+
+  it('5 — customerName null + múltiplas categorias válidas', () => {
+    render(
+      <ExpectedReceivableDetailsPanel
+        items={[{ ...item, customerName: null, categoryNames: ['Consultas', 'Procedimentos'] }]}
+      />,
+    );
+    const row = screen.getByRole('listitem');
+    expect(within(row).getByText('Consultas · Procedimentos')).toBeTruthy();
+    expect(within(row).getAllByText('Consultas · Procedimentos')).toHaveLength(1);
+    expect(row.querySelectorAll('p')).toHaveLength(1);
+    expect(screen.queryByText(LEGACY_CUSTOMER_FALLBACK)).toBeNull();
+  });
+
+  it('6 — categoryNames com vazias/espaços são ignoradas', () => {
+    expect(
+      resolveExpectedReceivableTitlePresentation({
+        customerName: null,
+        categoryNames: ['  ', '', 'Consultas', '   '],
+      }),
+    ).toEqual({
+      title: 'Consultas',
+      showCategoryBelow: false,
+      categoryBelow: null,
+    });
+    expect(formatExpectedReceivableCategories(['  ', 'A', '', 'B'])).toBe('A · B');
+  });
+
+  it('7/8 — sem cliente + sem categoria válida: Recebimento previsto', () => {
+    render(
+      <ExpectedReceivableDetailsPanel
+        items={[{ ...item, customerName: null, categoryNames: ['  ', ''] }]}
+      />,
+    );
+    const row = screen.getByRole('listitem');
+    expect(within(row).getByText(EXPECTED_RECEIVABLE_TITLE_FALLBACK)).toBeTruthy();
+    expect(screen.queryByText(LEGACY_CUSTOMER_FALLBACK)).toBeNull();
+    expect(screen.queryByText(EXPECTED_RECEIVABLE_CATEGORY_FALLBACK)).toBeNull();
+    expect(row.querySelectorAll('p')).toHaveLength(1);
+  });
+
+  it('helpers de formatação e resolução de título', () => {
+    expect(
+      resolveExpectedReceivableTitlePresentation({
+        customerName: '  Maria Silva  ',
+        categoryNames: ['Consultas'],
+      }),
+    ).toEqual({
+      title: 'Maria Silva',
+      showCategoryBelow: true,
+      categoryBelow: 'Consultas',
+    });
+    expect(
+      resolveExpectedReceivableTitlePresentation({
+        customerName: null,
+        categoryNames: [],
+      }).title,
+    ).toBe(EXPECTED_RECEIVABLE_TITLE_FALLBACK);
     expect(formatExpectedReceivableDescription(null)).toBe(EXPECTED_RECEIVABLE_DESCRIPTION_FALLBACK);
     expect(formatExpectedReceivableCategories([])).toBe(EXPECTED_RECEIVABLE_CATEGORY_FALLBACK);
     expect(formatExpectedReceivableCategories(['A', 'B'])).toBe('A · B');

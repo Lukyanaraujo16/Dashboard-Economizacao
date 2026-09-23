@@ -5,27 +5,79 @@ import type { DashboardReceivableStockDetailItem } from '../../services/dashboar
 import { formatInstallmentStockSituation } from './installment-stock-situation';
 import styles from './expected-receivable-details-panel.module.css';
 
-export const EXPECTED_RECEIVABLE_CUSTOMER_FALLBACK = 'Sem cliente vinculado no Conta Azul';
+/** Título neutro quando não há cliente nem categoria utilizável. */
+export const EXPECTED_RECEIVABLE_TITLE_FALLBACK = 'Recebimento previsto';
+
 export const EXPECTED_RECEIVABLE_DESCRIPTION_FALLBACK = 'Sem descrição';
 export const EXPECTED_RECEIVABLE_CATEGORY_FALLBACK = 'Sem categoria';
 
-export function formatExpectedReceivableCustomerName(
-  customerName: string | null,
-): string {
-  const trimmed = customerName?.trim();
-  return trimmed ? trimmed : EXPECTED_RECEIVABLE_CUSTOMER_FALLBACK;
+export function trimPresent(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function normalizeExpectedReceivableCategoryNames(
+  categoryNames: readonly string[] | null | undefined,
+): readonly string[] {
+  if (!categoryNames) {
+    return [];
+  }
+  return categoryNames.map((name) => name.trim()).filter((name) => name.length > 0);
 }
 
 export function formatExpectedReceivableDescription(description: string | null): string {
-  const trimmed = description?.trim();
-  return trimmed ? trimmed : EXPECTED_RECEIVABLE_DESCRIPTION_FALLBACK;
+  return trimPresent(description) ?? EXPECTED_RECEIVABLE_DESCRIPTION_FALLBACK;
 }
 
-export function formatExpectedReceivableCategories(categoryNames: readonly string[]): string {
-  if (categoryNames.length === 0) {
+export function formatExpectedReceivableCategories(
+  categoryNames: readonly string[] | null | undefined,
+): string {
+  const normalized = normalizeExpectedReceivableCategoryNames(categoryNames);
+  if (normalized.length === 0) {
     return EXPECTED_RECEIVABLE_CATEGORY_FALLBACK;
   }
-  return categoryNames.join(' · ');
+  return normalized.join(' · ');
+}
+
+export type ExpectedReceivableTitlePresentation = {
+  readonly title: string;
+  /** Categoria só abaixo quando o título é o cliente. */
+  readonly showCategoryBelow: boolean;
+  readonly categoryBelow: string | null;
+};
+
+/**
+ * Título principal: cliente → categoria → “Recebimento previsto”.
+ * Sem cliente + com categoria: não duplica a categoria na linha inferior.
+ */
+export function resolveExpectedReceivableTitlePresentation(
+  item: Pick<DashboardExpectedReceivableDetailItem, 'customerName' | 'categoryNames'>,
+): ExpectedReceivableTitlePresentation {
+  const customer = trimPresent(item.customerName);
+  const categories = normalizeExpectedReceivableCategoryNames(item.categoryNames);
+  const categoryLabel = categories.length > 0 ? categories.join(' · ') : null;
+
+  if (customer) {
+    return {
+      title: customer,
+      showCategoryBelow: categoryLabel !== null,
+      categoryBelow: categoryLabel,
+    };
+  }
+
+  if (categoryLabel) {
+    return {
+      title: categoryLabel,
+      showCategoryBelow: false,
+      categoryBelow: null,
+    };
+  }
+
+  return {
+    title: EXPECTED_RECEIVABLE_TITLE_FALLBACK,
+    showCategoryBelow: false,
+    categoryBelow: null,
+  };
 }
 
 type ReceivableDetailsItem =
@@ -56,6 +108,7 @@ export function ExpectedReceivableDetailsPanel({
   return (
     <ul className={styles.list} aria-label={ariaLabel}>
       {items.map((item) => {
+        const presentation = resolveExpectedReceivableTitlePresentation(item);
         const stockItem = hasStockSituation(item) ? item : null;
         const situation = stockItem
           ? formatInstallmentStockSituation(stockItem.situation, stockItem.overdueDays)
@@ -63,9 +116,7 @@ export function ExpectedReceivableDetailsPanel({
         return (
           <li key={item.id} className={styles.item}>
             <div className={styles.rowPrimary}>
-              <span className={styles.customer}>
-                {formatExpectedReceivableCustomerName(item.customerName)}
-              </span>
+              <span className={styles.customer}>{presentation.title}</span>
               <span className={styles.amount}>{formatMoneyBrl(item.amount)}</span>
             </div>
             <p className={styles.rowSecondary}>
@@ -81,9 +132,9 @@ export function ExpectedReceivableDetailsPanel({
               {situation ? ' · ' : null}
               {formatCivilDatePtBr(item.dueDate)} · {formatExpectedReceivableDescription(item.description)}
             </p>
-            <p className={styles.rowTertiary}>
-              {formatExpectedReceivableCategories(item.categoryNames)}
-            </p>
+            {presentation.showCategoryBelow && presentation.categoryBelow ? (
+              <p className={styles.rowTertiary}>{presentation.categoryBelow}</p>
+            ) : null}
           </li>
         );
       })}
