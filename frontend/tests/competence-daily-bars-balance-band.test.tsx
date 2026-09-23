@@ -188,6 +188,24 @@ describe('CompetenceDailyBars — faixa de saldo bancário', () => {
     expect(svgs[1]!.querySelectorAll('circle')).toHaveLength(0);
   });
 
+  it('11 — um único dia conhecido não cria segmento/área (Diária intacta)', () => {
+    const { container } = render(
+      <CompetenceDailyBars
+        revenueDaily={dailySeries(3)}
+        expenseDaily={dailySeries(3)}
+        monthKey="2026-08"
+        revenueLabel="Entradas"
+        expenseLabel="Saídas"
+        balanceByDate={new Map([['2026-08-01', '46925.20']])}
+      />,
+    );
+    const band = container.querySelectorAll('svg')[1]!;
+    expect(screen.getByText('Saldo bancário')).toBeTruthy();
+    expect(band.querySelectorAll('polyline')).toHaveLength(0);
+    expect(band.querySelectorAll('path')).toHaveLength(0);
+    expect(band.querySelectorAll('circle')).toHaveLength(1);
+  });
+
   it('gaps: duas linhas/áreas separadas; hover destaca um ponto', () => {
     const { container } = render(
       <CompetenceDailyBars

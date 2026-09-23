@@ -21,6 +21,7 @@ import {
 } from '../dashboard-forecast-view';
 import { maxAbs, parseAmount } from './chart-math';
 import { dailyBalanceBandGeometry } from './daily-balance-band-geometry';
+import { expandSingleKnownBalanceMark } from './monthly-realized-balance-mark';
 import { anchorRatioFromIndex } from './chart-tooltip-placement';
 import { ChartTooltip } from './chart-tooltip';
 import styles from './cash-monthly-grouped-bars.module.css';
@@ -195,17 +196,26 @@ export function CashMonthlyGroupedBars({
     if (!showBalanceBand || !balanceByMonthKey || count === 0) {
       return null;
     }
-    return dailyBalanceBandGeometry(
+    const slot = PROJECTED_BAND_WIDTH / count;
+    const geometry = dailyBalanceBandGeometry(
       buckets.map((bucket) => bucket.monthKey),
       balanceByMonthKey,
-      PROJECTED_BAND_WIDTH / count,
+      slot,
       {
         width: PROJECTED_BAND_WIDTH,
         height: PROJECTED_BAND_HEIGHT,
         pad: PROJECTED_BAND_PAD,
       },
     );
-  }, [balanceByMonthKey, buckets, count, showBalanceBand]);
+    if (!geometry) {
+      return null;
+    }
+    // Realizado mensal com 1 ponto: trecho visual. Previsto (signed) permanece intacto.
+    if (balanceScale === 'signed') {
+      return geometry;
+    }
+    return expandSingleKnownBalanceMark(geometry, slot);
+  }, [balanceByMonthKey, balanceScale, buckets, count, showBalanceBand]);
 
   const handleMove = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -430,7 +440,7 @@ export function CashMonthlyGroupedBars({
                         className={styles.balanceDot}
                         cx={point.x}
                         cy={point.y}
-                        r={projectedBand.points.length === 1 ? 2.2 : 1.6}
+                        r={1.6}
                         data-month-key={buckets[point.index]?.monthKey}
                         vectorEffect="non-scaling-stroke"
                       />

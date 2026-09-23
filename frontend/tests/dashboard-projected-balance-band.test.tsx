@@ -244,3 +244,181 @@ describe('Mensal → Previsto — faixa de saldo separada', () => {
     expect(tip.textContent).not.toMatch(/Entradas/);
   });
 });
+
+function realizedWindow12() {
+  return Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(Date.UTC(2025, 9 + index, 1));
+    const monthKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+    return {
+      monthKey,
+      inflows: '10',
+      outflows: '5',
+      result: '5',
+    };
+  });
+}
+
+describe('Mensal → Realizado — marca do primeiro saldo conhecido', () => {
+  it('1/2/3/4/5 — um mês conhecido: segmento+área; tooltip e data-month-key só em SET/26', () => {
+    const realized = realizedWindow12();
+    expect(realized[0]?.monthKey).toBe('2025-10');
+    expect(realized[10]?.monthKey).toBe('2026-08');
+    expect(realized[11]?.monthKey).toBe('2026-09');
+    const balances = new Map([['2026-09', '1500.25']]);
+    render(
+      <CashMonthlyGroupedBars
+        ariaLabel="Realizado 1 ponto"
+        buckets={realized}
+        balanceByMonthKey={balances}
+        balanceLayout="band"
+        balanceTooltipLabel="Saldo bancário"
+        includeResultInTooltip={false}
+        balanceCoverageNote="Saldo bancário disponível a partir de 02/09/2026"
+      />,
+    );
+
+    const plot = screen.getByRole('img', { name: 'Realizado 1 ponto' });
+    const band = plot.querySelector('[data-projected-balance-band]');
+    expect(band).toBeTruthy();
+    const dots = [...(band?.querySelectorAll('circle') ?? [])];
+    expect(dots).toHaveLength(1);
+    expect(dots[0]?.getAttribute('data-month-key')).toBe('2026-09');
+    expect(band?.querySelectorAll('circle[data-month-key]')).toHaveLength(1);
+    expect(band?.querySelectorAll('polyline')).toHaveLength(1);
+    expect(band?.querySelectorAll('path')).toHaveLength(1);
+    const polyline = band?.querySelector('polyline');
+    const coords = (polyline?.getAttribute('points') ?? '').split(/[ ,]/).map(Number);
+    const x1 = coords[0] ?? Number.NaN;
+    const y1 = coords[1] ?? Number.NaN;
+    const x2 = coords[2] ?? Number.NaN;
+    const y2 = coords[3] ?? Number.NaN;
+    expect(y1).toBe(y2);
+    expect(x2).toBeGreaterThan(x1);
+    expect(band?.querySelector('path')?.getAttribute('d')).toMatch(/Z$/);
+    expect(screen.getByText('Saldo bancário disponível a partir de 02/09/2026')).toBeTruthy();
+
+    const balancePlot = band?.querySelector('[class*="balancePlot"]') as HTMLElement;
+    mockWidth(plot, 480, 180);
+    mockWidth(balancePlot, 480, 52);
+    fireEvent.mouseMove(balancePlot, { clientX: 460, clientY: 10 });
+    const sepTip = screen.getByRole('tooltip', { hidden: true });
+    expect(sepTip.textContent).toMatch(/SET\/26/);
+    expect(sepTip.textContent).toMatch(/Saldo bancário/);
+    expect(sepTip.textContent).toMatch(/R\$\s*1\.500,25/);
+    expect(sepTip.textContent).not.toMatch(/R\$\s*0,00/);
+
+    fireEvent.mouseMove(balancePlot, { clientX: 20, clientY: 10 });
+    const octTip = screen.getByRole('tooltip', { hidden: true });
+    expect(octTip.textContent).toMatch(/OUT\/25/);
+    expect(octTip.textContent).toMatch(/Saldo bancário/);
+    expect(octTip.textContent).toMatch(/—/);
+    expect(octTip.textContent).not.toMatch(/R\$\s*1\.500,25/);
+    expect(octTip.textContent).not.toMatch(/R\$\s*0,00/);
+
+    fireEvent.mouseMove(balancePlot, { clientX: 420, clientY: 10 });
+    const agoTip = screen.getByRole('tooltip', { hidden: true });
+    expect(agoTip.textContent).toMatch(/AGO\/26/);
+    expect(agoTip.textContent).toMatch(/—/);
+    expect(agoTip.textContent).not.toMatch(/R\$\s*1\.500,25/);
+    expect(agoTip.textContent).not.toMatch(/R\$\s*0,00/);
+    expect([...balances.keys()]).toEqual(['2026-09']);
+  });
+
+  it('6/7 — dois pontos reais conectam; crescente sobe', () => {
+    const realized = realizedWindow12();
+    render(
+      <CashMonthlyGroupedBars
+        ariaLabel="Realizado crescente"
+        buckets={realized}
+        balanceByMonthKey={
+          new Map([
+            ['2026-08', '100'],
+            ['2026-09', '400'],
+          ])
+        }
+        balanceLayout="band"
+        balanceTooltipLabel="Saldo bancário"
+        includeResultInTooltip={false}
+      />,
+    );
+    const band = screen
+      .getByRole('img', { name: 'Realizado crescente' })
+      .querySelector('[data-projected-balance-band]');
+    const dots = [...(band?.querySelectorAll('circle') ?? [])];
+    expect(dots.map((dot) => dot.getAttribute('data-month-key'))).toEqual(['2026-08', '2026-09']);
+    expect(band?.querySelectorAll('polyline')).toHaveLength(1);
+    const points = (band?.querySelector('polyline')?.getAttribute('points') ?? '').split(' ');
+    expect(points).toHaveLength(2);
+    const yAug = Number(dots[0]?.getAttribute('cy'));
+    const ySep = Number(dots[1]?.getAttribute('cy'));
+    expect(ySep).toBeLessThan(yAug);
+  });
+
+  it('8 — decrescente desce', () => {
+    const realized = realizedWindow12();
+    render(
+      <CashMonthlyGroupedBars
+        ariaLabel="Realizado decrescente"
+        buckets={realized}
+        balanceByMonthKey={
+          new Map([
+            ['2026-08', '400'],
+            ['2026-09', '100'],
+          ])
+        }
+        balanceLayout="band"
+      />,
+    );
+    const dots = [
+      ...screen
+        .getByRole('img', { name: 'Realizado decrescente' })
+        .querySelectorAll('[data-projected-balance-band] circle'),
+    ];
+    expect(Number(dots[1]?.getAttribute('cy'))).toBeGreaterThan(Number(dots[0]?.getAttribute('cy')));
+  });
+
+  it('9 — iguais permanecem horizontais', () => {
+    const realized = realizedWindow12();
+    render(
+      <CashMonthlyGroupedBars
+        ariaLabel="Realizado plano"
+        buckets={realized}
+        balanceByMonthKey={
+          new Map([
+            ['2026-08', '250'],
+            ['2026-09', '250'],
+          ])
+        }
+        balanceLayout="band"
+      />,
+    );
+    const dots = [
+      ...screen
+        .getByRole('img', { name: 'Realizado plano' })
+        .querySelectorAll('[data-projected-balance-band] circle'),
+    ];
+    expect(Number(dots[1]?.getAttribute('cy'))).toBe(Number(dots[0]?.getAttribute('cy')));
+  });
+
+  it('10 — Mensal Previsto com um ponto não ganha o trecho especial', () => {
+    render(
+      <CashMonthlyGroupedBars
+        ariaLabel="Previsto 1 ponto"
+        inflowLabel="A receber"
+        outflowLabel="A pagar"
+        balanceLabel="Saldo bancário projetado"
+        balanceScale="signed"
+        balanceLayout="band"
+        buckets={bucketsFor(3)}
+        balanceByMonthKey={new Map([['2026-09', '110000']])}
+      />,
+    );
+    const band = screen
+      .getByRole('img', { name: 'Previsto 1 ponto' })
+      .querySelector('[data-projected-balance-band]');
+    expect(band?.querySelectorAll('circle')).toHaveLength(1);
+    expect(band?.querySelector('circle')?.getAttribute('data-month-key')).toBe('2026-09');
+    expect(band?.querySelectorAll('polyline')).toHaveLength(0);
+    expect(band?.querySelectorAll('path')).toHaveLength(0);
+  });
+});
