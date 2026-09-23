@@ -187,9 +187,6 @@ export const CASH_MONTHLY_REALIZED_CAPTION =
   'Entradas e saídas realizadas por mês de baixa';
 export const CASH_EXPECTED_HORIZON_CAPTION = 'A receber e a pagar por mês de vencimento';
 
-export function cashExpectedHorizonSubtitle(horizon: 1 | 3 | 6 | 12): string {
-  if (horizon === 1) {
-    return 'A receber e a pagar por dia de vencimento';
-  }
+export function cashExpectedHorizonSubtitle(horizon: 3 | 6 | 12): string {
   return `Previsão dos próximos ${horizon} meses por vencimento`;
 }

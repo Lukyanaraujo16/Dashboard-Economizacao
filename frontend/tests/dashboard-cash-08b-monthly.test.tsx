@@ -169,7 +169,7 @@ afterEach(() => {
 });
 
 describe('Correção 08-B — Movimentação financeira Mensal', () => {
-  it('Diária é default; history não busca no boot; Realizado|Previsto presentes', async () => {
+  it('Diária é default; history não busca no boot; Realizado|Previsto ausentes', async () => {
     renderDashboard();
     const scope = within(section('movimentacao-financeira'));
     expect(await scope.findByRole('button', { name: 'Diária' })).toBeTruthy();
@@ -177,8 +177,8 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
     expect(scope.getByRole('button', { name: 'Diária' }).getAttribute('aria-pressed')).toBe(
       'true',
     );
-    expect(scope.getByRole('button', { name: 'Realizado' })).toBeTruthy();
-    expect(scope.getByRole('button', { name: 'Previsto' })).toBeTruthy();
+    expect(scope.queryByRole('button', { name: 'Realizado' })).toBeNull();
+    expect(scope.queryByRole('button', { name: 'Previsto' })).toBeNull();
     expect(scope.getByText('Entradas e saídas por dia de baixa')).toBeTruthy();
     await waitFor(() => {
       expect(getMonthlyCashFlow).toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
     expect(screen.queryByRole('heading', { name: /Saldo bancário/i })).toBeNull();
   });
 
-  it('Mensal carrega UMA history, esconde Realizado|Previsto e renderiza 12 meses', async () => {
+  it('Mensal carrega UMA history, mostra Realizado|Previsto em Realizado e renderiza 12 meses', async () => {
     renderDashboard();
     const scope = within(section('movimentacao-financeira'));
     await scope.findByRole('button', { name: 'Mensal' });
@@ -196,8 +196,10 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
       expect(getHistory).toHaveBeenCalledTimes(1);
     });
     expect(getHistory).toHaveBeenCalledWith(null, null, null);
-    expect(scope.queryByRole('button', { name: 'Realizado' })).toBeNull();
-    expect(scope.queryByRole('button', { name: 'Previsto' })).toBeNull();
+    expect(scope.getByRole('button', { name: 'Realizado' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(scope.getByRole('button', { name: 'Previsto' })).toBeTruthy();
     expect(await scope.findByText(/12 meses até/i)).toBeTruthy();
     expect(scope.getByText('SET/25')).toBeTruthy();
     expect(scope.getByText('AGO/26')).toBeTruthy();
@@ -230,7 +232,7 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
     });
   });
 
-  it('expand Mensal abre sem Realizado|Previsto', async () => {
+  it('expand Mensal abre em Realizado com seletor Realizado|Previsto', async () => {
     renderDashboard();
     const scope = within(section('movimentacao-financeira'));
     await scope.findByRole('button', { name: 'Mensal' });
@@ -239,7 +241,10 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
     fireEvent.click(scope.getByRole('button', { name: 'Expandir' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
-    expect(within(dialog).queryByRole('button', { name: 'Realizado' })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Realizado' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Previsto' })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Mensal' }).getAttribute('aria-pressed')).toBe(
       'true',
     );
@@ -328,8 +333,8 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
     expect(scope.getByRole('button', { name: 'Diária' }).getAttribute('aria-pressed')).toBe(
       'true',
     );
-    expect(scope.getByRole('button', { name: 'Realizado' })).toBeTruthy();
-    expect(scope.getByRole('button', { name: 'Previsto' })).toBeTruthy();
+    expect(scope.queryByRole('button', { name: 'Realizado' })).toBeNull();
+    expect(scope.queryByRole('button', { name: 'Previsto' })).toBeNull();
     expect(scope.getByText('Entradas e saídas por dia de baixa')).toBeTruthy();
 
     const dailyPlot = scope.getByRole('img', {

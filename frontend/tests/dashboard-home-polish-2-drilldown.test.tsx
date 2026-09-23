@@ -8,6 +8,8 @@ import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/mont
 import type { DashboardMonthEndCashPressureResponse } from '../src/services/dashboard/month-end-cash-pressure.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
+import { getDashboardCashMovementHistory } from '../src/services/dashboard/cash-movement-history';
+import { getDashboardCashExpectedHorizon } from '../src/services/dashboard/cash-expected-horizon';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -38,6 +40,12 @@ vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
 vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
   getDashboardMonthlyCashFlow: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/cash-movement-history', () => ({
+  getDashboardCashMovementHistory: vi.fn(),
+}));
+vi.mock('../src/services/dashboard/cash-expected-horizon', () => ({
+  getDashboardCashExpectedHorizon: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -48,6 +56,8 @@ vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories:
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
+const getHistory = vi.mocked(getDashboardCashMovementHistory);
+const getHorizon = vi.mocked(getDashboardCashExpectedHorizon);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -169,6 +179,33 @@ beforeEach(() => {
   getMonthlyCashFlow.mockImplementation(async (month) =>
     month === '2026-07' ? previousMonthCashFlow : cashZeroOverdue,
   );
+  getHistory.mockResolvedValue({
+    today: '2026-08-19',
+    startMonth: '2025-09',
+    endMonth: '2026-08',
+    costCenterCashSplit: true,
+    months: Array.from({ length: 12 }, (_, i) => {
+      const date = new Date(Date.UTC(2025, 8 + i, 1));
+      return {
+        monthKey: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+        realized: { inflows: '10', outflows: '5', result: '5' },
+      };
+    }),
+  });
+  getHorizon.mockResolvedValue({
+    today: '2026-08-19',
+    startMonth: '2026-08',
+    endMonth: '2026-10',
+    horizon: 3,
+    costCenterCashSplit: true,
+    totals: { receivables: '100', payables: '40', result: '60' },
+    months: [
+      {
+        monthKey: '2026-08',
+        expected: { receivables: '100', payables: '40', result: '60' },
+      },
+    ],
+  });
   getRevenueGoal.mockResolvedValue(goal);
   getCostCenters.mockResolvedValue({ items: [] });
   getCategories.mockResolvedValue({ items: [] });
@@ -232,14 +269,16 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
     expect(screen.getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
   });
 
-  it('P2-18 — Movimentação permanece funcionando com toggle', async () => {
+  it('P2-18 — Movimentação permanece funcionando com toggle Mensal', async () => {
     const dialog = await openSectionExpand('movimentacao-financeira');
     expect(within(dialog).getByRole('heading', { name: 'Movimentação financeira' })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Previsto' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Mensal' }));
     expect(within(dialog).getByRole('button', { name: 'Realizado' })).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Previsto' })).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Previsto' }));
     await waitFor(() => {
-      expect(within(dialog).getAllByText(/vencimento/i).length).toBeGreaterThan(0);
+      expect(within(dialog).getByText(/Horizonte da previsão/i)).toBeTruthy();
     });
   });
 

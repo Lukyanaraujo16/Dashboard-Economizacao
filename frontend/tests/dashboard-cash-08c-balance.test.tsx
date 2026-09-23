@@ -9,6 +9,7 @@ import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/mont
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { getDashboardCashMovementHistory } from '../src/services/dashboard/cash-movement-history';
 import type { DashboardCashMovementHistoryResponse } from '../src/services/dashboard/cash-movement-history.types';
+import { getDashboardCashExpectedHorizon } from '../src/services/dashboard/cash-expected-horizon';
 import { getDashboardCashBalanceHistory } from '../src/services/dashboard/cash-balance-history';
 import type { DashboardCashBalanceHistoryResponse } from '../src/services/dashboard/cash-balance-history.types';
 import { DashboardCashBalanceHistoryRequestError } from '../src/services/dashboard/cash-balance-history.types';
@@ -42,6 +43,9 @@ vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
 vi.mock('../src/services/dashboard/cash-movement-history', () => ({
   getDashboardCashMovementHistory: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/cash-expected-horizon', () => ({
+  getDashboardCashExpectedHorizon: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/cash-balance-history', () => ({
   getDashboardCashBalanceHistory: vi.fn(),
 }));
@@ -56,6 +60,7 @@ const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getHistory = vi.mocked(getDashboardCashMovementHistory);
+const getHorizon = vi.mocked(getDashboardCashExpectedHorizon);
 const getBalance = vi.mocked(getDashboardCashBalanceHistory);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
@@ -169,6 +174,28 @@ beforeEach(() => {
   getMonthEnd.mockRejectedValue(new Error('not used'));
   getMonthlyCashFlow.mockResolvedValue(cashFlowHomeFixture);
   getHistory.mockResolvedValue(buildHistory('2026-08'));
+  getHorizon.mockResolvedValue({
+    today: '2026-08-19',
+    startMonth: '2026-08',
+    endMonth: '2026-10',
+    horizon: 3,
+    costCenterCashSplit: true,
+    totals: { receivables: '100', payables: '40', result: '60' },
+    months: [
+      {
+        monthKey: '2026-08',
+        expected: { receivables: '100', payables: '40', result: '60' },
+      },
+      {
+        monthKey: '2026-09',
+        expected: { receivables: '10', payables: '5', result: '5' },
+      },
+      {
+        monthKey: '2026-10',
+        expected: { receivables: '10', payables: '5', result: '5' },
+      },
+    ],
+  });
   getBalance.mockResolvedValue(balanceFixture());
   getRevenueGoal.mockResolvedValue(emptyGoal);
   getCostCenters.mockResolvedValue({
@@ -185,15 +212,19 @@ afterEach(() => {
 });
 
 describe('08-C3/C4 — linha de saldo bancário na Movimentação', () => {
-  it('Daily Realizado mostra Saldo bancário; Previsto não', async () => {
+  it('Daily Realizado mostra Saldo bancário; Mensal Previsto não', async () => {
     renderDashboard();
     const card = await waitFor(() => section('movimentacao-financeira'));
     await waitFor(() => expect(getBalance).toHaveBeenCalled());
     expect(within(card).getByText('Saldo bancário')).toBeTruthy();
     expect(within(card).getByText(/disponível a partir de 10\/08\/2026/)).toBeTruthy();
 
+    fireEvent.click(within(card).getByRole('button', { name: 'Mensal' }));
+    await waitFor(() => expect(getHistory).toHaveBeenCalled());
+    expect(within(card).getByText('Saldo bancário')).toBeTruthy();
+
     fireEvent.click(within(card).getByRole('button', { name: 'Previsto' }));
-    expect(within(card).queryByText('Saldo bancário')).toBeNull();
+    await waitFor(() => expect(within(card).queryByText('Saldo bancário')).toBeNull());
   });
 
   it('category e costCenter ocultam saldo sem alterar query do endpoint', async () => {

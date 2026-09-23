@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardPage } from '../src/components/dashboard';
@@ -179,40 +179,54 @@ describe('Movimentação financeira — horizonte Previsto', () => {
     vi.clearAllMocks();
   });
 
-  it('controle de horizonte só em Diária + Previsto; default Mês atual', async () => {
+  async function openMonthlyExpected(scope: ReturnType<typeof within>) {
+    fireEvent.click(scope.getByRole('button', { name: 'Mensal' }));
+    await waitFor(() => expect(getHistory).toHaveBeenCalled());
+    expect(scope.getByRole('button', { name: 'Realizado' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    fireEvent.click(scope.getByRole('button', { name: 'Previsto' }));
+  }
+
+  it('Diária não mostra Realizado|Previsto nem horizonte; renderiza realizado', async () => {
     renderDashboard();
     const scope = within(section('movimentacao-financeira'));
-    await scope.findByRole('button', { name: 'Previsto' });
+    expect(await scope.findByRole('button', { name: 'Diária' })).toBeTruthy();
+    expect(scope.queryByRole('button', { name: 'Realizado' })).toBeNull();
+    expect(scope.queryByRole('button', { name: 'Previsto' })).toBeNull();
     expect(scope.queryByText(/Horizonte da previsão/i)).toBeNull();
-    expect(scope.queryByRole('group', { name: /Horizonte da previsão/i })).toBeNull();
+    expect(scope.queryByRole('button', { name: 'Mês atual' })).toBeNull();
+    expect(scope.getByText('Entradas e saídas por dia de baixa')).toBeTruthy();
+    expect(getHorizon).not.toHaveBeenCalled();
+  });
 
-    fireEvent.click(scope.getByRole('button', { name: 'Previsto' }));
+  it('controle de horizonte só em Mensal + Previsto; default 3 meses', async () => {
+    renderDashboard();
+    const scope = within(section('movimentacao-financeira'));
+    await scope.findByRole('button', { name: 'Mensal' });
+    expect(scope.queryByText(/Horizonte da previsão/i)).toBeNull();
+
+    await openMonthlyExpected(scope);
     expect(scope.getByText(/Horizonte da previsão/i)).toBeTruthy();
     const horizonGroup = scope.getByRole('group', { name: /Horizonte da previsão/i });
+    expect(within(horizonGroup).queryByRole('button', { name: 'Mês atual' })).toBeNull();
     expect(
-      within(horizonGroup).getByRole('button', { name: 'Mês atual' }).getAttribute('aria-pressed'),
+      within(horizonGroup).getByRole('button', { name: '3 meses' }).getAttribute('aria-pressed'),
     ).toBe('true');
-    expect(getHorizon).not.toHaveBeenCalled();
-    await waitFor(() => expect(getMonthlyCashFlow).toHaveBeenCalled());
-    expect(scope.getAllByText(/por dia de vencimento/i).length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(getHorizon).toHaveBeenCalledWith(expect.objectContaining({ horizon: 3 })),
+    );
 
     fireEvent.click(scope.getByRole('button', { name: 'Realizado' }));
     expect(scope.queryByText(/Horizonte da previsão/i)).toBeNull();
-    expect(scope.queryByRole('group', { name: /Horizonte da previsão/i })).toBeNull();
-
-    fireEvent.click(scope.getByRole('button', { name: 'Mensal' }));
-    expect(scope.queryByText(/Horizonte da previsão/i)).toBeNull();
-    expect(scope.queryByRole('group', { name: /Horizonte da previsão/i })).toBeNull();
-    await waitFor(() => expect(getHistory).toHaveBeenCalled());
   });
 
-  it('3/6/12 meses chamam novo endpoint com horizon e âncora', async () => {
+  it('3/6/12 meses chamam novo endpoint com horizon e âncora; cruza o ano', async () => {
     renderDashboard();
     const scope = within(section('movimentacao-financeira'));
-    await scope.findByRole('button', { name: 'Previsto' });
-    fireEvent.click(scope.getByRole('button', { name: 'Previsto' }));
+    await scope.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(scope);
 
-    fireEvent.click(scope.getByRole('button', { name: '3 meses' }));
     await waitFor(() =>
       expect(getHorizon).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -226,16 +240,57 @@ describe('Movimentação financeira — horizonte Previsto', () => {
     expect(await scope.findByText('Saldo previsto')).toBeTruthy();
     expect(scope.getByText('A receber e a pagar por mês de vencimento')).toBeTruthy();
     expect(scope.getByText('SET/26')).toBeTruthy();
+    expect(scope.queryByText('Saldo bancário')).toBeNull();
 
     fireEvent.click(scope.getByRole('button', { name: '6 meses' }));
     await waitFor(() =>
       expect(getHorizon).toHaveBeenCalledWith(expect.objectContaining({ horizon: 6 })),
     );
+    expect(await scope.findByText('FEV/27')).toBeTruthy();
 
     fireEvent.click(scope.getByRole('button', { name: '12 meses' }));
     await waitFor(() =>
       expect(getHorizon).toHaveBeenCalledWith(expect.objectContaining({ horizon: 12 })),
     );
+    expect(await scope.findByText('AGO/27')).toBeTruthy();
+  });
+
+  it('Previsto → Diária volta ao realizado; Diária → Mensal reabre Realizado', async () => {
+    renderDashboard();
+    const scope = within(section('movimentacao-financeira'));
+    await scope.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(scope);
+    await waitFor(() => expect(getHorizon).toHaveBeenCalled());
+
+    fireEvent.click(scope.getByRole('button', { name: 'Diária' }));
+    expect(scope.getByRole('button', { name: 'Diária' }).getAttribute('aria-pressed')).toBe('true');
+    expect(scope.queryByRole('button', { name: 'Previsto' })).toBeNull();
+    expect(scope.getByText('Entradas e saídas por dia de baixa')).toBeTruthy();
+
+    fireEvent.click(scope.getByRole('button', { name: 'Mensal' }));
+    expect(scope.getByRole('button', { name: 'Realizado' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(scope.queryByText(/Horizonte da previsão/i)).toBeNull();
+    expect(await scope.findByText(/12 meses até/i)).toBeTruthy();
+  });
+
+  it('card e expand compartilham a navegação Mensal → Previsto', async () => {
+    renderDashboard();
+    const scope = within(section('movimentacao-financeira'));
+    await scope.findByRole('button', { name: 'Mensal' });
+    fireEvent.click(scope.getByRole('button', { name: 'Mensal' }));
+    await waitFor(() => expect(getHistory).toHaveBeenCalled());
+    fireEvent.click(scope.getByRole('button', { name: 'Expandir' }));
+    const dialog = await screen.findByRole('dialog');
+    const dialogScope = within(dialog);
+    expect(dialogScope.queryByRole('button', { name: 'Previsto' })).toBeTruthy();
+    fireEvent.click(dialogScope.getByRole('button', { name: 'Previsto' }));
+    expect(dialogScope.getByText(/Horizonte da previsão/i)).toBeTruthy();
+    expect(dialogScope.queryByRole('button', { name: 'Mês atual' })).toBeNull();
+    expect(
+      dialogScope.getByRole('button', { name: '3 meses' }).getAttribute('aria-pressed'),
+    ).toBe('true');
   });
 
   it('envia costCenter/category no horizonte', async () => {
@@ -263,9 +318,8 @@ describe('Movimentação financeira — horizonte Previsto', () => {
     });
     renderDashboard();
     const scope = within(section('movimentacao-financeira'));
-    await scope.findByRole('button', { name: 'Previsto' });
-    fireEvent.click(scope.getByRole('button', { name: 'Previsto' }));
-    fireEvent.click(scope.getByRole('button', { name: '3 meses' }));
+    await scope.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(scope);
     await waitFor(() =>
       expect(getHorizon).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -276,5 +330,33 @@ describe('Movimentação financeira — horizonte Previsto', () => {
         }),
       ),
     );
+  });
+
+  it('troca de tenant não reutiliza cache de previsão do tenant anterior', async () => {
+    renderDashboard();
+    const scope = within(section('movimentacao-financeira'));
+    await scope.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(scope);
+    await waitFor(() => expect(getHorizon).toHaveBeenCalledTimes(1));
+    cleanup();
+    getHorizon.mockClear();
+    renderWithAuth(
+      <ThemeProvider>
+        <DashboardPage />
+      </ThemeProvider>,
+      {
+        getCurrentUserAction: createAuthenticatedGetCurrentUser({
+          ...mockAuthenticatedUser,
+          id: 'user-2',
+          tenantId: 'tenant-2',
+        }),
+        hydrateOnMount: true,
+      },
+    );
+    const next = within(section('movimentacao-financeira'));
+    await next.findByRole('button', { name: 'Mensal' });
+    fireEvent.click(next.getByRole('button', { name: 'Mensal' }));
+    fireEvent.click(next.getByRole('button', { name: 'Previsto' }));
+    await waitFor(() => expect(getHorizon).toHaveBeenCalledTimes(1));
   });
 });

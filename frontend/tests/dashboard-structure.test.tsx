@@ -325,8 +325,10 @@ describe('Dashboard V2 structure', () => {
     expect(screen.queryByText(/Competência de/i)).toBeNull();
     expect(screen.queryByRole('heading', { name: /Saldo bancário/i })).toBeNull();
     expect(screen.queryByText('Previsto até o fim do mês')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Realizado' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Previsto' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Diária' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Mensal' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Realizado' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Previsto' })).toBeNull();
 
     expect(screen.queryByRole('heading', { name: 'Top 5 despesas' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Composição por categoria' })).toBeNull();
