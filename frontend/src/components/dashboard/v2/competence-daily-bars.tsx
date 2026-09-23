@@ -20,11 +20,15 @@ import {
   indexFromRatio,
   isFlatSeries,
   maxAbs,
-  parseAmount,
   type DailyPoint,
 } from './chart-math';
 import { anchorRatioFromIndex } from './chart-tooltip-placement';
 import { ChartTooltip } from './chart-tooltip';
+import {
+  BALANCE_BAND_HEIGHT,
+  BALANCE_BAND_WIDTH,
+  dailyBalanceBandGeometry,
+} from './daily-balance-band-geometry';
 import styles from './competence-daily-bars.module.css';
 
 const VIEW_WIDTH = 320;
@@ -32,7 +36,6 @@ const HALF_HEIGHT = 56;
 const VIEW_HEIGHT = HALF_HEIGHT * 2;
 const MIN_BAR = 1;
 const BAR_GAP_RATIO = 0.35;
-const BALANCE_PAD = 4;
 
 export type CompetenceDailyBarsProps = {
   /** Dia = competenceDate; Σ total do dia. */
@@ -68,58 +71,10 @@ function barHeight(value: number, scale: number): number {
   return Math.max(MIN_BAR, (abs / scale) * HALF_HEIGHT);
 }
 
-type BalancePoint = { readonly index: number; readonly x: number; readonly y: number };
-
-function balanceGeometry(
-  dates: readonly string[],
-  balanceByDate: ReadonlyMap<string, string>,
-  slot: number,
-): {
-  readonly scale: number;
-  readonly points: readonly BalancePoint[];
-  readonly segments: readonly string[];
-} {
-  const values = dates.map((date) => {
-    const raw = balanceByDate.get(date);
-    return raw === undefined ? null : parseAmount(raw);
-  });
-  const present = values.filter((value): value is number => value !== null);
-  const scale = maxAbs(present);
-  const usable = VIEW_HEIGHT - BALANCE_PAD * 2;
-  const points: BalancePoint[] = [];
-  for (let index = 0; index < dates.length; index += 1) {
-    const value = values[index];
-    if (value === null || value === undefined) {
-      continue;
-    }
-    const ratio = scale > 0 ? Math.min(Math.max(value / scale, 0), 1) : 0;
-    const x = index * slot + slot / 2;
-    const y = BALANCE_PAD + usable - ratio * usable;
-    points.push({ index, x, y });
-  }
-  const segments: string[] = [];
-  let run: BalancePoint[] = [];
-  const flush = () => {
-    if (run.length >= 2) {
-      segments.push(run.map((point) => `${point.x},${point.y}`).join(' '));
-    }
-    run = [];
-  };
-  for (const point of points) {
-    const prev = run[run.length - 1];
-    if (prev && point.index !== prev.index + 1) {
-      flush();
-    }
-    run.push(point);
-  }
-  flush();
-  return { scale, points, segments };
-}
-
 /**
  * Movimentação diária em barras espelhadas — primeira série acima do eixo,
  * segunda abaixo. Rotulagem padrão é competência; caixa sobrescreve os rótulos.
- * Linha de saldo bancário (08-C3) usa eixo Y secundário.
+ * Saldo bancário (08-C3) ocupa faixa vertical própria, com zero financeiro.
  */
 export function CompetenceDailyBars({
   revenueDaily,
@@ -152,16 +107,18 @@ export function CompetenceDailyBars({
     };
   }, [expenseDaily, revenueDaily]);
 
-  const showBalance = balanceByDate !== undefined && balanceByDate.size > 0;
+  const count = series.dates.length;
+  const slot = count > 0 ? VIEW_WIDTH / count : VIEW_WIDTH;
 
   const balance = useMemo(() => {
-    if (!showBalance || !balanceByDate) {
+    if (!balanceByDate || balanceByDate.size === 0) {
       return null;
     }
-    const count = series.dates.length;
-    const slot = count > 0 ? VIEW_WIDTH / count : VIEW_WIDTH;
-    return balanceGeometry(series.dates, balanceByDate, slot);
-  }, [balanceByDate, series.dates, showBalance]);
+    return dailyBalanceBandGeometry(series.dates, balanceByDate, slot);
+  }, [balanceByDate, series.dates, slot]);
+
+  const hasBalanceSeries = Boolean(balanceByDate && balanceByDate.size > 0);
+  const showBalanceBand = balance !== null;
 
   const handleMove = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -206,14 +163,12 @@ export function CompetenceDailyBars({
     );
   }
 
-  const count = series.dates.length;
-  const slot = count > 0 ? VIEW_WIDTH / count : VIEW_WIDTH;
   const barWidth = Math.max(slot * (1 - BAR_GAP_RATIO), 0.5);
   const activeRevenue = activeIndex >= 0 ? series.revenue[activeIndex] : undefined;
   const activeExpense = activeIndex >= 0 ? series.expense[activeIndex] : undefined;
   const activeDate = activeRevenue?.date;
   const activeBalance =
-    showBalance && activeDate && balanceByDate ? balanceByDate.get(activeDate) : undefined;
+    hasBalanceSeries && activeDate && balanceByDate ? balanceByDate.get(activeDate) : undefined;
   const firstDate = series.dates[0];
   const lastDate = series.dates[count - 1];
 
@@ -228,7 +183,7 @@ export function CompetenceDailyBars({
           <span className={cx(styles.swatch, styles.expenseSwatch)} aria-hidden="true" />
           {expenseLabel}
         </li>
-        {showBalance ? (
+        {hasBalanceSeries ? (
           <li className={styles.legendItem}>
             <span className={cx(styles.swatch, styles.balanceSwatch)} aria-hidden="true" />
             {balanceLabel}
@@ -236,139 +191,161 @@ export function CompetenceDailyBars({
         ) : null}
       </ul>
 
-      <div className={cx(styles.plotArea, showBalance ? styles.plotAreaWithBalance : undefined)}>
-        <div className={styles.axis} aria-hidden="true">
-          <span className={styles.axisTick}>{formatCompactBrl(series.scale)}</span>
-          <span className={styles.axisTick}>{formatCompactBrl(0)}</span>
-          <span className={styles.axisTick}>{formatCompactBrl(series.scale)}</span>
-        </div>
-
-        <div
-          ref={plotRef}
-          className={styles.plot}
-          role="img"
-          aria-label={ariaLabel ?? `Receitas e despesas por dia de competência em ${monthLabel}`}
-          tabIndex={0}
-          onMouseMove={handleMove}
-          onMouseLeave={() => setActiveIndex(-1)}
-          onFocus={() => setActiveIndex(count - 1)}
-          onBlur={() => setActiveIndex(-1)}
-          onKeyDown={handleKeyDown}
-        >
-          <svg
-            className={styles.canvas}
-            viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
-            preserveAspectRatio="none"
-            aria-hidden="true"
-            focusable="false"
-          >
-            {series.dates.map((date, index) => {
-              const x = index * slot + (slot - barWidth) / 2;
-              const revenue = barHeight(series.revenueValues[index] ?? 0, series.scale);
-              const expense = barHeight(series.expenseValues[index] ?? 0, series.scale);
-              const active = index === activeIndex;
-              return (
-                <g key={date} opacity={activeIndex < 0 || active ? 1 : 0.45}>
-                  {revenue > 0 ? (
-                    <rect
-                      className={cx(styles.bar, styles.revenueBar)}
-                      x={x}
-                      y={HALF_HEIGHT - revenue}
-                      width={barWidth}
-                      height={revenue}
-                    />
-                  ) : null}
-                  {expense > 0 ? (
-                    <rect
-                      className={cx(styles.bar, styles.expenseBar)}
-                      x={x}
-                      y={HALF_HEIGHT}
-                      width={barWidth}
-                      height={expense}
-                    />
-                  ) : null}
-                </g>
-              );
-            })}
-
-            <line
-              className={styles.zeroLine}
-              x1={0}
-              y1={HALF_HEIGHT}
-              x2={VIEW_WIDTH}
-              y2={HALF_HEIGHT}
-              vectorEffect="non-scaling-stroke"
-            />
-
-            {balance
-              ? balance.segments.map((points) => (
-                  <polyline
-                    key={points}
-                    className={styles.balanceLine}
-                    points={points}
-                    fill="none"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))
-              : null}
-            {balance
-              ? balance.points.map((point) => (
-                  <circle
-                    key={`b-${point.index}`}
-                    className={styles.balanceDot}
-                    cx={point.x}
-                    cy={point.y}
-                    r={balance.points.length === 1 ? 3.5 : 2.25}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))
-              : null}
-          </svg>
-
-          {activeRevenue && activeExpense ? (
-            <ChartTooltip
-              open
-              verticalMode="floating-top"
-              anchorRatio={anchorRatioFromIndex(activeIndex, count)}
-              containerRef={plotRef}
-              className={styles.tooltip}
-              role="tooltip"
-              aria-hidden="true"
-            >
-              <p className={styles.tooltipDay}>{formatDayPt(activeRevenue.date)}</p>
-              <p className={styles.tooltipRow}>
-                <span className={cx(styles.swatch, styles.revenueSwatch)} />
-                {revenueLabel}
-                <span className={styles.tooltipValue}>{formatMoneyBrl(activeRevenue.amount)}</span>
-              </p>
-              <p className={styles.tooltipRow}>
-                <span className={cx(styles.swatch, styles.expenseSwatch)} />
-                {expenseLabel}
-                <span className={styles.tooltipValue}>{formatMoneyBrl(activeExpense.amount)}</span>
-              </p>
-              {showBalance ? (
-                <p className={styles.tooltipRow}>
-                  <span className={cx(styles.swatch, styles.balanceSwatch)} />
-                  {balanceLabel}
-                  <span className={styles.tooltipValue}>
-                    {activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}
-                  </span>
-                </p>
-              ) : null}
-            </ChartTooltip>
-          ) : null}
-        </div>
-
-        {showBalance && balance ? (
-          <div className={cx(styles.axis, styles.balanceAxis)} aria-hidden="true">
-            <span className={styles.axisTick}>{formatCompactBrl(balance.scale)}</span>
-            <span className={styles.axisTick}>Saldo</span>
+      <div
+        ref={plotRef}
+        className={styles.hitArea}
+        role="img"
+        aria-label={ariaLabel ?? `Receitas e despesas por dia de competência em ${monthLabel}`}
+        tabIndex={0}
+        onMouseMove={handleMove}
+        onMouseLeave={() => setActiveIndex(-1)}
+        onFocus={() => setActiveIndex(count - 1)}
+        onBlur={() => setActiveIndex(-1)}
+        onKeyDown={handleKeyDown}
+      >
+        <div className={styles.plotArea}>
+          <div className={styles.axis} aria-hidden="true">
+            <span className={styles.axisTick}>{formatCompactBrl(series.scale)}</span>
             <span className={styles.axisTick}>{formatCompactBrl(0)}</span>
+            <span className={styles.axisTick}>{formatCompactBrl(series.scale)}</span>
           </div>
+
+          <div className={styles.plot}>
+            <svg
+              className={styles.canvas}
+              viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              focusable="false"
+            >
+              {series.dates.map((date, index) => {
+                const x = index * slot + (slot - barWidth) / 2;
+                const revenue = barHeight(series.revenueValues[index] ?? 0, series.scale);
+                const expense = barHeight(series.expenseValues[index] ?? 0, series.scale);
+                const active = index === activeIndex;
+                return (
+                  <g key={date} opacity={activeIndex < 0 || active ? 1 : 0.45}>
+                    {revenue > 0 ? (
+                      <rect
+                        className={cx(styles.bar, styles.revenueBar)}
+                        x={x}
+                        y={HALF_HEIGHT - revenue}
+                        width={barWidth}
+                        height={revenue}
+                      />
+                    ) : null}
+                    {expense > 0 ? (
+                      <rect
+                        className={cx(styles.bar, styles.expenseBar)}
+                        x={x}
+                        y={HALF_HEIGHT}
+                        width={barWidth}
+                        height={expense}
+                      />
+                    ) : null}
+                  </g>
+                );
+              })}
+
+              <line
+                className={styles.zeroLine}
+                x1={0}
+                y1={HALF_HEIGHT}
+                x2={VIEW_WIDTH}
+                y2={HALF_HEIGHT}
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+          </div>
+        </div>
+
+        {showBalanceBand && balance ? (
+          <div className={styles.balanceBand}>
+            <p className={styles.balanceBandLabel}>{balanceLabel}</p>
+            <div className={styles.balancePlotArea}>
+              <div className={cx(styles.axis, styles.balanceAxis)} aria-hidden="true">
+                <span className={styles.axisTick}>{formatCompactBrl(balance.maxDomain)}</span>
+                {balance.minDomain < 0 && balance.maxDomain > 0 ? (
+                  <span className={styles.axisTick}>{formatCompactBrl(0)}</span>
+                ) : null}
+                <span className={styles.axisTick}>{formatCompactBrl(balance.minDomain)}</span>
+              </div>
+              <div className={styles.balancePlot}>
+                <svg
+                  className={styles.canvas}
+                  viewBox={`0 0 ${BALANCE_BAND_WIDTH} ${BALANCE_BAND_HEIGHT}`}
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <line
+                    className={styles.zeroLine}
+                    x1={0}
+                    y1={balance.zeroY}
+                    x2={BALANCE_BAND_WIDTH}
+                    y2={balance.zeroY}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  {balance.segments.map((points) => (
+                    <polyline
+                      key={points}
+                      className={styles.balanceLine}
+                      points={points}
+                      fill="none"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                  {balance.points.map((point) => (
+                    <circle
+                      key={`b-${point.index}`}
+                      className={styles.balanceDot}
+                      cx={point.x}
+                      cy={point.y}
+                      r={balance.points.length === 1 ? 3.5 : 2.25}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </svg>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeRevenue && activeExpense ? (
+          <ChartTooltip
+            open
+            verticalMode="floating-top"
+            anchorRatio={anchorRatioFromIndex(activeIndex, count)}
+            containerRef={plotRef}
+            className={styles.tooltip}
+            role="tooltip"
+            aria-hidden="true"
+          >
+            <p className={styles.tooltipDay}>{formatDayPt(activeRevenue.date)}</p>
+            <p className={styles.tooltipRow}>
+              <span className={cx(styles.swatch, styles.revenueSwatch)} />
+              {revenueLabel}
+              <span className={styles.tooltipValue}>{formatMoneyBrl(activeRevenue.amount)}</span>
+            </p>
+            <p className={styles.tooltipRow}>
+              <span className={cx(styles.swatch, styles.expenseSwatch)} />
+              {expenseLabel}
+              <span className={styles.tooltipValue}>{formatMoneyBrl(activeExpense.amount)}</span>
+            </p>
+            {hasBalanceSeries ? (
+              <p className={styles.tooltipRow}>
+                <span className={cx(styles.swatch, styles.balanceSwatch)} />
+                {balanceLabel}
+                <span className={styles.tooltipValue}>
+                  {activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}
+                </span>
+              </p>
+            ) : null}
+          </ChartTooltip>
         ) : null}
       </div>
 
-      <div className={cx(styles.xAxis, showBalance ? styles.xAxisWithBalance : undefined)} aria-hidden="true">
+      <div className={styles.xAxis} aria-hidden="true">
         <span>{firstDate ? formatDayPt(firstDate) : ''}</span>
         <span>{lastDate ? formatDayPt(lastDate) : ''}</span>
       </div>
@@ -380,7 +357,7 @@ export function CompetenceDailyBars({
       <span className={styles.liveRegion} aria-live="polite">
         {activeRevenue && activeExpense
           ? `${formatDayPt(activeRevenue.date)}: ${revenueLabel.toLowerCase()} ${formatMoneyBrl(activeRevenue.amount)}, ${expenseLabel.toLowerCase()} ${formatMoneyBrl(activeExpense.amount)}${
-              showBalance
+              hasBalanceSeries
                 ? `, ${balanceLabel.toLowerCase()} ${activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}`
                 : ''
             }`

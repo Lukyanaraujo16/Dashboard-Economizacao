@@ -50,6 +50,16 @@ export type { CompetenceComparisonChartProps } from './competence-comparison-cha
 export { CompetenceDailyBars } from './competence-daily-bars';
 export type { CompetenceDailyBarsProps } from './competence-daily-bars';
 
+export {
+  BALANCE_BAND_HEIGHT,
+  BALANCE_BAND_PAD,
+  BALANCE_BAND_WIDTH,
+  dailyBalanceBandGeometry,
+  dailyBalanceDomain,
+  dailyBalanceValueToY,
+} from './daily-balance-band-geometry';
+export type { DailyBalanceBandGeometry, DailyBalanceBandPoint } from './daily-balance-band-geometry';
+
 export { CashMonthlyGroupedBars } from './cash-monthly-grouped-bars';
 export type {
   CashMonthlyGroupedBarsBucket,

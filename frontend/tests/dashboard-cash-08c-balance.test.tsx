@@ -216,7 +216,7 @@ describe('08-C3/C4 — linha de saldo bancário na Movimentação', () => {
     renderDashboard();
     const card = await waitFor(() => section('movimentacao-financeira'));
     await waitFor(() => expect(getBalance).toHaveBeenCalled());
-    expect(within(card).getByText('Saldo bancário')).toBeTruthy();
+    expect(within(card).getAllByText('Saldo bancário').length).toBeGreaterThan(0);
     expect(within(card).getByText(/disponível a partir de 10\/08\/2026/)).toBeTruthy();
 
     fireEvent.click(within(card).getByRole('button', { name: 'Mensal' }));
@@ -277,7 +277,7 @@ describe('08-C3/C4 — linha de saldo bancário na Movimentação', () => {
     );
     renderDashboard();
     const card = await waitFor(() => section('movimentacao-financeira'));
-    await waitFor(() => expect(within(card).getByText('Saldo bancário')).toBeTruthy());
+    await waitFor(() => expect(within(card).getAllByText('Saldo bancário').length).toBeGreaterThan(0));
   });
 
   it('erro do balance não quebra barras diárias', async () => {

@@ -302,7 +302,7 @@ describe('ChartTooltip nos componentes V2', () => {
         balanceByDate={balanceByDate}
       />,
     );
-    expect(screen.getByText('Saldo bancário')).toBeTruthy();
+    expect(screen.getAllByText('Saldo bancário').length).toBeGreaterThan(0);
     const plot = screen.getByRole('img');
     mockPlotRect(plot, 400, 108);
     fireEvent.mouseMove(plot, { clientX: 4, clientY: 40 });
