@@ -283,6 +283,15 @@ export type DashboardMonthlyCashFlowOverdue = {
   };
 };
 
+export type DashboardInstallmentPendingStock = {
+  readonly open: string | null;
+  readonly overdue: string | null;
+  readonly dueToday: string | null;
+  readonly upcoming: string | null;
+};
+
+export type DashboardInstallmentStockSituation = 'OVERDUE' | 'DUE_TODAY' | 'UPCOMING';
+
 export type DashboardMonthlyCashFlowDailyRealizedPoint = {
   readonly date: string;
   readonly inflows: string | null;
@@ -335,6 +344,11 @@ export type DashboardMonthlyCashFlowResponse = {
   };
   readonly expected: DashboardMonthlyCashFlowExpected;
   readonly overdue: DashboardMonthlyCashFlowOverdue;
+  /** Estoque financeiro pendente atual. Independente do mês. Não é `expected`. */
+  readonly stock: {
+    readonly receivables: DashboardInstallmentPendingStock;
+    readonly payables: DashboardInstallmentPendingStock;
+  };
   readonly coverage: string | null;
   readonly daily: {
     readonly realized: readonly DashboardMonthlyCashFlowDailyRealizedPoint[];
@@ -452,6 +466,36 @@ export type DashboardExpectedPayableDetailsResponse = {
   readonly available: boolean;
   readonly total: string | null;
   readonly items: readonly DashboardExpectedPayableDetailItem[];
+};
+
+export type DashboardReceivableStockDetailItem = DashboardExpectedReceivableDetailItem & {
+  readonly situation: DashboardInstallmentStockSituation;
+  readonly overdueDays: number | null;
+};
+
+export type DashboardPayableStockDetailItem = DashboardExpectedPayableDetailItem & {
+  readonly situation: DashboardInstallmentStockSituation;
+  readonly overdueDays: number | null;
+};
+
+export type DashboardReceivableStockDetailsResponse = {
+  readonly today: string;
+  readonly available: boolean;
+  readonly total: string | null;
+  readonly overdue: string | null;
+  readonly dueToday: string | null;
+  readonly upcoming: string | null;
+  readonly items: readonly DashboardReceivableStockDetailItem[];
+};
+
+export type DashboardPayableStockDetailsResponse = {
+  readonly today: string;
+  readonly available: boolean;
+  readonly total: string | null;
+  readonly overdue: string | null;
+  readonly dueToday: string | null;
+  readonly upcoming: string | null;
+  readonly items: readonly DashboardPayableStockDetailItem[];
 };
 
 /** GET /dashboard/cash-realized/details — detalhe lazy de baixas por categoryKey (12-B). */

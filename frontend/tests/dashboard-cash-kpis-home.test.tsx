@@ -87,6 +87,10 @@ const lifeCashFlow: DashboardMonthlyCashFlowResponse = {
     payables: '100.00',
     ofMonth: { receivables: '0', payables: '0' },
   },
+  stock: {
+    receivables: { open: '14711.20', overdue: '4200.00', dueToday: '0', upcoming: '10511.20' },
+    payables: { open: '28389.80', overdue: '100.00', dueToday: '0', upcoming: '28289.80' },
+  },
   coverage: '0.95',
   realizedByCategory: {
     inflows: {
@@ -185,9 +189,11 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     });
     expect(kpiScope('Faturamento').getByText('Recebido')).toBeTruthy();
     expect(kpiScope('Faturamento').getByText(/R\$\s*224\.790,30/)).toBeTruthy();
-    expect(kpiScope('A receber').getByText(/R\$\s*10\.511,20/)).toBeTruthy();
+    expect(kpiScope('A receber').getByText(/R\$\s*14\.711,20/)).toBeTruthy();
+    expect(kpiScope('A receber').getByText('Vencidos')).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/R\$\s*127\.231,32/)).toBeTruthy();
-    expect(kpiScope('Contas a pagar').getByText(/R\$\s*28\.289,80/)).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText(/R\$\s*28\.389,80/)).toBeTruthy();
+    expect(kpiScope('Contas a pagar').getByText('Vencidos')).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/^Pago$/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/R\$\s*98\.941,52/)).toBeTruthy();
     expect(kpiScope('Despesas').getByText(/^A pagar$/)).toBeTruthy();
@@ -268,6 +274,10 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
         payables: null,
         ofMonth: { receivables: null, payables: null },
       },
+      stock: {
+        receivables: { open: null, overdue: null, dueToday: null, upcoming: null },
+        payables: { open: null, overdue: null, dueToday: null, upcoming: null },
+      },
     });
     dashboardSearchParams = new URLSearchParams(`costCenter=${CENTER}`);
     await renderReadyDashboard();
@@ -284,7 +294,7 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     await renderReadyDashboard();
     const payableCard = kpiScope('Contas a pagar');
     await waitFor(() => {
-      expect(payableCard.getByText(/R\$\s*28\.289,80/)).toBeTruthy();
+      expect(payableCard.getByText(/R\$\s*28\.389,80/)).toBeTruthy();
     });
     expect(payableCard.queryByText(/dias? com vencimento/i)).toBeNull();
     expect(payableCard.queryByText('Sem vencimentos previstos')).toBeNull();
@@ -297,6 +307,10 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     getMonthlyCashFlow.mockResolvedValue({
       ...lifeCashFlow,
       expected: { receivables: '10511.20', payables: '300.00', result: '10211.20' },
+      stock: {
+        ...lifeCashFlow.stock!,
+        payables: { open: '400.00', overdue: '100.00', dueToday: '0', upcoming: '300.00' },
+      },
       daily: {
         realized: lifeCashFlow.daily.realized,
         expected: [
@@ -309,7 +323,7 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     await renderReadyDashboard();
     const payableCard = kpiScope('Contas a pagar');
     await waitFor(() => {
-      expect(payableCard.getByText(/R\$\s*300,00/)).toBeTruthy();
+      expect(payableCard.getByText(/R\$\s*400,00/)).toBeTruthy();
     });
     expect(payableCard.queryByText(/dias? com vencimento/i)).toBeNull();
     expect(payableCard.queryByText(/% do faturamento/i)).toBeNull();
@@ -319,6 +333,10 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     getMonthlyCashFlow.mockResolvedValue({
       ...lifeCashFlow,
       expected: { receivables: '10511.20', payables: '100.00', result: '10411.20' },
+      stock: {
+        ...lifeCashFlow.stock!,
+        payables: { open: '200.00', overdue: '100.00', dueToday: '0', upcoming: '100.00' },
+      },
       daily: {
         realized: lifeCashFlow.daily.realized,
         expected: [
@@ -329,7 +347,7 @@ describe('CASH-4B — KPIs de caixa na Home', () => {
     await renderReadyDashboard();
     const payableCard = kpiScope('Contas a pagar');
     await waitFor(() => {
-      expect(payableCard.getByText(/R\$\s*100,00/)).toBeTruthy();
+      expect(payableCard.getByText(/R\$\s*200,00/)).toBeTruthy();
     });
     expect(payableCard.queryByText('Sem vencimentos previstos')).toBeNull();
     expect(payableCard.queryByText(/dias? com vencimento/i)).toBeNull();

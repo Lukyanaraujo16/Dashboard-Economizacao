@@ -8,7 +8,7 @@ import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/mont
 import type { DashboardMonthEndCashPressureResponse } from '../src/services/dashboard/month-end-cash-pressure.types';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
-import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
+import { getDashboardReceivableStockDetails } from '../src/services/dashboard/receivable-stock-details';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -40,8 +40,8 @@ vi.mock('../src/services/dashboard/month-end-cash-pressure', () => ({
 vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
   getDashboardMonthlyCashFlow: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/expected-receivable-details', () => ({
-  getDashboardExpectedReceivableDetails: vi.fn(),
+vi.mock('../src/services/dashboard/receivable-stock-details', () => ({
+  getDashboardReceivableStockDetails: vi.fn(),
 }));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
@@ -53,7 +53,7 @@ vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories:
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
-const getExpectedReceivableDetails = vi.mocked(getDashboardExpectedReceivableDetails);
+const getReceivableStockDetails = vi.mocked(getDashboardReceivableStockDetails);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -177,13 +177,13 @@ beforeEach(() => {
   getMonthlyCashFlow.mockImplementation(async (month) =>
     month === '2026-07' ? previousMonthCashFlow : cashWithCategories,
   );
-  getExpectedReceivableDetails.mockResolvedValue({
+  getReceivableStockDetails.mockResolvedValue({
     today: '2026-08-19',
-    monthKey: '2026-08',
-    from: '2026-08-01',
-    to: '2026-08-31',
     available: true,
     total: '111111.11',
+    overdue: '1.00',
+    dueToday: '0',
+    upcoming: '111110.11',
     items: [],
   });
   getRevenueGoal.mockResolvedValue(goal);
@@ -211,9 +211,9 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
-  it('P3-6 — A receber lista recebimentos previstos sem composição categórica agregada', async () => {
+  it('P3-6 — A receber lista estoque em aberto sem composição categórica agregada', async () => {
     const dialog = await openKpiExpand('A receber');
-    expect(within(dialog).getByText('Recebimentos previstos')).toBeTruthy();
+    expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
     expect(
       within(dialog).queryByText(/Composição por categoria do previsto não disponível/i),
     ).toBeNull();

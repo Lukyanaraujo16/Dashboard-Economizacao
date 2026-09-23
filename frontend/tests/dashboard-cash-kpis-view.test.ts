@@ -8,6 +8,7 @@ import {
   toCashPayableKpi,
   toCashReceivableKpi,
   toCashReceivedKpi,
+  toCashStockBreakdown,
 } from '../src/components/dashboard/dashboard-cash-kpis-view';
 import { toMonthlyCashFlowView } from '../src/components/dashboard/dashboard-monthly-cash-flow-view';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
@@ -26,6 +27,10 @@ function lifeAugust(): DashboardMonthlyCashFlowResponse {
       receivables: '5000',
       payables: '1000',
       ofMonth: { receivables: '0', payables: '0' },
+    },
+    stock: {
+      receivables: { open: '15511.20', overdue: '5000', dueToday: '0', upcoming: '10511.20' },
+      payables: { open: '29289.80', overdue: '1000', dueToday: '0', upcoming: '28289.80' },
     },
     coverage: '0.95',
   realizedByCategory: {
@@ -90,10 +95,14 @@ describe('CASH-4B — KPIs de caixa (view)', () => {
         payables: null,
         ofMonth: { receivables: null, payables: null },
       },
+      stock: {
+        receivables: { open: null, overdue: null, dueToday: null, upcoming: null },
+        payables: { open: null, overdue: null, dueToday: null, upcoming: null },
+      },
     });
     expect(toCashBillingKpi(view, 'current').value).toBe('—');
     expect(toCashReceivedKpi(view).value).toBe('—');
-    expect(toCashReceivableKpi(view, 'current').value).toBe('—');
+    expect(toCashReceivableKpi(view).value).toBe('—');
     expect(toCashExpensesKpi(view, 'current').value).toBe('—');
     expect(toCashManagerialResultKpi(view).value).toBe('—');
     expect(toCashOverdueReceivablesKpi(view).value).toBe('—');
@@ -104,7 +113,19 @@ describe('CASH-4B — KPIs de caixa (view)', () => {
     const view = toMonthlyCashFlowView(lifeAugust());
     expect(toCashReceivedKpi(view).meta.toLowerCase()).toContain('caixa');
     expect(toCashReceivedKpi(view).meta.toLowerCase()).not.toContain('competência');
-    expect(toCashReceivableKpi(view, 'current').meta).toBe('');
-    expect(toCashPayableKpi(view, 'current').meta).toBe('');
+    expect(toCashReceivableKpi(view).meta).toBe('');
+    expect(toCashPayableKpi(view).meta).toBe('');
+  });
+
+  it('12 — cards de estoque usam stock, não expected', () => {
+    const view = toMonthlyCashFlowView(lifeAugust());
+    expect(toCashReceivableKpi(view).value).toMatch(/15\.511,20/);
+    expect(toCashPayableKpi(view).value).toMatch(/29\.289,80/);
+    expect(view.expectedReceivables).toBe('10511.20');
+    expect(view.expectedPayables).toBe('28289.80');
+    expect(view.billing).toBe('235301.50');
+    const breakdown = toCashStockBreakdown(view.receivableStock, 'A receber');
+    expect(breakdown?.map((item) => item.label)).toEqual(['Vencidos', 'Hoje', 'A receber']);
+    expect(breakdown?.[0]?.tone).toBe('overdue');
   });
 });

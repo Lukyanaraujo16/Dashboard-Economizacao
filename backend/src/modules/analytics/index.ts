@@ -8,6 +8,11 @@ export {
 } from './domain/payable-category-composition.js';
 export { buildDailyCompetenceTotals, accumulateDailyCompetence } from './domain/daily-competence-series.js';
 export type { DailyCompetencePoint } from './domain/daily-competence-series.js';
+export { calculateInstallmentPendingStock } from './domain/installment-snapshot.js';
+export {
+  classifyInstallmentDueSituation,
+  civilDaysOverdue,
+} from './domain/installment-due-situation.js';
 export { calculateMonthlyCashFlow, monthlyBilling } from './domain/monthly-cash-flow.js';
 export type { CashSettlementSource } from './domain/monthly-cash-flow.js';
 export { createMonthlyCashFlowService } from './services/monthly-cash-flow.service.js';
@@ -35,6 +40,7 @@ export type {
   ForecastBucket,
   GetFinancialStockSnapshotInput,
   GetUpcomingInstallmentsInput,
+  InstallmentPendingStock,
   InstallmentStockSnapshot,
   OpenPayablesCategoryCompositionResult,
   OpenReceivablesCategoryCompositionResult,

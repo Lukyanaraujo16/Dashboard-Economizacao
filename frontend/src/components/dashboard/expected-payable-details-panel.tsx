@@ -1,6 +1,8 @@
 import { formatMoneyBrl } from '../../lib/format-money-brl';
 import { formatCivilDatePtBr } from './dashboard-upcoming-view';
 import type { DashboardExpectedPayableDetailItem } from '../../services/dashboard/expected-payable-details.types';
+import type { DashboardPayableStockDetailItem } from '../../services/dashboard/payable-stock-details.types';
+import { formatInstallmentStockSituation } from './installment-stock-situation';
 import styles from './expected-payable-details-panel.module.css';
 
 /** Título neutro quando não há fornecedor nem categoria utilizável. */
@@ -76,21 +78,37 @@ export function resolveExpectedPayableTitlePresentation(
   };
 }
 
+type PayableDetailsItem = DashboardExpectedPayableDetailItem | DashboardPayableStockDetailItem;
+
 type ExpectedPayableDetailsPanelProps = {
-  readonly items: readonly DashboardExpectedPayableDetailItem[];
+  readonly items: readonly PayableDetailsItem[];
+  readonly emptyMessage?: string;
+  readonly ariaLabel?: string;
 };
 
-export function ExpectedPayableDetailsPanel({ items }: ExpectedPayableDetailsPanelProps) {
+function hasStockSituation(
+  item: PayableDetailsItem,
+): item is DashboardPayableStockDetailItem {
+  return 'situation' in item;
+}
+
+export function ExpectedPayableDetailsPanel({
+  items,
+  emptyMessage = 'Nenhum pagamento previsto no prazo neste período.',
+  ariaLabel = 'Pagamentos previstos',
+}: ExpectedPayableDetailsPanelProps) {
   if (items.length === 0) {
-    return (
-      <p className={styles.empty}>Nenhum pagamento previsto no prazo neste período.</p>
-    );
+    return <p className={styles.empty}>{emptyMessage}</p>;
   }
 
   return (
-    <ul className={styles.list} aria-label="Pagamentos previstos">
+    <ul className={styles.list} aria-label={ariaLabel}>
       {items.map((item) => {
         const presentation = resolveExpectedPayableTitlePresentation(item);
+        const stockItem = hasStockSituation(item) ? item : null;
+        const situation = stockItem
+          ? formatInstallmentStockSituation(stockItem.situation, stockItem.overdueDays)
+          : null;
         return (
           <li key={item.id} className={styles.item}>
             <div className={styles.rowPrimary}>
@@ -98,6 +116,16 @@ export function ExpectedPayableDetailsPanel({ items }: ExpectedPayableDetailsPan
               <span className={styles.amount}>{formatMoneyBrl(item.amount)}</span>
             </div>
             <p className={styles.rowSecondary}>
+              {situation ? (
+                <span
+                  className={
+                    stockItem?.situation === 'OVERDUE' ? styles.situationOverdue : styles.situation
+                  }
+                >
+                  {situation}
+                </span>
+              ) : null}
+              {situation ? ' · ' : null}
               {formatCivilDatePtBr(item.dueDate)} ·{' '}
               {formatExpectedPayableDescription(item.description)}
             </p>

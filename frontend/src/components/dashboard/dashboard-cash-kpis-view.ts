@@ -90,32 +90,55 @@ export function toCashReceivedKpi(view: MonthlyCashFlowView): MonthlyContextKpiV
   );
 }
 
-/** A receber = expected.receivables (dueDate no mês, ainda no prazo). */
-export function toCashReceivableKpi(
-  view: MonthlyCashFlowView,
-  phase: DashboardMonthPhase,
-): MonthlyContextKpiView {
+/** A receber = estoque pendente atual (overdue + hoje + a vencer). Não é `expected`. */
+export function toCashReceivableKpi(view: MonthlyCashFlowView): MonthlyContextKpiView {
   return moneyKpi(
     'cash-receivable',
     'A receber',
-    view.receivable,
+    view.receivableStock.open,
     '',
-    phase === 'future' ? 'Sem valores previstos no mês' : 'Sem valores a receber no prazo',
+    'Sem valores a receber em aberto',
   );
 }
 
-/** Contas a pagar = expected.payables (dueDate no mês, ainda no prazo). */
-export function toCashPayableKpi(
-  view: MonthlyCashFlowView,
-  phase: DashboardMonthPhase,
-): MonthlyContextKpiView {
+/** Contas a pagar = estoque pendente atual (overdue + hoje + a vencer). Não é `expected`. */
+export function toCashPayableKpi(view: MonthlyCashFlowView): MonthlyContextKpiView {
   return moneyKpi(
     'cash-payable',
     'Contas a pagar',
-    view.payable,
+    view.payableStock.open,
     '',
-    phase === 'future' ? 'Sem valores previstos no mês' : 'Sem contas a pagar no prazo',
+    'Sem contas a pagar em aberto',
   );
+}
+
+export type CashStockBreakdownItem = {
+  readonly label: string;
+  readonly value: string;
+  readonly tone?: 'overdue';
+};
+
+/** Decomposição compacta do estoque: vencidos / hoje / a vencer. */
+export function toCashStockBreakdown(
+  stock: MonthlyCashFlowView['receivableStock'],
+  upcomingLabel: 'A vencer' | 'A receber',
+): readonly CashStockBreakdownItem[] | undefined {
+  if (
+    stock.open === null ||
+    stock.overdue === null ||
+    stock.dueToday === null ||
+    stock.upcoming === null
+  ) {
+    return undefined;
+  }
+  if (isDecimalZero(stock.open)) {
+    return undefined;
+  }
+  return [
+    { label: 'Vencidos', value: formatMoneyBrl(stock.overdue), tone: 'overdue' },
+    { label: 'Hoje', value: formatMoneyBrl(stock.dueToday) },
+    { label: upcomingLabel, value: formatMoneyBrl(stock.upcoming) },
+  ];
 }
 
 /** Despesas = realized.outflows + expected.payables. */

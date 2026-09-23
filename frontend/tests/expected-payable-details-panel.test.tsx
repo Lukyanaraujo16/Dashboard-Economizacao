@@ -164,4 +164,43 @@ describe('ExpectedPayableDetailsPanel', () => {
     expect(formatExpectedPayableCategories([])).toBe(EXPECTED_PAYABLE_CATEGORY_FALLBACK);
     expect(formatExpectedPayableCategories(['A', 'B'])).toBe('A · B');
   });
+
+  it('14 — classifica vencido / hoje / a vencer no estoque', () => {
+    render(
+      <ExpectedPayableDetailsPanel
+        items={[
+          {
+            ...base,
+            id: 'over',
+            externalId: 'over',
+            dueDate: '2026-09-22',
+            situation: 'OVERDUE',
+            overdueDays: 1,
+          },
+          {
+            ...base,
+            id: 'today',
+            externalId: 'today',
+            dueDate: '2026-09-23',
+            situation: 'DUE_TODAY',
+            overdueDays: null,
+          },
+          {
+            ...base,
+            id: 'next',
+            externalId: 'next',
+            dueDate: '2026-09-24',
+            situation: 'UPCOMING',
+            overdueDays: null,
+          },
+        ]}
+        emptyMessage="Nenhuma conta a pagar em aberto."
+        ariaLabel="Títulos a pagar em aberto"
+      />,
+    );
+    expect(screen.getByLabelText('Títulos a pagar em aberto')).toBeTruthy();
+    expect(screen.getByText('Vencido há 1 dia')).toBeTruthy();
+    expect(screen.getByText('Vence hoje')).toBeTruthy();
+    expect(screen.getByText('A vencer')).toBeTruthy();
+  });
 });

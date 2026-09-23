@@ -73,6 +73,20 @@ function lifeAugustFlow(): MonthlyCashFlow {
       payables: ZERO,
       ofMonth: { receivables: ZERO, payables: ZERO },
     },
+    stock: {
+      receivables: {
+        open: new Prisma.Decimal('10511.20'),
+        overdue: ZERO,
+        dueToday: ZERO,
+        upcoming: new Prisma.Decimal('10511.20'),
+      },
+      payables: {
+        open: new Prisma.Decimal('28289.80'),
+        overdue: ZERO,
+        dueToday: ZERO,
+        upcoming: new Prisma.Decimal('28289.80'),
+      },
+    },
     coverage: new Prisma.Decimal('0.955447'),
     daily: { realized: [], expected: [] },
   };

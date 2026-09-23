@@ -96,6 +96,10 @@ function flow(
           { date: '2026-08-31', receivables: '20000', payables: '10000', result: '10000' },
         ],
     },
+    stock: overrides.stock ?? {
+      receivables: { open: '20000', overdue: '0', dueToday: '0', upcoming: '20000' },
+      payables: { open: '10000', overdue: '0', dueToday: '0', upcoming: '10000' },
+    },
   };
 }
 
@@ -140,6 +144,7 @@ describe('toMonthlyCashFlowView', () => {
     expect(view.billing).toBe('95000');
     expect(view.overdueReceivables).toBe('5000');
     expect(view.billing).not.toBe(money('100000'));
+    expect(view.receivableStock.open).toBe('20000');
   });
 
   it('A5 — overdue.payables não entra em monthlyExpenses', () => {

@@ -7,7 +7,23 @@ import type {
 export type InstallmentStockSnapshot = {
   readonly open: Prisma.Decimal;
   readonly overdue: Prisma.Decimal;
+  /** Inclui vence-hoje (contrato legado da overview). */
   readonly upcoming: Prisma.Decimal;
+};
+
+/** Estoque pendente com baldes exclusivos. Não é `expected`. */
+export type InstallmentPendingStock = {
+  readonly open: Prisma.Decimal;
+  readonly overdue: Prisma.Decimal;
+  readonly dueToday: Prisma.Decimal;
+  readonly upcoming: Prisma.Decimal;
+};
+
+export type MonthlyCashFlowPendingStock = {
+  readonly open: Prisma.Decimal | null;
+  readonly overdue: Prisma.Decimal | null;
+  readonly dueToday: Prisma.Decimal | null;
+  readonly upcoming: Prisma.Decimal | null;
 };
 
 export type ReceivableDelinquency = {
@@ -217,6 +233,14 @@ export type MonthlyCashFlow = {
   readonly expected: MonthlyCashFlowExpected;
   readonly overdue: MonthlyCashFlowOverdue;
   /**
+   * Estoque financeiro pendente atual (ACTIVE + unpaid > 0).
+   * Independente do mês selecionado. Não é `expected`.
+   */
+  readonly stock: {
+    readonly receivables: MonthlyCashFlowPendingStock;
+    readonly payables: MonthlyCashFlowPendingStock;
+  };
+  /**
    * Mês corrente: inflows / (inflows + expected.receivables).
    * Passado/futuro ou denominador 0 ou split unavailable → null.
    * Não é Faturamento. Faturamento = monthlyBilling(flow) =
@@ -274,4 +298,38 @@ export type ExpectedPayableDetails = {
   readonly available: boolean;
   readonly total: Prisma.Decimal | null;
   readonly items: readonly ExpectedPayableDetailItem[];
+};
+
+export type InstallmentStockSituation = 'OVERDUE' | 'DUE_TODAY' | 'UPCOMING';
+
+export type ReceivableStockDetailItem = ExpectedReceivableDetailItem & {
+  readonly situation: InstallmentStockSituation;
+  readonly overdueDays: number | null;
+};
+
+export type PayableStockDetailItem = ExpectedPayableDetailItem & {
+  readonly situation: InstallmentStockSituation;
+  readonly overdueDays: number | null;
+};
+
+export type ReceivableStockDetails = {
+  readonly tenantId: string;
+  readonly today: Date;
+  readonly available: boolean;
+  readonly total: Prisma.Decimal | null;
+  readonly overdue: Prisma.Decimal | null;
+  readonly dueToday: Prisma.Decimal | null;
+  readonly upcoming: Prisma.Decimal | null;
+  readonly items: readonly ReceivableStockDetailItem[];
+};
+
+export type PayableStockDetails = {
+  readonly tenantId: string;
+  readonly today: Date;
+  readonly available: boolean;
+  readonly total: Prisma.Decimal | null;
+  readonly overdue: Prisma.Decimal | null;
+  readonly dueToday: Prisma.Decimal | null;
+  readonly upcoming: Prisma.Decimal | null;
+  readonly items: readonly PayableStockDetailItem[];
 };

@@ -47,6 +47,20 @@ function isOverdue(value: unknown): boolean {
   );
 }
 
+function isPendingStockSide(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNullableDecimal(value.open) &&
+    isNullableDecimal(value.overdue) &&
+    isNullableDecimal(value.dueToday) &&
+    isNullableDecimal(value.upcoming)
+  );
+}
+
+function isStock(value: unknown): boolean {
+  return isRecord(value) && isPendingStockSide(value.receivables) && isPendingStockSide(value.payables);
+}
+
 function isRealizedPoint(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -121,6 +135,7 @@ function isMonthlyCashFlow(value: unknown): value is DashboardMonthlyCashFlowRes
     isRealizedByCategory(value.realizedByCategory) &&
     isExpected(value.expected) &&
     isOverdue(value.overdue) &&
+    isStock(value.stock) &&
     isNullableDecimal(value.coverage) &&
     daily.realized.every(isRealizedPoint) &&
     daily.expected.every(isExpectedPoint)

@@ -1,7 +1,32 @@
 import type {
   DashboardCashRealizedCategoryComposition,
+  DashboardInstallmentPendingStock,
   DashboardMonthlyCashFlowResponse,
 } from '../../src/services/dashboard/monthly-cash-flow.types';
+
+export function cashPendingStockSide(
+  open: string,
+  overdue = '0',
+  dueToday = '0',
+  upcoming?: string,
+): DashboardInstallmentPendingStock {
+  return {
+    open,
+    overdue,
+    dueToday,
+    upcoming: upcoming ?? open,
+  };
+}
+
+export function cashPendingStock(input?: {
+  readonly receivables?: DashboardInstallmentPendingStock;
+  readonly payables?: DashboardInstallmentPendingStock;
+}): DashboardMonthlyCashFlowResponse['stock'] {
+  return {
+    receivables: input?.receivables ?? cashPendingStockSide('0'),
+    payables: input?.payables ?? cashPendingStockSide('0'),
+  };
+}
 
 export function emptyCashCategoryComposition(
   total = '0',
@@ -59,6 +84,10 @@ export const cashFlowHomeFixture: DashboardMonthlyCashFlowResponse = {
     payables: '2.00',
     ofMonth: { receivables: '0', payables: '0' },
   },
+  stock: cashPendingStock({
+    receivables: cashPendingStockSide('111111.11', '1.00', '0', '111110.11'),
+    payables: cashPendingStockSide('22222.22', '2.00', '0', '22020.22'),
+  }),
   coverage: '0.5',
   realizedByCategory: {
     inflows: singleCashCategoryComposition('Serviços', '888888.88'),

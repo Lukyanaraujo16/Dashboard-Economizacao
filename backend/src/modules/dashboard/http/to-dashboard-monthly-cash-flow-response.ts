@@ -68,6 +68,20 @@ export function toDashboardMonthlyCashFlowResponse(
         payables: serializeNullableDecimal(flow.overdue.ofMonth.payables),
       },
     },
+    stock: {
+      receivables: {
+        open: serializeNullableDecimal(flow.stock.receivables.open),
+        overdue: serializeNullableDecimal(flow.stock.receivables.overdue),
+        dueToday: serializeNullableDecimal(flow.stock.receivables.dueToday),
+        upcoming: serializeNullableDecimal(flow.stock.receivables.upcoming),
+      },
+      payables: {
+        open: serializeNullableDecimal(flow.stock.payables.open),
+        overdue: serializeNullableDecimal(flow.stock.payables.overdue),
+        dueToday: serializeNullableDecimal(flow.stock.payables.dueToday),
+        upcoming: serializeNullableDecimal(flow.stock.payables.upcoming),
+      },
+    },
     coverage: serializeNullableDecimal(flow.coverage),
     daily: {
       realized: flow.daily.realized.map((point) => ({

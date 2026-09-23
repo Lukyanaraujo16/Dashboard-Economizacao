@@ -17,6 +17,7 @@ import {
   accumulatePayableOverdue,
   selectExpectedOpenPayables,
 } from './expected-open-payables.js';
+import { selectPendingStockInstallments } from './pending-installment-stock.js';
 import {
   matchesDashboardCategoryFilter,
   type DashboardCategoryFilter,
@@ -467,6 +468,22 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
     },
   );
 
+  const receivableStock = selectPendingStockInstallments({
+    rows: expectedReceivableRows,
+    today: input.today,
+    categoryFilter,
+    hasCostCenter: Boolean(input.costCenter),
+    expectedType: 'REVENUE',
+  });
+  const payableStock = selectPendingStockInstallments({
+    rows: expectedPayableRows,
+    today: input.today,
+    categoryFilter,
+    hasCostCenter: Boolean(input.costCenter),
+    expectedType: 'EXPENSE',
+  });
+  const stockAvailable = expectedAvailable && receivableStock.available && payableStock.available;
+
   const costCenterCashSplit = realizedAvailable && expectedAvailable;
 
   const realizedByCategory = realizedAvailable
@@ -501,6 +518,14 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
         receivables: expectedAvailable ? overdueReceivablesOfMonth : null,
         payables: expectedAvailable ? overduePayablesOfMonth : null,
       },
+    },
+    stock: {
+      receivables: stockAvailable
+        ? receivableStock.totals
+        : { open: null, overdue: null, dueToday: null, upcoming: null },
+      payables: stockAvailable
+        ? payableStock.totals
+        : { open: null, overdue: null, dueToday: null, upcoming: null },
     },
     coverage: coverageForCurrentMonth({
       monthKey,

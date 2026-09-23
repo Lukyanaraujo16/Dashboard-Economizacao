@@ -365,6 +365,26 @@ export function dashboardExpectedPayableDetailsPath(
   })}`;
 }
 
+export function dashboardReceivableStockDetailsPath(
+  costCenterId?: string | null,
+  categoryId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/receivables/stock-details${dashboardQueryString({
+    costCenterId,
+    categoryId,
+  })}`;
+}
+
+export function dashboardPayableStockDetailsPath(
+  costCenterId?: string | null,
+  categoryId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/payables/stock-details${dashboardQueryString({
+    costCenterId,
+    categoryId,
+  })}`;
+}
+
 /** 12-B/12-C — detalhe lazy de baixas realizadas por kind+key. */
 export function dashboardCashRealizedDetailsPath(options: {
   readonly monthKey?: string | null;

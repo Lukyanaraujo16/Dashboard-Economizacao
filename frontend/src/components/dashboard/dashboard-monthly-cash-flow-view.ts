@@ -1,5 +1,6 @@
 import type {
   DashboardCashRealizedCategoryComposition,
+  DashboardInstallmentPendingStock,
   DashboardMonthlyCashFlowDailyExpectedPoint,
   DashboardMonthlyCashFlowDailyRealizedPoint,
   DashboardMonthlyCashFlowResponse,
@@ -37,6 +38,8 @@ export type MonthlyCashFlowView = {
   readonly overduePayables: string | null;
   readonly overdueReceivablesOfMonth: string | null;
   readonly overduePayablesOfMonth: string | null;
+  readonly receivableStock: DashboardInstallmentPendingStock;
+  readonly payableStock: DashboardInstallmentPendingStock;
   readonly coverage: string | null;
   readonly realizedInflowsByCategory: DashboardCashRealizedCategoryComposition | null;
   readonly realizedOutflowsByCategory: DashboardCashRealizedCategoryComposition | null;
@@ -91,6 +94,18 @@ export function toMonthlyCashFlowView(data: DashboardMonthlyCashFlowResponse): M
     overduePayables: data.overdue.payables,
     overdueReceivablesOfMonth: data.overdue.ofMonth.receivables,
     overduePayablesOfMonth: data.overdue.ofMonth.payables,
+    receivableStock: data.stock?.receivables ?? {
+      open: null,
+      overdue: null,
+      dueToday: null,
+      upcoming: null,
+    },
+    payableStock: data.stock?.payables ?? {
+      open: null,
+      overdue: null,
+      dueToday: null,
+      upcoming: null,
+    },
     coverage: data.coverage,
     realizedInflowsByCategory: data.realizedByCategory.inflows,
     realizedOutflowsByCategory: data.realizedByCategory.outflows,

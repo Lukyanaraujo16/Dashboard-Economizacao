@@ -305,6 +305,15 @@
   white-space: nowrap;
 }
 
+.kpiFooterValueOverdue {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .kpiNote {
   margin: 0;
   color: var(--color-text-muted);

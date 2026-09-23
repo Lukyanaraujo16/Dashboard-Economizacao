@@ -35,6 +35,16 @@
   white-space: nowrap;
 }
 
+.situation {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.situationOverdue {
+  font-weight: 650;
+  color: var(--color-danger);
+}
+
 .rowSecondary,
 .rowTertiary {
   margin: var(--space-1) 0 0;

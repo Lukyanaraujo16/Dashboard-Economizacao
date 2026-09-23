@@ -162,6 +162,10 @@ const emptyCashFlow: DashboardMonthlyCashFlowResponse = {
     payables: '0',
     ofMonth: { receivables: '0', payables: '0' },
   },
+  stock: {
+    receivables: { open: '0', overdue: '0', dueToday: '0', upcoming: '0' },
+    payables: { open: '0', overdue: '0', dueToday: '0', upcoming: '0' },
+  },
   coverage: '0',
   realizedByCategory: {
     inflows: { total: '0', classified: '0', uncategorized: '0', imprecise: '0', coverageRate: null, items: [] },
@@ -463,7 +467,7 @@ describe('Dashboard V2 structure', () => {
       expect(kpiCard('Faturamento').dataset.state).toBe('empty');
     });
     expect(kpiScope('Faturamento').getByText('Sem faturamento de caixa no mês')).toBeTruthy();
-    expect(kpiScope('A receber').getByText('Sem valores a receber no prazo')).toBeTruthy();
+    expect(kpiScope('A receber').getByText('Sem valores a receber em aberto')).toBeTruthy();
     expect(kpiScope('Despesas').getByText('Sem despesas de caixa no mês')).toBeTruthy();
     expect(kpiScope('Resultado').getByText('Sem resultado de caixa no mês')).toBeTruthy();
     expect(sectionScope('inadimplencia').getByText('Taxa global (D1)')).toBeTruthy();

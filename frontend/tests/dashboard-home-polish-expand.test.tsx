@@ -9,8 +9,8 @@ import type { DashboardMonthEndCashPressureResponse } from '../src/services/dash
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardCashMovementHistory } from '../src/services/dashboard/cash-movement-history';
-import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
-import { getDashboardExpectedPayableDetails } from '../src/services/dashboard/expected-payable-details';
+import { getDashboardReceivableStockDetails } from '../src/services/dashboard/receivable-stock-details';
+import { getDashboardPayableStockDetails } from '../src/services/dashboard/payable-stock-details';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -45,11 +45,11 @@ vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
 vi.mock('../src/services/dashboard/cash-movement-history', () => ({
   getDashboardCashMovementHistory: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/expected-receivable-details', () => ({
-  getDashboardExpectedReceivableDetails: vi.fn(),
+vi.mock('../src/services/dashboard/receivable-stock-details', () => ({
+  getDashboardReceivableStockDetails: vi.fn(),
 }));
-vi.mock('../src/services/dashboard/expected-payable-details', () => ({
-  getDashboardExpectedPayableDetails: vi.fn(),
+vi.mock('../src/services/dashboard/payable-stock-details', () => ({
+  getDashboardPayableStockDetails: vi.fn(),
 }));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
@@ -62,8 +62,8 @@ const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getHistory = vi.mocked(getDashboardCashMovementHistory);
-const getExpectedReceivableDetails = vi.mocked(getDashboardExpectedReceivableDetails);
-const getExpectedPayableDetails = vi.mocked(getDashboardExpectedPayableDetails);
+const getReceivableStockDetails = vi.mocked(getDashboardReceivableStockDetails);
+const getPayableStockDetails = vi.mocked(getDashboardPayableStockDetails);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -189,13 +189,13 @@ beforeEach(() => {
       };
     }),
   });
-  getExpectedReceivableDetails.mockResolvedValue({
+  getReceivableStockDetails.mockResolvedValue({
     today: '2026-08-19',
-    monthKey: '2026-08',
-    from: '2026-08-01',
-    to: '2026-08-31',
     available: true,
     total: '111111.11',
+    overdue: '1.00',
+    dueToday: '0',
+    upcoming: '111110.11',
     items: [
       {
         id: 'item-1',
@@ -205,16 +205,18 @@ beforeEach(() => {
         description: 'Mensalidade',
         customerName: 'Cliente Teste',
         categoryNames: ['Serviços'],
+        situation: 'UPCOMING',
+        overdueDays: null,
       },
     ],
   });
-  getExpectedPayableDetails.mockResolvedValue({
+  getPayableStockDetails.mockResolvedValue({
     today: '2026-08-19',
-    monthKey: '2026-08',
-    from: '2026-08-01',
-    to: '2026-08-31',
     available: true,
     total: '22222.22',
+    overdue: '2.00',
+    dueToday: '0',
+    upcoming: '22020.22',
     items: [
       {
         id: 'ap-1',
@@ -224,6 +226,8 @@ beforeEach(() => {
         description: 'Honorários contábeis',
         supplierName: 'Fornecedor XYZ',
         categoryNames: ['Contabilidade'],
+        situation: 'UPCOMING',
+        overdueDays: null,
       },
     ],
   });
@@ -265,38 +269,38 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     ).toBeNull();
   });
 
-  it('Z6/Z7/Z8 — A receber abre com previsto; vencido fora; detalhes lazy', async () => {
+  it('Z6/Z7/Z8 — A receber abre estoque com vencidos e detalhes lazy', async () => {
     const dialog = await openKpiExpand('A receber');
     expect(within(dialog).getByRole('heading', { name: 'A receber' })).toBeTruthy();
-    expect(within(dialog).getByText('Total a receber')).toBeTruthy();
+    expect(within(dialog).getByText('Total em aberto')).toBeTruthy();
+    expect(within(dialog).getByText('Estoque financeiro em aberto')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*111\.111,11/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Vencidos')).toBeTruthy();
     expect(within(dialog).queryByText(/não entram neste total/i)).toBeNull();
     expect(within(dialog).queryByText(/Dias com vencimento/i)).toBeNull();
-    expect(within(dialog).queryByText(/Vencidos/i)).toBeNull();
-    expect(within(dialog).queryByText(/R\$\s*1,00/)).toBeNull();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
     await waitFor(() => {
-      expect(getExpectedReceivableDetails).toHaveBeenCalled();
+      expect(getReceivableStockDetails).toHaveBeenCalled();
     });
-    expect(within(dialog).getByText('Recebimentos previstos')).toBeTruthy();
+    expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
     expect(within(dialog).getByText('Cliente Teste')).toBeTruthy();
     expect(
       within(dialog).queryByText(/Composição por categoria do previsto não disponível/i),
     ).toBeNull();
   });
 
-  it('Z8b — Contas a pagar abre com previsto; detalhes lazy', async () => {
+  it('Z8b — Contas a pagar abre estoque com detalhes lazy', async () => {
     const dialog = await openKpiExpand('Contas a pagar');
     expect(within(dialog).getByRole('heading', { name: 'Contas a pagar' })).toBeTruthy();
-    expect(within(dialog).getByText('Total a pagar')).toBeTruthy();
+    expect(within(dialog).getByText('Total em aberto')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*22\.222,22/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Vencidos')).toBeTruthy();
     expect(within(dialog).queryByText(/não entram neste total/i)).toBeNull();
     expect(within(dialog).queryByText(/Dias com vencimento/i)).toBeNull();
-    expect(within(dialog).queryByText(/Vencidos/i)).toBeNull();
     await waitFor(() => {
-      expect(getExpectedPayableDetails).toHaveBeenCalled();
+      expect(getPayableStockDetails).toHaveBeenCalled();
     });
-    expect(within(dialog).getByText('Pagamentos previstos')).toBeTruthy();
+    expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
     expect(within(dialog).getByText('Fornecedor XYZ')).toBeTruthy();
   });
 
@@ -456,7 +460,7 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('A receber vazio honesto quando não há previsto diário', async () => {
+  it('A receber mantém estoque vencido mesmo sem previsto diário', async () => {
     getMonthlyCashFlow.mockImplementation(async (month) => {
       if (month === '2026-07') {
         return previousMonthCashFlow;
@@ -470,6 +474,10 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
           payables: '0',
           ofMonth: { receivables: '0', payables: '0' },
         },
+        stock: {
+          receivables: { open: '50.00', overdue: '50.00', dueToday: '0', upcoming: '0' },
+          payables: cashFlowHomeFixture.stock!.payables,
+        },
         daily: {
           realized: cashFlowHomeFixture.daily.realized,
           expected: [],
@@ -481,7 +489,9 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
       };
     });
     const dialog = await openKpiExpand('A receber');
-    expect(within(dialog).getByText(/Sem previsão a receber no prazo/i)).toBeTruthy();
-    expect(within(dialog).queryByText(/R\$\s*50,00/)).toBeNull();
+    expect(within(dialog).getByText('Total em aberto')).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*50,00/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Vencidos')).toBeTruthy();
+    expect(within(dialog).queryByText(/Sem previsão a receber no prazo/i)).toBeNull();
   });
 });

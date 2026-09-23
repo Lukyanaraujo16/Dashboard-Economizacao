@@ -9,16 +9,24 @@ import { civilTodayInSaoPaulo } from '../domain/analytical-timezone.js';
 import { collectCashCategoryExternalIds } from '../domain/cash-realized-category-composition.js';
 import { civilMonthBounds, civilMonthBoundsFromKey, civilMonthKey } from '../domain/civil-calendar.js';
 import { buildExpectedPayableDetailItems } from '../domain/expected-payable-details.js';
+import { buildPayableStockDetailItems } from '../domain/pending-payable-details.js';
 import { selectExpectedOpenPayables } from '../domain/expected-open-payables.js';
+import { selectPendingStockInstallments } from '../domain/pending-installment-stock.js';
 import { matchesDashboardCategoryFilter } from '../domain/dashboard-home-filters.js';
 import type { DashboardCategoryFilter } from '../domain/dashboard-home-filters.js';
 import type { CashCostCenterAllocationSource } from '../domain/monthly-cash-flow.js';
-import type { ExpectedPayableDetails, GetMonthlyCashFlowInput } from '../domain/types.js';
+import type {
+  ExpectedPayableDetails,
+  GetFinancialStockSnapshotInput,
+  GetMonthlyCashFlowInput,
+  PayableStockDetails,
+} from '../domain/types.js';
 
 const ZERO = new Prisma.Decimal(0);
 
 export type ExpectedPayableDetailsService = {
   getExpectedPayableDetails(input: GetMonthlyCashFlowInput): Promise<ExpectedPayableDetails>;
+  getPayableStockDetails(input: GetFinancialStockSnapshotInput): Promise<PayableStockDetails>;
 };
 
 export type ExpectedPayableDetailsServiceDependencies = {
@@ -158,5 +166,99 @@ export function createExpectedPayableDetailsService(
         items,
       };
     },
+
+    async getPayableStockDetails(input) {
+      const { tenantId, today, scope, costCenterId } = resolveStockScope(input);
+      const categoryFilter = input.categoryFilter ?? null;
+
+      const payables = await deps.payables.findActiveByTenant(scope);
+      const filteredPayables = activePayablesForCategory(payables, categoryFilter);
+
+      let rows: readonly CashCostCenterAllocationSource[] = filteredPayables.map((installment) => ({
+        amount: installment.unpaid,
+        installment,
+      }));
+
+      if (costCenterId !== undefined) {
+        const allocations = requireAllocations(deps);
+        rows = await allocations.findActivePayableAllocations({
+          ...scope,
+          costCenterId,
+        });
+      }
+
+      const selection = selectPendingStockInstallments({
+        rows,
+        today,
+        categoryFilter,
+        hasCostCenter: costCenterId !== undefined,
+        expectedType: 'EXPENSE',
+      });
+
+      if (!selection.available) {
+        return {
+          tenantId,
+          today,
+          available: false,
+          total: null,
+          overdue: null,
+          dueToday: null,
+          upcoming: null,
+          items: [],
+        };
+      }
+
+      const partyIds = selection.items
+        .map((row) => row.installment.partyId)
+        .filter((id): id is string => id !== null);
+      const categoryIds = collectCashCategoryExternalIds(
+        selection.items.map((row) => ({ categoryExternalIds: row.installment.categoryExternalIds })),
+      );
+
+      const [partyNames, categories] = await Promise.all([
+        deps.parties.findNamesByIds(scope, partyIds),
+        categoryIds.length === 0
+          ? Promise.resolve([])
+          : deps.categories.findByTenantAndExternalIds({ ...scope, externalIds: categoryIds }),
+      ]);
+
+      const categoryCatalog = new Map(categories.map((row) => [row.externalId, row]));
+      const items = buildPayableStockDetailItems({
+        items: selection.items,
+        partyNames,
+        categories: categoryCatalog,
+      });
+
+      return {
+        tenantId,
+        today,
+        available: true,
+        total: selection.totals.open,
+        overdue: selection.totals.overdue,
+        dueToday: selection.totals.dueToday,
+        upcoming: selection.totals.upcoming,
+        items,
+      };
+    },
+  };
+}
+
+function resolveStockScope(input: GetFinancialStockSnapshotInput): {
+  readonly tenantId: string;
+  readonly today: Date;
+  readonly scope: { readonly tenantId: string; readonly integrationId?: string };
+  readonly costCenterId: string | undefined;
+} {
+  assertTenantId(input.tenantId);
+  return {
+    tenantId: input.tenantId.trim(),
+    today: civilTodayInSaoPaulo(input.now ?? new Date()),
+    scope: {
+      tenantId: input.tenantId.trim(),
+      ...(input.integrationId !== undefined && input.integrationId.trim() !== ''
+        ? { integrationId: input.integrationId }
+        : {}),
+    },
+    costCenterId: input.costCenterId,
   };
 }

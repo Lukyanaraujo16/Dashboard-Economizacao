@@ -23,6 +23,10 @@ function flow(overrides: Partial<MonthlyCashFlow> = {}): MonthlyCashFlow {
       payables: dec('0'),
       ofMonth: { receivables: dec('0'), payables: dec('0') },
     },
+    stock: {
+      receivables: { open: dec('20000'), overdue: dec('0'), dueToday: dec('0'), upcoming: dec('20000') },
+      payables: { open: dec('0'), overdue: dec('0'), dueToday: dec('0'), upcoming: dec('0') },
+    },
     coverage: dec('0.8'),
     realizedByCategory: {
       inflows: {
@@ -81,6 +85,8 @@ describe('dashboard monthly cash flow serializer', () => {
     expect(dto.realized.inflows).toBe('80000');
     expect(dto.expected.receivables).toBe('20000');
     expect(dto.overdue.receivables).toBe('0');
+    expect(dto.stock.receivables.open).toBe('20000');
+    expect(dto.stock.payables.open).toBe('0');
     expect(dto.costCenterCashSplit).toBe(true);
     expect(dto.realizedByCategory.inflows?.items[0]).toEqual({
       kind: 'category',
@@ -113,6 +119,7 @@ describe('dashboard monthly cash flow serializer', () => {
     );
     expect(dto.billing).toBe('95000');
     expect(dto.overdue.receivables).toBe('5000');
+    expect(dto.expected.receivables).toBe('15000');
   });
 
   it('C — expected 0 + overdue 20000 → billing = realizado', () => {

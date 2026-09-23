@@ -19,6 +19,13 @@ export type DashboardMonthlyCashFlowOverdue = {
   };
 };
 
+export type DashboardInstallmentPendingStock = {
+  readonly open: string | null;
+  readonly overdue: string | null;
+  readonly dueToday: string | null;
+  readonly upcoming: string | null;
+};
+
 export type DashboardMonthlyCashFlowDailyRealizedPoint = {
   readonly date: string;
   readonly inflows: string | null;
@@ -70,6 +77,11 @@ export type DashboardMonthlyCashFlowResponse = {
   };
   readonly expected: DashboardMonthlyCashFlowExpected;
   readonly overdue: DashboardMonthlyCashFlowOverdue;
+  /** Estoque financeiro pendente atual. Independente do mês. Não é `expected`. */
+  readonly stock?: {
+    readonly receivables: DashboardInstallmentPendingStock;
+    readonly payables: DashboardInstallmentPendingStock;
+  };
   readonly coverage: string | null;
   readonly daily: {
     readonly realized: readonly DashboardMonthlyCashFlowDailyRealizedPoint[];

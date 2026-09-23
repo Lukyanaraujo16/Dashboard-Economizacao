@@ -50,6 +50,8 @@ import type {
   DashboardMonthlyCashFlowResponse,
   DashboardExpectedReceivableDetailsResponse,
   DashboardExpectedPayableDetailsResponse,
+  DashboardReceivableStockDetailsResponse,
+  DashboardPayableStockDetailsResponse,
   DashboardCashRealizedDetailsResponse,
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyRevenueResponse,
@@ -63,6 +65,8 @@ import { toDashboardMonthEndCashPressureResponse } from '../http/to-dashboard-mo
 import { toDashboardExpenseCompositionResponse } from '../http/to-dashboard-expense-composition-response.js';
 import { toDashboardExpectedReceivableDetailsResponse } from '../http/to-dashboard-expected-receivable-details-response.js';
 import { toDashboardExpectedPayableDetailsResponse } from '../http/to-dashboard-expected-payable-details-response.js';
+import { toDashboardReceivableStockDetailsResponse } from '../http/to-dashboard-receivable-stock-details-response.js';
+import { toDashboardPayableStockDetailsResponse } from '../http/to-dashboard-payable-stock-details-response.js';
 import { toDashboardCashRealizedDetailsResponse } from '../http/to-dashboard-cash-realized-details-response.js';
 import { toDashboardMonthlyCashFlowResponse } from '../http/to-dashboard-monthly-cash-flow-response.js';
 import { toDashboardCashMovementHistoryResponse } from '../http/to-dashboard-cash-movement-history-response.js';
@@ -192,6 +196,16 @@ export type DashboardOverviewFacade = {
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardExpectedPayableDetailsResponse>;
+  getReceivableStockDetails(
+    auth: AuthenticatedRequestContext,
+    costCenterId?: string | null,
+    categoryId?: string | null,
+  ): Promise<DashboardReceivableStockDetailsResponse>;
+  getPayableStockDetails(
+    auth: AuthenticatedRequestContext,
+    costCenterId?: string | null,
+    categoryId?: string | null,
+  ): Promise<DashboardPayableStockDetailsResponse>;
   getCashRealizedDetails(
     auth: AuthenticatedRequestContext,
     input: {
@@ -520,6 +534,32 @@ export function createDashboardOverviewFacade(
         ...categoryFilterSpread(categoryFilter),
       });
       return toDashboardExpectedPayableDetailsResponse(details);
+    },
+
+    async getReceivableStockDetails(auth, costCenterId = null, categoryId = null) {
+      const detailsService = requireExpectedReceivableDetails(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
+      const details = await detailsService.getReceivableStockDetails({
+        tenantId,
+        ...costCenterFilter(resolved),
+        ...categoryFilterSpread(categoryFilter),
+      });
+      return toDashboardReceivableStockDetailsResponse(details);
+    },
+
+    async getPayableStockDetails(auth, costCenterId = null, categoryId = null) {
+      const detailsService = requireExpectedPayableDetails(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
+      const details = await detailsService.getPayableStockDetails({
+        tenantId,
+        ...costCenterFilter(resolved),
+        ...categoryFilterSpread(categoryFilter),
+      });
+      return toDashboardPayableStockDetailsResponse(details);
     },
 
     async getCashRealizedDetails(auth, input) {

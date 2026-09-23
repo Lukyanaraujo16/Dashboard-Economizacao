@@ -244,6 +244,57 @@ describe('calculateMonthlyCashFlow', () => {
     expect(result.overdue.ofMonth.receivables?.toString()).toBe('70');
   });
 
+  it('estoque — vencido de mês anterior entra no stock e permanece fora de expected', () => {
+    const result = cash({
+      month: SEP,
+      today: civil('2026-09-23'),
+      receivables: [installment({ externalId: 'aug-open', dueDate: '2026-08-20', unpaid: '1000' })],
+      payables: [installment({ externalId: 'aug-ap', dueDate: '2026-08-20', unpaid: '400' })],
+    });
+    expect(result.expected.receivables?.toString()).toBe('0');
+    expect(result.expected.payables?.toString()).toBe('0');
+    expect(result.stock.receivables.open?.toString()).toBe('1000');
+    expect(result.stock.receivables.overdue?.toString()).toBe('1000');
+    expect(result.stock.payables.open?.toString()).toBe('400');
+    expect(result.stock.payables.overdue?.toString()).toBe('400');
+  });
+
+  it('estoque — total = overdue + dueToday + upcoming e não altera billing', () => {
+    const result = cash({
+      month: SEP,
+      today: civil('2026-09-23'),
+      receivables: [
+        installment({ externalId: 'over', dueDate: '2026-09-22', unpaid: '30' }),
+        installment({ externalId: 'today', dueDate: '2026-09-23', unpaid: '10' }),
+        installment({ externalId: 'next', dueDate: '2026-09-24', unpaid: '80' }),
+      ],
+    });
+    expect(result.stock.receivables.open?.toString()).toBe('120');
+    expect(result.stock.receivables.overdue?.toString()).toBe('30');
+    expect(result.stock.receivables.dueToday?.toString()).toBe('10');
+    expect(result.stock.receivables.upcoming?.toString()).toBe('80');
+    expect(result.expected.receivables?.toString()).toBe('90');
+    expect(monthlyBilling(result)?.toString()).toBe('90');
+  });
+
+  it('estoque — virada 31/08 em setembro e 31/12 em janeiro', () => {
+    const september = cash({
+      month: SEP,
+      today: civil('2026-09-01'),
+      payables: [installment({ externalId: 'aug-31', dueDate: '2026-08-31', unpaid: '15' })],
+    });
+    expect(september.stock.payables.overdue?.toString()).toBe('15');
+    expect(september.expected.payables?.toString()).toBe('0');
+
+    const january = cash({
+      month: civilMonthBoundsFromKey('2027-01'),
+      today: civil('2027-01-01'),
+      receivables: [installment({ externalId: 'dec-31', dueDate: '2026-12-31', unpaid: '22' })],
+    });
+    expect(january.stock.receivables.overdue?.toString()).toBe('22');
+    expect(january.expected.receivables?.toString()).toBe('0');
+  });
+
   it('11 — título quitado no passado: realizado histórico permanece', () => {
     const result = cash({
       month: AUG,

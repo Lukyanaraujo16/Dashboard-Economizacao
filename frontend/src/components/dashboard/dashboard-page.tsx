@@ -33,6 +33,7 @@ import {
   dashboardCashExpectedHorizonCacheKey,
   dashboardCashFlowCacheKey,
   dashboardCashMovementHistoryCacheKey,
+  dashboardCashWindowCacheKey,
   dashboardOverviewCacheKey,
 } from '../../lib/dashboard-filter-cache';
 import { getDashboardCashBalanceHistory } from '../../services/dashboard/cash-balance-history';
@@ -57,16 +58,16 @@ import {
   DashboardMonthlyCashFlowRequestError,
   type DashboardMonthlyCashFlowResponse,
 } from '../../services/dashboard/monthly-cash-flow.types';
-import { getDashboardExpectedReceivableDetails } from '../../services/dashboard/expected-receivable-details';
+import { getDashboardReceivableStockDetails } from '../../services/dashboard/receivable-stock-details';
 import {
-  DashboardExpectedReceivableDetailsRequestError,
-  type DashboardExpectedReceivableDetailsResponse,
-} from '../../services/dashboard/expected-receivable-details.types';
-import { getDashboardExpectedPayableDetails } from '../../services/dashboard/expected-payable-details';
+  DashboardReceivableStockDetailsRequestError,
+  type DashboardReceivableStockDetailsResponse,
+} from '../../services/dashboard/receivable-stock-details.types';
+import { getDashboardPayableStockDetails } from '../../services/dashboard/payable-stock-details';
 import {
-  DashboardExpectedPayableDetailsRequestError,
-  type DashboardExpectedPayableDetailsResponse,
-} from '../../services/dashboard/expected-payable-details.types';
+  DashboardPayableStockDetailsRequestError,
+  type DashboardPayableStockDetailsResponse,
+} from '../../services/dashboard/payable-stock-details.types';
 import { getDashboardOverview } from '../../services/dashboard/overview';
 import {
   DashboardOverviewRequestError,
@@ -91,10 +92,6 @@ import expectedReceivableStyles from './expected-receivable-details-panel.module
 import { ExpectedPayableDetailsPanel } from './expected-payable-details-panel';
 import expectedPayableStyles from './expected-payable-details-panel.module.css';
 import {
-  formatPeakDayLabel,
-  peakNonZeroDailyPoint,
-} from './dashboard-cash-modal-view';
-import {
   CASH_PAYABLE_SPARKLINE_CAPTION,
   CASH_RECEIVABLE_SPARKLINE_CAPTION,
   cashReceivableDailySeries,
@@ -105,10 +102,10 @@ import {
   toCashOverdueReceivablesKpi,
   toCashPayableKpi,
   toCashReceivableKpi,
+  toCashStockBreakdown,
   toOverviewDelinquencyRateKpi,
 } from './dashboard-cash-kpis-view';
 import {
-  CASH_DAILY_EXPECTED_CAPTION,
   CASH_DAILY_REALIZED_CAPTION,
   CASH_EXPECTED_HORIZON_CAPTION,
   CASH_EXPENSES_SPARKLINE_CAPTION,
@@ -117,7 +114,6 @@ import {
   cashBillingCoverageRatio,
   cashExpectedHorizonSubtitle,
   cashExpectedPayablesSeries,
-  cashExpectedReceivablesSeries,
   cashExpensesComposedSeries,
   cashManagerialResultComposedSeries,
   cashRealizedInflowsSeries,
@@ -161,7 +157,6 @@ import {
   revenueGoalStatusLabel,
   signedSharePercent,
   type CashMonthlyGroupedBarsBucket,
-  type DailyPoint,
   type ExecutiveKpiState,
 } from './v2';
 import styles from './dashboard-page.module.css';
@@ -219,17 +214,17 @@ type CashBalanceHistoryView =
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly data: DashboardCashBalanceHistoryResponse };
 
-type ExpectedReceivableDetailsView =
+type ReceivableStockDetailsView =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly data: DashboardExpectedReceivableDetailsResponse };
+  | { readonly kind: 'ready'; readonly data: DashboardReceivableStockDetailsResponse };
 
-type ExpectedPayableDetailsView =
+type PayableStockDetailsView =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly data: DashboardExpectedPayableDetailsResponse };
+  | { readonly kind: 'ready'; readonly data: DashboardPayableStockDetailsResponse };
 
 /** Estado do overview aplicado a cada widget antes dos dados locais. */
 type WidgetGate = 'loading' | 'first-sync' | 'blocked' | 'ready';
@@ -261,10 +256,6 @@ type PeriodMode = 'daily' | 'monthly';
 
 /** Horizonte do Previsto mensal (3|6|12). Sem “Mês atual” / horizon=1. */
 type ExpectedHorizon = 3 | 6 | 12;
-
-function zeroSeriesLike(points: readonly DailyPoint[]): readonly DailyPoint[] {
-  return points.map((point) => ({ date: point.date, amount: '0' }));
-}
 
 const MONTHLY_CASH_MODES: readonly { readonly id: MonthlyCashMode; readonly label: string }[] = [
   { id: 'realized', label: 'Realizado' },
@@ -338,15 +329,6 @@ function cashKpiSlot(
   return kpiViewSlot(build(cashFlow.model));
 }
 
-/** Participação da parte no total — legenda secundária dos KPIs de caixa. */
-function shareLabel(part: string | null, total: string | null): string | undefined {
-  if (part === null || total === null || isDecimalZero(total)) {
-    return undefined;
-  }
-  const share = signedSharePercent(part, total);
-  return share === null ? undefined : `${formatDelinquencyRate(share)} do faturamento`;
-}
-
 /**
  * Margem = resultado ÷ faturamento de caixa do mês, com sinal preservado.
  * `undefined` quando não há faturamento — não existe margem a declarar.
@@ -359,16 +341,26 @@ function managerialMarginLabel(result: string, revenueTotal: string): string | u
   return margin === null ? undefined : formatDelinquencyRate(margin);
 }
 
-type KpiFooterItem = { readonly label: string; readonly value: string };
+type KpiFooterItem = {
+  readonly label: string;
+  readonly value: string;
+  readonly tone?: 'overdue';
+};
 
-/** Quebra do total do mês no pé do card de KPI. */
+/** Quebra compacta no pé do card de KPI. */
 function KpiFooter({ items }: { readonly items: readonly KpiFooterItem[] }) {
   return (
     <dl className={styles.kpiFooter}>
       {items.map((item) => (
         <div key={item.label} className={styles.kpiFooterItem}>
           <dt className={styles.kpiFooterLabel}>{item.label}</dt>
-          <dd className={styles.kpiFooterValue}>{item.value}</dd>
+          <dd
+            className={
+              item.tone === 'overdue' ? styles.kpiFooterValueOverdue : styles.kpiFooterValue
+            }
+          >
+            {item.value}
+          </dd>
         </div>
       ))}
     </dl>
@@ -439,10 +431,10 @@ export function DashboardPage() {
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaveError, setGoalSaveError] = useState<string | null>(null);
   const [expandKind, setExpandKind] = useState<ExpandKind | null>(null);
-  const [expectedReceivableDetailsView, setExpectedReceivableDetailsView] =
-    useState<ExpectedReceivableDetailsView>({ kind: 'idle' });
-  const [expectedPayableDetailsView, setExpectedPayableDetailsView] =
-    useState<ExpectedPayableDetailsView>({ kind: 'idle' });
+  const [receivableStockDetailsView, setReceivableStockDetailsView] =
+    useState<ReceivableStockDetailsView>({ kind: 'idle' });
+  const [payableStockDetailsView, setPayableStockDetailsView] =
+    useState<PayableStockDetailsView>({ kind: 'idle' });
   const [monthlyCashMode, setMonthlyCashMode] = useState<MonthlyCashMode>('realized');
   const [periodMode, setPeriodMode] = useState<PeriodMode>('daily');
   const [expectedHorizon, setExpectedHorizon] = useState<ExpectedHorizon>(3);
@@ -471,16 +463,16 @@ export function DashboardPage() {
   const cashBalanceHistoryCacheRef = useRef(
     createDashboardFilterCache<DashboardCashBalanceHistoryResponse>(),
   );
-  const expectedReceivableDetailsCacheRef = useRef(
-    createDashboardFilterCache<DashboardExpectedReceivableDetailsResponse>(),
+  const receivableStockDetailsCacheRef = useRef(
+    createDashboardFilterCache<DashboardReceivableStockDetailsResponse>(),
   );
-  const expectedPayableDetailsCacheRef = useRef(
-    createDashboardFilterCache<DashboardExpectedPayableDetailsResponse>(),
+  const payableStockDetailsCacheRef = useRef(
+    createDashboardFilterCache<DashboardPayableStockDetailsResponse>(),
   );
-  const expectedReceivableDetailsViewRef = useRef(expectedReceivableDetailsView);
-  expectedReceivableDetailsViewRef.current = expectedReceivableDetailsView;
-  const expectedPayableDetailsViewRef = useRef(expectedPayableDetailsView);
-  expectedPayableDetailsViewRef.current = expectedPayableDetailsView;
+  const receivableStockDetailsViewRef = useRef(receivableStockDetailsView);
+  receivableStockDetailsViewRef.current = receivableStockDetailsView;
+  const payableStockDetailsViewRef = useRef(payableStockDetailsView);
+  payableStockDetailsViewRef.current = payableStockDetailsView;
 
   const operationalTenantId = useMemo(
     () => resolveOperationalTenantId(user, support),
@@ -629,11 +621,9 @@ export function DashboardPage() {
     [],
   );
 
-  const loadExpectedReceivableDetails = useCallback(
+  const loadReceivableStockDetails = useCallback(
     async (
       signal: AbortSignal,
-      monthKey: string,
-      todayMonthKey: string,
       costCenterId: string | null,
       categoryId: string | null,
     ) => {
@@ -641,46 +631,40 @@ export function DashboardPage() {
       if (tenantId === null) {
         return;
       }
-      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
-      const cached = expectedReceivableDetailsCacheRef.current.get(cacheKey);
+      const cacheKey = dashboardCashWindowCacheKey(tenantId, costCenterId, categoryId);
+      const cached = receivableStockDetailsCacheRef.current.get(cacheKey);
       if (cached) {
-        setExpectedReceivableDetailsView({ kind: 'ready', data: cached });
+        setReceivableStockDetailsView({ kind: 'ready', data: cached });
       } else {
-        setExpectedReceivableDetailsView({ kind: 'loading' });
+        setReceivableStockDetailsView({ kind: 'loading' });
       }
       try {
-        const data = await getDashboardExpectedReceivableDetails(
-          monthKey === todayMonthKey ? null : monthKey,
-          costCenterId,
-          categoryId,
-        );
+        const data = await getDashboardReceivableStockDetails(costCenterId, categoryId);
         if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
-        expectedReceivableDetailsCacheRef.current.set(cacheKey, data);
-        setExpectedReceivableDetailsView({ kind: 'ready', data });
+        receivableStockDetailsCacheRef.current.set(cacheKey, data);
+        setReceivableStockDetailsView({ kind: 'ready', data });
       } catch (error) {
         if (signal.aborted) {
           return;
         }
-        if (expectedReceivableDetailsViewRef.current.kind === 'ready') {
+        if (receivableStockDetailsViewRef.current.kind === 'ready') {
           return;
         }
         const message =
-          error instanceof DashboardExpectedReceivableDetailsRequestError
+          error instanceof DashboardReceivableStockDetailsRequestError
             ? error.message
-            : 'Não foi possível carregar os recebimentos previstos.';
-        setExpectedReceivableDetailsView({ kind: 'error', message });
+            : 'Não foi possível carregar o estoque a receber.';
+        setReceivableStockDetailsView({ kind: 'error', message });
       }
     },
     [],
   );
 
-  const loadExpectedPayableDetails = useCallback(
+  const loadPayableStockDetails = useCallback(
     async (
       signal: AbortSignal,
-      monthKey: string,
-      todayMonthKey: string,
       costCenterId: string | null,
       categoryId: string | null,
     ) => {
@@ -688,36 +672,32 @@ export function DashboardPage() {
       if (tenantId === null) {
         return;
       }
-      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
-      const cached = expectedPayableDetailsCacheRef.current.get(cacheKey);
+      const cacheKey = dashboardCashWindowCacheKey(tenantId, costCenterId, categoryId);
+      const cached = payableStockDetailsCacheRef.current.get(cacheKey);
       if (cached) {
-        setExpectedPayableDetailsView({ kind: 'ready', data: cached });
+        setPayableStockDetailsView({ kind: 'ready', data: cached });
       } else {
-        setExpectedPayableDetailsView({ kind: 'loading' });
+        setPayableStockDetailsView({ kind: 'loading' });
       }
       try {
-        const data = await getDashboardExpectedPayableDetails(
-          monthKey === todayMonthKey ? null : monthKey,
-          costCenterId,
-          categoryId,
-        );
+        const data = await getDashboardPayableStockDetails(costCenterId, categoryId);
         if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
-        expectedPayableDetailsCacheRef.current.set(cacheKey, data);
-        setExpectedPayableDetailsView({ kind: 'ready', data });
+        payableStockDetailsCacheRef.current.set(cacheKey, data);
+        setPayableStockDetailsView({ kind: 'ready', data });
       } catch (error) {
         if (signal.aborted) {
           return;
         }
-        if (expectedPayableDetailsViewRef.current.kind === 'ready') {
+        if (payableStockDetailsViewRef.current.kind === 'ready') {
           return;
         }
         const message =
-          error instanceof DashboardExpectedPayableDetailsRequestError
+          error instanceof DashboardPayableStockDetailsRequestError
             ? error.message
-            : 'Não foi possível carregar os pagamentos previstos.';
-        setExpectedPayableDetailsView({ kind: 'error', message });
+            : 'Não foi possível carregar o estoque a pagar.';
+        setPayableStockDetailsView({ kind: 'error', message });
       }
     },
     [],
@@ -919,6 +899,8 @@ export function DashboardPage() {
     cashMovementHistoryCacheRef.current.clear();
     cashExpectedHorizonCacheRef.current.clear();
     cashBalanceHistoryCacheRef.current.clear();
+    receivableStockDetailsCacheRef.current.clear();
+    payableStockDetailsCacheRef.current.clear();
 
     setCashBalanceHistoryView({ kind: 'idle' });
     setCashMovementHistoryView({ kind: 'idle' });
@@ -1230,51 +1212,33 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (expandKind !== 'receivable' || view.kind !== 'ready') {
-      setExpectedReceivableDetailsView({ kind: 'idle' });
+      setReceivableStockDetailsView({ kind: 'idle' });
       return;
     }
     const controller = new AbortController();
-    void loadExpectedReceivableDetails(
+    void loadReceivableStockDetails(
       controller.signal,
-      selectedMonthKey,
-      todayMonthKey,
       selectedCostCenterId,
       selectedCategoryId,
     );
     return () => controller.abort();
   }, [
     expandKind,
-    loadExpectedReceivableDetails,
+    loadReceivableStockDetails,
     selectedCategoryId,
     selectedCostCenterId,
-    selectedMonthKey,
-    todayMonthKey,
     view.kind,
   ]);
 
   useEffect(() => {
     if (expandKind !== 'payable' || view.kind !== 'ready') {
-      setExpectedPayableDetailsView({ kind: 'idle' });
+      setPayableStockDetailsView({ kind: 'idle' });
       return;
     }
     const controller = new AbortController();
-    void loadExpectedPayableDetails(
-      controller.signal,
-      selectedMonthKey,
-      todayMonthKey,
-      selectedCostCenterId,
-      selectedCategoryId,
-    );
+    void loadPayableStockDetails(controller.signal, selectedCostCenterId, selectedCategoryId);
     return () => controller.abort();
-  }, [
-    expandKind,
-    loadExpectedPayableDetails,
-    selectedCategoryId,
-    selectedCostCenterId,
-    selectedMonthKey,
-    todayMonthKey,
-    view.kind,
-  ]);
+  }, [expandKind, loadPayableStockDetails, selectedCategoryId, selectedCostCenterId, view.kind]);
 
   useEffect(() => {
     const rawMonth = searchParams.get('month');
@@ -1450,13 +1414,13 @@ export function DashboardPage() {
     toCashBillingKpi(model, selectedMonthPhase),
   );
   const receivableSlot = cashKpiSlot(gate, monthlyCashFlowView, (model) =>
-    toCashReceivableKpi(model, selectedMonthPhase),
+    toCashReceivableKpi(model),
   );
   const expensesSlot = cashKpiSlot(gate, monthlyCashFlowView, (model) =>
     toCashExpensesKpi(model, selectedMonthPhase),
   );
   const payableSlot = cashKpiSlot(gate, monthlyCashFlowView, (model) =>
-    toCashPayableKpi(model, selectedMonthPhase),
+    toCashPayableKpi(model),
   );
   const managerialResultSlot = cashKpiSlot(gate, monthlyCashFlowView, toCashManagerialResultKpi);
   const overdueSlot = cashKpiSlot(gate, monthlyCashFlowView, toCashOverdueReceivablesKpi);
@@ -1465,11 +1429,13 @@ export function DashboardPage() {
       ? (gateSlot(gate) ?? { state: 'loading' as const })
       : kpiViewSlot(toOverviewDelinquencyRateKpi(view.data));
 
-  const receivableShareLabel =
-    cashFlowModel &&
-    receivableSlot.state === 'ready' &&
-    cashFlowModel.receivable !== null
-      ? shareLabel(cashFlowModel.receivable, cashFlowModel.billing)
+  const receivableStockBreakdown =
+    cashFlowModel && receivableSlot.state === 'ready'
+      ? toCashStockBreakdown(cashFlowModel.receivableStock, 'A receber')
+      : undefined;
+  const payableStockBreakdown =
+    cashFlowModel && payableSlot.state === 'ready'
+      ? toCashStockBreakdown(cashFlowModel.payableStock, 'A vencer')
       : undefined;
 
   const cashHasSplit = cashFlowModel !== null && cashFlowModel.costCenterCashSplit;
@@ -1501,10 +1467,6 @@ export function DashboardPage() {
   );
   const realizedOutflows = useMemo(
     () => (cashFlowModel ? cashRealizedOutflowsSeries(cashFlowModel) : undefined),
-    [cashFlowModel],
-  );
-  const expectedReceivables = useMemo(
-    () => (cashFlowModel ? cashExpectedReceivablesSeries(cashFlowModel) : undefined),
     [cashFlowModel],
   );
   const expectedPayables = useMemo(
@@ -1625,11 +1587,11 @@ export function DashboardPage() {
   const canExpandBilling =
     canExpandCashDetail && cashFlowModel !== null && cashFlowModel.billing !== null;
   const canExpandReceivable =
-    canExpandCashDetail && cashFlowModel !== null && cashFlowModel.receivable !== null;
+    canExpandCashDetail && cashFlowModel !== null && cashFlowModel.receivableStock.open !== null;
   const canExpandExpenses =
     canExpandCashDetail && cashFlowModel !== null && cashFlowModel.monthlyExpenses !== null;
   const canExpandPayable =
-    canExpandCashDetail && cashFlowModel !== null && cashFlowModel.payable !== null;
+    canExpandCashDetail && cashFlowModel !== null && cashFlowModel.payableStock.open !== null;
   const canExpandResult =
     canExpandCashDetail && cashFlowModel !== null && cashFlowModel.managerialResult !== null;
   const canExpandCategoriesRevenue =
@@ -1646,8 +1608,8 @@ export function DashboardPage() {
 
   const closeExpand = useCallback(() => {
     setExpandKind(null);
-    setExpectedReceivableDetailsView({ kind: 'idle' });
-    setExpectedPayableDetailsView({ kind: 'idle' });
+    setReceivableStockDetailsView({ kind: 'idle' });
+    setPayableStockDetailsView({ kind: 'idle' });
   }, []);
 
   return (
@@ -1773,7 +1735,7 @@ export function DashboardPage() {
             expandable={canExpandReceivable}
             onExpand={canExpandReceivable ? () => setExpandKind('receivable') : undefined}
             footer={
-              receivableShareLabel ? <p className={styles.kpiNote}>{receivableShareLabel}</p> : undefined
+              receivableStockBreakdown ? <KpiFooter items={receivableStockBreakdown} /> : undefined
             }
           />
           <ExecutiveKpiCard
@@ -1814,6 +1776,9 @@ export function DashboardPage() {
             sparklineCaption={CASH_PAYABLE_SPARKLINE_CAPTION}
             expandable={canExpandPayable}
             onExpand={canExpandPayable ? () => setExpandKind('payable') : undefined}
+            footer={
+              payableStockBreakdown ? <KpiFooter items={payableStockBreakdown} /> : undefined
+            }
           />
           <ExecutiveKpiCard
             title="Resultado"
@@ -2272,64 +2237,59 @@ export function DashboardPage() {
         </WidgetExpandDialog>
       ) : null}
 
-      {expandKind === 'receivable' && cashFlowModel && cashFlowModel.receivable !== null ? (
+      {expandKind === 'receivable' && cashFlowModel && cashFlowModel.receivableStock.open !== null ? (
         <WidgetExpandDialog
           open
           title="A receber"
-          subtitle={`Previsto no prazo · ${monthLabel}`}
+          subtitle="Estoque financeiro em aberto"
           onClose={closeExpand}
         >
           <div className={styles.expandBody}>
             <dl className={styles.statsRow}>
               <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Total a receber</dt>
-                <dd className={styles.statsValue}>{formatMoneyBrl(cashFlowModel.receivable)}</dd>
+                <dt className={styles.statsLabel}>Total em aberto</dt>
+                <dd className={styles.statsValue}>
+                  {formatMoneyBrl(cashFlowModel.receivableStock.open)}
+                </dd>
               </div>
-              {expectedReceivables
-                ? (() => {
-                    const peak = peakNonZeroDailyPoint(expectedReceivables);
-                    return peak ? (
-                      <div className={styles.statsItem}>
-                        <dt className={styles.statsLabel}>Maior vencimento previsto</dt>
-                        <dd className={styles.statsValue}>
-                          {formatPeakDayLabel(peak.date)} · {formatMoneyBrl(peak.amount)}
-                        </dd>
-                      </div>
-                    ) : null;
-                  })()
-                : null}
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>Vencidos</dt>
+                <dd className={styles.statsValue}>
+                  {moneyOrDashCash(cashFlowModel.receivableStock.overdue)}
+                </dd>
+              </div>
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>Hoje</dt>
+                <dd className={styles.statsValue}>
+                  {moneyOrDashCash(cashFlowModel.receivableStock.dueToday)}
+                </dd>
+              </div>
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>A receber</dt>
+                <dd className={styles.statsValue}>
+                  {moneyOrDashCash(cashFlowModel.receivableStock.upcoming)}
+                </dd>
+              </div>
             </dl>
-            {expectedReceivables && expectedReceivables.length > 0 ? (
-              <CompetenceDailyBars
-                revenueDaily={expectedReceivables}
-                expenseDaily={zeroSeriesLike(expectedReceivables)}
-                monthKey={selectedMonthKey}
-                revenueLabel="A receber"
-                expenseLabel="—"
-                ariaLabel={`A receber por dia de vencimento em ${monthLabel}`}
-                caption={CASH_DAILY_EXPECTED_CAPTION}
-                emptyMessage={`Sem valores a receber no prazo em ${monthLabel}.`}
-              />
-            ) : (
-              <p className={styles.expandLabel}>
-                Sem previsão a receber no prazo neste mês.
-              </p>
-            )}
-            <h3 className={expectedReceivableStyles.sectionTitle}>Recebimentos previstos</h3>
-            {expectedReceivableDetailsView.kind === 'loading' ? (
+            <h3 className={expectedReceivableStyles.sectionTitle}>Títulos em aberto</h3>
+            {receivableStockDetailsView.kind === 'loading' ? (
               <p className={expectedReceivableStyles.loading}>Carregando detalhes…</p>
             ) : null}
-            {expectedReceivableDetailsView.kind === 'error' ? (
+            {receivableStockDetailsView.kind === 'error' ? (
               <p className={expectedReceivableStyles.error} role="alert">
-                {expectedReceivableDetailsView.message}
+                {receivableStockDetailsView.message}
               </p>
             ) : null}
-            {expectedReceivableDetailsView.kind === 'ready' &&
-            expectedReceivableDetailsView.data.available ? (
-              <ExpectedReceivableDetailsPanel items={expectedReceivableDetailsView.data.items} />
+            {receivableStockDetailsView.kind === 'ready' &&
+            receivableStockDetailsView.data.available ? (
+              <ExpectedReceivableDetailsPanel
+                items={receivableStockDetailsView.data.items}
+                emptyMessage="Nenhum valor a receber em aberto."
+                ariaLabel="Títulos a receber em aberto"
+              />
             ) : null}
-            {expectedReceivableDetailsView.kind === 'ready' &&
-            !expectedReceivableDetailsView.data.available ? (
+            {receivableStockDetailsView.kind === 'ready' &&
+            !receivableStockDetailsView.data.available ? (
               <p className={expectedReceivableStyles.empty}>
                 Detalhamento indisponível para o centro de custo selecionado.
               </p>
@@ -2338,64 +2298,59 @@ export function DashboardPage() {
         </WidgetExpandDialog>
       ) : null}
 
-      {expandKind === 'payable' && cashFlowModel && cashFlowModel.payable !== null ? (
+      {expandKind === 'payable' && cashFlowModel && cashFlowModel.payableStock.open !== null ? (
         <WidgetExpandDialog
           open
           title="Contas a pagar"
-          subtitle={`Previsto no prazo · ${monthLabel}`}
+          subtitle="Estoque financeiro em aberto"
           onClose={closeExpand}
         >
           <div className={styles.expandBody}>
             <dl className={styles.statsRow}>
               <div className={styles.statsItem}>
-                <dt className={styles.statsLabel}>Total a pagar</dt>
-                <dd className={styles.statsValue}>{formatMoneyBrl(cashFlowModel.payable)}</dd>
+                <dt className={styles.statsLabel}>Total em aberto</dt>
+                <dd className={styles.statsValue}>
+                  {formatMoneyBrl(cashFlowModel.payableStock.open)}
+                </dd>
               </div>
-              {expectedPayables
-                ? (() => {
-                    const peak = peakNonZeroDailyPoint(expectedPayables);
-                    return peak ? (
-                      <div className={styles.statsItem}>
-                        <dt className={styles.statsLabel}>Maior vencimento previsto</dt>
-                        <dd className={styles.statsValue}>
-                          {formatPeakDayLabel(peak.date)} · {formatMoneyBrl(peak.amount)}
-                        </dd>
-                      </div>
-                    ) : null;
-                  })()
-                : null}
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>Vencidos</dt>
+                <dd className={styles.statsValue}>
+                  {moneyOrDashCash(cashFlowModel.payableStock.overdue)}
+                </dd>
+              </div>
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>Hoje</dt>
+                <dd className={styles.statsValue}>
+                  {moneyOrDashCash(cashFlowModel.payableStock.dueToday)}
+                </dd>
+              </div>
+              <div className={styles.statsItem}>
+                <dt className={styles.statsLabel}>A vencer</dt>
+                <dd className={styles.statsValue}>
+                  {moneyOrDashCash(cashFlowModel.payableStock.upcoming)}
+                </dd>
+              </div>
             </dl>
-            {expectedPayables && expectedPayables.length > 0 ? (
-              <CompetenceDailyBars
-                revenueDaily={zeroSeriesLike(expectedPayables)}
-                expenseDaily={expectedPayables}
-                monthKey={selectedMonthKey}
-                revenueLabel="—"
-                expenseLabel="A pagar"
-                ariaLabel={`A pagar por dia de vencimento em ${monthLabel}`}
-                caption={CASH_DAILY_EXPECTED_CAPTION}
-                emptyMessage={`Sem valores a pagar no prazo em ${monthLabel}.`}
-              />
-            ) : (
-              <p className={styles.expandLabel}>
-                Sem previsão a pagar no prazo neste mês.
-              </p>
-            )}
-            <h3 className={expectedPayableStyles.sectionTitle}>Pagamentos previstos</h3>
-            {expectedPayableDetailsView.kind === 'loading' ? (
+            <h3 className={expectedPayableStyles.sectionTitle}>Títulos em aberto</h3>
+            {payableStockDetailsView.kind === 'loading' ? (
               <p className={expectedPayableStyles.loading}>Carregando detalhes…</p>
             ) : null}
-            {expectedPayableDetailsView.kind === 'error' ? (
+            {payableStockDetailsView.kind === 'error' ? (
               <p className={expectedPayableStyles.error} role="alert">
-                {expectedPayableDetailsView.message}
+                {payableStockDetailsView.message}
               </p>
             ) : null}
-            {expectedPayableDetailsView.kind === 'ready' &&
-            expectedPayableDetailsView.data.available ? (
-              <ExpectedPayableDetailsPanel items={expectedPayableDetailsView.data.items} />
+            {payableStockDetailsView.kind === 'ready' &&
+            payableStockDetailsView.data.available ? (
+              <ExpectedPayableDetailsPanel
+                items={payableStockDetailsView.data.items}
+                emptyMessage="Nenhuma conta a pagar em aberto."
+                ariaLabel="Títulos a pagar em aberto"
+              />
             ) : null}
-            {expectedPayableDetailsView.kind === 'ready' &&
-            !expectedPayableDetailsView.data.available ? (
+            {payableStockDetailsView.kind === 'ready' &&
+            !payableStockDetailsView.data.available ? (
               <p className={expectedPayableStyles.empty}>
                 Detalhamento indisponível para o centro de custo selecionado.
               </p>

@@ -22,6 +22,10 @@ const body = {
     payables: '0',
     ofMonth: { receivables: '0', payables: '0' },
   },
+  stock: {
+    receivables: { open: '20000', overdue: '0', dueToday: '0', upcoming: '20000' },
+    payables: { open: '0', overdue: '0', dueToday: '0', upcoming: '0' },
+  },
   coverage: '0.8',
   realizedByCategory: {
     inflows: { total: '80000', classified: '80000', uncategorized: '0', imprecise: '0', coverageRate: '100', items: [{ kind: 'category', key: 'cat-fixture', name: 'Serviços', amount: '80000', percentage: '100' }] },

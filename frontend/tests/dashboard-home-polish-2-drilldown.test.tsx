@@ -246,7 +246,7 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
   it('P2-11 — Contas a pagar abre via KPI', async () => {
     const dialog = await openKpiExpand('Contas a pagar');
     expect(within(dialog).getByRole('heading', { name: 'Contas a pagar' })).toBeTruthy();
-    expect(within(dialog).getByText('Total a pagar')).toBeTruthy();
+    expect(within(dialog).getByText('Total em aberto')).toBeTruthy();
   });
 
   it('P2-12 — Resultado abre via KPI', async () => {
@@ -297,8 +297,8 @@ describe('PRE-F13-HOME-POLISH-2 — drill-down e cobertura', () => {
 
     fireEvent.click(kpiScope('A receber').getByRole('button', { name: 'Expandir' }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getAllByText(/vencimento/i).length).toBeGreaterThan(0);
-    // fixture tem um único dia de expected → uma barra é válida
+    expect(within(dialog).getByText('Estoque financeiro em aberto')).toBeTruthy();
+    expect(within(dialog).getByText('Total em aberto')).toBeTruthy();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
