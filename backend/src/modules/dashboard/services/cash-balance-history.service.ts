@@ -7,11 +7,59 @@ import {
 import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
 import type { ContaAzulBalanceSnapshotRepository } from '../../integrations/conta-azul/repositories/balance-snapshot.repository.js';
 import { listRevenueGoalHistoryMonthKeys } from '../domain/revenue-goal-math.js';
+import type { OfficialBankBalanceBase } from '../../analytics/domain/projected-bank-balance.js';
 import type { DashboardCashBalanceHistoryResponse } from '../domain/types.js';
 import { serializeCivilDate, serializeDecimal } from '../http/to-dashboard-overview-response.js';
 
 /** Janela mensal do gráfico futuro: 12 meses terminando no mês selecionado. */
 export const CASH_BALANCE_HISTORY_MONTHS = 12;
+
+/** Último dia consolidado da série diária — âncora da projeção, não ledger. */
+export function officialBalanceBaseFromHistory(
+  history: DashboardCashBalanceHistoryResponse,
+): OfficialBankBalanceBase | null {
+  if (history.coverage === 'none') {
+    return null;
+  }
+  const last = history.daily[history.daily.length - 1];
+  if (!last) {
+    return null;
+  }
+  return {
+    date: new Date(`${last.date}T00:00:00.000Z`),
+    balance: new Prisma.Decimal(last.balance),
+    coverage: history.coverage,
+  };
+}
+
+/**
+ * Último saldo oficial consolidado utilizável.
+ * Se o mês corrente ainda não tem dia diário, recua ao último mês com série diária.
+ * Não inventa R$ 0 e não reconstrói por ledger.
+ */
+export async function resolveOfficialBankBalanceBase(
+  service: CashBalanceHistoryService,
+  input: { readonly tenantId: string; readonly now: Date },
+): Promise<OfficialBankBalanceBase | null> {
+  const current = await service.getCashBalanceHistory({
+    tenantId: input.tenantId,
+    now: input.now,
+  });
+  const fromCurrent = officialBalanceBaseFromHistory(current);
+  if (fromCurrent) {
+    return fromCurrent;
+  }
+  const lastMonthly = current.monthly[current.monthly.length - 1];
+  if (!lastMonthly) {
+    return null;
+  }
+  const previous = await service.getCashBalanceHistory({
+    tenantId: input.tenantId,
+    monthKey: lastMonthly.monthKey,
+    now: input.now,
+  });
+  return officialBalanceBaseFromHistory(previous);
+}
 
 export type CashBalanceHistoryService = {
   getCashBalanceHistory(input: {

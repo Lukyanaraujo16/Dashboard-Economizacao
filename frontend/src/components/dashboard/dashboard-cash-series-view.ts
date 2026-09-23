@@ -186,6 +186,25 @@ export const CASH_DAILY_EXPECTED_CAPTION = 'Previsto no prazo por dia de vencime
 export const CASH_MONTHLY_REALIZED_CAPTION =
   'Entradas e saídas realizadas por mês de baixa';
 export const CASH_EXPECTED_HORIZON_CAPTION = 'A receber e a pagar por mês de vencimento';
+export const CASH_PROJECTED_BALANCE_LABEL = 'Saldo bancário projetado';
+export const CASH_PROJECTED_OPEN_TITLES_NOTE =
+  'Valores projetados com base nos títulos atualmente em aberto.';
+
+export function cashProjectedBalanceFromCopy(dateLabel: string): string {
+  return `Projeção a partir do saldo oficial em ${dateLabel}.`;
+}
+
+export function cashProjectedBalanceUnavailableCopy(
+  reason: string | null | undefined,
+): string | null {
+  if (reason === 'FILTERED') {
+    return 'A projeção do saldo bancário está disponível apenas na visão financeira consolidada.';
+  }
+  if (reason === 'NO_BASE') {
+    return 'Saldo bancário indisponível para projeção.';
+  }
+  return null;
+}
 
 export function cashExpectedHorizonSubtitle(horizon: 3 | 6 | 12): string {
   return `Previsão dos próximos ${horizon} meses por vencimento`;

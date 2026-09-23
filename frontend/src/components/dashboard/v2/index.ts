@@ -61,7 +61,7 @@ export {
 } from './daily-balance-band-geometry';
 export type { DailyBalanceBandGeometry, DailyBalanceBandPoint } from './daily-balance-band-geometry';
 
-export { CashMonthlyGroupedBars } from './cash-monthly-grouped-bars';
+export { CashMonthlyGroupedBars, signedBalancePlotRatio } from './cash-monthly-grouped-bars';
 export type {
   CashMonthlyGroupedBarsBucket,
   CashMonthlyGroupedBarsProps,

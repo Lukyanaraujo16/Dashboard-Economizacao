@@ -424,6 +424,35 @@ export type DashboardCashExpectedHorizonResponse = {
   readonly costCenterCashSplit: boolean;
   readonly totals: DashboardCashExpectedHorizonMoney;
   readonly months: readonly DashboardCashExpectedHorizonMonth[];
+  /** Camada nova — saldo oficial + overdue do 1º mês + expected. Não é `expected`. */
+  readonly projection?: DashboardCashBankBalanceProjection;
+};
+
+export type DashboardProjectedBankBalanceUnavailableReason =
+  | 'FILTERED'
+  | 'NOT_CURRENT_MONTH'
+  | 'NO_BASE'
+  | 'EXPECTED_UNAVAILABLE';
+
+export type DashboardCashBankBalanceProjectionBase = {
+  readonly date: string;
+  readonly balance: string;
+  readonly coverage: DashboardCashBalanceCoverage;
+};
+
+export type DashboardCashBankBalanceProjectionMonth = {
+  readonly monthKey: string;
+  readonly overdueAdjustment: string | null;
+  readonly expectedReceivables: string | null;
+  readonly expectedPayables: string | null;
+  readonly projectedBalance: string | null;
+};
+
+export type DashboardCashBankBalanceProjection = {
+  readonly available: boolean;
+  readonly unavailableReason: DashboardProjectedBankBalanceUnavailableReason | null;
+  readonly base: DashboardCashBankBalanceProjectionBase | null;
+  readonly months: readonly DashboardCashBankBalanceProjectionMonth[];
 };
 
 /** GET /dashboard/receivables/expected-details — itens do KPI A receber (lazy). */

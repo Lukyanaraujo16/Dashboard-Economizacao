@@ -205,6 +205,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+.tooltipValueNegative {
+  color: var(--color-danger);
+}
+
+.tooltipCaption {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  line-height: 1.35;
+}
+
 .caption {
   margin: 0;
   color: var(--color-text-muted);

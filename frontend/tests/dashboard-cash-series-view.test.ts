@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   cashExpensesComposedSeries,
   cashManagerialResultComposedSeries,
+  cashProjectedBalanceFromCopy,
+  cashProjectedBalanceUnavailableCopy,
   cashRealizedOutflowsAccumulated,
   cashRealizedOutflowsSeries,
 } from '../src/components/dashboard/dashboard-cash-series-view';
@@ -106,5 +108,16 @@ describe('CASH-4C — séries compostas de caixa', () => {
     expect(cashExpensesComposedSeries(view)).toBeUndefined();
     expect(cashManagerialResultComposedSeries(view)).toBeUndefined();
     expect(cashRealizedOutflowsAccumulated(view)).toBeUndefined();
+  });
+});
+
+describe('copy da projeção bancária', () => {
+  it('informa data-base e não promete saldo futuro', () => {
+    expect(cashProjectedBalanceFromCopy('23/09/2026')).toBe(
+      'Projeção a partir do saldo oficial em 23/09/2026.',
+    );
+    expect(cashProjectedBalanceUnavailableCopy('FILTERED')).toMatch(/visão financeira consolidada/);
+    expect(cashProjectedBalanceUnavailableCopy('NO_BASE')).toMatch(/indisponível para projeção/);
+    expect(cashProjectedBalanceUnavailableCopy('NOT_CURRENT_MONTH')).toBeNull();
   });
 });

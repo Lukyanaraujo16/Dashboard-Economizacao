@@ -41,7 +41,11 @@ export type CashMonthlyGroupedBarsProps = {
   /** Saldo final por monthKey (08-C4). Ausência = sem linha. */
   readonly balanceByMonthKey?: ReadonlyMap<string, string>;
   readonly balanceLabel?: string;
+  readonly balanceTooltipLabel?: string;
+  readonly balanceBaseNote?: string | null;
   readonly balanceCoverageNote?: string | null;
+  /** `signed` permite saldo negativo na linha (projeção). Realizado permanece unsigned. */
+  readonly balanceScale?: 'unsigned' | 'signed';
   /** Labels das séries (default = realizado 08-B). */
   readonly inflowLabel?: string;
   readonly outflowLabel?: string;
@@ -77,9 +81,22 @@ type BalanceGeom = {
   readonly segments: readonly string[];
 };
 
+export function signedBalancePlotRatio(value: number, present: readonly number[]): number {
+  const min = Math.min(0, ...present);
+  const max = Math.max(0, ...present);
+  const span = max - min;
+  if (span <= 0) {
+    return 0.5;
+  }
+  const raw = (value - min) / span;
+  const pad = 0.08;
+  return pad + raw * (1 - 2 * pad);
+}
+
 function monthlyBalanceGeometry(
   buckets: readonly CashMonthlyGroupedBarsBucket[],
   balanceByMonthKey: ReadonlyMap<string, string>,
+  scaleMode: 'unsigned' | 'signed',
 ): BalanceGeom {
   const count = buckets.length;
   const values = buckets.map((bucket) => {
@@ -94,7 +111,12 @@ function monthlyBalanceGeometry(
     if (value === null || value === undefined) {
       continue;
     }
-    const ratio = scale > 0 ? Math.min(Math.max(value / scale, 0), 1) : 0;
+    const ratio =
+      scaleMode === 'signed'
+        ? signedBalancePlotRatio(value, present)
+        : scale > 0
+          ? Math.min(Math.max(value / scale, 0), 1)
+          : 0;
     const xPct = ((index + 0.5) / count) * 100;
     const yPct = (1 - ratio) * 100;
     points.push({ index, xPct, yPct });
@@ -131,7 +153,10 @@ export function CashMonthlyGroupedBars({
   className,
   balanceByMonthKey,
   balanceLabel = 'Saldo bancário',
+  balanceTooltipLabel = 'Saldo final',
+  balanceBaseNote = null,
   balanceCoverageNote = null,
+  balanceScale = 'unsigned',
   inflowLabel = 'Entradas',
   outflowLabel = 'Saídas',
   resultLabel = 'Resultado',
@@ -147,8 +172,8 @@ export function CashMonthlyGroupedBars({
     if (!showBalance || !balanceByMonthKey) {
       return null;
     }
-    return monthlyBalanceGeometry(buckets, balanceByMonthKey);
-  }, [balanceByMonthKey, buckets, showBalance]);
+    return monthlyBalanceGeometry(buckets, balanceByMonthKey, balanceScale);
+  }, [balanceByMonthKey, balanceScale, buckets, showBalance]);
 
   const handleMove = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -243,7 +268,7 @@ export function CashMonthlyGroupedBars({
                       bucket.result,
                     )}${
                       showBalance
-                        ? `, saldo final ${
+                        ? `, ${balanceTooltipLabel.toLowerCase()} ${
                             balanceByMonthKey?.get(bucket.monthKey) !== undefined
                               ? formatMoneyBrl(balanceByMonthKey.get(bucket.monthKey)!)
                               : '—'
@@ -341,12 +366,20 @@ export function CashMonthlyGroupedBars({
             {showBalance ? (
               <p className={styles.tooltipRow}>
                 <span className={cx(styles.swatch, styles.balanceSwatch)} aria-hidden="true" />
-                Saldo final
-                <span className={styles.tooltipValue}>
+                {balanceTooltipLabel}
+                <span
+                  className={cx(
+                    styles.tooltipValue,
+                    activeBalance !== undefined && parseAmount(activeBalance) < 0
+                      ? styles.tooltipValueNegative
+                      : undefined,
+                  )}
+                >
                   {activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}
                 </span>
               </p>
             ) : null}
+            {balanceBaseNote ? <p className={styles.tooltipCaption}>{balanceBaseNote}</p> : null}
           </ChartTooltip>
         ) : null}
       </div>
@@ -359,7 +392,7 @@ export function CashMonthlyGroupedBars({
         {active
           ? `${axisMonthLabel(active.monthKey)}: ${inflowLabel.toLowerCase()} ${moneyOrDash(active.inflows)}, ${outflowLabel.toLowerCase()} ${moneyOrDash(active.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(active.result)}${
               showBalance
-                ? `, saldo final ${activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}`
+                ? `, ${balanceTooltipLabel.toLowerCase()} ${activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}`
                 : ''
             }`
           : ''}

@@ -31,6 +31,40 @@ function isMonth(value: unknown): boolean {
   return isRecord(value) && typeof value.monthKey === 'string' && isMoney(value.expected);
 }
 
+function isProjectionMonth(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.monthKey === 'string' &&
+    isNullableDecimal(value.overdueAdjustment) &&
+    isNullableDecimal(value.expectedReceivables) &&
+    isNullableDecimal(value.expectedPayables) &&
+    isNullableDecimal(value.projectedBalance)
+  );
+}
+
+function isProjection(value: unknown): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  if (!isRecord(value) || typeof value.available !== 'boolean') {
+    return false;
+  }
+  if (value.unavailableReason !== null && typeof value.unavailableReason !== 'string') {
+    return false;
+  }
+  if (value.base !== null) {
+    if (
+      !isRecord(value.base) ||
+      typeof value.base.date !== 'string' ||
+      typeof value.base.balance !== 'string' ||
+      typeof value.base.coverage !== 'string'
+    ) {
+      return false;
+    }
+  }
+  return Array.isArray(value.months) && value.months.every(isProjectionMonth);
+}
+
 export function isCashExpectedHorizon(
   value: unknown,
   expectedHorizon: 3 | 6 | 12,
@@ -45,7 +79,8 @@ export function isCashExpectedHorizon(
     isMoney(value.totals) &&
     Array.isArray(value.months) &&
     value.months.length === expectedHorizon &&
-    value.months.every(isMonth)
+    value.months.every(isMonth) &&
+    isProjection(value.projection)
   );
 }
 

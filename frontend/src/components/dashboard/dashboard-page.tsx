@@ -109,9 +109,13 @@ import {
   CASH_EXPECTED_HORIZON_CAPTION,
   CASH_EXPENSES_SPARKLINE_CAPTION,
   CASH_MONTHLY_REALIZED_CAPTION,
+  CASH_PROJECTED_BALANCE_LABEL,
+  CASH_PROJECTED_OPEN_TITLES_NOTE,
   CASH_RESULT_SPARKLINE_CAPTION,
   cashBillingCoverageRatio,
   cashExpectedHorizonSubtitle,
+  cashProjectedBalanceFromCopy,
+  cashProjectedBalanceUnavailableCopy,
   cashExpectedPayablesSeries,
   cashExpensesComposedSeries,
   cashManagerialResultComposedSeries,
@@ -1565,6 +1569,31 @@ export function DashboardPage() {
     }));
   }, [horizonData, horizonUnavailable]);
 
+  const projection = horizonData?.projection;
+  const showProjectedBalanceLine =
+    showExpectedHorizon &&
+    selectedMonthKey === todayMonthKey &&
+    selectedCostCenterId === null &&
+    selectedCategoryId === null &&
+    projection?.available === true &&
+    projection.months.length > 0;
+  const projectedBalanceMap = useMemo(() => {
+    if (!showProjectedBalanceLine || !projection?.available) {
+      return undefined;
+    }
+    const map = new Map<string, string>();
+    for (const month of projection.months) {
+      if (month.projectedBalance !== null) {
+        map.set(month.monthKey, month.projectedBalance);
+      }
+    }
+    return map.size > 0 ? map : undefined;
+  }, [projection, showProjectedBalanceLine]);
+  const projectedBalanceCaption =
+    projection?.available && projection.base
+      ? cashProjectedBalanceFromCopy(formatCivilDatePtBr(projection.base.date))
+      : cashProjectedBalanceUnavailableCopy(projection?.unavailableReason ?? null);
+
   /** Linha de saldo: só Realizado (diário) / Mensal, sem category/CC, com pontos reais. */
   const balanceFiltersClear = selectedCategoryId === null && selectedCostCenterId === null;
   const balanceData =
@@ -1984,13 +2013,21 @@ export function DashboardPage() {
                         </dd>
                       </div>
                       <div className={styles.statsItem}>
-                        <dt className={styles.statsLabel}>Saldo previsto</dt>
+                        <dt className={styles.statsLabel}>Resultado previsto</dt>
                         <dd className={styles.statsValue}>
                           {horizonData.totals.result === null
                             ? '—'
                             : formatMoneyBrl(horizonData.totals.result)}
                         </dd>
                       </div>
+                      {showProjectedBalanceLine && projection?.base ? (
+                        <div className={styles.statsItem}>
+                          <dt className={styles.statsLabel}>Saldo hoje</dt>
+                          <dd className={styles.statsValue}>
+                            {formatMoneyBrl(projection.base.balance)}
+                          </dd>
+                        </div>
+                      ) : null}
                     </dl>
                     <CashMonthlyGroupedBars
                       buckets={expectedHorizonBuckets}
@@ -1999,7 +2036,23 @@ export function DashboardPage() {
                       emptyMessage="Sem vencimentos previstos no prazo neste horizonte."
                       inflowLabel="A receber"
                       outflowLabel="A pagar"
-                      resultLabel="Saldo previsto"
+                      resultLabel="Resultado previsto"
+                      balanceByMonthKey={projectedBalanceMap}
+                      balanceLabel={CASH_PROJECTED_BALANCE_LABEL}
+                      balanceTooltipLabel="Saldo projetado"
+                      balanceScale="signed"
+                      balanceBaseNote={
+                        projection?.base
+                          ? cashProjectedBalanceFromCopy(
+                              formatCivilDatePtBr(projection.base.date),
+                            )
+                          : null
+                      }
+                      balanceCoverageNote={
+                        showProjectedBalanceLine
+                          ? `${projectedBalanceCaption ?? ''} ${CASH_PROJECTED_OPEN_TITLES_NOTE}`.trim()
+                          : projectedBalanceCaption
+                      }
                     />
                   </>
                 ) : (
@@ -2819,13 +2872,21 @@ export function DashboardPage() {
                           </dd>
                         </div>
                         <div className={styles.statsItem}>
-                          <dt className={styles.statsLabel}>Saldo previsto</dt>
+                          <dt className={styles.statsLabel}>Resultado previsto</dt>
                           <dd className={styles.statsValue}>
                             {horizonData.totals.result === null
                               ? '—'
                               : formatMoneyBrl(horizonData.totals.result)}
                           </dd>
                         </div>
+                        {showProjectedBalanceLine && projection?.base ? (
+                          <div className={styles.statsItem}>
+                            <dt className={styles.statsLabel}>Saldo hoje</dt>
+                            <dd className={styles.statsValue}>
+                              {formatMoneyBrl(projection.base.balance)}
+                            </dd>
+                          </div>
+                        ) : null}
                       </dl>
                       <CashMonthlyGroupedBars
                         buckets={expectedHorizonBuckets}
@@ -2834,7 +2895,23 @@ export function DashboardPage() {
                         emptyMessage="Sem vencimentos previstos no prazo neste horizonte."
                         inflowLabel="A receber"
                         outflowLabel="A pagar"
-                        resultLabel="Saldo previsto"
+                        resultLabel="Resultado previsto"
+                        balanceByMonthKey={projectedBalanceMap}
+                        balanceLabel={CASH_PROJECTED_BALANCE_LABEL}
+                        balanceTooltipLabel="Saldo projetado"
+                        balanceScale="signed"
+                        balanceBaseNote={
+                          projection?.base
+                            ? cashProjectedBalanceFromCopy(
+                                formatCivilDatePtBr(projection.base.date),
+                              )
+                            : null
+                        }
+                        balanceCoverageNote={
+                          showProjectedBalanceLine
+                            ? `${projectedBalanceCaption ?? ''} ${CASH_PROJECTED_OPEN_TITLES_NOTE}`.trim()
+                            : projectedBalanceCaption
+                        }
                       />
                     </>
                   ) : (

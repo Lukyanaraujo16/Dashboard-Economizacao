@@ -20,6 +20,7 @@ import {
   createUserRepository,
 } from '../src/modules/auth/index.js';
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
+import { createContaAzulBalanceSnapshotRepository } from '../src/modules/integrations/conta-azul/repositories/balance-snapshot.repository.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
 import { createTenantRepository } from '../src/modules/tenant/repositories/tenant.repository.js';
@@ -34,6 +35,7 @@ const prisma = getPrismaClient();
 const tenants = createTenantRepository(prisma);
 const integrations = createContaAzulIntegrationRepository(prisma);
 const financial = createContaAzulFinancialRepository(prisma);
+const snapshots = createContaAzulBalanceSnapshotRepository(prisma);
 const users = createUserRepository(prisma);
 const credentials = createUserCredentialRepository(prisma);
 const passwordHasher = createArgon2idPasswordHasher();
@@ -296,5 +298,144 @@ describe('GET /dashboard/cash-expected-horizon', () => {
     expect(body.totals.receivables).not.toBe('99999');
     expect(new Prisma.Decimal(body.totals.receivables).greaterThanOrEqualTo(100)).toBe(true);
     expect(body.totals.payables).toBe('30');
+    expect(body.totals.receivables).not.toContain('999');
+    expect(body.projection.available).toBe(false);
+    expect(body.projection.unavailableReason).toBe('NO_BASE');
+    expect(body.projection.months).toEqual([]);
+  });
+
+  it('projeção usa saldo oficial + vencido só no ajuste; DELETED e outro tenant ficam fora', async () => {
+    const today = civilTodayInSaoPaulo(new Date());
+    const { from, to } = civilMonthBounds(today);
+    const monthKey = civilMonthKey(today);
+    const pastMonthKey = shiftCivilMonthKey(monthKey, -4);
+    const futureMonthKey = shiftCivilMonthKey(monthKey, 2);
+
+    const seeded = await seedConnected('ceh-proj');
+    const other = await seedConnected('ceh-proj-other');
+    const scope = {
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      syncedAt: new Date(),
+    };
+    const dueThisMonth =
+      today.getTime() <= to.getTime() ? (today.getTime() >= from.getTime() ? today : from) : to;
+    const dueInMonth = dueThisMonth.getTime() < today.getTime() ? today : dueThisMonth;
+
+    await financial.upsertReceivables(scope, [
+      installment({ externalId: 'ar-open', dueDate: dueInMonth, unpaid: '20' }),
+      installment({
+        externalId: 'ar-overdue',
+        dueDate: addCivilDays(today, -4),
+        unpaid: '15',
+        status: 'OVERDUE',
+      }),
+      installment({
+        externalId: 'ar-deleted',
+        dueDate: dueInMonth,
+        unpaid: '777',
+      }),
+    ]);
+    await financial.upsertPayables(scope, [
+      installment({ externalId: 'ap-open', dueDate: dueInMonth, unpaid: '5' }),
+    ]);
+    await prisma.receivable.updateMany({
+      where: { tenantId: seeded.tenant.id, externalId: 'ar-deleted' },
+      data: { lifecycleStatus: 'DELETED' },
+    });
+
+    await financial.upsertAccounts(scope, [
+      {
+        externalId: 'acc-main',
+        name: 'Conta principal',
+        type: 'CONTA_CORRENTE',
+        active: true,
+      },
+    ]);
+    const account = await prisma.financialAccount.findFirstOrThrow({
+      where: { tenantId: seeded.tenant.id, externalId: 'acc-main' },
+    });
+    await snapshots.upsertDailyBalanceSnapshot({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      financialAccountId: account.id,
+      financialAccountExternalId: 'acc-main',
+      balance: new Prisma.Decimal('100'),
+      balanceDate: today,
+      capturedAt: new Date(),
+      accountActiveAtCapture: true,
+    });
+    await financial.upsertAccounts(
+      {
+        tenantId: other.tenant.id,
+        integrationId: other.integration.id,
+        syncedAt: new Date(),
+      },
+      [
+        {
+          externalId: 'acc-other',
+          name: 'Outra',
+          type: 'CONTA_CORRENTE',
+          active: true,
+        },
+      ],
+    );
+    const otherAccount = await prisma.financialAccount.findFirstOrThrow({
+      where: { tenantId: other.tenant.id, externalId: 'acc-other' },
+    });
+    await snapshots.upsertDailyBalanceSnapshot({
+      tenantId: other.tenant.id,
+      integrationId: other.integration.id,
+      financialAccountId: otherAccount.id,
+      financialAccountExternalId: 'acc-other',
+      balance: new Prisma.Decimal('88888'),
+      balanceDate: today,
+      capturedAt: new Date(),
+      accountActiveAtCapture: true,
+    });
+
+    await createUser({ email: 'user-ceh-proj@mcf.test', role: 'USER', tenantId: seeded.tenant.id });
+    const app = await buildTestApp();
+    const cookie = await loginAs(app, 'user-ceh-proj@mcf.test');
+
+    const current = await app.inject({
+      method: 'GET',
+      url: `/dashboard/cash-expected-horizon?month=${monthKey}&horizon=3`,
+      headers: { cookie },
+    });
+    expect(current.statusCode).toBe(200);
+    const body = current.json();
+    expect(body.totals.receivables).toBe('20');
+    expect(body.totals.payables).toBe('5');
+    expect(body.totals.result).toBe('15');
+    expect(body.projection.available).toBe(true);
+    expect(body.projection.base.balance).toBe('100');
+    expect(body.projection.base.coverage).not.toBe('none');
+    expect(body.projection.months).toHaveLength(3);
+    expect(body.projection.months[0].overdueAdjustment).toBe('15');
+    expect(body.projection.months[0].expectedReceivables).toBe('20');
+    expect(body.projection.months[0].expectedPayables).toBe('5');
+    expect(body.projection.months[0].projectedBalance).toBe('130');
+    expect(body.projection.months[1].overdueAdjustment).toBe('0');
+    expect(body.projection.months[1].projectedBalance).toBe('130');
+
+    const past = await app.inject({
+      method: 'GET',
+      url: `/dashboard/cash-expected-horizon?month=${pastMonthKey}&horizon=3`,
+      headers: { cookie },
+    });
+    expect(past.json().projection.available).toBe(false);
+    expect(past.json().projection.unavailableReason).toBe('NOT_CURRENT_MONTH');
+    expect(past.json().totals.receivables).toBe('0');
+
+    const future = await app.inject({
+      method: 'GET',
+      url: `/dashboard/cash-expected-horizon?month=${futureMonthKey}&horizon=6`,
+      headers: { cookie },
+    });
+    expect(future.json().horizon).toBe(6);
+    expect(future.json().months).toHaveLength(6);
+    expect(future.json().projection.available).toBe(false);
+    expect(future.json().projection.unavailableReason).toBe('NOT_CURRENT_MONTH');
   });
 });

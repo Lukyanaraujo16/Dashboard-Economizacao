@@ -8,7 +8,11 @@ import { getDashboardMonthEndCashPressure } from '../src/services/dashboard/mont
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { getDashboardCashMovementHistory } from '../src/services/dashboard/cash-movement-history';
 import { getDashboardCashExpectedHorizon } from '../src/services/dashboard/cash-expected-horizon';
-import type { DashboardCashExpectedHorizonResponse } from '../src/services/dashboard/cash-expected-horizon.types';
+import type {
+  DashboardCashBankBalanceProjection,
+  DashboardCashExpectedHorizonResponse,
+} from '../src/services/dashboard/cash-expected-horizon.types';
+import { dashboardCashExpectedHorizonCacheKey } from '../src/lib/dashboard-filter-cache';
 import { getDashboardCashBalanceHistory } from '../src/services/dashboard/cash-balance-history';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
@@ -90,7 +94,34 @@ function section(id: string) {
   return document.querySelector(`[data-financial-section="${id}"]`) as HTMLElement;
 }
 
-function buildHorizon(horizon: 3 | 6 | 12): DashboardCashExpectedHorizonResponse {
+function buildProjection(horizon: 3 | 6 | 12): DashboardCashBankBalanceProjection {
+  const months = Array.from({ length: horizon }, (_, index) => {
+    const date = new Date(Date.UTC(2026, 8 + index, 1));
+    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+    const expectedReceivables = index === 0 ? '100' : '10';
+    const expectedPayables = index === 0 ? '40' : '5';
+    const overdueAdjustment = index === 0 ? '20' : '0';
+    const projectedBalance = String(100000 + (index === 0 ? 80 : 80 + index * 5));
+    return {
+      monthKey: key,
+      overdueAdjustment,
+      expectedReceivables,
+      expectedPayables,
+      projectedBalance,
+    };
+  });
+  return {
+    available: true,
+    unavailableReason: null,
+    base: { date: '2026-09-23', balance: '100000', coverage: 'available' },
+    months,
+  };
+}
+
+function buildHorizon(
+  horizon: 3 | 6 | 12,
+  projection?: DashboardCashBankBalanceProjection,
+): DashboardCashExpectedHorizonResponse {
   const months = Array.from({ length: horizon }, (_, index) => {
     const date = new Date(Date.UTC(2026, 8 + index, 1));
     const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -120,6 +151,7 @@ function buildHorizon(horizon: 3 | 6 | 12): DashboardCashExpectedHorizonResponse
       result: String(receivables - payables),
     },
     months,
+    ...(projection !== undefined ? { projection } : {}),
   };
 }
 
@@ -237,9 +269,11 @@ describe('Movimentação financeira — horizonte Previsto', () => {
         }),
       ),
     );
-    expect(await scope.findByText('Saldo previsto')).toBeTruthy();
+    expect(await scope.findByText('Resultado previsto')).toBeTruthy();
+    expect(scope.queryByText('Saldo previsto')).toBeNull();
     expect(scope.getByText('A receber e a pagar por mês de vencimento')).toBeTruthy();
     expect(scope.getByText('SET/26')).toBeTruthy();
+    expect(scope.queryByText('Saldo bancário projetado')).toBeNull();
     expect(scope.queryByText('Saldo bancário')).toBeNull();
 
     fireEvent.click(scope.getByRole('button', { name: '6 meses' }));
@@ -358,5 +392,153 @@ describe('Movimentação financeira — horizonte Previsto', () => {
     fireEvent.click(next.getByRole('button', { name: 'Mensal' }));
     fireEvent.click(next.getByRole('button', { name: 'Previsto' }));
     await waitFor(() => expect(getHorizon).toHaveBeenCalledTimes(1));
+  });
+
+  it('33/34/35/41/42 — saldo hoje, linha projetada e Resultado previsto distintos', async () => {
+    getHorizon.mockImplementation(async (options) =>
+      buildHorizon(options.horizon, buildProjection(options.horizon)),
+    );
+    renderDashboard();
+    const scope = within(section('movimentacao-financeira'));
+    await scope.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(scope);
+
+    expect(await scope.findByText('Resultado previsto')).toBeTruthy();
+    expect(scope.getByText('Saldo hoje')).toBeTruthy();
+    expect(scope.getByText('R$ 100.000,00')).toBeTruthy();
+    expect(scope.getByText('Saldo bancário projetado')).toBeTruthy();
+    expect(scope.getByText(/Projeção a partir do saldo oficial em 23\/09\/2026/)).toBeTruthy();
+    expect(scope.getByText(/títulos atualmente em aberto/)).toBeTruthy();
+    expect(scope.queryByText('Saldo previsto')).toBeNull();
+
+    const plot = scope.getByRole('img', { name: /Previsão dos próximos 3 meses/ });
+    expect(plot.querySelectorAll('circle').length).toBe(3);
+
+    fireEvent.click(scope.getByRole('button', { name: '6 meses' }));
+    await waitFor(() => expect(scope.getByText('FEV/27')).toBeTruthy());
+    expect(
+      scope.getByRole('img', { name: /Previsão dos próximos 6 meses/ }).querySelectorAll('circle')
+        .length,
+    ).toBe(6);
+
+    fireEvent.click(scope.getByRole('button', { name: '12 meses' }));
+    await waitFor(() => expect(scope.getByText('AGO/27')).toBeTruthy());
+    expect(
+      scope.getByRole('img', { name: /Previsão dos próximos 12 meses/ }).querySelectorAll('circle')
+        .length,
+    ).toBe(12);
+  });
+
+  it('38 — sem base não desenha linha e mantém expected', async () => {
+    getHorizon.mockImplementation(async (options) =>
+      buildHorizon(options.horizon, {
+        available: false,
+        unavailableReason: 'NO_BASE',
+        base: null,
+        months: [],
+      }),
+    );
+    renderDashboard();
+    const scope = within(section('movimentacao-financeira'));
+    await scope.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(scope);
+    expect(await scope.findByText('Resultado previsto')).toBeTruthy();
+    expect(scope.getAllByText('A receber').length).toBeGreaterThan(0);
+    expect(scope.getByText('SET/26')).toBeTruthy();
+    expect(scope.queryByText('Saldo bancário projetado')).toBeNull();
+    expect(scope.queryByText('Saldo hoje')).toBeNull();
+    expect(scope.getByText('Saldo bancário indisponível para projeção.')).toBeTruthy();
+  });
+
+  it('39 — filtro oculta projeção e preserva expected', async () => {
+    dashboardSearchParams = new URLSearchParams(
+      'month=2026-09&costCenter=11111111-1111-4111-8111-111111111111',
+    );
+    getCostCenters.mockResolvedValue({
+      items: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'CC',
+          code: null,
+          active: true,
+        },
+      ],
+    });
+    getHorizon.mockImplementation(async (options) =>
+      buildHorizon(options.horizon, {
+        available: false,
+        unavailableReason: 'FILTERED',
+        base: null,
+        months: [],
+      }),
+    );
+    renderDashboard();
+    const scope = within(section('movimentacao-financeira'));
+    await scope.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(scope);
+    expect(await scope.findByText('Resultado previsto')).toBeTruthy();
+    expect(scope.getByText('SET/26')).toBeTruthy();
+    expect(scope.queryByText('Saldo bancário projetado')).toBeNull();
+    expect(scope.queryByText('Saldo hoje')).toBeNull();
+    expect(
+      scope.getByText(
+        'A projeção do saldo bancário está disponível apenas na visão financeira consolidada.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('30/31/32 — mês passado/futuro não exibe linha e a cache não vaza entre meses', async () => {
+    getHorizon.mockImplementation(async (options) =>
+      buildHorizon(options.horizon, buildProjection(options.horizon)),
+    );
+    dashboardSearchParams = new URLSearchParams('month=2026-07');
+    const { unmount } = renderDashboard();
+    const past = within(section('movimentacao-financeira'));
+    await past.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(past);
+    expect(await past.findByText('Resultado previsto')).toBeTruthy();
+    expect(past.queryByText('Saldo bancário projetado')).toBeNull();
+    expect(past.queryByText('Saldo hoje')).toBeNull();
+    await waitFor(() =>
+      expect(getHorizon).toHaveBeenCalledWith(expect.objectContaining({ monthKey: '2026-07' })),
+    );
+    unmount();
+    getHorizon.mockClear();
+
+    dashboardSearchParams = new URLSearchParams('month=2026-11');
+    renderDashboard();
+    const future = within(section('movimentacao-financeira'));
+    await future.findByRole('button', { name: 'Mensal' });
+    await openMonthlyExpected(future);
+    expect(await future.findByText('Resultado previsto')).toBeTruthy();
+    expect(future.queryByText('Saldo bancário projetado')).toBeNull();
+    await waitFor(() =>
+      expect(getHorizon).toHaveBeenCalledWith(expect.objectContaining({ monthKey: '2026-11' })),
+    );
+    expect(dashboardCashExpectedHorizonCacheKey('t1', '2026-09', 3, null, null)).not.toBe(
+      dashboardCashExpectedHorizonCacheKey('t1', '2026-07', 3, null, null),
+    );
+  });
+
+  it('40 — Realizado permanece com saldo oficial e sem linha projetada', async () => {
+    getHorizon.mockImplementation(async (options) =>
+      buildHorizon(options.horizon, buildProjection(options.horizon)),
+    );
+    renderDashboard();
+    const scope = within(section('movimentacao-financeira'));
+    await scope.findByRole('button', { name: 'Mensal' });
+    fireEvent.click(scope.getByRole('button', { name: 'Mensal' }));
+    await waitFor(() => expect(getHistory).toHaveBeenCalled());
+    expect(scope.getByRole('button', { name: 'Realizado' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(scope.queryByText('Saldo bancário projetado')).toBeNull();
+    expect(scope.queryByText('Resultado previsto')).toBeNull();
+
+    await openMonthlyExpected(scope);
+    expect(await scope.findByText('Saldo bancário projetado')).toBeTruthy();
+    fireEvent.click(scope.getByRole('button', { name: 'Realizado' }));
+    expect(scope.queryByText('Saldo bancário projetado')).toBeNull();
+    expect(scope.queryByText('Resultado previsto')).toBeNull();
   });
 });

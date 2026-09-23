@@ -313,5 +313,8 @@ describe('calculateCashExpectedHorizon', () => {
     expect(body.months).toHaveLength(3);
     expect(body.totals.receivables).toBe('10');
     expect(body.months[0]!.expected.receivables).toBe('10');
+    expect(body.projection?.available).toBe(false);
+    expect(body.projection?.unavailableReason).toBe('NO_BASE');
+    expect(domain.projection).toBeUndefined();
   });
 });

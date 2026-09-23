@@ -7,6 +7,7 @@ import {
 import { selectExpectedOpenPayables } from './expected-open-payables.js';
 import { selectExpectedOpenReceivables } from './expected-open-receivables.js';
 import type { CashCostCenterAllocationSource } from './monthly-cash-flow.js';
+import type { ProjectedBankBalance } from './projected-bank-balance.js';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -32,6 +33,11 @@ export type CashExpectedHorizon = {
   readonly costCenterCashSplit: boolean;
   readonly totals: CashExpectedHorizonMoney;
   readonly months: readonly CashExpectedHorizonMonthBucket[];
+  /**
+   * Camada nova. Ausente nos cálculos puros de `expected`.
+   * HTTP sempre serializa (available=false quando não composta).
+   */
+  readonly projection?: ProjectedBankBalance;
 };
 
 export type CalculateCashExpectedHorizonInput = {

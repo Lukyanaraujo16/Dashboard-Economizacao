@@ -21,7 +21,10 @@ import { createContaAzulIntegrationRepository } from '../../integrations/conta-a
 import { createContaAzulBalanceSnapshotRepository } from '../../integrations/conta-azul/repositories/balance-snapshot.repository.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createRevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
-import { createCashBalanceHistoryService } from '../services/cash-balance-history.service.js';
+import {
+  createCashBalanceHistoryService,
+  resolveOfficialBankBalanceBase,
+} from '../services/cash-balance-history.service.js';
 import { createDashboardOverviewFacade } from '../services/dashboard-overview.facade.js';
 import { assertNoCashBalanceAnalyticsFilters } from './assert-no-cash-balance-analytics-filters.js';
 import { assertNoTenantIdQuery } from './assert-no-tenant-id-query.js';
@@ -52,6 +55,9 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
   const payables = createPayableReadRepository(prisma);
   const parties = createPartyReadRepository(prisma);
   const costCenterAllocations = createCostCenterAllocationReadRepository(prisma);
+  const cashBalanceHistory = createCashBalanceHistoryService({
+    snapshots: createContaAzulBalanceSnapshotRepository(prisma),
+  });
   const dashboard = createDashboardOverviewFacade({
     analytics: createAnalyticsService({
       receivables,
@@ -70,6 +76,8 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       receivables,
       payables,
       costCenterAllocations,
+      loadOfficialBalanceBase: ({ tenantId, now }) =>
+        resolveOfficialBankBalanceBase(cashBalanceHistory, { tenantId, now }),
     }),
     expectedReceivableDetails: createExpectedReceivableDetailsService({
       receivables,
@@ -91,9 +99,7 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       parties,
       costCenterAllocations,
     }),
-    cashBalanceHistory: createCashBalanceHistoryService({
-      snapshots: createContaAzulBalanceSnapshotRepository(prisma),
-    }),
+    cashBalanceHistory,
     integrations: createContaAzulIntegrationRepository(prisma),
     revenueGoals: createRevenueGoalRepository(prisma),
     costCenters,
