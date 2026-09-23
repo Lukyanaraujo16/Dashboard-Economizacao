@@ -48,6 +48,7 @@ import { captureActiveAccountBalanceSnapshots } from './conta-azul-balance-captu
 import { createContaAzulFinancialAccountCatalogSyncService } from './conta-azul-financial-account-catalog-sync.service.js';
 import { createContaAzulFinancialCategoryCatalogSyncService } from './conta-azul-financial-category-catalog-sync.service.js';
 import { createContaAzulPartyCatalogSyncService } from './conta-azul-party-catalog-sync.service.js';
+import type { ReusedInstallmentDetail } from '../domain/conta-azul-installment-detail-reuse.js';
 import type { ContaAzulInstallmentPresenceSyncService } from './conta-azul-installment-presence-sync.service.js';
 
 export class ContaAzulSyncExecutionError extends Error {
@@ -562,6 +563,7 @@ export function createContaAzulManualSyncEngine(deps: {
         // 11-E.1: manutenção bounded de presença AR/AP (GET /parcelas/{id}).
         // Após upserts (reativam) e antes do enrich CC, para não re-enriquecer DELETED.
         // Ausência no full/incremental NÃO tombstona — só HTTP 404 explícito.
+        const reusedInstallmentDetails: ReusedInstallmentDetail[] = [];
         if (deps.installmentPresenceSync) {
           for (const kind of ['RECEIVABLE', 'PAYABLE'] as const) {
             const presence = await deps.installmentPresenceSync.maintainPresence({
@@ -577,6 +579,7 @@ export function createContaAzulManualSyncEngine(deps: {
             processed.installmentPresenceWouldTombstone += presence.wouldTombstone;
             processed.installmentPresenceFound += presence.found200;
             processed.installmentPresenceFailed += presence.probeFailed;
+            reusedInstallmentDetails.push(...presence.foundDetails);
           }
         }
 
@@ -589,6 +592,7 @@ export function createContaAzulManualSyncEngine(deps: {
           });
           const allocationResult = await deps.costCenterSync.syncAllocationsForInstallments({
             scope: scopeOf(),
+            reusedDetails: reusedInstallmentDetails,
             requestWithAuth,
             gatedGet,
             heartbeat,

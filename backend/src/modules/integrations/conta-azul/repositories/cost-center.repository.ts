@@ -6,8 +6,10 @@ import {
   type CostCenterCatalogUpsertCounters,
 } from '../domain/conta-azul-cost-center-catalog-metrics.js';
 import {
+  classifyCostCenterAllocationMutation,
   COST_CENTER_DETAIL_RULE_VERSION,
-  shouldFetchCostCenterDetail,
+  selectCostCenterDetailCandidates,
+  type CostCenterAllocationMutation,
   type CostCenterDetailStatusValue,
 } from '../domain/conta-azul-cost-center-detail-fetch.js';
 import type { FinancialSyncScope } from './financial.repository.js';
@@ -90,13 +92,31 @@ export type ContaAzulCostCenterRepository = {
     payableId: string,
     state: CostCenterDetailStateWrite,
   ): Promise<void>;
+  persistInstallmentCostCenterDetail(input: {
+    readonly tenantId: string;
+    readonly kind: 'RECEIVABLE' | 'PAYABLE';
+    readonly installmentId: string;
+    readonly allocations: readonly CostCenterAllocationWrite[];
+    readonly state: CostCenterDetailStateWrite;
+  }): Promise<{ readonly mutation: CostCenterAllocationMutation }>;
+  findActiveInstallmentForAllocation(
+    scope: { readonly tenantId: string; readonly integrationId: string },
+    kind: 'RECEIVABLE' | 'PAYABLE',
+    externalId: string,
+  ): Promise<CostCenterAllocationCandidate | null>;
   listInstallmentsNeedingAllocationSync(scope: {
     readonly tenantId: string;
     readonly integrationId: string;
+    readonly now?: Date;
+    readonly staleAfterMs?: number;
+    readonly staleLimit?: number;
   }): Promise<{
     readonly candidates: CostCenterAllocationCandidate[];
     readonly totalInstallments: number;
     readonly skippedFresh: number;
+    readonly staleSelected: number;
+    readonly staleHotSelected: number;
+    readonly staleColdSelected: number;
   }>;
 };
 
@@ -315,11 +335,103 @@ export function createContaAzulCostCenterRepository(
       });
     },
 
+    async persistInstallmentCostCenterDetail(input) {
+      return prisma.$transaction(async (tx) => {
+        const allocationWhere =
+          input.kind === 'RECEIVABLE'
+            ? { tenantId: input.tenantId, receivableId: input.installmentId }
+            : { tenantId: input.tenantId, payableId: input.installmentId };
+        const previous = await tx.installmentCostCenterAllocation.findMany({
+          where: allocationWhere,
+          select: { costCenterId: true, amount: true },
+        });
+        await tx.installmentCostCenterAllocation.deleteMany({ where: allocationWhere });
+        if (input.allocations.length > 0) {
+          await tx.installmentCostCenterAllocation.createMany({
+            data: input.allocations.map((item) =>
+              input.kind === 'RECEIVABLE'
+                ? {
+                    tenantId: input.tenantId,
+                    receivableId: input.installmentId,
+                    costCenterId: item.costCenterId,
+                    amount: item.amount,
+                    syncedAt: input.state.syncedAt,
+                  }
+                : {
+                    tenantId: input.tenantId,
+                    payableId: input.installmentId,
+                    costCenterId: item.costCenterId,
+                    amount: item.amount,
+                    syncedAt: input.state.syncedAt,
+                  },
+            ),
+          });
+        }
+        const detailData = {
+          costCenterDetailStatus: input.state.status,
+          costCenterDetailSyncedAt: input.state.syncedAt,
+          costCenterDetailRuleVersion: input.state.ruleVersion,
+        };
+        if (input.kind === 'RECEIVABLE') {
+          await tx.receivable.updateMany({
+            where: { id: input.installmentId, tenantId: input.tenantId },
+            data: detailData,
+          });
+        } else {
+          await tx.payable.updateMany({
+            where: { id: input.installmentId, tenantId: input.tenantId },
+            data: detailData,
+          });
+        }
+        const previousFingerprint = allocationFingerprint(previous);
+        const nextFingerprint = allocationFingerprint(input.allocations);
+        return {
+          mutation: classifyCostCenterAllocationMutation(
+            previous.length,
+            input.allocations.length,
+            previousFingerprint === nextFingerprint,
+          ),
+        };
+      });
+    },
+
+    async findActiveInstallmentForAllocation(scope, kind, externalId) {
+      const where = {
+        tenantId: scope.tenantId,
+        integrationId: scope.integrationId,
+        externalId,
+        lifecycleStatus: 'ACTIVE' as const,
+      };
+      const select = { id: true, externalId: true, total: true } as const;
+      if (kind === 'RECEIVABLE') {
+        const row = await prisma.receivable.findFirst({ where, select });
+        return row
+          ? {
+              kind,
+              localId: row.id,
+              externalId: row.externalId,
+              total: row.total,
+            }
+          : null;
+      }
+      const row = await prisma.payable.findFirst({ where, select });
+      return row
+        ? {
+            kind,
+            localId: row.id,
+            externalId: row.externalId,
+            total: row.total,
+          }
+        : null;
+    },
+
     async listInstallmentsNeedingAllocationSync(scope) {
       const select = {
         id: true,
         externalId: true,
         total: true,
+        dueDate: true,
+        competenceDate: true,
         upstreamUpdatedAt: true,
         costCenterDetailStatus: true,
         costCenterDetailSyncedAt: true,
@@ -345,49 +457,63 @@ export function createContaAzulCostCenterRepository(
         }),
       ]);
 
-      const candidates: CostCenterAllocationCandidate[] = [];
-      let skippedFresh = 0;
-      const totalInstallments = receivables.length + payables.length;
-
-      const consider = (
-        kind: 'RECEIVABLE' | 'PAYABLE',
-        row: {
-          readonly id: string;
-          readonly externalId: string;
-          readonly total: Prisma.Decimal;
-          readonly upstreamUpdatedAt: Date | null;
-          readonly costCenterDetailStatus: CostCenterDetailStatusValue;
-          readonly costCenterDetailSyncedAt: Date | null;
-          readonly costCenterDetailRuleVersion: number;
-        },
-      ) => {
-        const decision = shouldFetchCostCenterDetail({
-          status: row.costCenterDetailStatus,
-          detailSyncedAt: row.costCenterDetailSyncedAt,
-          detailRuleVersion: row.costCenterDetailRuleVersion,
-          upstreamUpdatedAt: row.upstreamUpdatedAt,
+      const selected = selectCostCenterDetailCandidates(
+        [
+          ...receivables.map((row) => ({
+            kind: 'RECEIVABLE' as const,
+            localId: row.id,
+            externalId: row.externalId,
+            total: row.total,
+            status: row.costCenterDetailStatus,
+            detailSyncedAt: row.costCenterDetailSyncedAt,
+            detailRuleVersion: row.costCenterDetailRuleVersion,
+            upstreamUpdatedAt: row.upstreamUpdatedAt,
+            dueDate: row.dueDate,
+            competenceDate: row.competenceDate,
+          })),
+          ...payables.map((row) => ({
+            kind: 'PAYABLE' as const,
+            localId: row.id,
+            externalId: row.externalId,
+            total: row.total,
+            status: row.costCenterDetailStatus,
+            detailSyncedAt: row.costCenterDetailSyncedAt,
+            detailRuleVersion: row.costCenterDetailRuleVersion,
+            upstreamUpdatedAt: row.upstreamUpdatedAt,
+            dueDate: row.dueDate,
+            competenceDate: row.competenceDate,
+          })),
+        ],
+        {
+          now: scope.now,
+          staleAfterMs: scope.staleAfterMs,
+          staleLimit: scope.staleLimit,
           currentRuleVersion: COST_CENTER_DETAIL_RULE_VERSION,
-        });
-        if (!decision.shouldFetch) {
-          skippedFresh += 1;
-          return;
-        }
-        candidates.push({
-          kind,
-          localId: row.id,
+        },
+      );
+
+      return {
+        candidates: selected.candidates.map((row) => ({
+          kind: row.kind,
+          localId: row.localId,
           externalId: row.externalId,
           total: row.total,
-        });
+        })),
+        totalInstallments: receivables.length + payables.length,
+        skippedFresh: selected.skippedFresh,
+        staleSelected: selected.staleSelected,
+        staleHotSelected: selected.staleHotSelected,
+        staleColdSelected: selected.staleColdSelected,
       };
-
-      for (const row of receivables) {
-        consider('RECEIVABLE', row);
-      }
-      for (const row of payables) {
-        consider('PAYABLE', row);
-      }
-
-      return { candidates, totalInstallments, skippedFresh };
     },
   };
+}
+
+function allocationFingerprint(
+  rows: readonly { readonly costCenterId: string; readonly amount: Prisma.Decimal }[],
+): string {
+  return rows
+    .map((row) => `${row.costCenterId}:${row.amount.toFixed(4)}`)
+    .sort()
+    .join('|');
 }

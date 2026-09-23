@@ -8,6 +8,7 @@ import type {
   ContaAzulInstallmentPresenceRepository,
   InstallmentPresenceKind,
 } from '../repositories/installment-presence.repository.js';
+import type { ReusedInstallmentDetail } from '../domain/conta-azul-installment-detail-reuse.js';
 import type { FinancialSyncScope } from '../repositories/financial.repository.js';
 
 export type InstallmentPresenceProbeFailureReason =
@@ -36,6 +37,8 @@ export type InstallmentPresenceMaintenanceSummary = {
   readonly remainingEstimate: number;
   readonly autoTombstone: boolean;
   readonly durationMs: number;
+  /** GET 200 já obtidos — o engine reusa no rateio sem segundo GET. */
+  readonly foundDetails: readonly ReusedInstallmentDetail[];
 };
 
 export type ContaAzulInstallmentPresenceSyncService = {
@@ -158,18 +161,24 @@ export function createContaAzulInstallmentPresenceSyncService(deps: {
       let probeFailed = 0;
       let checkpointsAdvanced = 0;
       const probeFailures = emptyFailures();
+      const foundDetails: ReusedInstallmentDetail[] = [];
 
       for (const candidate of candidates) {
         await heartbeat();
         const checkedAt = now();
         try {
-          await input.requestWithAuth((accessToken) =>
+          const payload = await input.requestWithAuth((accessToken) =>
             input.gatedGet(() =>
               deps.apiClient.getInstallmentDetail(accessToken, candidate.externalId),
             ),
           );
-          // GET 200: presença confirmada. Sync normal permanece autoridade dos campos financeiros.
+          // GET 200: presença confirmada. O body é reusado no rateio (sem segundo GET).
           found200 += 1;
+          foundDetails.push({
+            kind: candidate.kind,
+            externalId: candidate.externalId,
+            payload,
+          });
           await deps.presence.touchPresenceCheckpoint({
             tenantId: input.scope.tenantId,
             integrationId: input.scope.integrationId,
@@ -231,11 +240,29 @@ export function createContaAzulInstallmentPresenceSyncService(deps: {
         remainingEstimate: Math.max(0, remainingEstimate - tombstoned),
         autoTombstone,
         durationMs: Date.now() - startedAt,
+        foundDetails,
       };
 
       logPresence({
         event: 'conta_azul_installment_presence_maintain',
-        ...summary,
+        tenantId: summary.tenantId,
+        integrationId: summary.integrationId,
+        kind: summary.kind,
+        candidatesDiscovered: summary.candidatesDiscovered,
+        candidatesQueued: summary.candidatesQueued,
+        neverChecked: summary.neverChecked,
+        previouslyChecked: summary.previouslyChecked,
+        found200: summary.found200,
+        notFound404: summary.notFound404,
+        tombstoned: summary.tombstoned,
+        wouldTombstone: summary.wouldTombstone,
+        probeFailed: summary.probeFailed,
+        probeFailures: summary.probeFailures,
+        checkpointsAdvanced: summary.checkpointsAdvanced,
+        remainingEstimate: summary.remainingEstimate,
+        autoTombstone: summary.autoTombstone,
+        durationMs: summary.durationMs,
+        reusedPayloads: foundDetails.length,
       });
       return summary;
     },

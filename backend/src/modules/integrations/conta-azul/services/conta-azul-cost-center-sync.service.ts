@@ -8,10 +8,14 @@ import {
 } from '../domain/conta-azul-cost-center-catalog-metrics.js';
 import {
   COST_CENTER_DETAIL_RULE_VERSION,
+  COST_CENTER_DETAIL_STALE_AFTER_MS,
+  COST_CENTER_DETAIL_STALE_REVALIDATE_MAX_PER_SYNC,
   detailStatusFromNormalizeKind,
   emptyCostCenterEnrichmentCounters,
+  type CostCenterAllocationMutation,
   type CostCenterEnrichmentCounters,
 } from '../domain/conta-azul-cost-center-detail-fetch.js';
+import type { ReusedInstallmentDetail } from '../domain/conta-azul-installment-detail-reuse.js';
 import {
   mapCostCenterPage,
   mapInstallmentCostCenterAllocations,
@@ -39,6 +43,7 @@ export type ContaAzulCostCenterSyncService = {
   syncAllocationsForInstallments(input: {
     readonly scope: FinancialSyncScope;
     readonly installments?: readonly CostCenterAllocationCandidate[];
+    readonly reusedDetails?: readonly ReusedInstallmentDetail[];
     readonly requestWithAuth: <T>(work: (accessToken: string) => Promise<T>) => Promise<T>;
     readonly gatedGet: <T>(work: () => Promise<T>) => Promise<T>;
     readonly heartbeat: () => Promise<void>;
@@ -322,19 +327,188 @@ export function createContaAzulCostCenterSyncService(deps: {
     async syncAllocationsForInstallments(input) {
       const startedAt = Date.now();
       const counters = emptyCostCenterEnrichmentCounters();
+      const appliedKeys = new Set<string>();
+
+      const recordMutation = (mutation: CostCenterAllocationMutation) => {
+        if (mutation === 'opened') {
+          counters.allocationOpened += 1;
+        } else if (mutation === 'cleared') {
+          counters.allocationCleared += 1;
+        } else if (mutation === 'replaced') {
+          counters.allocationReplaced += 1;
+        } else {
+          counters.allocationUnchanged += 1;
+        }
+      };
+
+      const applyPayload = async (
+        installment: CostCenterAllocationCandidate,
+        payload: unknown,
+      ) => {
+        const mapped = mapInstallmentCostCenterAllocations(payload);
+        const normalized = normalizeInstallmentCostCenterAllocations({
+          installmentTotal: installment.total,
+          allocations: mapped,
+        });
+
+        if (normalized.kind === 'MULTI_CENTER_UNRESOLVED') {
+          logMultiCenterUnresolved({
+            kind: installment.kind,
+            installmentExternalId: installment.externalId,
+            total: installment.total.toFixed(),
+            upstreamSum: normalized.upstreamSum.toFixed(),
+            centerCount: normalized.allocations.length,
+          });
+        }
+
+        const knownIds = await deps.costCenters.findCostCenterIdsByExternal(
+          {
+            tenantId: input.scope.tenantId,
+            integrationId: input.scope.integrationId,
+          },
+          normalized.allocations.map((item) => item.externalCostCenterId),
+        );
+
+        const writes: Array<{ costCenterId: string; amount: Prisma.Decimal }> = [];
+        for (const item of normalized.allocations) {
+          let costCenterId = knownIds.get(item.externalCostCenterId);
+          if (!costCenterId) {
+            costCenterId = await deps.costCenters.upsertCostCenterByExternal(input.scope, {
+              externalId: item.externalCostCenterId,
+              name: item.name,
+            });
+            knownIds.set(item.externalCostCenterId, costCenterId);
+          }
+          writes.push({ costCenterId, amount: item.amount });
+        }
+
+        const persistResult = await deps.costCenters.persistInstallmentCostCenterDetail({
+          tenantId: input.scope.tenantId,
+          kind: installment.kind,
+          installmentId: installment.localId,
+          allocations: writes,
+          state: {
+            status: detailStatusFromNormalizeKind(normalized.kind),
+            syncedAt: input.scope.syncedAt,
+            ruleVersion: COST_CENTER_DETAIL_RULE_VERSION,
+          },
+        });
+
+        counters.allocationsWritten += writes.length;
+        counters.success += 1;
+        recordMutation(persistResult.mutation);
+        if (normalized.kind === 'NO_ALLOCATION') {
+          counters.noAllocation += 1;
+        } else if (normalized.kind === 'PARTIAL') {
+          counters.partial += 1;
+        } else if (normalized.kind === 'MULTI_CENTER_UNRESOLVED') {
+          counters.unresolved += 1;
+        }
+
+        const allocated = writes.reduce(
+          (sum, row) => sum.plus(row.amount),
+          new Prisma.Decimal(0),
+        );
+        const status = reconcileCostCenterAllocationAmounts({
+          total: installment.total,
+          allocated,
+        });
+        logAllocationReconcile({
+          kind: installment.kind,
+          installmentExternalId: installment.externalId,
+          status,
+          normalizeKind: normalized.kind,
+          total: installment.total.toFixed(),
+          allocated: allocated.toFixed(),
+          upstreamSum: normalized.upstreamSum.toFixed(),
+        });
+      };
+
+      const markAttemptedParcelError = async (installment: CostCenterAllocationCandidate) => {
+        // 11-E.3: tentativa já iniciada — invalidar confirmação CURRENT sem apagar rows.
+        const errorState = {
+          status: 'ERROR' as const,
+          syncedAt: input.scope.syncedAt,
+          ruleVersion: COST_CENTER_DETAIL_RULE_VERSION,
+        };
+        if (installment.kind === 'RECEIVABLE') {
+          await deps.costCenters.markReceivableCostCenterDetailState(
+            input.scope.tenantId,
+            installment.localId,
+            errorState,
+          );
+        } else {
+          await deps.costCenters.markPayableCostCenterDetailState(
+            input.scope.tenantId,
+            installment.localId,
+            errorState,
+          );
+        }
+      };
+
+      for (const reused of input.reusedDetails ?? []) {
+        const key = `${reused.kind}:${reused.externalId}`;
+        if (appliedKeys.has(key)) {
+          continue;
+        }
+        const fromExplicit = input.installments?.find(
+          (row) => row.kind === reused.kind && row.externalId === reused.externalId,
+        );
+        const installment =
+          fromExplicit ??
+          (await deps.costCenters.findActiveInstallmentForAllocation(
+            {
+              tenantId: input.scope.tenantId,
+              integrationId: input.scope.integrationId,
+            },
+            reused.kind,
+            reused.externalId,
+          ));
+        if (!installment) {
+          continue;
+        }
+        appliedKeys.add(key);
+        counters.reusedPresencePayloads += 1;
+        try {
+          await applyPayload(installment, reused.payload);
+        } catch (error) {
+          if (isAbortingApiError(error)) {
+            await markAttemptedParcelError(installment);
+            counters.errors += 1;
+            throw error;
+          }
+          if (error instanceof ContaAzulApiError || error instanceof ContaAzulMappingError) {
+            counters.errors += 1;
+            await markAttemptedParcelError(installment);
+          } else {
+            throw error;
+          }
+        }
+        await input.heartbeat();
+      }
 
       let installments: readonly CostCenterAllocationCandidate[];
       if (input.installments) {
-        installments = input.installments;
-        counters.candidates = installments.length;
+        installments = input.installments.filter(
+          (row) => !appliedKeys.has(`${row.kind}:${row.externalId}`),
+        );
+        counters.candidates += input.installments.length;
       } else {
         const listed = await deps.costCenters.listInstallmentsNeedingAllocationSync({
           tenantId: input.scope.tenantId,
           integrationId: input.scope.integrationId,
+          now: input.scope.syncedAt,
+          staleAfterMs: COST_CENTER_DETAIL_STALE_AFTER_MS,
+          staleLimit: COST_CENTER_DETAIL_STALE_REVALIDATE_MAX_PER_SYNC,
         });
-        installments = listed.candidates;
-        counters.candidates = listed.totalInstallments;
+        installments = listed.candidates.filter(
+          (row) => !appliedKeys.has(`${row.kind}:${row.externalId}`),
+        );
+        counters.candidates += listed.totalInstallments;
         counters.skippedFresh = listed.skippedFresh;
+        counters.staleRevalidated = listed.staleSelected;
+        counters.staleHotSelected = listed.staleHotSelected;
+        counters.staleColdSelected = listed.staleColdSelected;
       }
 
       for (const installment of installments) {
@@ -345,137 +519,16 @@ export function createContaAzulCostCenterSyncService(deps: {
               deps.apiClient.getInstallmentDetail(accessToken, installment.externalId),
             ),
           );
-          const mapped = mapInstallmentCostCenterAllocations(payload);
-          const normalized = normalizeInstallmentCostCenterAllocations({
-            installmentTotal: installment.total,
-            allocations: mapped,
-          });
-
-          if (normalized.kind === 'MULTI_CENTER_UNRESOLVED') {
-            logMultiCenterUnresolved({
-              kind: installment.kind,
-              installmentExternalId: installment.externalId,
-              total: installment.total.toFixed(),
-              upstreamSum: normalized.upstreamSum.toFixed(),
-              centerCount: normalized.allocations.length,
-            });
-          }
-
-          const knownIds = await deps.costCenters.findCostCenterIdsByExternal(
-            {
-              tenantId: input.scope.tenantId,
-              integrationId: input.scope.integrationId,
-            },
-            normalized.allocations.map((item) => item.externalCostCenterId),
-          );
-
-          const writes: Array<{ costCenterId: string; amount: Prisma.Decimal }> = [];
-          for (const item of normalized.allocations) {
-            let costCenterId = knownIds.get(item.externalCostCenterId);
-            if (!costCenterId) {
-              costCenterId = await deps.costCenters.upsertCostCenterByExternal(input.scope, {
-                externalId: item.externalCostCenterId,
-                name: item.name,
-              });
-              knownIds.set(item.externalCostCenterId, costCenterId);
-            }
-            writes.push({ costCenterId, amount: item.amount });
-          }
-
-          if (installment.kind === 'RECEIVABLE') {
-            await deps.costCenters.replaceAllocationsForReceivable(
-              input.scope.tenantId,
-              installment.localId,
-              writes,
-              input.scope.syncedAt,
-            );
-          } else {
-            await deps.costCenters.replaceAllocationsForPayable(
-              input.scope.tenantId,
-              installment.localId,
-              writes,
-              input.scope.syncedAt,
-            );
-          }
-
-          const detailStatus = detailStatusFromNormalizeKind(normalized.kind);
-          const detailState = {
-            status: detailStatus,
-            syncedAt: input.scope.syncedAt,
-            ruleVersion: COST_CENTER_DETAIL_RULE_VERSION,
-          };
-          if (installment.kind === 'RECEIVABLE') {
-            await deps.costCenters.markReceivableCostCenterDetailState(
-              input.scope.tenantId,
-              installment.localId,
-              detailState,
-            );
-          } else {
-            await deps.costCenters.markPayableCostCenterDetailState(
-              input.scope.tenantId,
-              installment.localId,
-              detailState,
-            );
-          }
-
-          counters.allocationsWritten += writes.length;
-          counters.success += 1;
-          if (normalized.kind === 'NO_ALLOCATION') {
-            counters.noAllocation += 1;
-          } else if (normalized.kind === 'PARTIAL') {
-            counters.partial += 1;
-          } else if (normalized.kind === 'MULTI_CENTER_UNRESOLVED') {
-            counters.unresolved += 1;
-          }
-
-          const allocated = writes.reduce(
-            (sum, row) => sum.plus(row.amount),
-            new Prisma.Decimal(0),
-          );
-          const status = reconcileCostCenterAllocationAmounts({
-            total: installment.total,
-            allocated,
-          });
-          logAllocationReconcile({
-            kind: installment.kind,
-            installmentExternalId: installment.externalId,
-            status,
-            normalizeKind: normalized.kind,
-            total: installment.total.toFixed(),
-            allocated: allocated.toFixed(),
-            upstreamSum: normalized.upstreamSum.toFixed(),
-          });
+          await applyPayload(installment, payload);
         } catch (error) {
-          const markAttemptedParcelError = async () => {
-            // 11-E.3: tentativa já iniciada — invalidar confirmação CURRENT sem apagar rows.
-            const errorState = {
-              status: 'ERROR' as const,
-              syncedAt: input.scope.syncedAt,
-              ruleVersion: COST_CENTER_DETAIL_RULE_VERSION,
-            };
-            if (installment.kind === 'RECEIVABLE') {
-              await deps.costCenters.markReceivableCostCenterDetailState(
-                input.scope.tenantId,
-                installment.localId,
-                errorState,
-              );
-            } else {
-              await deps.costCenters.markPayableCostCenterDetailState(
-                input.scope.tenantId,
-                installment.localId,
-                errorState,
-              );
-            }
-          };
-
           if (isAbortingApiError(error)) {
-            await markAttemptedParcelError();
+            await markAttemptedParcelError(installment);
             counters.errors += 1;
             throw error;
           }
           if (error instanceof ContaAzulApiError || error instanceof ContaAzulMappingError) {
             counters.errors += 1;
-            await markAttemptedParcelError();
+            await markAttemptedParcelError(installment);
           } else {
             throw error;
           }

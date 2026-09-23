@@ -44,10 +44,15 @@ function createRepoMock(
     replaceAllocationsForPayable: vi.fn(async () => undefined),
     markReceivableCostCenterDetailState: vi.fn(async () => undefined),
     markPayableCostCenterDetailState: vi.fn(async () => undefined),
+    persistInstallmentCostCenterDetail: vi.fn(async () => ({ mutation: 'unchanged' as const })),
+    findActiveInstallmentForAllocation: vi.fn(async () => null),
     listInstallmentsNeedingAllocationSync: vi.fn(async () => ({
       candidates: [],
       totalInstallments: 0,
       skippedFresh: 0,
+      staleSelected: 0,
+      staleHotSelected: 0,
+      staleColdSelected: 0,
     })),
     ...overrides,
   };

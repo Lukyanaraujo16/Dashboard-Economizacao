@@ -332,6 +332,13 @@ describe('11-E.1 maintainPresence probes', () => {
     const getDetail = vi.fn(async () => ({ id: 'parcela-ok', status: 'ATRASADO' }));
     const summary = await runMaintain(presence, getDetail);
     expect(summary.found200).toBe(1);
+    expect(summary.foundDetails).toEqual([
+      {
+        kind: 'RECEIVABLE',
+        externalId: 'parcela-ok',
+        payload: { id: 'parcela-ok', status: 'ATRASADO' },
+      },
+    ]);
     expect(summary.tombstoned).toBe(0);
     expect(summary.checkpointsAdvanced).toBe(1);
     expect(markDeleted).not.toHaveBeenCalled();
