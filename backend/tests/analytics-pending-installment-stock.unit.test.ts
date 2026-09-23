@@ -10,6 +10,12 @@ import {
 } from '../src/modules/analytics/domain/pending-installment-stock.js';
 
 const today = new Date('2026-09-23T00:00:00.000Z');
+const SEP_FROM = new Date('2026-09-01T00:00:00.000Z');
+const SEP_TO = new Date('2026-09-30T00:00:00.000Z');
+const AUG_FROM = new Date('2026-08-01T00:00:00.000Z');
+const AUG_TO = new Date('2026-08-31T00:00:00.000Z');
+const OCT_FROM = new Date('2026-10-01T00:00:00.000Z');
+const OCT_TO = new Date('2026-10-31T00:00:00.000Z');
 
 function dec(value: string): Prisma.Decimal {
   return new Prisma.Decimal(value);
@@ -24,6 +30,7 @@ function installment(input: {
   readonly status?: FinancialInstallmentReadRecord['status'];
   readonly tenantId?: string;
   readonly partyId?: string | null;
+  readonly categoryExternalIds?: readonly string[];
 }): FinancialInstallmentReadRecord {
   const unpaid = dec(input.unpaid ?? '0');
   const paid = dec(input.paid ?? '0');
@@ -43,7 +50,7 @@ function installment(input: {
     paid,
     unpaid,
     partyId: input.partyId ?? null,
-    categoryExternalIds: [],
+    categoryExternalIds: [...(input.categoryExternalIds ?? [])],
     syncedAt: today,
   };
 }
@@ -52,10 +59,16 @@ function row(record: FinancialInstallmentReadRecord) {
   return { amount: record.unpaid, installment: record };
 }
 
-function select(records: readonly FinancialInstallmentReadRecord[], type: 'REVENUE' | 'EXPENSE') {
+function select(
+  records: readonly FinancialInstallmentReadRecord[],
+  type: 'REVENUE' | 'EXPENSE',
+  window: { readonly from: Date; readonly to: Date } = { from: SEP_FROM, to: SEP_TO },
+) {
   return selectPendingStockInstallments({
     rows: records.map(row),
     today,
+    from: window.from,
+    to: window.to,
     categoryFilter: null,
     hasCostCenter: false,
     expectedType: type,
@@ -109,13 +122,21 @@ describe('selectPendingStockInstallments', () => {
     expect(result.totals.upcoming.toString()).toBe('4');
   });
 
-  it('4 — vencimento em mês anterior permanece no estoque', () => {
-    const result = select(
+  it('4 — vencimento em mês anterior fica fora do mês selecionado', () => {
+    const september = select(
       [installment({ externalId: 'ap-aug', dueDate: '2026-08-20', unpaid: '1000' })],
       'EXPENSE',
     );
-    expect(result.totals.open.toString()).toBe('1000');
-    expect(result.items[0]?.situation).toBe('OVERDUE');
+    expect(september.items).toHaveLength(0);
+    expect(september.totals.open.toString()).toBe('0');
+
+    const august = select(
+      [installment({ externalId: 'ap-aug', dueDate: '2026-08-20', unpaid: '1000' })],
+      'EXPENSE',
+      { from: AUG_FROM, to: AUG_TO },
+    );
+    expect(august.totals.open.toString()).toBe('1000');
+    expect(august.items[0]?.situation).toBe('OVERDUE');
   });
 
   it('5 — PARTIALLY_PAID entra só pelo unpaid restante', () => {
@@ -181,17 +202,64 @@ describe('selectPendingStockInstallments', () => {
     expect(result.totals.open.toString()).toBe('3');
   });
 
-  it('20 — estoque não recorta pelo mês: agosto entra em setembro', () => {
-    const result = select(
-      [
-        installment({ externalId: 'aug', dueDate: '2026-08-20', unpaid: '1000' }),
-        installment({ externalId: 'sep', dueDate: '2026-09-24', unpaid: '500' }),
-      ],
-      'EXPENSE',
-    );
-    expect(result.totals.overdue.toString()).toBe('1000');
-    expect(result.totals.upcoming.toString()).toBe('500');
-    expect(result.totals.open.toString()).toBe('1500');
+  it('20 — recorta pelo mês: agosto e outubro ficam fora de setembro', () => {
+    const records = [
+      installment({ externalId: 'aug', dueDate: '2026-08-20', unpaid: '1000' }),
+      installment({ externalId: 'sep-over', dueDate: '2026-09-22', unpaid: '200' }),
+      installment({ externalId: 'sep-today', dueDate: '2026-09-23', unpaid: '50' }),
+      installment({ externalId: 'sep-up', dueDate: '2026-09-24', unpaid: '500' }),
+      installment({ externalId: 'oct', dueDate: '2026-10-05', unpaid: '900' }),
+    ];
+    const september = select(records, 'EXPENSE');
+    expect(september.items.map((item) => item.installment.externalId)).toEqual([
+      'sep-over',
+      'sep-today',
+      'sep-up',
+    ]);
+    expect(september.totals.overdue.toString()).toBe('200');
+    expect(september.totals.dueToday.toString()).toBe('50');
+    expect(september.totals.upcoming.toString()).toBe('500');
+    expect(september.totals.open.toString()).toBe('750');
+
+    const october = select(records, 'EXPENSE', { from: OCT_FROM, to: OCT_TO });
+    expect(october.items).toHaveLength(1);
+    expect(october.items[0]?.situation).toBe('UPCOMING');
+    expect(october.totals.open.toString()).toBe('900');
+  });
+
+  it('8 — filtro de categoria precisa continua valendo no recorte mensal', () => {
+    const records = [
+      installment({
+        externalId: 'serv-over',
+        dueDate: '2026-09-22',
+        unpaid: '40',
+        categoryExternalIds: ['serv'],
+      }),
+      installment({
+        externalId: 'outras',
+        dueDate: '2026-09-24',
+        unpaid: '90',
+        categoryExternalIds: ['outras'],
+      }),
+      installment({
+        externalId: 'multi',
+        dueDate: '2026-09-23',
+        unpaid: '15',
+        categoryExternalIds: ['serv', 'outras'],
+      }),
+    ];
+    const filtered = selectPendingStockInstallments({
+      rows: records.map(row),
+      today,
+      from: SEP_FROM,
+      to: SEP_TO,
+      categoryFilter: { externalId: 'serv', type: 'REVENUE' },
+      hasCostCenter: false,
+      expectedType: 'REVENUE',
+    });
+    expect(filtered.items.map((item) => item.installment.externalId)).toEqual(['serv-over']);
+    expect(filtered.totals.open.toString()).toBe('40');
+    expect(filtered.totals.overdue.toString()).toBe('40');
   });
 });
 

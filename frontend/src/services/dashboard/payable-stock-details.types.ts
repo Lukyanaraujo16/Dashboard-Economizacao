@@ -7,7 +7,7 @@ export type DashboardPayableStockDetailItem = DashboardExpectedPayableDetailItem
   readonly overdueDays: number | null;
 };
 
-/** GET /dashboard/payables/stock-details — estoque pendente de Contas a pagar. */
+/** GET /dashboard/payables/stock-details — pendências do mês selecionado. */
 export type DashboardPayableStockDetailsResponse = {
   readonly today: string;
   readonly available: boolean;

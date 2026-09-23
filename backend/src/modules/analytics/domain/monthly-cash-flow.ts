@@ -471,6 +471,8 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
   const receivableStock = selectPendingStockInstallments({
     rows: expectedReceivableRows,
     today: input.today,
+    from: input.from,
+    to: input.to,
     categoryFilter,
     hasCostCenter: Boolean(input.costCenter),
     expectedType: 'REVENUE',
@@ -478,6 +480,8 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
   const payableStock = selectPendingStockInstallments({
     rows: expectedPayableRows,
     today: input.today,
+    from: input.from,
+    to: input.to,
     categoryFilter,
     hasCostCenter: Boolean(input.costCenter),
     expectedType: 'EXPENSE',

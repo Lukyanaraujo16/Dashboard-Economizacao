@@ -31,20 +31,27 @@ const body = {
 };
 
 describe('payable stock details service', () => {
-  it('não envia month na query do estoque', async () => {
+  it('envia month na query do estoque mensal', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       text: async () => JSON.stringify(body),
     });
     vi.stubGlobal('fetch', fetchMock);
-    const result = await getDashboardPayableStockDetails('cc-1', 'cat-1');
-    expect(fetchMock).toHaveBeenCalledWith(dashboardPayableStockDetailsPath('cc-1', 'cat-1'), {
-      method: 'GET',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-    });
-    expect(dashboardPayableStockDetailsPath('cc-1', 'cat-1')).not.toContain('month=');
+    const result = await getDashboardPayableStockDetails('2026-09', 'cc-1', 'cat-1');
+    expect(fetchMock).toHaveBeenCalledWith(
+      dashboardPayableStockDetailsPath('2026-09', 'cc-1', 'cat-1'),
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      },
+    );
+    expect(dashboardPayableStockDetailsPath('2026-09', 'cc-1', 'cat-1')).toContain('month=2026-09');
+    expect(dashboardPayableStockDetailsPath('2026-08', 'cc-1', 'cat-1')).toContain('month=2026-08');
+    expect(dashboardPayableStockDetailsPath('2026-09', 'cc-1', 'cat-1')).not.toBe(
+      dashboardPayableStockDetailsPath('2026-08', 'cc-1', 'cat-1'),
+    );
     expect(result.total).toBe('12');
     expect(result.items[0]?.situation).toBe('OVERDUE');
   });

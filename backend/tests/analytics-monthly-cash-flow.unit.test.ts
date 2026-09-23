@@ -244,7 +244,7 @@ describe('calculateMonthlyCashFlow', () => {
     expect(result.overdue.ofMonth.receivables?.toString()).toBe('70');
   });
 
-  it('estoque — vencido de mês anterior entra no stock e permanece fora de expected', () => {
+  it('estoque — vencido de mês anterior fica fora do stock de setembro e fora de expected', () => {
     const result = cash({
       month: SEP,
       today: civil('2026-09-23'),
@@ -253,10 +253,34 @@ describe('calculateMonthlyCashFlow', () => {
     });
     expect(result.expected.receivables?.toString()).toBe('0');
     expect(result.expected.payables?.toString()).toBe('0');
-    expect(result.stock.receivables.open?.toString()).toBe('1000');
-    expect(result.stock.receivables.overdue?.toString()).toBe('1000');
-    expect(result.stock.payables.open?.toString()).toBe('400');
-    expect(result.stock.payables.overdue?.toString()).toBe('400');
+    expect(result.stock.receivables.open?.toString()).toBe('0');
+    expect(result.stock.payables.open?.toString()).toBe('0');
+  });
+
+  it('estoque — mês passado ainda aberto aparece como vencido só naquele mês', () => {
+    const august = cash({
+      month: AUG,
+      today: civil('2026-09-23'),
+      receivables: [installment({ externalId: 'aug-open', dueDate: '2026-08-20', unpaid: '1000' })],
+    });
+    expect(august.stock.receivables.open?.toString()).toBe('1000');
+    expect(august.stock.receivables.overdue?.toString()).toBe('1000');
+    expect(august.expected.receivables?.toString()).toBe('0');
+  });
+
+  it('estoque — mês futuro inclui só títulos daquele mês como upcoming', () => {
+    const october = cash({
+      month: OCT,
+      today: civil('2026-09-23'),
+      receivables: [
+        installment({ externalId: 'sep', dueDate: '2026-09-24', unpaid: '80' }),
+        installment({ externalId: 'oct', dueDate: '2026-10-10', unpaid: '70' }),
+        installment({ externalId: 'nov', dueDate: '2026-11-02', unpaid: '60' }),
+      ],
+    });
+    expect(october.stock.receivables.open?.toString()).toBe('70');
+    expect(october.stock.receivables.upcoming?.toString()).toBe('70');
+    expect(october.expected.receivables?.toString()).toBe('70');
   });
 
   it('estoque — total = overdue + dueToday + upcoming e não altera billing', () => {
@@ -277,21 +301,29 @@ describe('calculateMonthlyCashFlow', () => {
     expect(monthlyBilling(result)?.toString()).toBe('90');
   });
 
-  it('estoque — virada 31/08 em setembro e 31/12 em janeiro', () => {
+  it('estoque — virada 31/08 fica no stock de agosto, não no de setembro', () => {
     const september = cash({
       month: SEP,
       today: civil('2026-09-01'),
       payables: [installment({ externalId: 'aug-31', dueDate: '2026-08-31', unpaid: '15' })],
     });
-    expect(september.stock.payables.overdue?.toString()).toBe('15');
+    expect(september.stock.payables.open?.toString()).toBe('0');
     expect(september.expected.payables?.toString()).toBe('0');
+
+    const august = cash({
+      month: AUG,
+      today: civil('2026-09-01'),
+      payables: [installment({ externalId: 'aug-31', dueDate: '2026-08-31', unpaid: '15' })],
+    });
+    expect(august.stock.payables.overdue?.toString()).toBe('15');
+    expect(august.expected.payables?.toString()).toBe('0');
 
     const january = cash({
       month: civilMonthBoundsFromKey('2027-01'),
       today: civil('2027-01-01'),
       receivables: [installment({ externalId: 'dec-31', dueDate: '2026-12-31', unpaid: '22' })],
     });
-    expect(january.stock.receivables.overdue?.toString()).toBe('22');
+    expect(january.stock.receivables.open?.toString()).toBe('0');
     expect(january.expected.receivables?.toString()).toBe('0');
   });
 
@@ -371,6 +403,7 @@ describe('calculateMonthlyCashFlow', () => {
     });
     expect(result.realized.inflows?.toString()).toBe('10');
     expect(result.expected.receivables?.toString()).toBe('30');
+    expect(result.stock.receivables.open?.toString()).toBe('30');
   });
 
   it('17 — categoria imprecisa/múltipla não associa', () => {
@@ -389,6 +422,7 @@ describe('calculateMonthlyCashFlow', () => {
     });
     expect(result.realized.inflows?.toString()).toBe('0');
     expect(result.expected.receivables?.toString()).toBe('0');
+    expect(result.stock.receivables.open?.toString()).toBe('0');
   });
 
   it('18 — occurredOn no último dia civil do mês', () => {

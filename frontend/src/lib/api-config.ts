@@ -366,20 +366,24 @@ export function dashboardExpectedPayableDetailsPath(
 }
 
 export function dashboardReceivableStockDetailsPath(
+  monthKey?: string | null,
   costCenterId?: string | null,
   categoryId?: string | null,
 ): string {
   return `${DASHBOARD_API_PREFIX}/receivables/stock-details${dashboardQueryString({
+    monthKey,
     costCenterId,
     categoryId,
   })}`;
 }
 
 export function dashboardPayableStockDetailsPath(
+  monthKey?: string | null,
   costCenterId?: string | null,
   categoryId?: string | null,
 ): string {
   return `${DASHBOARD_API_PREFIX}/payables/stock-details${dashboardQueryString({
+    monthKey,
     costCenterId,
     categoryId,
   })}`;

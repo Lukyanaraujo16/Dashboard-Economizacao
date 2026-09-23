@@ -99,13 +99,14 @@ function toFailure(
 }
 
 export async function getDashboardReceivableStockDetails(
+  monthKey?: string | null,
   costCenterId?: string | null,
   categoryId?: string | null,
 ): Promise<DashboardReceivableStockDetailsResponse> {
   let response: Response;
 
   try {
-    response = await fetch(dashboardReceivableStockDetailsPath(costCenterId, categoryId), {
+    response = await fetch(dashboardReceivableStockDetailsPath(monthKey, costCenterId, categoryId), {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },

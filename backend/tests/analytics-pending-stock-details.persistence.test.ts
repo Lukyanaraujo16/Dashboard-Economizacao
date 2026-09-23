@@ -107,10 +107,12 @@ describe('estoque financeiro — persistência', () => {
 
     const stockA = await payableDetails.getPayableStockDetails({
       tenantId: a.tenant.id,
+      monthKey: '2026-08',
       now,
     });
     const stockB = await payableDetails.getPayableStockDetails({
       tenantId: b.tenant.id,
+      monthKey: '2026-08',
       now,
     });
 
@@ -130,6 +132,7 @@ describe('estoque financeiro — persistência', () => {
 
     const before = await payableDetails.getPayableStockDetails({
       tenantId: seeded.tenant.id,
+      monthKey: '2026-08',
       now,
     });
     expect(before.total?.toString()).toBe('80');
@@ -141,13 +144,14 @@ describe('estoque financeiro — persistência', () => {
 
     const after = await payableDetails.getPayableStockDetails({
       tenantId: seeded.tenant.id,
+      monthKey: '2026-08',
       now,
     });
     expect(after.items).toHaveLength(0);
     expect(after.total?.toString()).toBe('0');
   });
 
-  it('4/8 — receivable de mês anterior continua OVERDUE no estoque', async () => {
+  it('4/8 — receivable de agosto só entra no recorte de agosto', async () => {
     const seeded = await seedConnected('stock-overdue-month');
     const syncedAt = new Date();
     await financial.upsertReceivables(
@@ -155,13 +159,43 @@ describe('estoque financeiro — persistência', () => {
       [installment({ externalId: 'ar-aug', status: 'OPEN', dueDate: '2026-08-20', unpaid: '55' })],
     );
 
-    const stock = await receivableDetails.getReceivableStockDetails({
+    const september = await receivableDetails.getReceivableStockDetails({
       tenantId: seeded.tenant.id,
+      monthKey: '2026-09',
       now,
     });
-    expect(stock.items).toHaveLength(1);
-    expect(stock.items[0]?.situation).toBe('OVERDUE');
-    expect(stock.overdue?.toString()).toBe('55');
-    expect(stock.total?.toString()).toBe('55');
+    expect(september.items).toHaveLength(0);
+    expect(september.total?.toString()).toBe('0');
+
+    const august = await receivableDetails.getReceivableStockDetails({
+      tenantId: seeded.tenant.id,
+      monthKey: '2026-08',
+      now,
+    });
+    expect(august.items).toHaveLength(1);
+    expect(august.items[0]?.situation).toBe('OVERDUE');
+    expect(august.overdue?.toString()).toBe('55');
+    expect(august.total?.toString()).toBe('55');
+  });
+
+  it('7 card/modal — stock-details reconcilia com o recorte mensal do seletor', async () => {
+    const seeded = await seedConnected('stock-month-window');
+    const syncedAt = new Date();
+    await financial.upsertPayables(
+      { tenantId: seeded.tenant.id, integrationId: seeded.integration.id, syncedAt },
+      [
+        installment({ externalId: 'ap-aug', status: 'OPEN', dueDate: '2026-08-20', unpaid: '80' }),
+        installment({ externalId: 'ap-sep', status: 'OPEN', dueDate: '2026-09-22', unpaid: '25' }),
+      ],
+    );
+
+    const september = await payableDetails.getPayableStockDetails({
+      tenantId: seeded.tenant.id,
+      monthKey: '2026-09',
+      now,
+    });
+    expect(september.items.map((item) => item.externalId)).toEqual(['ap-sep']);
+    expect(september.total?.toString()).toBe('25');
+    expect(september.overdue?.toString()).toBe('25');
   });
 });

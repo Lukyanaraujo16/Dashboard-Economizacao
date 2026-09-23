@@ -90,7 +90,7 @@ export function toCashReceivedKpi(view: MonthlyCashFlowView): MonthlyContextKpiV
   );
 }
 
-/** A receber = estoque pendente atual (overdue + hoje + a vencer). Não é `expected`. */
+/** A receber = pendências do mês selecionado (vencidos do mês + hoje + a receber). */
 export function toCashReceivableKpi(view: MonthlyCashFlowView): MonthlyContextKpiView {
   return moneyKpi(
     'cash-receivable',
@@ -101,7 +101,7 @@ export function toCashReceivableKpi(view: MonthlyCashFlowView): MonthlyContextKp
   );
 }
 
-/** Contas a pagar = estoque pendente atual (overdue + hoje + a vencer). Não é `expected`. */
+/** Contas a pagar = pendências do mês selecionado (vencidos do mês + hoje + a vencer). */
 export function toCashPayableKpi(view: MonthlyCashFlowView): MonthlyContextKpiView {
   return moneyKpi(
     'cash-payable',

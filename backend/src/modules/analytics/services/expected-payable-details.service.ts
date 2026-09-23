@@ -17,7 +17,6 @@ import type { DashboardCategoryFilter } from '../domain/dashboard-home-filters.j
 import type { CashCostCenterAllocationSource } from '../domain/monthly-cash-flow.js';
 import type {
   ExpectedPayableDetails,
-  GetFinancialStockSnapshotInput,
   GetMonthlyCashFlowInput,
   PayableStockDetails,
 } from '../domain/types.js';
@@ -26,7 +25,7 @@ const ZERO = new Prisma.Decimal(0);
 
 export type ExpectedPayableDetailsService = {
   getExpectedPayableDetails(input: GetMonthlyCashFlowInput): Promise<ExpectedPayableDetails>;
-  getPayableStockDetails(input: GetFinancialStockSnapshotInput): Promise<PayableStockDetails>;
+  getPayableStockDetails(input: GetMonthlyCashFlowInput): Promise<PayableStockDetails>;
 };
 
 export type ExpectedPayableDetailsServiceDependencies = {
@@ -168,7 +167,7 @@ export function createExpectedPayableDetailsService(
     },
 
     async getPayableStockDetails(input) {
-      const { tenantId, today, scope, costCenterId } = resolveStockScope(input);
+      const { tenantId, today, from, to, scope, costCenterId } = resolveMonth(input);
       const categoryFilter = input.categoryFilter ?? null;
 
       const payables = await deps.payables.findActiveByTenant(scope);
@@ -190,6 +189,8 @@ export function createExpectedPayableDetailsService(
       const selection = selectPendingStockInstallments({
         rows,
         today,
+        from,
+        to,
         categoryFilter,
         hasCostCenter: costCenterId !== undefined,
         expectedType: 'EXPENSE',
@@ -240,25 +241,5 @@ export function createExpectedPayableDetailsService(
         items,
       };
     },
-  };
-}
-
-function resolveStockScope(input: GetFinancialStockSnapshotInput): {
-  readonly tenantId: string;
-  readonly today: Date;
-  readonly scope: { readonly tenantId: string; readonly integrationId?: string };
-  readonly costCenterId: string | undefined;
-} {
-  assertTenantId(input.tenantId);
-  return {
-    tenantId: input.tenantId.trim(),
-    today: civilTodayInSaoPaulo(input.now ?? new Date()),
-    scope: {
-      tenantId: input.tenantId.trim(),
-      ...(input.integrationId !== undefined && input.integrationId.trim() !== ''
-        ? { integrationId: input.integrationId }
-        : {}),
-    },
-    costCenterId: input.costCenterId,
   };
 }

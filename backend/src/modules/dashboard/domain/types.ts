@@ -344,7 +344,7 @@ export type DashboardMonthlyCashFlowResponse = {
   };
   readonly expected: DashboardMonthlyCashFlowExpected;
   readonly overdue: DashboardMonthlyCashFlowOverdue;
-  /** Estoque financeiro pendente atual. Independente do mês. Não é `expected`. */
+  /** Pendências do mês selecionado (inclui vencidos do próprio mês). Não é `expected`. */
   readonly stock: {
     readonly receivables: DashboardInstallmentPendingStock;
     readonly payables: DashboardInstallmentPendingStock;

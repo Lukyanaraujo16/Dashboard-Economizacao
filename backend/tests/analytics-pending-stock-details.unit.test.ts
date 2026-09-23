@@ -7,6 +7,10 @@ import { buildReceivableStockDetailItems } from '../src/modules/analytics/domain
 import { selectPendingStockInstallments } from '../src/modules/analytics/domain/pending-installment-stock.js';
 
 const today = new Date('2026-09-23T00:00:00.000Z');
+const SEP_FROM = new Date('2026-09-01T00:00:00.000Z');
+const SEP_TO = new Date('2026-09-30T00:00:00.000Z');
+const AUG_FROM = new Date('2026-08-01T00:00:00.000Z');
+const AUG_TO = new Date('2026-08-31T00:00:00.000Z');
 
 function installment(input: {
   readonly externalId: string;
@@ -45,6 +49,8 @@ describe('pending stock details', () => {
     const selection = selectPendingStockInstallments({
       rows: records.map((row) => ({ amount: row.unpaid, installment: row })),
       today,
+      from: SEP_FROM,
+      to: SEP_TO,
       categoryFilter: null,
       hasCostCenter: false,
       expectedType: 'REVENUE',
@@ -61,6 +67,9 @@ describe('pending stock details', () => {
     expect(items.map((item) => item.situation)).toEqual(['OVERDUE', 'DUE_TODAY', 'UPCOMING']);
     expect(items.map((item) => item.externalId)).toEqual(['over', 'today', 'up']);
     expect(items[0]?.overdueDays).toBe(1);
+    const modalTotal = items.reduce((sum, item) => sum.plus(item.amount), new Prisma.Decimal(0));
+    expect(selection.totals.open.toString()).toBe(modalTotal.toString());
+    expect(selection.totals.open.toString()).toBe('12');
   });
 
   it('8/15 — payables simétricos e ordenação determinística', () => {
@@ -71,6 +80,8 @@ describe('pending stock details', () => {
     const selection = selectPendingStockInstallments({
       rows: records.map((row) => ({ amount: row.unpaid, installment: row })),
       today,
+      from: AUG_FROM,
+      to: AUG_TO,
       categoryFilter: null,
       hasCostCenter: false,
       expectedType: 'EXPENSE',

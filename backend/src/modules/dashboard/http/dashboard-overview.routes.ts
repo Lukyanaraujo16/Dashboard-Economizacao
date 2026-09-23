@@ -390,10 +390,16 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
+      const monthKey = parseDashboardMonth(request.query);
       const costCenterId = parseDashboardCostCenterQuery(request.query);
       const categoryId = parseDashboardCategoryQuery(request.query);
       parseDashboardSituationQuery(request.query);
-      const body = await dashboard.getReceivableStockDetails(auth, costCenterId, categoryId);
+      const body = await dashboard.getReceivableStockDetails(
+        auth,
+        monthKey,
+        costCenterId,
+        categoryId,
+      );
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -407,10 +413,16 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
+      const monthKey = parseDashboardMonth(request.query);
       const costCenterId = parseDashboardCostCenterQuery(request.query);
       const categoryId = parseDashboardCategoryQuery(request.query);
       parseDashboardSituationQuery(request.query);
-      const body = await dashboard.getPayableStockDetails(auth, costCenterId, categoryId);
+      const body = await dashboard.getPayableStockDetails(
+        auth,
+        monthKey,
+        costCenterId,
+        categoryId,
+      );
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

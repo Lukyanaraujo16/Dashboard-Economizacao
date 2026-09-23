@@ -5,6 +5,8 @@ import {
   dashboardMonthEndCashPressurePath,
   dashboardMonthlyExpensesPath,
   dashboardMonthlyRevenuePath,
+  dashboardPayableStockDetailsPath,
+  dashboardReceivableStockDetailsPath,
   dashboardRevenueGoalPath,
 } from '../src/lib/api-config';
 import { buildDashboardCostCenterSearchParams } from '../src/lib/dashboard-cost-center';
@@ -16,6 +18,7 @@ import {
   parseDashboardCategoryFromSearchParams,
 } from '../src/lib/dashboard-category';
 import {
+  dashboardCashFlowCacheKey,
   dashboardCashWindowCacheKey,
   dashboardFilterCacheKey,
 } from '../src/lib/dashboard-filter-cache';
@@ -116,6 +119,18 @@ describe('dashboard filter cache e query paths', () => {
       `${TENANT}|${CENTER}|${CATEGORY}`,
     );
     expect(dashboardCashWindowCacheKey(TENANT, CENTER, null)).toBe(`${TENANT}|${CENTER}|`);
+    expect(dashboardCashFlowCacheKey(TENANT, '2026-09', CENTER, CATEGORY)).toBe(
+      `${TENANT}|2026-09|${CENTER}|${CATEGORY}`,
+    );
+    expect(dashboardCashFlowCacheKey(TENANT, '2026-09', CENTER, CATEGORY)).not.toBe(
+      dashboardCashFlowCacheKey(TENANT, '2026-08', CENTER, CATEGORY),
+    );
+    expect(dashboardCashFlowCacheKey(TENANT, '2026-09', CENTER, CATEGORY)).not.toBe(
+      dashboardCashFlowCacheKey(TENANT, '2026-09', CENTER, null),
+    );
+    expect(dashboardCashFlowCacheKey('tenant-a', '2026-09', null)).not.toBe(
+      dashboardCashFlowCacheKey('tenant-b', '2026-09', null),
+    );
   });
 
   it('monthly/insights enviam os 4 params; pressão só category; meta nenhum slice', () => {
@@ -138,6 +153,14 @@ describe('dashboard filter cache e query paths', () => {
     expect(dashboardRevenueGoalPath('2026-07')).not.toContain('costCenter=');
     expect(dashboardRevenueGoalPath('2026-07')).not.toContain('situation=');
     expect(dashboardRevenueGoalPath('2026-07')).not.toContain('category=');
+
+    expect(dashboardReceivableStockDetailsPath('2026-09', CENTER, CATEGORY)).toContain(
+      'month=2026-09',
+    );
+    expect(dashboardPayableStockDetailsPath('2026-08', CENTER, CATEGORY)).toContain('month=2026-08');
+    expect(dashboardReceivableStockDetailsPath('2026-09', CENTER, CATEGORY)).not.toBe(
+      dashboardReceivableStockDetailsPath('2026-08', CENTER, CATEGORY),
+    );
   });
 });
 

@@ -2,6 +2,7 @@ import { Prisma } from '../../../generated/prisma/client.js';
 import { ACTIVE_INSTALLMENT_STATUSES } from '../../finance/domain/active-installment-status.js';
 import type { FinancialInstallmentReadRecord } from '../../finance/domain/types.js';
 import type { FinancialCategoryType } from '../../../generated/prisma/client.js';
+import { isCivilDateInInclusiveRange } from './civil-calendar.js';
 import type { CashCostCenterAllocationSource } from './monthly-cash-flow.js';
 import { deriveInstallmentCostCenterCashSplit } from './cost-center-cash-split.js';
 import {
@@ -29,6 +30,8 @@ export type PendingStockItem = {
 export type SelectPendingStockInput = {
   readonly rows: readonly CashCostCenterAllocationSource[];
   readonly today: Date;
+  readonly from: Date;
+  readonly to: Date;
   readonly categoryFilter: DashboardCategoryFilter | null;
   readonly hasCostCenter: boolean;
   readonly expectedType: FinancialCategoryType;
@@ -47,8 +50,8 @@ function isActiveInstallment(
 }
 
 /**
- * Estoque pendente atual: ACTIVE + saldo aberto, sem recorte de mês
- * e sem exigir dueDate >= today.
+ * Pendências do mês civil: ACTIVE + unpaid > 0 + dueDate em [from, to].
+ * Não exige dueDate >= today — vencidos do próprio mês entram.
  */
 export function selectPendingStockInstallments(
   input: SelectPendingStockInput,
@@ -58,6 +61,9 @@ export function selectPendingStockInstallments(
 
   for (const row of input.rows) {
     if (!isActiveInstallment(row.installment)) {
+      continue;
+    }
+    if (!isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
       continue;
     }
     if (!matchesDashboardCategoryFilter(row.installment, input.categoryFilter, input.expectedType)) {

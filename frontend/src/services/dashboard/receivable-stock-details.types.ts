@@ -7,7 +7,7 @@ export type DashboardReceivableStockDetailItem = DashboardExpectedReceivableDeta
   readonly overdueDays: number | null;
 };
 
-/** GET /dashboard/receivables/stock-details — estoque pendente de A receber. */
+/** GET /dashboard/receivables/stock-details — pendências do mês selecionado. */
 export type DashboardReceivableStockDetailsResponse = {
   readonly today: string;
   readonly available: boolean;

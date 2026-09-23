@@ -17,7 +17,6 @@ import type { DashboardCategoryFilter } from '../domain/dashboard-home-filters.j
 import type { CashCostCenterAllocationSource } from '../domain/monthly-cash-flow.js';
 import type {
   ExpectedReceivableDetails,
-  GetFinancialStockSnapshotInput,
   GetMonthlyCashFlowInput,
   ReceivableStockDetails,
 } from '../domain/types.js';
@@ -26,7 +25,7 @@ const ZERO = new Prisma.Decimal(0);
 
 export type ExpectedReceivableDetailsService = {
   getExpectedReceivableDetails(input: GetMonthlyCashFlowInput): Promise<ExpectedReceivableDetails>;
-  getReceivableStockDetails(input: GetFinancialStockSnapshotInput): Promise<ReceivableStockDetails>;
+  getReceivableStockDetails(input: GetMonthlyCashFlowInput): Promise<ReceivableStockDetails>;
 };
 
 export type ExpectedReceivableDetailsServiceDependencies = {
@@ -168,7 +167,7 @@ export function createExpectedReceivableDetailsService(
     },
 
     async getReceivableStockDetails(input) {
-      const { tenantId, today, scope, costCenterId } = resolveStockScope(input);
+      const { tenantId, today, from, to, scope, costCenterId } = resolveMonth(input);
       const categoryFilter = input.categoryFilter ?? null;
 
       const receivables = await deps.receivables.findActiveByTenant(scope);
@@ -192,6 +191,8 @@ export function createExpectedReceivableDetailsService(
       const selection = selectPendingStockInstallments({
         rows,
         today,
+        from,
+        to,
         categoryFilter,
         hasCostCenter: costCenterId !== undefined,
         expectedType: 'REVENUE',
@@ -242,25 +243,5 @@ export function createExpectedReceivableDetailsService(
         items,
       };
     },
-  };
-}
-
-function resolveStockScope(input: GetFinancialStockSnapshotInput): {
-  readonly tenantId: string;
-  readonly today: Date;
-  readonly scope: { readonly tenantId: string; readonly integrationId?: string };
-  readonly costCenterId: string | undefined;
-} {
-  assertTenantId(input.tenantId);
-  return {
-    tenantId: input.tenantId.trim(),
-    today: civilTodayInSaoPaulo(input.now ?? new Date()),
-    scope: {
-      tenantId: input.tenantId.trim(),
-      ...(input.integrationId !== undefined && input.integrationId.trim() !== ''
-        ? { integrationId: input.integrationId }
-        : {}),
-    },
-    costCenterId: input.costCenterId,
   };
 }

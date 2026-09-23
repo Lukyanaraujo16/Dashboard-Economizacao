@@ -33,7 +33,6 @@ import {
   dashboardCashExpectedHorizonCacheKey,
   dashboardCashFlowCacheKey,
   dashboardCashMovementHistoryCacheKey,
-  dashboardCashWindowCacheKey,
   dashboardOverviewCacheKey,
 } from '../../lib/dashboard-filter-cache';
 import { getDashboardCashBalanceHistory } from '../../services/dashboard/cash-balance-history';
@@ -624,6 +623,8 @@ export function DashboardPage() {
   const loadReceivableStockDetails = useCallback(
     async (
       signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
       costCenterId: string | null,
       categoryId: string | null,
     ) => {
@@ -631,7 +632,7 @@ export function DashboardPage() {
       if (tenantId === null) {
         return;
       }
-      const cacheKey = dashboardCashWindowCacheKey(tenantId, costCenterId, categoryId);
+      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
       const cached = receivableStockDetailsCacheRef.current.get(cacheKey);
       if (cached) {
         setReceivableStockDetailsView({ kind: 'ready', data: cached });
@@ -639,7 +640,11 @@ export function DashboardPage() {
         setReceivableStockDetailsView({ kind: 'loading' });
       }
       try {
-        const data = await getDashboardReceivableStockDetails(costCenterId, categoryId);
+        const data = await getDashboardReceivableStockDetails(
+          monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
+          categoryId,
+        );
         if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
@@ -665,6 +670,8 @@ export function DashboardPage() {
   const loadPayableStockDetails = useCallback(
     async (
       signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
       costCenterId: string | null,
       categoryId: string | null,
     ) => {
@@ -672,7 +679,7 @@ export function DashboardPage() {
       if (tenantId === null) {
         return;
       }
-      const cacheKey = dashboardCashWindowCacheKey(tenantId, costCenterId, categoryId);
+      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
       const cached = payableStockDetailsCacheRef.current.get(cacheKey);
       if (cached) {
         setPayableStockDetailsView({ kind: 'ready', data: cached });
@@ -680,7 +687,11 @@ export function DashboardPage() {
         setPayableStockDetailsView({ kind: 'loading' });
       }
       try {
-        const data = await getDashboardPayableStockDetails(costCenterId, categoryId);
+        const data = await getDashboardPayableStockDetails(
+          monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
+          categoryId,
+        );
         if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
           return;
         }
@@ -1218,6 +1229,8 @@ export function DashboardPage() {
     const controller = new AbortController();
     void loadReceivableStockDetails(
       controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
       selectedCostCenterId,
       selectedCategoryId,
     );
@@ -1227,6 +1240,8 @@ export function DashboardPage() {
     loadReceivableStockDetails,
     selectedCategoryId,
     selectedCostCenterId,
+    selectedMonthKey,
+    todayMonthKey,
     view.kind,
   ]);
 
@@ -1236,9 +1251,23 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadPayableStockDetails(controller.signal, selectedCostCenterId, selectedCategoryId);
+    void loadPayableStockDetails(
+      controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+      selectedCategoryId,
+    );
     return () => controller.abort();
-  }, [expandKind, loadPayableStockDetails, selectedCategoryId, selectedCostCenterId, view.kind]);
+  }, [
+    expandKind,
+    loadPayableStockDetails,
+    selectedCategoryId,
+    selectedCostCenterId,
+    selectedMonthKey,
+    todayMonthKey,
+    view.kind,
+  ]);
 
   useEffect(() => {
     const rawMonth = searchParams.get('month');

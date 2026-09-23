@@ -233,8 +233,8 @@ export type MonthlyCashFlow = {
   readonly expected: MonthlyCashFlowExpected;
   readonly overdue: MonthlyCashFlowOverdue;
   /**
-   * Estoque financeiro pendente atual (ACTIVE + unpaid > 0).
-   * Independente do mês selecionado. Não é `expected`.
+   * Pendências do mês selecionado (ACTIVE + unpaid > 0 + dueDate no mês).
+   * Inclui vencidos do próprio mês. Não é `expected` (previsto no prazo).
    */
   readonly stock: {
     readonly receivables: MonthlyCashFlowPendingStock;

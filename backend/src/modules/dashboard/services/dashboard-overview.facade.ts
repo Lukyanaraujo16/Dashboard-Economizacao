@@ -198,11 +198,13 @@ export type DashboardOverviewFacade = {
   ): Promise<DashboardExpectedPayableDetailsResponse>;
   getReceivableStockDetails(
     auth: AuthenticatedRequestContext,
+    monthKey: string | null,
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardReceivableStockDetailsResponse>;
   getPayableStockDetails(
     auth: AuthenticatedRequestContext,
+    monthKey: string | null,
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardPayableStockDetailsResponse>;
@@ -536,26 +538,28 @@ export function createDashboardOverviewFacade(
       return toDashboardExpectedPayableDetailsResponse(details);
     },
 
-    async getReceivableStockDetails(auth, costCenterId = null, categoryId = null) {
+    async getReceivableStockDetails(auth, monthKey, costCenterId = null, categoryId = null) {
       const detailsService = requireExpectedReceivableDetails(deps);
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
       const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const details = await detailsService.getReceivableStockDetails({
         tenantId,
+        ...(monthKey === null ? {} : { monthKey }),
         ...costCenterFilter(resolved),
         ...categoryFilterSpread(categoryFilter),
       });
       return toDashboardReceivableStockDetailsResponse(details);
     },
 
-    async getPayableStockDetails(auth, costCenterId = null, categoryId = null) {
+    async getPayableStockDetails(auth, monthKey, costCenterId = null, categoryId = null) {
       const detailsService = requireExpectedPayableDetails(deps);
       const tenantId = requireOperationalTenantId(auth);
       const resolved = await resolveCostCenterId(deps, tenantId, costCenterId);
       const categoryFilter = await resolveCategoryFilter(deps, tenantId, categoryId);
       const details = await detailsService.getPayableStockDetails({
         tenantId,
+        ...(monthKey === null ? {} : { monthKey }),
         ...costCenterFilter(resolved),
         ...categoryFilterSpread(categoryFilter),
       });
