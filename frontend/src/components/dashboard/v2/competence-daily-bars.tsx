@@ -169,6 +169,10 @@ export function CompetenceDailyBars({
   const activeDate = activeRevenue?.date;
   const activeBalance =
     hasBalanceSeries && activeDate && balanceByDate ? balanceByDate.get(activeDate) : undefined;
+  const activeBalancePoint =
+    showBalanceBand && balance
+      ? balance.points.find((point) => point.index === activeIndex)
+      : undefined;
   const firstDate = series.dates[0];
   const lastDate = series.dates[count - 1];
 
@@ -183,12 +187,6 @@ export function CompetenceDailyBars({
           <span className={cx(styles.swatch, styles.expenseSwatch)} aria-hidden="true" />
           {expenseLabel}
         </li>
-        {hasBalanceSeries ? (
-          <li className={styles.legendItem}>
-            <span className={cx(styles.swatch, styles.balanceSwatch)} aria-hidden="true" />
-            {balanceLabel}
-          </li>
-        ) : null}
       </ul>
 
       <div
@@ -286,6 +284,9 @@ export function CompetenceDailyBars({
                     y2={balance.zeroY}
                     vectorEffect="non-scaling-stroke"
                   />
+                  {balance.areas.map((d) => (
+                    <path key={d} className={styles.balanceArea} d={d} />
+                  ))}
                   {balance.segments.map((points) => (
                     <polyline
                       key={points}
@@ -295,16 +296,23 @@ export function CompetenceDailyBars({
                       vectorEffect="non-scaling-stroke"
                     />
                   ))}
-                  {balance.points.map((point) => (
+                  {activeBalancePoint ? (
                     <circle
-                      key={`b-${point.index}`}
                       className={styles.balanceDot}
-                      cx={point.x}
-                      cy={point.y}
-                      r={balance.points.length === 1 ? 3.5 : 2.25}
+                      cx={activeBalancePoint.x}
+                      cy={activeBalancePoint.y}
+                      r={2.5}
                       vectorEffect="non-scaling-stroke"
                     />
-                  ))}
+                  ) : balance.points.length === 1 ? (
+                    <circle
+                      className={styles.balanceDot}
+                      cx={balance.points[0]!.x}
+                      cy={balance.points[0]!.y}
+                      r={2.5}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ) : null}
                 </svg>
               </div>
             </div>

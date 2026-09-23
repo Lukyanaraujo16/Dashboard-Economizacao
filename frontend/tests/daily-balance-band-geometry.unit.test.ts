@@ -209,6 +209,7 @@ describe('dailyBalanceBandGeometry', () => {
     expect(geometry!.points.map((point) => point.index)).toEqual([0, 2, 4]);
     expect(geometry!.points.every((point) => point.value !== 0)).toBe(true);
     expect(geometry!.segments).toEqual([]);
+    expect(geometry!.areas).toEqual([]);
   });
 
   it('F) segmentos consecutivos ligam; gap quebra a polyline', () => {
@@ -226,6 +227,30 @@ describe('dailyBalanceBandGeometry', () => {
     expect(geometry!.segments).toHaveLength(2);
     expect(geometry!.segments[0]!.split(' ')).toHaveLength(2);
     expect(geometry!.segments[1]!.split(' ')).toHaveLength(2);
+    expect(geometry!.areas).toHaveLength(2);
+    expect(geometry!.areas[0]).not.toEqual(geometry!.areas[1]);
+    expect(geometry!.areas.every((d) => d.endsWith(' Z') || d.endsWith('Z'))).toBe(true);
+  });
+
+  it('área de cada segmento ancora no zero financeiro, sem ir ao fundo do SVG', () => {
+    const geometry = dailyBalanceBandGeometry(
+      dates,
+      new Map([
+        ['2026-08-01', '50000'],
+        ['2026-08-02', '10000'],
+        ['2026-08-03', '0'],
+        ['2026-08-04', '-5000'],
+        ['2026-08-05', '20000'],
+      ]),
+      slot,
+    );
+    expect(geometry).not.toBeNull();
+    expect(geometry!.areas).toHaveLength(1);
+    const first = geometry!.points[0]!;
+    const last = geometry!.points[geometry!.points.length - 1]!;
+    expect(geometry!.areas[0]).toContain(`M ${first.x} ${geometry!.zeroY}`);
+    expect(geometry!.areas[0]).toContain(`L ${last.x} ${geometry!.zeroY}`);
+    expect(geometry!.areas[0]).not.toMatch(/ L \S+ 44/);
   });
 
   it('mapa sem sobreposição com as datas não reserva faixa', () => {

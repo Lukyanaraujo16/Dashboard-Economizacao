@@ -107,7 +107,7 @@ describe('CompetenceDailyBars — faixa de saldo bancário', () => {
         balanceByDate={new Map([['2026-07-31', '1000']])}
       />,
     );
-    expect(screen.getByText('Saldo bancário')).toBeTruthy();
+    expect(screen.queryByText('Saldo bancário')).toBeNull();
     expect(container.querySelectorAll('svg')).toHaveLength(1);
   });
 
@@ -132,7 +132,9 @@ describe('CompetenceDailyBars — faixa de saldo bancário', () => {
       </ThemeProvider>,
     );
     const dialog = screen.getByRole('dialog', { name: 'Movimentação financeira' });
-    expect(within(dialog).getAllByText('Saldo bancário').length).toBeGreaterThan(0);
+    const expandLegend = within(dialog).getByRole('list');
+    expect(within(expandLegend).queryByText('Saldo bancário')).toBeNull();
+    expect(within(dialog).getByText('Saldo bancário')).toBeTruthy();
     const plot = within(dialog).getByRole('img');
     expect(plot.querySelectorAll('svg')).toHaveLength(2);
     mockPlotRect(plot, 640, 200);
@@ -144,7 +146,7 @@ describe('CompetenceDailyBars — faixa de saldo bancário', () => {
     expect(tip.textContent).toMatch(/R\$\s*50\.000,00/);
   });
 
-  it('faixa própria: linha roxa só no segundo SVG; barras só no primeiro', () => {
+  it('faixa própria: linha e área no segundo SVG; sem pontos permanentes', () => {
     const { container } = render(
       <CompetenceDailyBars
         revenueDaily={dailySeries(3)}
@@ -161,12 +163,50 @@ describe('CompetenceDailyBars — faixa de saldo bancário', () => {
         }
       />,
     );
+    const legend = screen.getByRole('list');
+    expect(within(legend).getByText('Entradas')).toBeTruthy();
+    expect(within(legend).getByText('Saídas')).toBeTruthy();
+    expect(within(legend).queryByText('Saldo bancário')).toBeNull();
+    expect(screen.getByText('Saldo bancário')).toBeTruthy();
+
     const svgs = container.querySelectorAll('svg');
     expect(svgs).toHaveLength(2);
     expect(svgs[0]!.querySelectorAll('rect').length).toBeGreaterThan(0);
     expect(svgs[0]!.querySelectorAll('polyline')).toHaveLength(0);
+    expect(svgs[0]!.querySelectorAll('path')).toHaveLength(0);
     expect(svgs[1]!.querySelectorAll('rect')).toHaveLength(0);
-    expect(svgs[1]!.querySelectorAll('polyline').length).toBeGreaterThan(0);
-    expect(svgs[1]!.querySelectorAll('circle').length).toBe(3);
+    expect(svgs[1]!.querySelectorAll('polyline')).toHaveLength(1);
+    expect(svgs[1]!.querySelectorAll('path')).toHaveLength(1);
+    expect(svgs[1]!.querySelectorAll('circle')).toHaveLength(0);
+  });
+
+  it('gaps: duas linhas/áreas separadas; hover destaca um ponto', () => {
+    const { container } = render(
+      <CompetenceDailyBars
+        revenueDaily={dailySeries(5)}
+        expenseDaily={dailySeries(5)}
+        monthKey="2026-08"
+        revenueLabel="Entradas"
+        expenseLabel="Saídas"
+        balanceByDate={
+          new Map([
+            ['2026-08-01', '10000'],
+            ['2026-08-02', '12000'],
+            ['2026-08-04', '8000'],
+            ['2026-08-05', '9000'],
+          ])
+        }
+      />,
+    );
+    const band = container.querySelectorAll('svg')[1]!;
+    expect(band.querySelectorAll('polyline')).toHaveLength(2);
+    expect(band.querySelectorAll('path')).toHaveLength(2);
+    expect(band.querySelectorAll('circle')).toHaveLength(0);
+
+    const plot = screen.getByRole('img');
+    mockPlotRect(plot, 400, 180);
+    fireEvent.mouseMove(plot, { clientX: 4, clientY: 20 });
+    expect(band.querySelectorAll('circle')).toHaveLength(1);
+    expect(screen.getByRole('tooltip', { hidden: true }).textContent).toMatch(/Saldo bancário/);
   });
 });

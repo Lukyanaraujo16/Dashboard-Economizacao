@@ -269,9 +269,9 @@ describe('08-C3/C4 — linha de saldo bancário na Movimentação', () => {
     getBalance.mockResolvedValue(
       balanceFixture({
         coverage: 'partial',
-        availableFrom: '2026-08-19',
+        availableFrom: '2026-08-05',
         pointCount: 1,
-        daily: [{ date: '2026-08-19', balance: '42.00' }],
+        daily: [{ date: '2026-08-05', balance: '42.00' }],
         monthly: [{ monthKey: '2026-08', balance: '42.00' }],
       }),
     );

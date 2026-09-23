@@ -1,4 +1,4 @@
-import { parseAmount } from './chart-math';
+import { parseAmount, toAreaPath } from './chart-math';
 
 export const BALANCE_BAND_WIDTH = 320;
 export const BALANCE_BAND_HEIGHT = 44;
@@ -17,6 +17,8 @@ export type DailyBalanceBandGeometry = {
   readonly zeroY: number;
   readonly points: readonly DailyBalanceBandPoint[];
   readonly segments: readonly string[];
+  /** Áreas linha→zero, uma por segmento contínuo (não atravessa gap). */
+  readonly areas: readonly string[];
 };
 
 /**
@@ -62,14 +64,16 @@ export function dailyBalanceValueToY(
   return pad + ((maxDomain - value) / span) * usable;
 }
 
-function polylineSegments(points: readonly DailyBalanceBandPoint[]): readonly string[] {
-  const segments: string[] = [];
+function consecutiveRuns(
+  points: readonly DailyBalanceBandPoint[],
+): readonly (readonly DailyBalanceBandPoint[])[] {
+  const runs: DailyBalanceBandPoint[][] = [];
   let run: DailyBalanceBandPoint[] = [];
   const flush = () => {
-    if (run.length >= 2) {
-      segments.push(run.map((point) => `${point.x},${point.y}`).join(' '));
+    if (run.length > 0) {
+      runs.push(run);
+      run = [];
     }
-    run = [];
   };
   for (const point of points) {
     const prev = run[run.length - 1];
@@ -79,7 +83,19 @@ function polylineSegments(points: readonly DailyBalanceBandPoint[]): readonly st
     run.push(point);
   }
   flush();
-  return segments;
+  return runs;
+}
+
+function polylineSegments(points: readonly DailyBalanceBandPoint[]): readonly string[] {
+  return consecutiveRuns(points)
+    .filter((run) => run.length >= 2)
+    .map((run) => run.map((point) => `${point.x},${point.y}`).join(' '));
+}
+
+function areaPaths(points: readonly DailyBalanceBandPoint[], zeroY: number): readonly string[] {
+  return consecutiveRuns(points)
+    .filter((run) => run.length >= 2)
+    .map((run) => toAreaPath(run, zeroY));
 }
 
 /** Geometria da faixa de saldo alinhada ao mesmo `dates`/`slot` das barras. */
@@ -124,5 +140,6 @@ export function dailyBalanceBandGeometry(
     zeroY,
     points,
     segments: polylineSegments(points),
+    areas: areaPaths(points, zeroY),
   };
 }

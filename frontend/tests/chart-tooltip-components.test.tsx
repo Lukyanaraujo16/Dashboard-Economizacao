@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -302,7 +302,8 @@ describe('ChartTooltip nos componentes V2', () => {
         balanceByDate={balanceByDate}
       />,
     );
-    expect(screen.getAllByText('Saldo bancário').length).toBeGreaterThan(0);
+    expect(within(screen.getByRole('list')).queryByText('Saldo bancário')).toBeNull();
+    expect(screen.getByText('Saldo bancário')).toBeTruthy();
     const plot = screen.getByRole('img');
     mockPlotRect(plot, 400, 108);
     fireEvent.mouseMove(plot, { clientX: 4, clientY: 40 });

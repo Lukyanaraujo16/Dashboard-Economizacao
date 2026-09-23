@@ -149,9 +149,14 @@
   overflow: visible;
 }
 
+.balanceArea {
+  fill: color-mix(in srgb, var(--color-series-result) 16%, transparent);
+  stroke: none;
+}
+
 .balanceLine {
   stroke: var(--color-series-result);
-  stroke-width: 2;
+  stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
