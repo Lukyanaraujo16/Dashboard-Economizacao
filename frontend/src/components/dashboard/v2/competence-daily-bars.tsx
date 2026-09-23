@@ -17,7 +17,7 @@ import {
   amountValues,
   formatCompactBrl,
   formatDayPt,
-  indexFromRatio,
+  indexFromSlotRatio,
   isFlatSeries,
   maxAbs,
   type DailyPoint,
@@ -92,6 +92,7 @@ export function CompetenceDailyBars({
 }: CompetenceDailyBarsProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
   const plotRef = useRef<HTMLDivElement>(null);
+  const barsPlotRef = useRef<HTMLDivElement>(null);
 
   const series = useMemo(() => {
     const aligned = alignDailySeries(revenueDaily, expenseDaily);
@@ -122,11 +123,20 @@ export function CompetenceDailyBars({
 
   const handleMove = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      const rect = event.currentTarget.getBoundingClientRect();
+      const plot = barsPlotRef.current;
+      if (!plot) {
+        return;
+      }
+      const rect = plot.getBoundingClientRect();
       if (rect.width <= 0) {
         return;
       }
-      setActiveIndex(indexFromRatio((event.clientX - rect.left) / rect.width, series.dates.length));
+      const localX = event.clientX - rect.left;
+      if (localX < 0 || localX > rect.width) {
+        setActiveIndex(-1);
+        return;
+      }
+      setActiveIndex(indexFromSlotRatio(localX / rect.width, series.dates.length));
     },
     [series.dates.length],
   );
@@ -208,7 +218,7 @@ export function CompetenceDailyBars({
             <span className={styles.axisTick}>{formatCompactBrl(series.scale)}</span>
           </div>
 
-          <div className={styles.plot}>
+          <div ref={barsPlotRef} className={styles.plot} data-daily-bars-plot="">
             <svg
               className={styles.canvas}
               viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}

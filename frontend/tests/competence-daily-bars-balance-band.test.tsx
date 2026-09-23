@@ -10,21 +10,29 @@ afterEach(() => {
   document.body.style.overflow = '';
 });
 
-function mockPlotRect(element: Element, width: number, height = 180) {
+function applyRect(element: Element, width: number, height: number, left = 0) {
   Object.defineProperty(element, 'clientWidth', { configurable: true, value: width });
   Object.defineProperty(element, 'clientHeight', { configurable: true, value: height });
   element.getBoundingClientRect = () =>
     ({
-      left: 0,
+      left,
       top: 0,
-      right: width,
+      right: left + width,
       bottom: height,
       width,
       height,
-      x: 0,
+      x: left,
       y: 0,
       toJSON: () => ({}),
     }) as DOMRect;
+}
+
+function mockPlotRect(element: Element, width: number, height = 180) {
+  applyRect(element, width, height);
+  const barsPlot = element.querySelector('[data-daily-bars-plot]');
+  if (barsPlot) {
+    applyRect(barsPlot, width, height);
+  }
 }
 
 function dailySeries(count: number, prefix = '2026-08') {

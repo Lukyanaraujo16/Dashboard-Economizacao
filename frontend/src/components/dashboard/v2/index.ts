@@ -22,6 +22,7 @@ export {
   formatCompactBrl,
   formatDayPt,
   indexFromRatio,
+  indexFromSlotRatio,
   isFlatSeries,
   maxAbs,
   outstandingSeries,

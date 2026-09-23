@@ -14,6 +14,7 @@ import {
   formatCompactBrl,
   formatDayPt,
   indexFromRatio,
+  indexFromSlotRatio,
   isFlatSeries,
   maxAbs,
   outstandingSeries,
@@ -165,6 +166,34 @@ describe('chart-math', () => {
     expect(indexFromRatio(-1, 5)).toBe(0);
     expect(indexFromRatio(2, 5)).toBe(4);
     expect(indexFromRatio(0.5, 0)).toBe(-1);
+  });
+
+  it('indexFromSlotRatio usa N faixas iguais, não N−1 pontos', () => {
+    const n = 30;
+    const center = (index: number) => (index + 0.5) / n;
+    expect(indexFromSlotRatio(0, n)).toBe(0);
+    expect(indexFromSlotRatio(center(0), n)).toBe(0);
+    expect(indexFromSlotRatio(center(1), n)).toBe(1);
+    expect(indexFromSlotRatio(center(8), n)).toBe(8);
+    expect(indexFromSlotRatio(center(9), n)).toBe(9);
+    expect(indexFromSlotRatio(center(10), n)).toBe(10);
+    expect(indexFromSlotRatio(center(29), n)).toBe(29);
+    expect(indexFromSlotRatio(1, n)).toBe(29);
+    expect(indexFromSlotRatio(-0.2, n)).toBe(0);
+    expect(indexFromSlotRatio(1.4, n)).toBe(29);
+    expect(indexFromSlotRatio(0.5, 0)).toBe(-1);
+
+    const epsilon = 1e-9;
+    for (const index of [0, 1, 8, 9, 10, 28]) {
+      expect(indexFromSlotRatio(index / n + epsilon, n)).toBe(index);
+      expect(indexFromSlotRatio((index + 1) / n - epsilon, n)).toBe(index);
+      expect(indexFromSlotRatio((index + 1) / n + epsilon, n)).toBe(index + 1);
+    }
+
+    expect(indexFromSlotRatio(8 / n + epsilon, n)).toBe(8);
+    expect(indexFromSlotRatio(9 / n - epsilon, n)).toBe(8);
+    expect(indexFromSlotRatio(9 / n + epsilon, n)).toBe(9);
+    expect(indexFromRatio(9 / n - epsilon, n)).not.toBe(8);
   });
 
   it('buildSvgPoints assinado põe o zero no meio e aceita valores negativos', () => {

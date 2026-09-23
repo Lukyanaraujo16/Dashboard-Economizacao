@@ -333,6 +333,23 @@ export function indexFromRatio(ratio: number, count: number): number {
   return Math.min(count - 1, Math.max(0, Math.round(clamped * (count - 1))));
 }
 
+/**
+ * Índice do slot diário a partir da posição relativa do ponteiro (0–1).
+ * N faixas iguais: [i/N, (i+1)/N) → i. Não usar em séries de pontos nas bordas.
+ */
+export function indexFromSlotRatio(ratio: number, count: number): number {
+  if (count <= 0) {
+    return -1;
+  }
+  if (ratio >= 1) {
+    return count - 1;
+  }
+  if (ratio <= 0) {
+    return 0;
+  }
+  return Math.min(count - 1, Math.floor(ratio * count));
+}
+
 /** Rótulo curto de eixo (não substitui `formatMoneyBrl` na exibição de valores). */
 export function formatCompactBrl(value: number): string {
   const abs = Math.abs(value);

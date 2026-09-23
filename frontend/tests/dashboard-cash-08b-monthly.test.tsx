@@ -354,6 +354,12 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
         y: 0,
         toJSON: () => ({}),
       }) as DOMRect;
+    const barsPlot = dailyPlot.querySelector('[data-daily-bars-plot]');
+    if (barsPlot) {
+      barsPlot.getBoundingClientRect = dailyPlot.getBoundingClientRect;
+      Object.defineProperty(barsPlot, 'clientWidth', { configurable: true, value: 480 });
+      Object.defineProperty(barsPlot, 'clientHeight', { configurable: true, value: 108 });
+    }
     fireEvent.mouseMove(dailyPlot, { clientX: 40, clientY: 40 });
     const dailyTip = within(dailyPlot).getByRole('tooltip', { hidden: true }) as HTMLElement;
     expect(dailyTip.getAttribute('data-vertical-mode')).toBe('floating-top');
