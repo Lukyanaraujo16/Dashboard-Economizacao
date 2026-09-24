@@ -1,10 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { useAuth } from '../../auth';
-import { currentDashboardMonthKey } from '../../lib/dashboard-month';
 import {
   createConsultantConversation,
   getConsultantConversation,
@@ -18,14 +17,11 @@ import {
 import { ConsultantFab } from './consultant-fab';
 import { ConsultantPanel } from './consultant-panel';
 import {
+  resolveConsultantReferenceMonth,
   resolveOperationalConsultantTenantId,
   shouldShowConsultantHost,
   type ConsultantUiState,
 } from './consultant-surface';
-
-function resolveConsultantMonth(): string | undefined {
-  return currentDashboardMonthKey();
-}
 
 function toEmptyDetail(conversation: ConsultantConversation): ConsultantConversationDetail {
   return { ...conversation, messages: [] };
@@ -38,6 +34,7 @@ function toEmptyDetail(conversation: ConsultantConversation): ConsultantConversa
 export function ConsultantHost() {
   const { user, support, status } = useAuth();
   const pathname = usePathname() ?? '/';
+  const searchParams = useSearchParams();
   const visible = status === 'authenticated' && shouldShowConsultantHost(pathname, user, support);
   const operationalTenantId = resolveOperationalConsultantTenantId(user, support);
   const supportActive = support.active;
@@ -75,7 +72,7 @@ export function ConsultantHost() {
     }
   }, [resetChatState, visible]);
 
-  const month = resolveConsultantMonth();
+  const month = resolveConsultantReferenceMonth(searchParams);
 
   const openPanel = useCallback(async () => {
     const requestId = ++requestGenRef.current;

@@ -69,6 +69,7 @@ vi.mock('next/navigation', () => ({
     push: vi.fn(),
   }),
   usePathname: () => `/empresas/${companyId}/integracoes`,
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('next/link', () => ({

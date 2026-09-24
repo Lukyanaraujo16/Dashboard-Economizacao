@@ -13,6 +13,7 @@ vi.mock('next/navigation', () => ({
     replace: replaceMock,
     push: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 afterEach(() => {

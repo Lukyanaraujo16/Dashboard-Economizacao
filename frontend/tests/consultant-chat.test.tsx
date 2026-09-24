@@ -2,7 +2,6 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConsultantHost } from '../src/components/consultant';
-import { currentDashboardMonthKey } from '../src/lib/dashboard-month';
 import { useAuth } from '../src/auth';
 import type { AuthenticatedUser, SupportState } from '../src/auth/types';
 import {
@@ -24,6 +23,7 @@ import {
 
 const replaceMock = vi.fn();
 let pathname = '/';
+let searchParams = new URLSearchParams('month=2026-09');
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -31,7 +31,7 @@ vi.mock('next/navigation', () => ({
     push: vi.fn(),
   }),
   usePathname: () => pathname,
-  useSearchParams: () => new URLSearchParams('month=2026-09'),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('../src/services/consultant', async () => {
@@ -126,6 +126,7 @@ async function openConsultant() {
 afterEach(() => {
   cleanup();
   pathname = '/';
+  searchParams = new URLSearchParams('month=2026-09');
   replaceMock.mockReset();
   vi.mocked(getConsultantStatus).mockReset();
   vi.mocked(listConsultantConversations).mockReset();
@@ -209,13 +210,14 @@ describe('chat do Consultor', () => {
     await waitFor(() => {
       expect(sendConsultantMessage).toHaveBeenCalledWith('conv-1', {
         content: 'Qual a receita?',
-        month: currentDashboardMonthKey(),
+        month: '2026-09',
       });
     });
     const sentPayload = vi.mocked(sendConsultantMessage).mock.calls[0]?.[1];
     expect(sentPayload).not.toHaveProperty('tenantId');
     expect(sentPayload).not.toHaveProperty('provider');
     expect(sentPayload).not.toHaveProperty('model');
+    expect(sentPayload).not.toHaveProperty('resolvedMonth');
 
     resolveSend({
       userMessage: {
@@ -236,6 +238,68 @@ describe('chat do Consultor', () => {
     expect(await screen.findByText('A receita oficial do mês é 0.')).toBeTruthy();
     await waitFor(() => {
       expect(screen.queryByLabelText('O Consultor está respondendo')).toBeNull();
+    });
+  });
+
+  it('envia o mês selecionado da Home como referência, sem interpretar a pergunta', async () => {
+    searchParams = new URLSearchParams('month=2026-08');
+    vi.mocked(sendConsultantMessage).mockResolvedValue({
+      userMessage: {
+        id: 'msg-user-ref',
+        senderType: 'USER',
+        content: 'Qual foi meu faturamento em agosto de 2026?',
+        createdAt: '2026-09-01T11:00:00.000Z',
+      },
+      consultantMessage: {
+        id: 'msg-ai-ref',
+        senderType: 'CONSULTANT',
+        content: 'ok',
+        createdAt: '2026-09-01T11:00:02.000Z',
+      },
+    });
+    renderChat();
+    await openConsultant();
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'Qual foi meu faturamento em agosto de 2026?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+
+    await waitFor(() => {
+      expect(sendConsultantMessage).toHaveBeenCalledWith('conv-new', {
+        content: 'Qual foi meu faturamento em agosto de 2026?',
+        month: '2026-08',
+      });
+    });
+  });
+
+  it('envia setembro quando a Home está em ?month=2026-09', async () => {
+    searchParams = new URLSearchParams('month=2026-09');
+    vi.mocked(sendConsultantMessage).mockResolvedValue({
+      userMessage: {
+        id: 'msg-user-set',
+        senderType: 'USER',
+        content: 'Qual a receita?',
+        createdAt: '2026-09-01T11:00:00.000Z',
+      },
+      consultantMessage: {
+        id: 'msg-ai-set',
+        senderType: 'CONSULTANT',
+        content: 'ok',
+        createdAt: '2026-09-01T11:00:02.000Z',
+      },
+    });
+    renderChat();
+    await openConsultant();
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'Qual a receita?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+
+    await waitFor(() => {
+      expect(sendConsultantMessage).toHaveBeenCalledWith('conv-new', {
+        content: 'Qual a receita?',
+        month: '2026-09',
+      });
     });
   });
 

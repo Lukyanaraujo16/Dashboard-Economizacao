@@ -2,12 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createFakeIaProvider } from '../src/infrastructure/ai/fake-ia-provider.js';
 import { createIaProviderRegistry } from '../src/infrastructure/ai/ia-provider-registry.js';
+import { Prisma } from '../src/generated/prisma/client.js';
+import type { MonthlyCashFlow } from '../src/modules/analytics/domain/types.js';
 import {
   AI_PROVIDER_MODEL_CATALOG,
   AdvisorDomainError,
   AdvisorExecutionError,
   createAllowAllConsultantRateLimiter,
+  createBuildAdvisorContext,
   createSendAdvisorMessage,
+  type BuildAdvisorContextInput,
 } from '../src/modules/advisor/index.js';
 import type { ConsultantRateLimiter } from '../src/modules/advisor/domain/consultant-rate-limit.js';
 import type { AdvisorBuiltContext } from '../src/modules/advisor/domain/context-blocks.js';
@@ -92,6 +96,7 @@ function createHarness(options?: {
   readonly openai?: ReturnType<typeof createFakeIaProvider>;
   readonly anthropic?: ReturnType<typeof createFakeIaProvider>;
   readonly rateLimiter?: ConsultantRateLimiter;
+  readonly context?: { build: (input: BuildAdvisorContextInput) => Promise<AdvisorBuiltContext> };
 }) {
   const openai = options?.openai ?? createFakeIaProvider({ id: 'OPENAI', text: 'Faturamento oficial: 0' });
   const anthropic = options?.anthropic ?? createFakeIaProvider({ id: 'ANTHROPIC' });
@@ -170,7 +175,7 @@ function createHarness(options?: {
         return next;
       },
     },
-    context: {
+    context: options?.context ?? {
       build: vi.fn(async () => builtContext()),
     },
     providers: createIaProviderRegistry({ openai, anthropic }),
@@ -320,5 +325,117 @@ describe('send-advisor-message (F13.3)', () => {
       }),
     ).rejects.toBeInstanceOf(AdvisorDomainError);
     expect(messages).toEqual([]);
+  });
+
+  it('resolve agosto explícito antes do Context Builder mesmo com reference setembro', async () => {
+    const build = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'MISSING',
+    }));
+    const { send } = createHarness({ context: { build } });
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual foi meu faturamento em agosto de 2026?',
+      monthKey: '2026-09',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    expect(build).toHaveBeenCalledWith(
+      expect.objectContaining({
+        monthKey: '2026-08',
+        question: 'Qual foi meu faturamento em agosto de 2026?',
+      }),
+    );
+    expect(result.run.status).toBe('SUCCEEDED');
+  });
+
+  it('regression smoke: FINANCIAL_FACTS de agosto chegam ao Fake com selected setembro', async () => {
+    const cashFlowMonths: string[] = [];
+    const context = createBuildAdvisorContext({
+      settings: {
+        async findSettingsByTenant() {
+          return settings();
+        },
+      },
+      knowledge: {
+        async listKnowledge() {
+          return [];
+        },
+      },
+      conversations: {
+        async findConversation() {
+          return conversation();
+        },
+        async listMessages() {
+          return [];
+        },
+      },
+      cashFlow: {
+        async getMonthlyCashFlow(input) {
+          cashFlowMonths.push(input.monthKey ?? 'MISSING');
+          const billingAugust = input.monthKey === '2026-08';
+          return {
+            tenantId: 'tenant-a',
+            today: new Date('2026-09-24T00:00:00.000Z'),
+            monthKey: input.monthKey ?? '2026-09',
+            from: new Date('2026-08-01T00:00:00.000Z'),
+            to: new Date('2026-08-31T00:00:00.000Z'),
+            costCenterCashSplit: true,
+            realized: {
+              inflows: new Prisma.Decimal(billingAugust ? '224790.3' : '0'),
+              outflows: new Prisma.Decimal('0'),
+              result: new Prisma.Decimal(billingAugust ? '224790.3' : '0'),
+            },
+            realizedByCategory: { inflows: null, outflows: null },
+            expected: {
+              receivables: new Prisma.Decimal('0'),
+              payables: new Prisma.Decimal('0'),
+              result: new Prisma.Decimal('0'),
+            },
+            overdue: {
+              receivables: new Prisma.Decimal('0'),
+              payables: new Prisma.Decimal('0'),
+              ofMonth: { receivables: new Prisma.Decimal('0'), payables: new Prisma.Decimal('0') },
+            },
+            stock: {
+              receivables: { open: null, overdue: null, dueToday: null, upcoming: null },
+              payables: { open: null, overdue: null, dueToday: null, upcoming: null },
+            },
+            coverage: null,
+            daily: { realized: [], expected: [] },
+          } satisfies MonthlyCashFlow;
+        },
+      },
+      analytics: {
+        async getFinancialStockSnapshot() {
+          return {
+            tenantId: 'tenant-a',
+            today: new Date('2026-09-24T00:00:00.000Z'),
+            receivables: { open: new Prisma.Decimal('0'), overdue: new Prisma.Decimal('0'), upcoming: new Prisma.Decimal('0') },
+            payables: { open: new Prisma.Decimal('0'), overdue: new Prisma.Decimal('0'), upcoming: new Prisma.Decimal('0') },
+            receivableDelinquency: {
+              overdueUnpaid: new Prisma.Decimal('0'),
+              openUnpaid: new Prisma.Decimal('0'),
+              rate: null,
+            },
+          };
+        },
+      },
+    });
+    const { send, openai } = createHarness({ context });
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual foi meu faturamento em agosto de 2026?',
+      monthKey: '2026-09',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    const facts = openai.lastInput?.blocks.find((block) => block.type === 'FINANCIAL_FACTS');
+    expect(cashFlowMonths).toEqual(['2026-08']);
+    expect(facts?.content).toContain('monthKey: 2026-08');
+    expect(facts?.content).toContain('billing: 224790.3');
+    expect(facts?.content).not.toContain('monthKey: 2026-09');
   });
 });

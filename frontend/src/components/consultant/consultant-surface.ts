@@ -1,5 +1,9 @@
 import { canUseTenantSurfaces } from '../../auth';
 import type { AuthenticatedUser, SupportState } from '../../auth/types';
+import {
+  currentDashboardMonthKey,
+  resolveSelectedDashboardMonthKey,
+} from '../../lib/dashboard-month';
 
 export type ConsultantUiState = 'CLOSED' | 'OPEN' | 'LOADING' | 'ERROR' | 'UNAVAILABLE';
 
@@ -35,6 +39,21 @@ export function shouldShowConsultantHost(
     return false;
   }
   return isConsultantTenantSurfacePath(pathname);
+}
+
+/**
+ * Mês de referência enviado no POST (`month`).
+ * Usa o seletor da Home (`?month=`); ausente = mês civil atual SP.
+ * Não interpreta linguagem natural — isso é do backend.
+ */
+export function resolveConsultantReferenceMonth(
+  searchParams: { readonly toString: () => string },
+  todayMonthKey: string = currentDashboardMonthKey(),
+): string {
+  return resolveSelectedDashboardMonthKey(
+    new URLSearchParams(searchParams.toString()),
+    todayMonthKey,
+  );
 }
 
 export function resolveOperationalConsultantTenantId(

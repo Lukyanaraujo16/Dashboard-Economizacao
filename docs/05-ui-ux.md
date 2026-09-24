@@ -1040,6 +1040,8 @@ O Consultor Financeiro deverá possuir botão flutuante persistente no canto inf
 
 O componente deverá permanecer disponível nas principais telas do painel do cliente.
 
+Mês de referência do chat (F13.6.1): o FAB envia o mês selecionado da Home (`?month=YYYY-MM`, mesmo helper `resolveSelectedDashboardMonthKey`). Ausente = mês civil atual SP. Relatórios não inventam recorte `from`/`to`. O frontend **não** interpreta linguagem natural; o backend resolve o mês explícito da pergunta.
+
 ⸻
 
 37. Estados do Botão do Consultor

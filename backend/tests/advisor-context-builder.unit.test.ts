@@ -429,6 +429,26 @@ describe('Context Builder do Consultor (F13.2)', () => {
     expect(deps.calls.snapshot.at(-1)?.now).toBe(now);
   });
 
+  it('FINANCIAL_FACTS usa o monthKey já resolvido (agosto smoke)', async () => {
+    const deps = createDeps({
+      flow: flowA({
+        monthKey: '2026-08',
+        realized: { inflows: dec('224790.3'), outflows: dec('0'), result: dec('224790.3') },
+        expected: { receivables: dec('0'), payables: dec('0'), result: dec('0') },
+      }),
+    });
+    const builder = createBuildAdvisorContext(deps);
+    const result = await builder.build({
+      tenantId: TENANT_A,
+      question: 'Qual foi meu faturamento em agosto de 2026?',
+      monthKey: '2026-08',
+    });
+    expect(result.monthKey).toBe('2026-08');
+    expect(block(result, 'FINANCIAL_FACTS').content).toContain('monthKey: 2026-08');
+    expect(block(result, 'FINANCIAL_FACTS').content).toContain('billing: 224790.3');
+    expect(deps.calls.cashFlow.at(-1)?.monthKey).toBe('2026-08');
+  });
+
   it('ausência financeira não vira zero e zero verdadeiro permanece 0', async () => {
     const flow = flowA({
       realized: { inflows: null, outflows: dec('0'), result: null },

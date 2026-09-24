@@ -5,6 +5,7 @@ import {
   RateLimitedError,
 } from '../../../shared/errors/application-error.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
+import { resolveAdvisorPeriod } from '../domain/resolve-advisor-period.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
 import {
   CONSULTANT_PLATFORM_LIMIT_MESSAGE,
@@ -120,12 +121,18 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         content: question,
       });
 
+      const period = resolveAdvisorPeriod({
+        content: question,
+        referenceMonthKey: input.monthKey,
+        now: input.now,
+      });
+
       const built = await deps.context.build({
         tenantId,
         userId,
         conversationId: conversation.id,
         question,
-        monthKey: input.monthKey,
+        monthKey: period.monthKey,
         now: input.now,
       });
 

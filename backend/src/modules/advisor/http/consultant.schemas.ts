@@ -14,6 +14,7 @@ export type CreateConsultantConversationBody = {
 
 export type SendConsultantMessageBody = {
   readonly content: string;
+  /** Mês de referência da superfície (YYYY-MM). Não prevalece sobre mês explícito na pergunta. */
   readonly month?: string;
 };
 

@@ -934,6 +934,18 @@ Critérios de aceite
 * contexto é limitado ao tenant;
 * dados desnecessários não são enviados por padrão.
 
+Resolução temporal (F13.6.1, IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL)
+
+A aplicação resolve o período financeiro **antes** do Motor Analítico e do provider. O LLM não escolhe o mês oficial.
+
+Precedência:
+
+1. mês/ano explícito na pergunta (determinístico, sem LLM);
+2. mês de referência da superfície (`month` no POST = seletor da Home);
+3. mês civil atual em `America/Sao_Paulo`.
+
+Mês citado sem ano: usa o ano do mês de referência; senão o ano civil SP. Expressões relativas (“este mês”, “mês passado”) usam a referência. Dois períodos explícitos distintos: não inventa — cai no default. F14 continua NÃO iniciada. Produção NÃO homologada.
+
 ⸻
 
 CONSULTOR-004 — Configuração por empresa

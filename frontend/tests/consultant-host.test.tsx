@@ -1,7 +1,11 @@
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ConsultantHost, shouldShowConsultantHost } from '../src/components/consultant';
+import {
+  ConsultantHost,
+  resolveConsultantReferenceMonth,
+  shouldShowConsultantHost,
+} from '../src/components/consultant';
 import { useAuth } from '../src/auth';
 import {
   createAuthenticatedGetCurrentUser,
@@ -65,6 +69,18 @@ afterEach(() => {
 
 beforeEach(() => {
   pathname = '/';
+});
+
+describe('resolveConsultantReferenceMonth', () => {
+  it('usa ?month= da Home e cai no mês civil quando ausente', () => {
+    expect(resolveConsultantReferenceMonth(new URLSearchParams('month=2026-08'), '2026-09')).toBe(
+      '2026-08',
+    );
+    expect(resolveConsultantReferenceMonth(new URLSearchParams('month=2026-09'), '2026-09')).toBe(
+      '2026-09',
+    );
+    expect(resolveConsultantReferenceMonth(new URLSearchParams(), '2026-09')).toBe('2026-09');
+  });
 });
 
 describe('shouldShowConsultantHost', () => {
