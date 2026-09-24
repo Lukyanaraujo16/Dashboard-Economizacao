@@ -10,6 +10,7 @@ import {
   COST_CENTER_DETAIL_STALE_REVALIDATE_MAX_PER_SYNC,
   detailStatusFromNormalizeKind,
   isCostCenterDetailStaleHot,
+  isCostCenterDetailStaleHotCurrentMonth,
   selectCostCenterDetailCandidates,
   shouldFetchCostCenterDetail,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-cost-center-detail-fetch.js';
@@ -496,6 +497,466 @@ describe('selectCostCenterDetailCandidates HOT/COLD', () => {
     expect(selected.staleHotSelected + selected.staleColdSelected).toBe(40);
     expect(selected.staleHotSelected).toBe(28);
     expect(selected.staleColdSelected).toBe(12);
+  });
+});
+
+describe('selectCostCenterDetailCandidates HOT CURRENT-MONTH', () => {
+  const now = new Date('2026-09-23T18:00:00.000Z');
+  const upstreamUpdatedAt = new Date('2026-07-01T00:00:00.000Z');
+
+  function civil(isoDate: string): Date {
+    return new Date(`${isoDate}T00:00:00.000Z`);
+  }
+
+  function row(input: {
+    readonly externalId: string;
+    readonly dueDate?: string | null;
+    readonly competenceDate?: string | null;
+    readonly detailSyncedAt?: Date;
+    readonly hoursAgo?: number;
+    readonly kind?: 'RECEIVABLE' | 'PAYABLE';
+    readonly localId?: string;
+    readonly status?: 'NO_ALLOCATION' | 'FETCHED' | 'UNRESOLVED' | 'UNKNOWN' | 'ERROR';
+  }) {
+    return {
+      kind: input.kind ?? ('PAYABLE' as const),
+      localId: input.localId ?? input.externalId,
+      externalId: input.externalId,
+      total: 1,
+      status: input.status ?? ('NO_ALLOCATION' as const),
+      detailSyncedAt:
+        input.detailSyncedAt ?? new Date(now.getTime() - (input.hoursAgo ?? 8) * 60 * 60 * 1000),
+      detailRuleVersion: COST_CENTER_DETAIL_RULE_VERSION,
+      upstreamUpdatedAt,
+      dueDate: input.dueDate === undefined || input.dueDate === null ? input.dueDate ?? null : civil(input.dueDate),
+      competenceDate:
+        input.competenceDate === undefined || input.competenceDate === null
+          ? input.competenceDate ?? null
+          : civil(input.competenceDate),
+    };
+  }
+
+  function select(
+    rows: ReturnType<typeof row>[],
+    clock: Date = now,
+    extra?: { readonly staleLimit?: number },
+  ) {
+    return selectCostCenterDetailCandidates(rows, {
+      now: clock,
+      staleAfterMs: COST_CENTER_DETAIL_STALE_AFTER_MS,
+      staleLimit: extra?.staleLimit ?? COST_CENTER_DETAIL_STALE_REVALIDATE_MAX_PER_SYNC,
+    });
+  }
+
+  it('1. CURRENT-MONTH vence HOT do mês anterior mesmo com detailSyncedAt mais novo', () => {
+    const selected = select([
+      row({
+        externalId: 'aug-older',
+        dueDate: '2026-08-20',
+        detailSyncedAt: new Date('2026-08-20T12:00:00.000Z'),
+      }),
+      row({
+        externalId: 'sep-newer',
+        dueDate: '2026-09-03',
+        detailSyncedAt: new Date('2026-09-03T14:28:17.161Z'),
+      }),
+    ]);
+    expect(selected.candidates.map((item) => item.externalId)).toEqual(['sep-newer', 'aug-older']);
+    expect(selected.staleHotSelected).toBe(2);
+  });
+
+  it('2. CURRENT-MONTH vence HOT do mês seguinte mesmo com detailSyncedAt mais novo', () => {
+    const selected = select([
+      row({
+        externalId: 'oct-older',
+        dueDate: '2026-10-10',
+        detailSyncedAt: new Date('2026-08-20T12:00:00.000Z'),
+      }),
+      row({
+        externalId: 'sep-newer',
+        dueDate: '2026-09-15',
+        detailSyncedAt: new Date('2026-09-03T14:28:17.161Z'),
+      }),
+    ]);
+    expect(selected.candidates.map((item) => item.externalId)).toEqual(['sep-newer', 'oct-older']);
+  });
+
+  it('3. dueDate no mês corrente classifica CURRENT-MONTH', () => {
+    expect(isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-09-02') }, now)).toBe(true);
+    expect(isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-08-31') }, now)).toBe(false);
+    expect(isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-10-01') }, now)).toBe(false);
+  });
+
+  it('4. competenceDate no mês corrente também classifica CURRENT-MONTH', () => {
+    expect(
+      isCostCenterDetailStaleHotCurrentMonth(
+        { dueDate: civil('2026-08-15'), competenceDate: civil('2026-09-30') },
+        now,
+      ),
+    ).toBe(true);
+    const selected = select([
+      row({
+        externalId: 'comp-current',
+        dueDate: '2026-08-15',
+        competenceDate: '2026-09-30',
+        detailSyncedAt: new Date('2026-09-03T14:28:17.161Z'),
+      }),
+      row({
+        externalId: 'aug-only',
+        dueDate: '2026-08-15',
+        competenceDate: '2026-08-15',
+        detailSyncedAt: new Date('2026-08-20T12:00:00.000Z'),
+      }),
+    ]);
+    expect(selected.candidates[0]?.externalId).toBe('comp-current');
+  });
+
+  it('5. PAID + NO_ALLOCATION no mês corrente continua elegível (sem filtro financeiro)', () => {
+    const selected = select([
+      row({
+        externalId: '744a6443-1fff-444d-b8d5-50d0176132f9',
+        localId: 'cf976583-1dee-4d30-bdf3-f74e9d38a948',
+        dueDate: '2026-09-02',
+        competenceDate: '2026-09-02',
+        status: 'NO_ALLOCATION',
+        detailSyncedAt: new Date('2026-09-03T14:28:17.161Z'),
+      }),
+    ]);
+    expect(selected.staleHotSelected).toBe(1);
+    expect(selected.candidates[0]?.staleBand).toBe('hot');
+    expect(selected.candidates[0]?.reason).toBe('stale_revalidate');
+  });
+
+  it('6. Dentro de CURRENT-MONTH preserva detailSyncedAt ASC', () => {
+    const selected = select([
+      row({
+        externalId: 'sep-new',
+        dueDate: '2026-09-10',
+        detailSyncedAt: new Date('2026-09-10T12:00:00.000Z'),
+      }),
+      row({
+        externalId: 'sep-old',
+        dueDate: '2026-09-02',
+        detailSyncedAt: new Date('2026-09-02T12:00:00.000Z'),
+      }),
+      row({
+        externalId: 'sep-mid',
+        dueDate: '2026-09-05',
+        detailSyncedAt: new Date('2026-09-05T12:00:00.000Z'),
+      }),
+    ]);
+    expect(selected.candidates.map((item) => item.externalId)).toEqual([
+      'sep-old',
+      'sep-mid',
+      'sep-new',
+    ]);
+  });
+
+  it('7. Empate de detailSyncedAt: kind → externalId → localId', () => {
+    const sameTs = new Date('2026-09-03T14:28:17.161Z');
+    const selected = select([
+      row({
+        externalId: '744a6443-1fff-444d-b8d5-50d0176132f9',
+        localId: 'cf976583-1dee-4d30-bdf3-f74e9d38a948',
+        kind: 'PAYABLE',
+        dueDate: '2026-09-02',
+        detailSyncedAt: sameTs,
+      }),
+      row({
+        externalId: '733d39ae-130a-4000-8000-000000000000',
+        localId: '55a65c14-0000-4000-8000-000000000000',
+        kind: 'PAYABLE',
+        dueDate: '2026-09-02',
+        detailSyncedAt: sameTs,
+      }),
+      row({
+        externalId: '808164be-33a9-4000-8000-000000000000',
+        localId: '37ef0575-0000-4000-8000-000000000000',
+        kind: 'RECEIVABLE',
+        dueDate: '2026-09-02',
+        detailSyncedAt: sameTs,
+      }),
+    ]);
+    expect(selected.candidates.map((item) => item.externalId)).toEqual([
+      '733d39ae-130a-4000-8000-000000000000',
+      '744a6443-1fff-444d-b8d5-50d0176132f9',
+      '808164be-33a9-4000-8000-000000000000',
+    ]);
+  });
+
+  it('8. HOT adjacente continua depois da banda corrente', () => {
+    const selected = select([
+      ...Array.from({ length: 3 }, (_, i) =>
+        row({
+          externalId: `adj-${i}`,
+          dueDate: i === 0 ? '2026-08-10' : '2026-10-10',
+          detailSyncedAt: new Date('2026-08-01T00:00:00.000Z'),
+        }),
+      ),
+      ...Array.from({ length: 3 }, (_, i) =>
+        row({
+          externalId: `cur-${i}`,
+          dueDate: '2026-09-10',
+          detailSyncedAt: new Date('2026-09-20T00:00:00.000Z'),
+        }),
+      ),
+    ]);
+    expect(selected.candidates.slice(0, 3).map((item) => item.externalId)).toEqual([
+      'cur-0',
+      'cur-1',
+      'cur-2',
+    ]);
+    expect(selected.candidates.slice(3).every((item) => item.externalId.startsWith('adj-'))).toBe(
+      true,
+    );
+  });
+
+  it('9. COLD permanece inalterado (FIFO próprio, sem banda de mês)', () => {
+    const selected = select([
+      row({
+        externalId: 'cold-newer',
+        dueDate: '2025-01-01',
+        detailSyncedAt: new Date('2026-09-01T00:00:00.000Z'),
+      }),
+      row({
+        externalId: 'cold-older',
+        dueDate: '2027-06-01',
+        detailSyncedAt: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+      row({
+        externalId: 'sep-current',
+        dueDate: '2026-09-02',
+        detailSyncedAt: new Date('2026-09-03T14:28:17.161Z'),
+      }),
+    ]);
+    const cold = selected.candidates.filter((item) => item.staleBand === 'cold');
+    expect(cold.map((item) => item.externalId)).toEqual(['cold-older', 'cold-newer']);
+    expect(selected.staleColdSelected).toBe(2);
+    expect(selected.staleHotSelected).toBe(1);
+  });
+
+  it('10. Immediate permanece fora do stale budget', () => {
+    const rows = [
+      row({
+        externalId: 'unknown-now',
+        dueDate: '2026-09-02',
+        status: 'UNKNOWN',
+        detailSyncedAt: undefined,
+      }),
+      ...Array.from({ length: 40 }, (_, i) =>
+        row({
+          externalId: `sep-${String(i).padStart(2, '0')}`,
+          dueDate: '2026-09-10',
+          hoursAgo: 8 + i,
+        }),
+      ),
+      ...Array.from({ length: 20 }, (_, i) =>
+        row({
+          externalId: `cold-${String(i).padStart(2, '0')}`,
+          dueDate: '2025-01-01',
+          hoursAgo: 8 + i,
+        }),
+      ),
+    ];
+    const unknownRow = {
+      ...rows[0]!,
+      status: 'UNKNOWN' as const,
+      detailSyncedAt: null,
+      detailRuleVersion: 0,
+      upstreamUpdatedAt: null,
+    };
+    const selected = select([unknownRow, ...rows.slice(1)]);
+    expect(selected.candidates[0]?.externalId).toBe('unknown-now');
+    expect(selected.candidates[0]?.reason).toBe('unknown');
+    expect(selected.candidates[0]?.staleBand).toBeUndefined();
+    expect(selected.staleSelected).toBe(40);
+    expect(selected.staleHotSelected).toBe(28);
+    expect(selected.staleColdSelected).toBe(12);
+    expect(selected.candidates).toHaveLength(41);
+  });
+
+  it('11. Budget 28 HOT / 12 COLD / teto 40 com redistribuição', () => {
+    expect(COST_CENTER_DETAIL_STALE_HOT_MAX_PER_SYNC).toBe(28);
+    expect(COST_CENTER_DETAIL_STALE_COLD_MAX_PER_SYNC).toBe(12);
+    expect(COST_CENTER_DETAIL_STALE_REVALIDATE_MAX_PER_SYNC).toBe(40);
+    const mixed = select([
+      ...Array.from({ length: 40 }, (_, i) =>
+        row({ externalId: `sep-${i}`, dueDate: '2026-09-02', hoursAgo: 8 + i }),
+      ),
+      ...Array.from({ length: 10 }, (_, i) =>
+        row({ externalId: `aug-${i}`, dueDate: '2026-08-02', hoursAgo: 8 + i }),
+      ),
+      ...Array.from({ length: 20 }, (_, i) =>
+        row({ externalId: `cold-${i}`, dueDate: '2024-01-01', hoursAgo: 8 + i }),
+      ),
+    ]);
+    expect(mixed.staleHotSelected).toBe(28);
+    expect(mixed.staleColdSelected).toBe(12);
+    expect(mixed.staleSelected).toBe(40);
+    expect(allocateStaleHotColdBudget({ hotCount: 10, coldCount: 50 })).toEqual({
+      hot: 10,
+      cold: 30,
+    });
+  });
+
+  it('12. TTL 6h permanece', () => {
+    expect(COST_CENTER_DETAIL_STALE_AFTER_MS).toBe(6 * 60 * 60 * 1000);
+    const fresh = select([
+      row({
+        externalId: 'fresh-sep',
+        dueDate: '2026-09-02',
+        detailSyncedAt: new Date(now.getTime() - COST_CENTER_DETAIL_STALE_AFTER_MS + 1),
+      }),
+    ]);
+    expect(fresh.staleSelected).toBe(0);
+    expect(fresh.skippedFresh).toBe(1);
+    const stale = select([
+      row({
+        externalId: 'stale-sep',
+        dueDate: '2026-09-02',
+        detailSyncedAt: new Date(now.getTime() - COST_CENTER_DETAIL_STALE_AFTER_MS),
+      }),
+    ]);
+    expect(stale.staleHotSelected).toBe(1);
+  });
+
+  it('13. em outubro/2026 outubro vira CURRENT-MONTH e setembro deixa de ser corrente', () => {
+    const octoberNow = new Date('2026-10-15T15:00:00.000Z');
+    expect(isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-10-02') }, octoberNow)).toBe(
+      true,
+    );
+    expect(isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-09-02') }, octoberNow)).toBe(
+      false,
+    );
+    const selected = select(
+      [
+        row({
+          externalId: 'sep-old-ts',
+          dueDate: '2026-09-02',
+          detailSyncedAt: new Date('2026-08-01T00:00:00.000Z'),
+        }),
+        row({
+          externalId: 'oct-new-ts',
+          dueDate: '2026-10-02',
+          detailSyncedAt: new Date('2026-09-20T00:00:00.000Z'),
+        }),
+      ],
+      octoberNow,
+    );
+    expect(selected.candidates.map((item) => item.externalId)).toEqual([
+      'oct-new-ts',
+      'sep-old-ts',
+    ]);
+  });
+
+  it('14. fronteiras civis de São Paulo não dependem do timezone da máquina', () => {
+    const stillSeptemberInSp = new Date('2026-10-01T02:30:00.000Z');
+    expect(
+      isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-09-30') }, stillSeptemberInSp),
+    ).toBe(true);
+    expect(
+      isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-10-01') }, stillSeptemberInSp),
+    ).toBe(false);
+
+    const octoberInSp = new Date('2026-10-01T04:00:00.000Z');
+    expect(isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-10-01') }, octoberInSp)).toBe(
+      true,
+    );
+    expect(isCostCenterDetailStaleHotCurrentMonth({ dueDate: civil('2026-09-30') }, octoberInSp)).toBe(
+      false,
+    );
+  });
+
+  it('15. backlog equivalente à produção: João-equivalente entra na fatia HOT 28', () => {
+    const lastCycleNow = new Date('2026-09-24T02:28:52.302Z');
+    const joaoTs = new Date('2026-09-03T14:28:17.161Z');
+    const joaoExternalId = '744a6443-1fff-444d-b8d5-50d0176132f9';
+    const aheadAugust = Array.from({ length: 38 }, (_, i) =>
+      row({
+        externalId: `aug-ahead-${String(i).padStart(2, '0')}`,
+        dueDate: '2026-08-15',
+        competenceDate: '2026-08-15',
+        detailSyncedAt: new Date('2026-08-24T21:59:13.563Z'),
+      }),
+    );
+    const competenceCurrentDueAdjacent = row({
+      externalId: '1f62e253-b6e1-4000-8000-000000000001',
+      dueDate: '2026-10-04',
+      competenceDate: '2026-09-30',
+      detailSyncedAt: new Date('2026-08-31T21:23:19.318Z'),
+    });
+    const aheadSeptemberOlder = Array.from({ length: 7 }, (_, i) =>
+      row({
+        externalId: `sep-old-${i}`,
+        dueDate: '2026-09-01',
+        detailSyncedAt: new Date('2026-09-02T19:09:17.777Z'),
+      }),
+    );
+    const aheadSeptemberSameTs = [
+      '00bb9d6b-8b1f-4000-8000-000000000000',
+      '0d729a7e-6e78-4000-8000-000000000000',
+      '66258296-a307-4000-8000-000000000000',
+      '733d39ae-130a-4000-8000-000000000000',
+    ].map((externalId) =>
+      row({
+        externalId,
+        dueDate: '2026-09-02',
+        detailSyncedAt: joaoTs,
+      }),
+    );
+    const joao = row({
+      externalId: joaoExternalId,
+      localId: 'cf976583-1dee-4d30-bdf3-f74e9d38a948',
+      dueDate: '2026-09-02',
+      competenceDate: '2026-09-02',
+      status: 'NO_ALLOCATION',
+      detailSyncedAt: joaoTs,
+    });
+    const behindSeptember = Array.from({ length: 135 }, (_, i) =>
+      row({
+        externalId: `sep-behind-${String(i).padStart(3, '0')}`,
+        dueDate: '2026-09-10',
+        detailSyncedAt: new Date('2026-09-03T19:33:17.015Z'),
+      }),
+    );
+    const adjacentOctober = Array.from({ length: 52 }, (_, i) =>
+      row({
+        externalId: `oct-${String(i).padStart(2, '0')}`,
+        dueDate: '2026-10-04',
+        detailSyncedAt: new Date('2026-08-31T21:23:19.318Z'),
+      }),
+    );
+    const coldFuture = Array.from({ length: 40 }, (_, i) =>
+      row({
+        externalId: `cold-${String(i).padStart(2, '0')}`,
+        dueDate: '2027-06-01',
+        detailSyncedAt: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    );
+    const selected = select(
+      [
+        ...aheadAugust,
+        competenceCurrentDueAdjacent,
+        ...aheadSeptemberOlder,
+        ...aheadSeptemberSameTs,
+        joao,
+        ...behindSeptember,
+        ...adjacentOctober,
+        ...coldFuture,
+      ],
+      lastCycleNow,
+    );
+    expect(selected.staleHotSelected).toBe(28);
+    expect(selected.staleColdSelected).toBe(12);
+    expect(selected.staleSelected).toBe(40);
+    const hot = selected.candidates.filter((item) => item.staleBand === 'hot');
+    expect(hot).toHaveLength(28);
+    expect(hot.every((item) => !item.externalId.startsWith('aug-'))).toBe(true);
+    expect(hot.every((item) => !item.externalId.startsWith('oct-'))).toBe(true);
+    const joaoIndex = hot.findIndex((item) => item.externalId === joaoExternalId);
+    expect(joaoIndex).toBeGreaterThanOrEqual(0);
+    expect(joaoIndex).toBeLessThan(28);
+    expect(joaoIndex).toBe(12);
   });
 });
 

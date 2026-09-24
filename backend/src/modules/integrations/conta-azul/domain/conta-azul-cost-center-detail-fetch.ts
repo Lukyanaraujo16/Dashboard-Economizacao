@@ -165,23 +165,16 @@ export type CostCenterDetailSelectionRow<TTotal> = {
   readonly competenceDate?: Date | null;
 };
 
-/**
- * HOT = dueDate OU competenceDate no mês civil SP anterior, atual ou seguinte.
- * Datas no contrato @db.Date (meia-noite UTC), âncora = civilTodayInSaoPaulo(now).
- */
-export function isCostCenterDetailStaleHot(
-  input: {
-    readonly dueDate?: Date | null;
-    readonly competenceDate?: Date | null;
-  },
-  now: Date,
+type CostCenterDetailCivilDates = {
+  readonly dueDate?: Date | null;
+  readonly competenceDate?: Date | null;
+};
+
+function civilDateTouchesInclusiveRange(
+  input: CostCenterDetailCivilDates,
+  from: Date,
+  to: Date,
 ): boolean {
-  const today = civilTodayInSaoPaulo(now);
-  const current = civilMonthBounds(today);
-  const previous = civilMonthBoundsFromKey(shiftCivilMonthKey(current.monthKey, -1));
-  const next = civilMonthBoundsFromKey(shiftCivilMonthKey(current.monthKey, 1));
-  const from = previous.from;
-  const to = next.to;
   if (input.dueDate && isCivilDateInInclusiveRange(input.dueDate, from, to)) {
     return true;
   }
@@ -189,6 +182,33 @@ export function isCostCenterDetailStaleHot(
     return true;
   }
   return false;
+}
+
+function civilCurrentMonthBoundsInSaoPaulo(now: Date) {
+  return civilMonthBounds(civilTodayInSaoPaulo(now));
+}
+
+/**
+ * HOT = dueDate OU competenceDate no mês civil SP anterior, atual ou seguinte.
+ * Datas no contrato @db.Date (meia-noite UTC), âncora = civilTodayInSaoPaulo(now).
+ */
+export function isCostCenterDetailStaleHot(input: CostCenterDetailCivilDates, now: Date): boolean {
+  const current = civilCurrentMonthBoundsInSaoPaulo(now);
+  const previous = civilMonthBoundsFromKey(shiftCivilMonthKey(current.monthKey, -1));
+  const next = civilMonthBoundsFromKey(shiftCivilMonthKey(current.monthKey, 1));
+  return civilDateTouchesInclusiveRange(input, previous.from, next.to);
+}
+
+/**
+ * Dentro do HOT, CURRENT-MONTH = dueDate OU competenceDate no mês civil SP corrente.
+ * Mesma âncora e contrato date-only de `isCostCenterDetailStaleHot`.
+ */
+export function isCostCenterDetailStaleHotCurrentMonth(
+  input: CostCenterDetailCivilDates,
+  now: Date,
+): boolean {
+  const current = civilCurrentMonthBoundsInSaoPaulo(now);
+  return civilDateTouchesInclusiveRange(input, current.from, current.to);
 }
 
 /** Reserva 28/12 com sobra redistribuída; nunca ultrapassa o teto total. */
@@ -215,6 +235,8 @@ export function allocateStaleHotColdBudget(input: {
   return { hot: hotTake + extraHot, cold: coldTake + extraCold };
 }
 
+type CostCenterDetailStaleHotPriority = 'current' | 'adjacent';
+
 function compareStaleCandidates(
   left: { readonly detailSyncedAt: Date | null; readonly kind: string; readonly externalId: string; readonly localId: string },
   right: { readonly detailSyncedAt: Date | null; readonly kind: string; readonly externalId: string; readonly localId: string },
@@ -232,6 +254,28 @@ function compareStaleCandidates(
     return byExternal;
   }
   return left.localId.localeCompare(right.localId);
+}
+
+function compareHotStaleCandidates(
+  left: {
+    readonly hotPriority: CostCenterDetailStaleHotPriority;
+    readonly detailSyncedAt: Date | null;
+    readonly kind: string;
+    readonly externalId: string;
+    readonly localId: string;
+  },
+  right: {
+    readonly hotPriority: CostCenterDetailStaleHotPriority;
+    readonly detailSyncedAt: Date | null;
+    readonly kind: string;
+    readonly externalId: string;
+    readonly localId: string;
+  },
+): number {
+  if (left.hotPriority !== right.hotPriority) {
+    return left.hotPriority === 'current' ? -1 : 1;
+  }
+  return compareStaleCandidates(left, right);
 }
 
 /**
@@ -278,9 +322,12 @@ export function selectCostCenterDetailCandidates<TTotal>(
     readonly detailSyncedAt: Date | null;
     readonly staleBand: CostCenterDetailStaleBand;
   };
+  type HotStaleRow = StaleRow & {
+    readonly hotPriority: CostCenterDetailStaleHotPriority;
+  };
 
   const immediate: Selected[] = [];
-  const hot: StaleRow[] = [];
+  const hot: HotStaleRow[] = [];
   const cold: StaleRow[] = [];
   let skippedFresh = 0;
 
@@ -311,7 +358,12 @@ export function selectCostCenterDetailCandidates<TTotal>(
         : 'cold';
       const staleRow = { ...candidate, detailSyncedAt: row.detailSyncedAt, staleBand: band };
       if (band === 'hot') {
-        hot.push(staleRow);
+        hot.push({
+          ...staleRow,
+          hotPriority: isCostCenterDetailStaleHotCurrentMonth(row, options.now)
+            ? 'current'
+            : 'adjacent',
+        });
       } else {
         cold.push(staleRow);
       }
@@ -320,7 +372,7 @@ export function selectCostCenterDetailCandidates<TTotal>(
     }
   }
 
-  hot.sort(compareStaleCandidates);
+  hot.sort(compareHotStaleCandidates);
   cold.sort(compareStaleCandidates);
 
   const budget = allocateStaleHotColdBudget({
