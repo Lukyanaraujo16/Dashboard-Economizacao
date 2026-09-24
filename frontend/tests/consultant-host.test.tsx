@@ -112,7 +112,7 @@ describe('ConsultantHost', () => {
     renderHost();
 
     expect((await screen.findByTestId('auth-status')).textContent).toBe('authenticated:USER');
-    expect(screen.getByRole('button', { name: 'Abrir o Consultor' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Abrir o Consultor/ })).toBeTruthy();
   });
 
   it('não mostra o FAB em `/empresas`', async () => {
@@ -120,7 +120,7 @@ describe('ConsultantHost', () => {
     renderHost();
 
     expect((await screen.findByTestId('auth-status')).textContent).toBe('authenticated:USER');
-    expect(screen.queryByRole('button', { name: 'Abrir o Consultor' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Abrir o Consultor/ })).toBeNull();
   });
 
   it('não mostra o FAB quando o usuário não pode usar superfícies tenant', async () => {
@@ -133,17 +133,17 @@ describe('ConsultantHost', () => {
     });
 
     expect((await screen.findByTestId('auth-status')).textContent).toBe('authenticated:ADMIN');
-    expect(screen.queryByRole('button', { name: 'Abrir o Consultor' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Abrir o Consultor/ })).toBeNull();
   });
 
   it('some com o FAB após logout', async () => {
     renderHost(undefined, { withLogout: true });
 
-    expect(await screen.findByRole('button', { name: 'Abrir o Consultor' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Abrir o Consultor/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Encerrar sessão' }));
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Abrir o Consultor' })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Abrir o Consultor/ })).toBeNull();
     });
   });
 });

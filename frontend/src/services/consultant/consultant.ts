@@ -54,7 +54,18 @@ function isConsultantStatus(value: unknown): value is ConsultantUserStatus['stat
 }
 
 function isConsultantUserStatus(value: unknown): value is ConsultantUserStatus {
-  return isRecord(value) && isConsultantStatus(value.status);
+  if (!isRecord(value) || !isConsultantStatus(value.status)) {
+    return false;
+  }
+  return value.consultantName === undefined || typeof value.consultantName === 'string';
+}
+
+function toConsultantUserStatus(value: ConsultantUserStatus): ConsultantUserStatus {
+  const name = value.consultantName?.trim();
+  return {
+    status: value.status,
+    consultantName: name && name.length > 0 ? name : 'Consultor',
+  };
 }
 
 function isConversation(value: unknown): value is ConsultantConversation {
@@ -211,7 +222,7 @@ function parseSendResult(body: unknown): SendConsultantMessageResult {
     return {
       userMessage: body.userMessage,
       consultantMessage: body.consultantMessage,
-      conversation: isConversationDetail(body.conversation) ? body.conversation : undefined,
+      conversation: isConversation(body.conversation) ? body.conversation : undefined,
     };
   }
 
@@ -232,7 +243,7 @@ export async function getConsultantStatus(): Promise<ConsultantUserStatus> {
     });
   }
 
-  return body;
+  return toConsultantUserStatus(body);
 }
 
 export async function listConsultantConversations(): Promise<readonly ConsultantConversation[]> {
@@ -292,6 +303,21 @@ export async function createConsultantConversation(): Promise<ConsultantConversa
   }
 
   return body;
+}
+
+export async function deleteConsultantConversation(conversationId: string): Promise<void> {
+  const response = await consultantFetch(consultantConversationPath(conversationId), {
+    method: 'DELETE',
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
 }
 
 export async function sendConsultantMessage(

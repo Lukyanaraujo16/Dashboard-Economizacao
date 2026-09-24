@@ -1,5 +1,6 @@
 export {
   createConsultantConversation,
+  deleteConsultantConversation,
   getConsultantConversation,
   getConsultantStatus,
   listConsultantConversations,

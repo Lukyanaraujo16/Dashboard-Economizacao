@@ -107,4 +107,16 @@ export async function registerConsultantRoutes(
       return reply.status(200).header('Cache-Control', 'private, no-store').send(result);
     },
   );
+
+  app.delete(
+    '/consultant/conversations/:conversationId',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      assertNoTenantIdQuery(request.query);
+      const { tenantId, userId } = requireOperationalTenant(request);
+      const conversationId = parseConversationIdParam(request.params);
+      await consultant.deleteConversation(tenantId, userId, conversationId);
+      return reply.status(204).header('Cache-Control', 'private, no-store').send();
+    },
+  );
 }

@@ -444,7 +444,7 @@ describe('segurança multi-tenant do Consultor (F13.5)', () => {
       headers: { cookie },
     });
     expect(status.statusCode).toBe(200);
-    expect(status.json()).toEqual({ status: 'ACTIVE' });
+    expect(status.json()).toEqual({ status: 'ACTIVE', consultantName: 'Consultor' });
     expectNoSecretLeak(status.body);
 
     const listInSupport = await app.inject({

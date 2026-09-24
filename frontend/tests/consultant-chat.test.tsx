@@ -6,6 +6,7 @@ import { useAuth } from '../src/auth';
 import type { AuthenticatedUser, SupportState } from '../src/auth/types';
 import {
   createConsultantConversation,
+  deleteConsultantConversation,
   getConsultantConversation,
   getConsultantStatus,
   listConsultantConversations,
@@ -44,6 +45,7 @@ vi.mock('../src/services/consultant', async () => {
     listConsultantConversations: vi.fn(),
     getConsultantConversation: vi.fn(),
     createConsultantConversation: vi.fn(),
+    deleteConsultantConversation: vi.fn(),
     sendConsultantMessage: vi.fn(),
   };
 });
@@ -119,8 +121,8 @@ function renderChat(user: AuthenticatedUser = mockAuthenticatedUser, support?: S
 }
 
 async function openConsultant() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Abrir o Consultor' }));
-  expect(await screen.findByRole('dialog', { name: 'Consultor' })).toBeTruthy();
+  fireEvent.click(await screen.findByRole('button', { name: /Abrir o Consultor/ }));
+  expect(await screen.findByRole('dialog', { name: /Consultor/ })).toBeTruthy();
 }
 
 afterEach(() => {
@@ -132,12 +134,16 @@ afterEach(() => {
   vi.mocked(listConsultantConversations).mockReset();
   vi.mocked(getConsultantConversation).mockReset();
   vi.mocked(createConsultantConversation).mockReset();
+  vi.mocked(deleteConsultantConversation).mockReset();
   vi.mocked(sendConsultantMessage).mockReset();
 });
 
 beforeEach(() => {
   pathname = '/';
-  vi.mocked(getConsultantStatus).mockResolvedValue({ status: 'ACTIVE' });
+  vi.mocked(getConsultantStatus).mockResolvedValue({
+    status: 'ACTIVE',
+    consultantName: 'Consultor',
+  });
   vi.mocked(listConsultantConversations).mockResolvedValue([conversation]);
   vi.mocked(getConsultantConversation).mockResolvedValue(conversationDetail);
   vi.mocked(createConsultantConversation).mockResolvedValue({
@@ -155,9 +161,9 @@ describe('chat do Consultor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fechar o Consultor' }));
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Consultor' })).toBeNull();
+      expect(screen.queryByRole('dialog', { name: /Consultor/ })).toBeNull();
     });
-    expect(screen.getByRole('button', { name: 'Abrir o Consultor' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Abrir o Consultor/ })).toBeTruthy();
   });
 
   it('fecha com Escape no desktop', async () => {
@@ -167,7 +173,7 @@ describe('chat do Consultor', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Consultor' })).toBeNull();
+      expect(screen.queryByRole('dialog', { name: /Consultor/ })).toBeNull();
     });
   });
 
@@ -176,10 +182,11 @@ describe('chat do Consultor', () => {
     await openConsultant();
 
     await waitFor(() => {
-      expect(getConsultantStatus).toHaveBeenCalledTimes(1);
+      expect(getConsultantStatus).toHaveBeenCalled();
       expect(listConsultantConversations).toHaveBeenCalledTimes(1);
     });
 
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
     fireEvent.click(screen.getByRole('button', { name: 'Caixa de setembro' }));
 
     expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
@@ -198,6 +205,7 @@ describe('chat do Consultor', () => {
 
     renderChat();
     await openConsultant();
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
     expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
 
@@ -322,6 +330,7 @@ describe('chat do Consultor', () => {
 
     renderChat();
     await openConsultant();
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
     expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
 
@@ -336,7 +345,7 @@ describe('chat do Consultor', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText('Como está o caixa?')).toBeTruthy();
-    expect(screen.getByRole('dialog', { name: 'Consultor' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: /Consultor/ })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
       target: { value: 'Tentar de novo' },
@@ -346,8 +355,27 @@ describe('chat do Consultor', () => {
     expect(screen.getByText('Como está o caixa?')).toBeTruthy();
   });
 
+  it('exclui conversa com confirmação e some do histórico', async () => {
+    vi.mocked(deleteConsultantConversation).mockResolvedValue();
+    renderChat();
+    await openConsultant();
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ações de Caixa de setembro' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir conversa' }));
+
+    await waitFor(() => {
+      expect(deleteConsultantConversation).toHaveBeenCalledWith('conv-1');
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Caixa de setembro' })).toBeNull();
+    });
+  });
+
   it('mostra empty state e não envia quando o Consultor está indisponível', async () => {
-    vi.mocked(getConsultantStatus).mockResolvedValue({ status: 'DISABLED' });
+    vi.mocked(getConsultantStatus).mockResolvedValue({
+      status: 'DISABLED',
+      consultantName: 'Consultor',
+    });
     renderChat();
     await openConsultant();
 
@@ -377,17 +405,18 @@ describe('chat do Consultor', () => {
   it('limpa o estado ao trocar o tenant operacional', async () => {
     renderChat();
     await openConsultant();
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
     expect(await screen.findByText('O caixa do mês está estável.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Trocar tenant' }));
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Consultor' })).toBeNull();
+      expect(screen.queryByRole('dialog', { name: /Consultor/ })).toBeNull();
       expect(screen.queryByText('O caixa do mês está estável.')).toBeNull();
       expect(screen.queryByText('Caixa de setembro')).toBeNull();
     });
-    expect(await screen.findByRole('button', { name: 'Abrir o Consultor' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Abrir o Consultor/ })).toBeTruthy();
   });
 
   it('limpa o estado ao sair do Support Mode', async () => {
@@ -417,14 +446,15 @@ describe('chat do Consultor', () => {
     );
 
     await openConsultant();
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
     expect(await screen.findByText('O caixa do mês está estável.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Trocar tenant' }));
 
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Consultor' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Abrir o Consultor' })).toBeNull();
+      expect(screen.queryByRole('dialog', { name: /Consultor/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Abrir o Consultor/ })).toBeNull();
       expect(screen.queryByText('O caixa do mês está estável.')).toBeNull();
     });
   });
@@ -444,6 +474,7 @@ describe('chat do Consultor', () => {
 
     renderChat();
     await openConsultant();
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
 
     const bubble = await screen.findByText('<script>window.__consultantPwned = true</script>');

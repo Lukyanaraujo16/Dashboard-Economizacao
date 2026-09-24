@@ -5,11 +5,12 @@ import {
   useEffect,
   useId,
   useRef,
+  useState,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { History, Plus, X } from 'lucide-react';
 
 import type {
   ConsultantConversation,
@@ -30,16 +31,21 @@ const FOCUSABLE_SELECTOR =
 
 export type ConsultantPanelProps = {
   readonly uiState: Exclude<ConsultantUiState, 'CLOSED'>;
+  readonly consultantName: string;
+  readonly available: boolean;
   readonly conversations: readonly ConsultantConversation[];
   readonly activeConversation: ConsultantConversationDetail | null;
+  readonly historyOpen: boolean;
   readonly loadingMessages: boolean;
   readonly sending: boolean;
   readonly sendError?: string | null;
   readonly draft: string;
   readonly onDraftChange: (value: string) => void;
   readonly onClose: () => void;
+  readonly onToggleHistory: () => void;
   readonly onSelectConversation: (conversationId: string) => void;
   readonly onNewConversation: () => void;
+  readonly onDeleteConversation: (conversationId: string) => void;
   readonly onSend: () => void;
 };
 
@@ -58,33 +64,29 @@ function senderClass(senderType: ConsultantMessage['senderType']): string {
   return styles.messageSystem ?? '';
 }
 
-function senderLabel(senderType: ConsultantMessage['senderType']): string {
-  if (senderType === 'USER') {
-    return 'Você';
-  }
-  if (senderType === 'CONSULTANT') {
-    return 'Consultor';
-  }
-  return 'Sistema';
-}
-
 export function ConsultantPanel({
   uiState,
+  consultantName,
+  available,
   conversations,
   activeConversation,
+  historyOpen,
   loadingMessages,
   sending,
   sendError,
   draft,
   onDraftChange,
   onClose,
+  onToggleHistory,
   onSelectConversation,
   onNewConversation,
+  onDeleteConversation,
   onSend,
 }: ConsultantPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const canCompose = uiState === 'OPEN' && !sending;
   const showDesktopBackdrop =
     typeof window !== 'undefined' &&
@@ -111,11 +113,19 @@ export function ConsultantPanel({
         return;
       }
       event.preventDefault();
+      if (pendingDeleteId) {
+        setPendingDeleteId(null);
+        return;
+      }
+      if (historyOpen) {
+        onToggleHistory();
+        return;
+      }
       onClose();
     };
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
+  }, [historyOpen, onClose, onToggleHistory, pendingDeleteId]);
 
   const handleTabTrap = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab' || !panelRef.current) {
@@ -176,50 +186,112 @@ export function ConsultantPanel({
       >
         <header className={styles.header}>
           <div className={styles.heading}>
+            <span
+              className={cx(styles.headerStatus, available && styles.headerStatusAvailable)}
+              aria-hidden="true"
+            />
             <Typography as="h2" variant="title" id={titleId} className={styles.title}>
-              Consultor
-            </Typography>
-            <Typography as="p" variant="caption" className={styles.subtitle}>
-              Assistente financeiro
+              {consultantName}
             </Typography>
           </div>
-          <IconButton size="sm" variant="ghost" aria-label="Fechar o Consultor" onClick={onClose}>
-            <X size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
-          </IconButton>
-        </header>
-
-        <div className={styles.body}>
-          <aside className={styles.sidebar} aria-label="Conversas">
-            <Button
+          <div className={styles.headerActions}>
+            <IconButton
               size="sm"
-              variant="secondary"
+              variant="ghost"
+              aria-label="Histórico de conversas"
+              aria-expanded={historyOpen}
+              onClick={onToggleHistory}
+              disabled={uiState !== 'OPEN'}
+            >
+              <History size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
+            </IconButton>
+            <IconButton
+              size="sm"
+              variant="ghost"
+              aria-label="Nova conversa"
               onClick={onNewConversation}
               disabled={uiState !== 'OPEN' || sending}
             >
-              Nova conversa
-            </Button>
-            {conversations.length > 0 ? (
-              <ul className={styles.conversationList}>
-                {conversations.map((conversation) => (
-                  <li key={conversation.id}>
-                    <button
-                      type="button"
-                      className={styles.conversationButton}
-                      aria-current={activeConversation?.id === conversation.id ? 'true' : undefined}
-                      onClick={() => onSelectConversation(conversation.id)}
-                    >
-                      {conversationLabel(conversation)}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </aside>
+              <Plus size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
+            </IconButton>
+            <IconButton size="sm" variant="ghost" aria-label="Fechar o Consultor" onClick={onClose}>
+              <X size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
+            </IconButton>
+          </div>
+        </header>
+
+        <div className={styles.body}>
+          {historyOpen ? (
+            <>
+              <div
+                className={styles.historyBackdrop}
+                onMouseDown={onToggleHistory}
+                aria-hidden="true"
+              />
+              <aside className={styles.historyPanel} aria-label="Conversas">
+                {conversations.length === 0 ? (
+                  <p className={styles.statusText}>Nenhuma conversa ainda.</p>
+                ) : (
+                  <ul className={styles.conversationList}>
+                    {conversations.map((conversation) => (
+                      <li key={conversation.id}>
+                        {pendingDeleteId === conversation.id ? (
+                          <div className={styles.confirmDelete} role="group" aria-label="Confirmar exclusão">
+                            <Typography as="p" variant="caption">
+                              Excluir esta conversa?
+                            </Typography>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => {
+                                onDeleteConversation(conversation.id);
+                                setPendingDeleteId(null);
+                              }}
+                            >
+                              Excluir conversa
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setPendingDeleteId(null)}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className={styles.conversationRow}>
+                            <button
+                              type="button"
+                              className={styles.conversationButton}
+                              aria-current={
+                                activeConversation?.id === conversation.id ? 'true' : undefined
+                              }
+                              onClick={() => onSelectConversation(conversation.id)}
+                            >
+                              {conversationLabel(conversation)}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.menuButton}
+                              aria-label={`Ações de ${conversationLabel(conversation)}`}
+                              onClick={() => setPendingDeleteId(conversation.id)}
+                            >
+                              ⋯
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </aside>
+            </>
+          ) : null}
 
           <div className={styles.thread}>
             {uiState === 'LOADING' ? (
               <div className={styles.statusBlock}>
-                <Spinner label="Carregando o Consultor" />
+                <Spinner label={`Carregando ${consultantName}`} />
               </div>
             ) : null}
 
@@ -244,7 +316,7 @@ export function ConsultantPanel({
             {uiState === 'OPEN' && !loadingMessages && !activeConversation ? (
               <div className={styles.statusBlock} data-empty-state="true">
                 <p className={styles.statusText}>
-                  Selecione uma conversa ou inicie uma nova para falar com o Consultor.
+                  Envie a primeira pergunta ou abra o histórico para continuar uma conversa.
                 </p>
               </div>
             ) : null}
@@ -263,7 +335,11 @@ export function ConsultantPanel({
                       data-sender={message.senderType}
                     >
                       <Typography as="p" variant="caption" className={styles.messageMeta}>
-                        {senderLabel(message.senderType)}
+                        {message.senderType === 'USER'
+                          ? 'Você'
+                          : message.senderType === 'CONSULTANT'
+                            ? consultantName
+                            : 'Sistema'}
                       </Typography>
                       <Typography as="p" variant="body">
                         {message.content}
@@ -273,7 +349,7 @@ export function ConsultantPanel({
                 )}
                 {sending ? (
                   <div className={cx(styles.message, styles.messageConsultant)} aria-live="polite">
-                    <Spinner size="sm" label="O Consultor está respondendo" />
+                    <Spinner size="sm" label={`O ${consultantName} está respondendo`} />
                   </div>
                 ) : null}
               </div>
@@ -283,7 +359,7 @@ export function ConsultantPanel({
 
         <form className={styles.composer} onSubmit={handleSubmit}>
           <label className={styles.srOnly} htmlFor={`${titleId}-composer`}>
-            Mensagem para o Consultor
+            Mensagem para o {consultantName}
           </label>
           <textarea
             id={`${titleId}-composer`}

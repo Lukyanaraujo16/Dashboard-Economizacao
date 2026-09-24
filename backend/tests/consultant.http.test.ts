@@ -165,7 +165,7 @@ describe('resolveConsultantAvailability', () => {
         openaiApiKey: 'sk-present',
         anthropicApiKey: 'sk-ant-present',
       }),
-    ).toEqual({ status: 'NOT_CONFIGURED' });
+    ).toEqual({ status: 'NOT_CONFIGURED', consultantName: 'Consultor' });
   });
 
   it('retorna DISABLED com settings desabilitadas', () => {
@@ -177,7 +177,7 @@ describe('resolveConsultantAvailability', () => {
         openaiApiKey: 'sk-present',
         anthropicApiKey: null,
       }),
-    ).toEqual({ status: 'DISABLED' });
+    ).toEqual({ status: 'DISABLED', consultantName: 'Consultor' });
   });
 
   it('retorna ACTIVE em NODE_ENV=test mesmo sem key (Fake)', () => {
@@ -189,7 +189,7 @@ describe('resolveConsultantAvailability', () => {
         openaiApiKey: null,
         anthropicApiKey: null,
       }),
-    ).toEqual({ status: 'ACTIVE' });
+    ).toEqual({ status: 'ACTIVE', consultantName: 'Consultor' });
   });
 
   it('retorna UNAVAILABLE em production-like sem key do provider', () => {
@@ -201,7 +201,7 @@ describe('resolveConsultantAvailability', () => {
         openaiApiKey: null,
         anthropicApiKey: 'sk-ant-present',
       }),
-    ).toEqual({ status: 'UNAVAILABLE' });
+    ).toEqual({ status: 'UNAVAILABLE', consultantName: 'Consultor' });
 
     expect(
       resolveConsultantAvailability({
@@ -211,7 +211,7 @@ describe('resolveConsultantAvailability', () => {
         openaiApiKey: 'sk-present',
         anthropicApiKey: null,
       }),
-    ).toEqual({ status: 'UNAVAILABLE' });
+    ).toEqual({ status: 'UNAVAILABLE', consultantName: 'Consultor' });
   });
 
   it('retorna ACTIVE em production-like com key do provider', () => {
@@ -223,7 +223,7 @@ describe('resolveConsultantAvailability', () => {
         openaiApiKey: 'sk-present',
         anthropicApiKey: null,
       }),
-    ).toEqual({ status: 'ACTIVE' });
+    ).toEqual({ status: 'ACTIVE', consultantName: 'Consultor' });
   });
 });
 
@@ -259,7 +259,7 @@ describe('API do usuário /consultant (F13.4)', () => {
       headers: { cookie },
     });
     expect(status.statusCode).toBe(200);
-    expect(status.json()).toEqual({ status: 'NOT_CONFIGURED' });
+    expect(status.json()).toEqual({ status: 'NOT_CONFIGURED', consultantName: 'Consultor' });
     expect(status.json()).not.toHaveProperty('provider');
     expect(status.json()).not.toHaveProperty('model');
 
@@ -287,7 +287,7 @@ describe('API do usuário /consultant (F13.4)', () => {
       url: '/consultant/status',
       headers: { cookie },
     });
-    expect(status.json()).toEqual({ status: 'DISABLED' });
+    expect(status.json()).toEqual({ status: 'DISABLED', consultantName: 'Consultor' });
 
     const created = await app.inject({
       method: 'POST',
@@ -330,8 +330,8 @@ describe('API do usuário /consultant (F13.4)', () => {
       headers: { cookie },
     });
     expect(status.statusCode).toBe(200);
-    expect(Object.keys(status.json())).toEqual(['status']);
-    expect(status.json()).toEqual({ status: 'ACTIVE' });
+    expect(Object.keys(status.json()).sort()).toEqual(['consultantName', 'status']);
+    expect(status.json()).toEqual({ status: 'ACTIVE', consultantName: 'Consultor' });
   });
 
   it('cria e lista apenas conversas do user+tenant, com paginação', async () => {
@@ -701,5 +701,60 @@ describe('API do usuário /consultant (F13.4)', () => {
     });
     expect(response.statusCode).toBe(400);
     expect(response.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('exclui conversa do owner e preserva ai_runs; cross-user vira 404', async () => {
+    const { tenant, user } = await seedTenant({
+      slug: 'del-owner',
+      email: 'del-owner@api.test',
+      settings: { provider: 'OPENAI', status: 'ACTIVE' },
+    });
+    const other = await createUser({
+      email: 'del-other@api.test',
+      role: 'USER',
+      tenantId: tenant.id,
+    });
+    const app = await buildTestApp();
+    const cookie = await loginAs(app, user.email);
+    const otherCookie = await loginAs(app, other.email);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/consultant/conversations',
+      headers: { cookie },
+      payload: {},
+    });
+    const conversationId = created.json().id as string;
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/consultant/conversations/${conversationId}/messages`,
+      headers: { cookie },
+      payload: { content: 'Qual foi meu faturamento em agosto de 2026?' },
+    });
+    expect(sent.statusCode).toBe(200);
+    expect(sent.json().conversation.title).toBe('Faturamento em agosto de 2026');
+
+    const runsBefore = await prisma.aiRun.findMany({ where: { tenantId: tenant.id } });
+    expect(runsBefore.length).toBeGreaterThan(0);
+    expect(runsBefore[0]?.conversationId).toBe(conversationId);
+
+    const cross = await app.inject({
+      method: 'DELETE',
+      url: `/consultant/conversations/${conversationId}`,
+      headers: { cookie: otherCookie },
+    });
+    expect(cross.statusCode).toBe(404);
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/consultant/conversations/${conversationId}`,
+      headers: { cookie },
+    });
+    expect(removed.statusCode).toBe(204);
+    expect(await prisma.aiConversation.findUnique({ where: { id: conversationId } })).toBeNull();
+
+    const runsAfter = await prisma.aiRun.findMany({ where: { tenantId: tenant.id } });
+    expect(runsAfter).toHaveLength(runsBefore.length);
+    expect(runsAfter.every((run) => run.conversationId === null)).toBe(true);
   });
 });

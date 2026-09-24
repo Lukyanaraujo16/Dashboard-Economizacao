@@ -117,7 +117,7 @@ describe('independência do produto quando a IA está degradada', () => {
       headers: { cookie },
     });
     expect(consultant.statusCode).toBe(200);
-    expect(consultant.json()).toEqual({ status: 'DISABLED' });
+    expect(consultant.json()).toEqual({ status: 'DISABLED', consultantName: 'Consultor' });
 
     const overview = await app.inject({
       method: 'GET',

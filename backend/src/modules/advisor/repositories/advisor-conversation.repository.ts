@@ -73,6 +73,12 @@ export type AdvisorConversationRepository = {
     conversationId: string,
   ): Promise<AiConversationRecord | null>;
   listConversations(tenantId: string, userId: string): Promise<readonly AiConversationRecord[]>;
+  updateConversationTitle(
+    tenantId: string,
+    conversationId: string,
+    title: string,
+  ): Promise<AiConversationRecord | null>;
+  deleteConversation(tenantId: string, userId: string, conversationId: string): Promise<boolean>;
   createMessage(
     tenantId: string,
     conversationId: string,
@@ -132,6 +138,37 @@ export function createAdvisorConversationRepository(
         orderBy: { lastMessageAt: 'desc' },
       });
       return rows.map(toConversation);
+    },
+
+    async updateConversationTitle(tenantId, conversationId, title) {
+      assertAdvisorTenantId(tenantId);
+      const existing = await prisma.aiConversation.findFirst({
+        where: { id: conversationId, tenantId },
+        select: { id: true },
+      });
+      if (existing === null) {
+        return null;
+      }
+      const row = await prisma.aiConversation.update({
+        where: { id: existing.id },
+        data: { title: title.trim() || null },
+      });
+      return toConversation(row);
+    },
+
+    async deleteConversation(tenantId, userId, conversationId) {
+      assertAdvisorTenantId(tenantId);
+      const existing = await prisma.aiConversation.findFirst({
+        where: { id: conversationId, tenantId, userId },
+        select: { id: true },
+      });
+      if (existing === null) {
+        return false;
+      }
+      await prisma.aiConversation.delete({
+        where: { id: existing.id },
+      });
+      return true;
     },
 
     async createMessage(tenantId, conversationId, input) {

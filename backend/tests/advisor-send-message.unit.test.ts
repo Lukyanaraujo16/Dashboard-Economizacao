@@ -32,7 +32,9 @@ function settings(overrides: Partial<AiTenantSettingsRecord> = {}): AiTenantSett
     model: AI_PROVIDER_MODEL_CATALOG.OPENAI.defaultModel,
     businessSegment: 'Clínica',
     businessDescription: 'Clínica A',
+    consultantName: null,
     adminPrompt: null,
+    tonePreset: 'PROFISSIONAL_OBJETIVO',
     tone: 'objetivo',
     status: 'ACTIVE',
     createdAt: now,
@@ -127,6 +129,13 @@ function createHarness(options?: {
         const created = message(`msg-${++messageSeq}`, input.senderType, input.content);
         messages.push(created);
         return created;
+      },
+      async updateConversationTitle(tenantId, conversationId, title) {
+        const row = conversation();
+        if (row.tenantId !== tenantId || row.id !== conversationId) {
+          return null;
+        }
+        return { ...row, title };
       },
       async listMessages() {
         return messages;

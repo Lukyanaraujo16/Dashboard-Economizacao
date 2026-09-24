@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../auth';
 import {
   createConsultantConversation,
+  deleteConsultantConversation,
   getConsultantConversation,
   getConsultantStatus,
   listConsultantConversations,
@@ -13,6 +14,7 @@ import {
   ConsultantRequestError,
   type ConsultantConversation,
   type ConsultantConversationDetail,
+  type ConsultantUserStatus,
 } from '../../services/consultant';
 import { ConsultantFab } from './consultant-fab';
 import { ConsultantPanel } from './consultant-panel';
@@ -41,7 +43,12 @@ export function ConsultantHost() {
   const sessionKey = `${user?.id ?? ''}|${operationalTenantId ?? ''}|${supportActive ? '1' : '0'}`;
 
   const [uiState, setUiState] = useState<ConsultantUiState>('CLOSED');
+  const [availability, setAvailability] = useState<ConsultantUserStatus>({
+    status: 'NOT_CONFIGURED',
+    consultantName: 'Consultor',
+  });
   const [conversations, setConversations] = useState<readonly ConsultantConversation[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeConversation, setActiveConversation] = useState<ConsultantConversationDetail | null>(
     null,
   );
@@ -50,11 +57,14 @@ export function ConsultantHost() {
   const [draft, setDraft] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const requestGenRef = useRef(0);
+  const statusGenRef = useRef(0);
 
   const resetChatState = useCallback(() => {
     requestGenRef.current += 1;
     setUiState('CLOSED');
+    setAvailability({ status: 'NOT_CONFIGURED', consultantName: 'Consultor' });
     setConversations([]);
+    setHistoryOpen(false);
     setActiveConversation(null);
     setLoadingMessages(false);
     setSending(false);
@@ -72,6 +82,26 @@ export function ConsultantHost() {
     }
   }, [resetChatState, visible]);
 
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    const requestId = ++statusGenRef.current;
+    void getConsultantStatus()
+      .then((status) => {
+        if (requestId !== statusGenRef.current) {
+          return;
+        }
+        setAvailability(status);
+      })
+      .catch(() => {
+        if (requestId !== statusGenRef.current) {
+          return;
+        }
+        setAvailability({ status: 'UNAVAILABLE', consultantName: 'Consultor' });
+      });
+  }, [visible, sessionKey]);
+
   const month = resolveConsultantReferenceMonth(searchParams);
 
   const openPanel = useCallback(async () => {
@@ -85,6 +115,7 @@ export function ConsultantHost() {
       if (requestId !== requestGenRef.current) {
         return;
       }
+      setAvailability(consultantStatus);
       if (consultantStatus.status !== 'ACTIVE') {
         setConversations([]);
         setUiState('UNAVAILABLE');
@@ -108,6 +139,7 @@ export function ConsultantHost() {
 
   const closePanel = useCallback(() => {
     setUiState('CLOSED');
+    setHistoryOpen(false);
     setLoadingMessages(false);
     setSending(false);
   }, []);
@@ -134,6 +166,30 @@ export function ConsultantHost() {
     }
   }, []);
 
+  const deleteConversation = useCallback(async (conversationId: string) => {
+    const requestId = ++requestGenRef.current;
+    try {
+      await deleteConsultantConversation(conversationId);
+      if (requestId !== requestGenRef.current) {
+        return;
+      }
+      const remaining = conversations.filter((item) => item.id !== conversationId);
+      setConversations(remaining);
+      if (activeConversation?.id === conversationId) {
+        if (remaining[0]) {
+          await selectConversation(remaining[0].id);
+        } else {
+          setActiveConversation(null);
+        }
+      }
+    } catch {
+      if (requestId !== requestGenRef.current) {
+        return;
+      }
+      setSendError('Não foi possível excluir a conversa.');
+    }
+  }, [activeConversation?.id, conversations, selectConversation]);
+
   const startNewConversation = useCallback(async () => {
     const requestId = ++requestGenRef.current;
     setLoadingMessages(true);
@@ -142,6 +198,7 @@ export function ConsultantHost() {
       if (requestId !== requestGenRef.current) {
         return;
       }
+      setHistoryOpen(false);
       setConversations((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setActiveConversation(toEmptyDetail(created));
     } catch {
@@ -186,10 +243,13 @@ export function ConsultantHost() {
       }
 
       setDraft('');
+      if (result.conversation) {
+        setConversations((current) => {
+          const next = current.filter((item) => item.id !== result.conversation!.id);
+          return [result.conversation!, ...next];
+        });
+      }
       setActiveConversation((current) => {
-        if (result.conversation) {
-          return result.conversation;
-        }
         const base = current ?? conversation;
         const existingIds = new Set(base.messages.map((message) => message.id));
         const nextMessages = [...base.messages];
@@ -199,7 +259,12 @@ export function ConsultantHost() {
         if (!existingIds.has(result.consultantMessage.id)) {
           nextMessages.push(result.consultantMessage);
         }
-        return { ...base, messages: nextMessages, lastMessageAt: result.consultantMessage.createdAt };
+        return {
+          ...base,
+          ...(result.conversation ?? {}),
+          messages: nextMessages,
+          lastMessageAt: result.consultantMessage.createdAt,
+        };
       });
     } catch (error) {
       if (requestId !== requestGenRef.current) {
@@ -227,20 +292,34 @@ export function ConsultantHost() {
 
   return (
     <>
-      {uiState === 'CLOSED' ? <ConsultantFab onOpen={() => void openPanel()} /> : null}
+      {uiState === 'CLOSED' ? (
+        <ConsultantFab
+          onOpen={() => void openPanel()}
+          available={availability.status === 'ACTIVE'}
+          consultantName={availability.consultantName}
+        />
+      ) : null}
       {uiState !== 'CLOSED' ? (
         <ConsultantPanel
           uiState={uiState}
+          consultantName={availability.consultantName}
+          available={availability.status === 'ACTIVE'}
           conversations={conversations}
           activeConversation={activeConversation}
+          historyOpen={historyOpen}
           loadingMessages={loadingMessages}
           sending={sending}
           sendError={sendError}
           draft={draft}
           onDraftChange={setDraft}
           onClose={closePanel}
-          onSelectConversation={(conversationId) => void selectConversation(conversationId)}
+          onToggleHistory={() => setHistoryOpen((current) => !current)}
+          onSelectConversation={(conversationId) => {
+            setHistoryOpen(false);
+            void selectConversation(conversationId);
+          }}
           onNewConversation={() => void startNewConversation()}
+          onDeleteConversation={(conversationId) => void deleteConversation(conversationId)}
           onSend={() => void sendMessage()}
         />
       ) : null}

@@ -5,6 +5,7 @@ import {
   RateLimitedError,
 } from '../../../shared/errors/application-error.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
+import { deriveConsultantConversationTitle } from '../domain/conversation-title.js';
 import { resolveAdvisorPeriod } from '../domain/resolve-advisor-period.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
 import {
@@ -57,7 +58,10 @@ export class AdvisorExecutionError extends AdvisorDomainError {
 
 export type SendAdvisorMessageDependencies = {
   readonly settings: Pick<AdvisorSettingsRepository, 'findSettingsByTenant'>;
-  readonly conversations: Pick<AdvisorConversationRepository, 'findConversation' | 'createMessage'>;
+  readonly conversations: Pick<
+    AdvisorConversationRepository,
+    'findConversation' | 'createMessage' | 'updateConversationTitle'
+  >;
   readonly runs: Pick<AdvisorRunRepository, 'createRun' | 'updateRun'>;
   readonly context: AdvisorContextBuilder;
   readonly providers: IaProviderRegistry;
@@ -120,6 +124,14 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         senderType: 'USER',
         content: question,
       });
+
+      if (conversation.title === null) {
+        await deps.conversations.updateConversationTitle(
+          tenantId,
+          conversation.id,
+          deriveConsultantConversationTitle(question),
+        );
+      }
 
       const period = resolveAdvisorPeriod({
         content: question,

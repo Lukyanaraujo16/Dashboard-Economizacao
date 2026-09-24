@@ -8,9 +8,11 @@ import {
   ValidationError,
 } from '../../../shared/errors/application-error.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
+import { resolveConsultantDisplayName } from '../domain/consultant-name.js';
 import type {
   AiConversationRecord,
   AiMessageRecord,
+  AiProviderId,
   AiTenantSettingsRecord,
 } from '../domain/types.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
@@ -29,7 +31,10 @@ const MAX_LIST_LIMIT = 100;
 const SAFE_UNAVAILABLE_MESSAGE = 'O Consultor está temporariamente indisponível.';
 
 export type ConsultantAvailabilityInput = {
-  readonly settings: Pick<AiTenantSettingsRecord, 'tenantId' | 'status' | 'provider'> | null;
+  readonly settings: Pick<
+    AiTenantSettingsRecord,
+    'tenantId' | 'status' | 'provider' | 'consultantName'
+  > | null;
   readonly tenantId: string;
   readonly nodeEnv: string;
   readonly openaiApiKey: string | null;
@@ -42,22 +47,24 @@ export function resolveConsultantAvailability(
   const settings =
     input.settings !== null && input.settings.tenantId === input.tenantId ? input.settings : null;
 
+  const consultantName = resolveConsultantDisplayName(settings?.consultantName);
+
   if (settings === null) {
-    return { status: 'NOT_CONFIGURED' };
+    return { status: 'NOT_CONFIGURED', consultantName };
   }
   if (settings.status === 'DISABLED') {
-    return { status: 'DISABLED' };
+    return { status: 'DISABLED', consultantName };
   }
   if (input.nodeEnv === 'test') {
-    return { status: 'ACTIVE' };
+    return { status: 'ACTIVE', consultantName };
   }
 
   const key = settings.provider === 'OPENAI' ? input.openaiApiKey : input.anthropicApiKey;
   if (key === null || key.trim() === '') {
-    return { status: 'UNAVAILABLE' };
+    return { status: 'UNAVAILABLE', consultantName };
   }
 
-  return { status: 'ACTIVE' };
+  return { status: 'ACTIVE', consultantName };
 }
 
 export type ConsultantConversationList = {
@@ -99,27 +106,39 @@ export type ConsultantService = {
     conversationId: string,
     input: { readonly content: string; readonly month?: string },
   ): Promise<ConsultantSendMessageResult>;
+  deleteConversation(tenantId: string, userId: string, conversationId: string): Promise<void>;
 };
 
 export function createConsultantService(deps: {
   readonly settings: Pick<AdvisorSettingsRepository, 'findSettingsByTenant'>;
   readonly conversations: Pick<
     AdvisorConversationRepository,
-    'createConversation' | 'findConversation' | 'listConversations' | 'listMessages'
+    | 'createConversation'
+    | 'findConversation'
+    | 'listConversations'
+    | 'listMessages'
+    | 'deleteConversation'
   >;
   readonly send: SendAdvisorMessage;
   readonly nodeEnv: string;
   readonly openaiApiKey: string | null;
   readonly anthropicApiKey: string | null;
+  readonly resolveProviderApiKey?: (provider: AiProviderId) => Promise<string | null>;
 }): ConsultantService {
   async function loadAvailability(tenantId: string): Promise<PublicConsultantUserStatus> {
     const settings = await deps.settings.findSettingsByTenant(tenantId);
+    const openaiApiKey = deps.resolveProviderApiKey
+      ? await deps.resolveProviderApiKey('OPENAI')
+      : deps.openaiApiKey;
+    const anthropicApiKey = deps.resolveProviderApiKey
+      ? await deps.resolveProviderApiKey('ANTHROPIC')
+      : deps.anthropicApiKey;
     return resolveConsultantAvailability({
       settings,
       tenantId,
       nodeEnv: deps.nodeEnv,
-      openaiApiKey: deps.openaiApiKey,
-      anthropicApiKey: deps.anthropicApiKey,
+      openaiApiKey,
+      anthropicApiKey,
     });
   }
 
@@ -206,6 +225,26 @@ export function createConsultantService(deps: {
         };
       } catch (error) {
         mapAdvisorHttpError(error);
+      }
+    },
+
+    async deleteConversation(tenantId, userId, conversationId) {
+      const conversation = await deps.conversations.findConversation(
+        tenantId,
+        userId,
+        conversationId,
+      );
+      if (conversation === null || conversation.tenantId !== tenantId || conversation.userId !== userId) {
+        throw new NotFoundError('Conversa não encontrada.');
+      }
+
+      const deleted = await deps.conversations.deleteConversation(
+        tenantId,
+        userId,
+        conversation.id,
+      );
+      if (!deleted) {
+        throw new NotFoundError('Conversa não encontrada.');
       }
     },
   };

@@ -2,6 +2,7 @@ export type ConsultantStatus = 'ACTIVE' | 'DISABLED' | 'NOT_CONFIGURED' | 'UNAVA
 
 export type ConsultantUserStatus = {
   readonly status: ConsultantStatus;
+  readonly consultantName: string;
 };
 
 export type ConsultantConversationStatus = 'OPEN' | 'CLOSED';
@@ -35,7 +36,7 @@ export type SendConsultantMessageInput = {
 export type SendConsultantMessageResult = {
   readonly userMessage: ConsultantMessage;
   readonly consultantMessage: ConsultantMessage;
-  readonly conversation?: ConsultantConversationDetail;
+  readonly conversation?: ConsultantConversation;
 };
 
 export type ConsultantErrorDetail = {
