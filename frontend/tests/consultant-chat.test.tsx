@@ -11,6 +11,7 @@ import {
   getConsultantStatus,
   listConsultantConversations,
   sendConsultantMessage,
+  ConsultantRequestError,
   type ConsultantConversation,
   type ConsultantConversationDetail,
   type SendConsultantMessageResult,
@@ -236,6 +237,49 @@ describe('chat do Consultor', () => {
     await waitFor(() => {
       expect(screen.queryByLabelText('O Consultor está respondendo')).toBeNull();
     });
+  });
+
+  it('429 e 503 no envio não apagam o histórico', async () => {
+    vi.mocked(sendConsultantMessage)
+      .mockRejectedValueOnce(
+        new ConsultantRequestError(
+          'rate_limited',
+          'Você atingiu o limite de mensagens do Consultor. Tente novamente em alguns minutos.',
+          { httpStatus: 429, code: 'RATE_LIMITED' },
+        ),
+      )
+      .mockRejectedValueOnce(
+        new ConsultantRequestError(
+          'unavailable',
+          'O Consultor está temporariamente indisponível.',
+          { httpStatus: 503, code: 'INTEGRATION_UNAVAILABLE' },
+        ),
+      );
+
+    renderChat();
+    await openConsultant();
+    fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
+    expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'Qual a receita?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+
+    expect(
+      await screen.findByText(
+        'Você atingiu o limite de mensagens do Consultor. Tente novamente em alguns minutos.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Como está o caixa?')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Consultor' })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'Tentar de novo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(await screen.findByText('O Consultor está temporariamente indisponível.')).toBeTruthy();
+    expect(screen.getByText('Como está o caixa?')).toBeTruthy();
   });
 
   it('mostra empty state e não envia quando o Consultor está indisponível', async () => {

@@ -969,7 +969,8 @@ CASH-9C: transferências internas fora de faturamento/despesas/resultado.
 Ghost ACTIVE pode ser excluído do analytics sem virar DELETED.
 Produção: `--confirm=PRODUCTION`; sem dry-run/report-only no CLI CASH-9C.
 CASH-4B HOMOLOGADA. CASH-4C HOMOLOGADA. CASH-6 HOMOLOGADA.
-PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local DESBLOQUEADA; produção AINDA BLOQUEADA.
+PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local IMPLEMENTADA — AGUARDANDO HOMOLOGAÇÃO REAL; produção AINDA BLOQUEADA.
+F14 NÃO iniciada. O Consultor reativo consome as mesmas fórmulas deste documento; não calcula indicador.
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
 BACKFILL DE PRODUÇÃO + CASH-8B. Sem as-of.
 

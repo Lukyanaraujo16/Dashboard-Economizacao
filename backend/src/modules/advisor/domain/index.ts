@@ -1,5 +1,22 @@
 export { AdvisorDomainError } from './advisor-domain-error.js';
 export {
+  CONSULTANT_PLATFORM_LIMIT_MESSAGE,
+  CONSULTANT_RATE_LIMIT_TENANT_MAX,
+  CONSULTANT_RATE_LIMIT_USER_MAX,
+  CONSULTANT_RATE_LIMIT_WINDOW_SECONDS,
+  CONSULTANT_UNAVAILABLE_MESSAGE,
+  DEFAULT_CONSULTANT_RATE_LIMIT_POLICY,
+  buildConsultantTenantRateLimitKey,
+  buildConsultantUserRateLimitKey,
+  resolveConsultantRateLimitPolicy,
+} from './consultant-rate-limit.js';
+export type {
+  ConsultantRateLimitConsumeInput,
+  ConsultantRateLimitDecision,
+  ConsultantRateLimitPolicy,
+  ConsultantRateLimiter,
+} from './consultant-rate-limit.js';
+export {
   ADVISOR_CONTEXT_BLOCK_TYPES,
   ADVISOR_CONTEXT_CHAR_BUDGET,
   ADVISOR_CONTEXT_PRESERVATION_ORDER,

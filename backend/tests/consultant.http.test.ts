@@ -14,6 +14,10 @@ import {
   FAKE_ANTHROPIC_CONSULTANT_TEXT,
   FAKE_OPENAI_CONSULTANT_TEXT,
 } from '../src/modules/advisor/http/create-advisor-runtime.js';
+import {
+  buildConsultantUserRateLimitKey,
+  CONSULTANT_PLATFORM_LIMIT_MESSAGE,
+} from '../src/modules/advisor/domain/consultant-rate-limit.js';
 import { createAdvisorSettingsRepository } from '../src/modules/advisor/repositories/advisor-settings.repository.js';
 import {
   createConsultantService,
@@ -642,6 +646,44 @@ describe('API do usuário /consultant (F13.4)', () => {
     expect(overview.json()).toHaveProperty('receivables');
     expect(overview.json()).not.toHaveProperty('provider');
     expect(overview.json()).not.toHaveProperty('ai_runs');
+  });
+
+  it('429 da plataforma não se confunde com rate limit do vendor', async () => {
+    const { tenant, user } = await seedTenant({
+      slug: 'limit',
+      email: 'limit@api.test',
+      settings: { provider: 'OPENAI', status: 'ACTIVE' },
+    });
+    const app = await buildTestApp();
+    const cookie = await loginAs(app, user.email);
+    const created = await app.inject({
+      method: 'POST',
+      url: '/consultant/conversations',
+      headers: { cookie },
+      payload: { title: 'Limite' },
+    });
+    const conversationId = created.json().id as string;
+    const key = buildConsultantUserRateLimitKey('test', tenant.id, user.id);
+    await app.redis.set(key, '20', 'EX', 600);
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: `/consultant/conversations/${conversationId}/messages`,
+      headers: { cookie },
+      payload: { content: 'Olá' },
+    });
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json().error.code).toBe('RATE_LIMITED');
+    expect(blocked.json().error.message).toBe(CONSULTANT_PLATFORM_LIMIT_MESSAGE);
+    expectSafeConsultantPayload(blocked.body);
+
+    const runs = await prisma.aiRun.findMany({ where: { tenantId: tenant.id } });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.status).toBe('LIMIT_BLOCKED');
+    expect(runs[0]?.errorCode).toBe('RATE_LIMIT');
+    expect(runs[0]?.finishedAt).not.toBeNull();
+    const messages = await prisma.aiMessage.count({ where: { tenantId: tenant.id } });
+    expect(messages).toBe(0);
   });
 
   it('rejeita tenantId na query', async () => {

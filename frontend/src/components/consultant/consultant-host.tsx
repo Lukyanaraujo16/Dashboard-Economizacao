@@ -11,6 +11,7 @@ import {
   getConsultantStatus,
   listConsultantConversations,
   sendConsultantMessage,
+  ConsultantRequestError,
   type ConsultantConversation,
   type ConsultantConversationDetail,
 } from '../../services/consultant';
@@ -50,6 +51,7 @@ export function ConsultantHost() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
   const requestGenRef = useRef(0);
 
   const resetChatState = useCallback(() => {
@@ -60,6 +62,7 @@ export function ConsultantHost() {
     setLoadingMessages(false);
     setSending(false);
     setDraft('');
+    setSendError(null);
   }, []);
 
   useEffect(() => {
@@ -79,6 +82,7 @@ export function ConsultantHost() {
     setUiState('LOADING');
     setActiveConversation(null);
     setDraft('');
+    setSendError(null);
     try {
       const consultantStatus = await getConsultantStatus();
       if (requestId !== requestGenRef.current) {
@@ -163,6 +167,7 @@ export function ConsultantHost() {
 
     const requestId = requestGenRef.current;
     setSending(true);
+    setSendError(null);
     try {
       let conversation = activeConversation;
       if (!conversation) {
@@ -199,11 +204,19 @@ export function ConsultantHost() {
         }
         return { ...base, messages: nextMessages, lastMessageAt: result.consultantMessage.createdAt };
       });
-    } catch {
+    } catch (error) {
       if (requestId !== requestGenRef.current) {
         return;
       }
-      setUiState('ERROR');
+      if (error instanceof ConsultantRequestError && error.kind === 'rate_limited') {
+        setSendError(error.message);
+        return;
+      }
+      if (error instanceof ConsultantRequestError) {
+        setSendError(error.message);
+        return;
+      }
+      setSendError('O Consultor está temporariamente indisponível.');
     } finally {
       if (requestId === requestGenRef.current) {
         setSending(false);
@@ -225,6 +238,7 @@ export function ConsultantHost() {
           activeConversation={activeConversation}
           loadingMessages={loadingMessages}
           sending={sending}
+          sendError={sendError}
           draft={draft}
           onDraftChange={setDraft}
           onClose={closePanel}

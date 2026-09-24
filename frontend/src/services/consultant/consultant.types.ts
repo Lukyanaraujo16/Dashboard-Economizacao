@@ -50,6 +50,7 @@ export type ConsultantRequestFailureKind =
   | 'conflict'
   | 'validation'
   | 'bad_request'
+  | 'rate_limited'
   | 'unavailable';
 
 export class ConsultantRequestError extends Error {

@@ -921,7 +921,11 @@ Campos conceituais:
 * created_at;
 * updated_at.
 
-Provider e model efetivos são por tenant. Ausência de settings equivale a Consultor não configurado/desabilitado. Credenciais de API não são persistidas.
+Provider e model efetivos são por tenant. Ausência de settings equivale a Consultor não configurado/desabilitado. Credenciais de API não são persistidas (sem BYOK). Motor único (`OPENAI` | `ANTHROPIC`).
+
+F13 (F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
+F14 (insights / regras proativas / `ai_insights` operacional): NÃO iniciada.
+Produção NÃO homologada.
 
 ⸻
 
@@ -1043,6 +1047,11 @@ Campos conceituais:
 * finished_at.
 
 Não deverá armazenar segredos.
+
+Status de `ai_runs` no recorte F13: `STARTED`, `SUCCEEDED`, `FAILED`,
+`TIMEOUT`, `LIMIT_BLOCKED`. `LIMIT_BLOCKED` é exclusivo do limiter da
+plataforma (429 `RATE_LIMITED`). `RATE_LIMIT` do vendor grava `FAILED`
+e a API devolve 503. Sem retry automático de generate.
 
 Política de armazenamento de prompts completos será definida posteriormente considerando privacidade.
 

@@ -34,6 +34,7 @@ export type ConsultantPanelProps = {
   readonly activeConversation: ConsultantConversationDetail | null;
   readonly loadingMessages: boolean;
   readonly sending: boolean;
+  readonly sendError?: string | null;
   readonly draft: string;
   readonly onDraftChange: (value: string) => void;
   readonly onClose: () => void;
@@ -73,6 +74,7 @@ export function ConsultantPanel({
   activeConversation,
   loadingMessages,
   sending,
+  sendError,
   draft,
   onDraftChange,
   onClose,
@@ -224,6 +226,12 @@ export function ConsultantPanel({
             {statusMessage ? (
               <div className={styles.statusBlock} role="status">
                 <p className={styles.statusText}>{statusMessage}</p>
+              </div>
+            ) : null}
+
+            {uiState === 'OPEN' && sendError ? (
+              <div className={styles.statusBlock} role="alert">
+                <p className={styles.statusText}>{sendError}</p>
               </div>
             ) : null}
 

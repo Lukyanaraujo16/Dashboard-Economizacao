@@ -4,6 +4,7 @@ import {
   ForbiddenError,
   IntegrationUnavailableError,
   NotFoundError,
+  RateLimitedError,
   ValidationError,
 } from '../../../shared/errors/application-error.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
@@ -244,6 +245,7 @@ function toPublicMessage(row: AiMessageRecord): PublicConsultantMessage {
 function mapAdvisorHttpError(error: unknown): never {
   if (
     error instanceof IntegrationUnavailableError ||
+    error instanceof RateLimitedError ||
     error instanceof ConflictError ||
     error instanceof NotFoundError ||
     error instanceof ValidationError ||

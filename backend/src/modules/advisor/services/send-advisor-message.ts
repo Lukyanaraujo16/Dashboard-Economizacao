@@ -1,7 +1,16 @@
 import type { IaProviderRegistry } from '../../../infrastructure/ai/ia-provider-registry.js';
 import { IaProviderError } from '../../../infrastructure/ai/types.js';
+import {
+  IntegrationUnavailableError,
+  RateLimitedError,
+} from '../../../shared/errors/application-error.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
+import {
+  CONSULTANT_PLATFORM_LIMIT_MESSAGE,
+  CONSULTANT_UNAVAILABLE_MESSAGE,
+  type ConsultantRateLimiter,
+} from '../domain/consultant-rate-limit.js';
 import type {
   AiMessageRecord,
   AiRunErrorCode,
@@ -51,11 +60,12 @@ export type SendAdvisorMessageDependencies = {
   readonly runs: Pick<AdvisorRunRepository, 'createRun' | 'updateRun'>;
   readonly context: AdvisorContextBuilder;
   readonly providers: IaProviderRegistry;
+  readonly rateLimiter: ConsultantRateLimiter;
 };
 
 /**
- * Caso de uso reativo F13.3.
- * Rate limit Redis: ponto de integração F13.6 — não antecipar limiter aqui.
+ * Caso de uso reativo. 1 request do usuário → no máximo 1 generate.
+ * Rate limit da plataforma ocorre antes do contexto e do provider.
  */
 export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
   return {
@@ -77,6 +87,32 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       const conversation = await deps.conversations.findConversation(tenantId, userId, conversationId);
       if (conversation === null || conversation.tenantId !== tenantId || conversation.userId !== userId) {
         throw new AdvisorDomainError('CONVERSATION_NOT_FOUND', 'Conversa não encontrada neste tenant.');
+      }
+
+      const limit = await deps.rateLimiter.consume({ tenantId, userId });
+      if (limit.ok === false && limit.kind === 'store_unavailable') {
+        await persistBlockedRun(deps.runs, {
+          tenantId,
+          userId,
+          conversationId: conversation.id,
+          provider: ready.provider,
+          model,
+          status: 'FAILED',
+          errorCode: 'UNKNOWN',
+        });
+        throw new IntegrationUnavailableError(CONSULTANT_UNAVAILABLE_MESSAGE);
+      }
+      if (limit.ok === false && limit.kind === 'limit') {
+        await persistBlockedRun(deps.runs, {
+          tenantId,
+          userId,
+          conversationId: conversation.id,
+          provider: ready.provider,
+          model,
+          status: 'LIMIT_BLOCKED',
+          errorCode: 'RATE_LIMIT',
+        });
+        throw new RateLimitedError(CONSULTANT_PLATFORM_LIMIT_MESSAGE);
       }
 
       const userMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
@@ -225,10 +261,30 @@ function statusForErrorCode(code: AiRunErrorCode): AiRunStatus {
   if (code === 'TIMEOUT') {
     return 'TIMEOUT';
   }
-  if (code === 'RATE_LIMIT') {
-    return 'LIMIT_BLOCKED';
-  }
   return 'FAILED';
+}
+
+async function persistBlockedRun(
+  runs: Pick<AdvisorRunRepository, 'createRun'>,
+  input: {
+    readonly tenantId: string;
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly provider: AiTenantSettingsRecord['provider'];
+    readonly model: string;
+    readonly status: Extract<AiRunStatus, 'LIMIT_BLOCKED' | 'FAILED'>;
+    readonly errorCode: AiRunErrorCode;
+  },
+): Promise<void> {
+  await runs.createRun(input.tenantId, {
+    userId: input.userId,
+    conversationId: input.conversationId,
+    provider: input.provider,
+    model: input.model,
+    status: input.status,
+    errorCode: input.errorCode,
+    finishedAt: new Date(),
+  });
 }
 
 function isRunErrorCode(code: string): code is AiRunErrorCode {

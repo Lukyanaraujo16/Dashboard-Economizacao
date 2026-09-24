@@ -663,7 +663,9 @@ ADR-028 — Provedor de IA
 
 Status
 
-Aprovada para o motor reativo (F13)
+Aprovada para o motor reativo (F13).
+IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL (F13.1–F13.6).
+F14 NÃO iniciada. Produção NÃO homologada.
 
 Decisão
 
@@ -671,7 +673,9 @@ A arquitetura possui abstração de provedor de inteligência artificial (`IaPro
 
 O sistema não fica acoplado a um vendor específico.
 
-Providers suportados: OPENAI e ANTHROPIC. A escolha é por tenant (`ai_tenant_settings.provider` / `model`), sem migration para trocar vendor. Credenciais são da plataforma. Não há fallback cruzado entre vendors.
+Providers suportados: OPENAI e ANTHROPIC. A escolha é por tenant (`ai_tenant_settings.provider` / `model`), sem migration para trocar vendor. Credenciais são da plataforma (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). Sem BYOK. Não há fallback cruzado entre vendors. Não há retry automático de `generate`.
+
+Rate limit de plataforma no Redis: 20 msg/10 min por user+tenant e 60/10 min por tenant. 429 `RATE_LIMITED` e `ai_run` `LIMIT_BLOCKED` só do limiter da plataforma. `RATE_LIMIT` do vendor → 503 + `ai_run` FAILED. Redis fail-closed só no Consultor (503), sem derrubar Dashboard/Relatórios.
 
 ⸻
 

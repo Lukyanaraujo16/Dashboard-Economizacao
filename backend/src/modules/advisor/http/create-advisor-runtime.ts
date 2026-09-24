@@ -20,7 +20,14 @@ import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowle
 import { createAdvisorRunRepository } from '../repositories/advisor-run.repository.js';
 import { createAdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
 import type { AdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
+import type { ConsultantRateLimiter } from '../domain/consultant-rate-limit.js';
 import { createBuildAdvisorContext } from '../services/build-advisor-context.js';
+import {
+  createAllowAllConsultantRateLimiter,
+  createFailingConsultantRateLimiter,
+  createRedisConsultantRateLimiter,
+  type RedisEvalClient,
+} from '../services/consultant-rate-limiter.js';
 import {
   createSendAdvisorMessage,
   type SendAdvisorMessage,
@@ -39,6 +46,7 @@ export type AdvisorRuntime = {
   readonly conversations: AdvisorConversationRepository;
   readonly send: SendAdvisorMessage;
   readonly providers: IaProviderRegistry;
+  readonly rateLimiter: ConsultantRateLimiter;
   readonly nodeEnv: string;
   readonly openaiApiKey: string | null;
   readonly anthropicApiKey: string | null;
@@ -47,6 +55,8 @@ export type AdvisorRuntime = {
 export type CreateAdvisorRuntimeOptions = {
   readonly environment?: AdvisorRuntimeEnvironment;
   readonly send?: SendAdvisorMessage;
+  readonly redis?: RedisEvalClient;
+  readonly rateLimiter?: ConsultantRateLimiter;
 };
 
 /**
@@ -101,6 +111,16 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     analytics,
   });
   const providers = createAdvisorIaProviderRegistry(environment);
+  const rateLimiter =
+    options.rateLimiter ??
+    (options.redis
+      ? createRedisConsultantRateLimiter({
+          redis: options.redis,
+          nodeEnv: environment.nodeEnv,
+        })
+      : environment.nodeEnv === 'test'
+        ? createAllowAllConsultantRateLimiter()
+        : createFailingConsultantRateLimiter());
   const send =
     options.send ??
     createSendAdvisorMessage({
@@ -109,6 +129,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
       runs,
       context,
       providers,
+      rateLimiter,
     });
 
   return {
@@ -116,6 +137,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     conversations,
     send,
     providers,
+    rateLimiter,
     nodeEnv: environment.nodeEnv,
     openaiApiKey: environment.openaiApiKey,
     anthropicApiKey: environment.anthropicApiKey,

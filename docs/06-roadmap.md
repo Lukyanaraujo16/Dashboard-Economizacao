@@ -90,8 +90,13 @@ PRE-F13-HOME-POLISH-2: cobertura de expansão + drill-down analítico (local;
   homologado). Rankings `realizedByCategory` em Faturamento/Já recebido/
   Despesas/Entradas×Saídas; composição billing−despesas no Resultado; A receber
   honesto sem categoria expected. Sem commit. F13 NÃO iniciada.
-F13 (desenvolvimento local): DESBLOQUEADA (não iniciada).
+F13 (Consultor reativo, F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
+  Motor único; provider/model por tenant (`OPENAI` | `ANTHROPIC`); secrets
+  `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`; sem BYOK; sem fallback cruzado;
+  sem retry automático de generate. Rate limit Redis 20 msg/10min
+  user+tenant e 60/10min tenant. F14 NÃO iniciada.
 Produção: AINDA BLOQUEADA (rollout operacional — ver pendências CASH-7/8B abaixo).
+  F13 em produção NÃO homologada.
 CASH-7: bootstrap/backfill LOCAL do ledger IMPLEMENTADO (Clínica Life).
   Discovery = AR/AP local `paid > 0` + GET `/baixa` nas não cobertas.
   Idempotente; skip se Σ gross ACTIVE = paid (DELETED não impede skip).
@@ -117,7 +122,7 @@ CASH-9C: transferências internas IMPLEMENTADAS (código + migration + testes).
   CASH-4C-CAT: donuts = caixa realizado (fecha com realized.inflows/outflows).
   CASH-6 HOMOLOGADA (commit `39e2ab3`): Relatórios/PDF/XLSX = MonthlyCashFlow
   (mesmo motor da Home; regime de caixa).
-  PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local DESBLOQUEADA; produção NÃO.
+  PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local IMPLEMENTADA — AGUARDANDO HOMOLOGAÇÃO REAL; produção NÃO.
 Faturamento Gerencial (F1-G): SUPERSEDED na Home (CASH-4B = caixa / MonthlyCashFlow)
   (fórmula de produto SUPERSEDED pela decisão Felipe acima).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
@@ -637,7 +642,7 @@ Backlog explícito (não bloqueia Fase 10):
 * despesas fixas/variáveis (sem regra determinística);
 * Receita × Despesa (D7 adiada).
 
-Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-9C: transferências internas IMPLEMENTADAS (local). CASH-4B: HOMOLOGADA. CASH-4C: HOMOLOGADA. CASH-6: HOMOLOGADA (Reports/PDF/XLSX caixa). PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local DESBLOQUEADA; produção AINDA BLOQUEADA.
+Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-9C: transferências internas IMPLEMENTADAS (local). CASH-4B: HOMOLOGADA. CASH-4C: HOMOLOGADA. CASH-6: HOMOLOGADA (Reports/PDF/XLSX caixa). PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local IMPLEMENTADA — AGUARDANDO HOMOLOGAÇÃO REAL; produção AINDA BLOQUEADA.
 
 ⸻
 
@@ -908,6 +913,9 @@ Critérios de aceite (V1)
 
 17. Fase 13 — Consultor Financeiro Reativo
 
+Status: IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL (F13.1–F13.6).
+F14 NÃO iniciada. Produção NÃO homologada.
+
 Objetivo
 
 Permitir que o usuário converse com a IA sobre seus próprios dados.
@@ -940,9 +948,20 @@ Critérios de aceite
 * números não são inventados;
 * usuário consegue conversar sem sair da dashboard.
 
+Recorte local entregue (F13.1–F13.6): motor único; provider/model por
+tenant (`OPENAI` | `ANTHROPIC`); secrets de plataforma
+`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`; sem BYOK; sem fallback cruzado;
+sem retry automático de generate; chat reativo; rate limit Redis
+20 msg/10 min por user+tenant e 60/10 min por tenant. 429 `RATE_LIMITED`
+só do limiter da plataforma; `RATE_LIMIT` do vendor → 503 + `ai_run`
+FAILED. `LIMIT_BLOCKED` só do limiter da plataforma. Redis fail-closed
+apenas no Consultor (503), sem derrubar Dashboard/Relatórios.
+
 ⸻
 
 18. Fase 14 — Consultor Proativo e Insights
+
+Status: NÃO INICIADA.
 
 Objetivo
 

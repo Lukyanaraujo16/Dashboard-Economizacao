@@ -385,7 +385,10 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   realizadas e composição explícita do Resultado; previsto sem categoria
   inventada.
   PRE-F13-HOME-POLISH-CLOSE (27/08/2026): homologação humana APROVADA no
-  localhost; pacote fechado localmente. F13 NÃO iniciada; produção NÃO.
+  localhost; pacote fechado localmente. Naquele fechamento, F13 ainda
+  não havia sido iniciada. F13 reativa (F13.1–F13.6) está hoje
+  IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. F14 NÃO
+  iniciada. Produção NÃO homologada.
 
 CASH-4A (infra Home / caixa): a Home **carrega** `GET /dashboard/monthly-cash-flow`
 (`month`, `costCenter`, `category`). Infra mantida; números oficiais = CASH-4B.
@@ -1030,6 +1033,9 @@ Não deverá parecer que a tela travou.
 
 36. Consultor Financeiro — Botão Flutuante
 
+Status F13.5 (reativo): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
+Badge/proatividade: F14 — NÃO iniciada. Produção NÃO homologada.
+
 O Consultor Financeiro deverá possuir botão flutuante persistente no canto inferior direito.
 
 O componente deverá permanecer disponível nas principais telas do painel do cliente.
@@ -1112,6 +1118,9 @@ Essas sugestões não deverão limitar a conversa.
 ⸻
 
 42. Consultor Proativo
+
+F14 — NÃO INICIADA. O recorte F13 é só reativo (FAB + conversa). Sem badge
+proativo, sem insight iniciado pelo sistema.
 
 Quando um insight relevante for detectado:
 
@@ -1402,7 +1411,8 @@ Campos iniciais:
 * conhecimento adicional.
 
 Rota administrativa implementada: `/empresas/{companyId}/consultor`.
-Acesso reativo do cliente: FAB nas superfícies de tenant (Dashboard e Relatórios), sem badge proativo (F14).
+Acesso reativo do cliente: FAB nas superfícies de tenant (Dashboard e Relatórios), sem badge proativo (F14 NÃO iniciada).
+F13.5 local: IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. Produção NÃO homologada.
 
 ⸻
 

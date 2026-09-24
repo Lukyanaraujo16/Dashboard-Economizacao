@@ -878,6 +878,9 @@ não datas D/M/A soltas. Eixo = `competenceDate`. Não misturar com
 
 5.9 CONSULTOR — Consultor Financeiro Inteligente
 
+Status de implementação: F13 reativo (F13.1–F13.6) IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
+CONSULTOR-006 (proatividade) e F14: NÃO iniciadas. Produção NÃO homologada.
+
 CONSULTOR-001 — Acesso permanente
 
 Requisito
@@ -949,7 +952,9 @@ Campos previstos
 * base de conhecimento;
 * tom de comunicação quando definido.
 
-O motor do Consultor é único. Provider e model efetivos vêm da configuração do tenant. Credenciais (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) são da plataforma e não são persistidas.
+O motor do Consultor é único. Provider e model efetivos vêm da configuração do tenant. Credenciais (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) são da plataforma e não são persistidas. Sem BYOK. Sem fallback cruzado. Sem retry automático de generate.
+
+Rate limit de plataforma: 20 mensagens / 10 min por usuário+tenant e 60 / 10 min por tenant. 429 `RATE_LIMITED` só deste limiter. Limite do vendor não é 429 da plataforma.
 
 Critérios de aceite
 
@@ -974,6 +979,8 @@ Critérios de aceite
 ⸻
 
 CONSULTOR-006 — Proatividade
+
+F14 — NÃO INICIADA.
 
 Requisito
 

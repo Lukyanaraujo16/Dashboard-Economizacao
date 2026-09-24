@@ -6,6 +6,13 @@ export type {
   BuildAdvisorContextDependencies,
   BuildAdvisorContextInput,
 } from './build-advisor-context.js';
+export {
+  createAllowAllConsultantRateLimiter,
+  createFailingConsultantRateLimiter,
+  createMemoryConsultantRateLimiter,
+  createRedisConsultantRateLimiter,
+} from './consultant-rate-limiter.js';
+export type { RedisEvalClient } from './consultant-rate-limiter.js';
 export { mapAdvisorDomainError, withAdvisorDomainError } from './map-advisor-http-error.js';
 export { AdvisorExecutionError, createSendAdvisorMessage } from './send-advisor-message.js';
 export type {

@@ -6,8 +6,10 @@ import {
   AI_PROVIDER_MODEL_CATALOG,
   AdvisorDomainError,
   AdvisorExecutionError,
+  createAllowAllConsultantRateLimiter,
   createSendAdvisorMessage,
 } from '../src/modules/advisor/index.js';
+import type { ConsultantRateLimiter } from '../src/modules/advisor/domain/consultant-rate-limit.js';
 import type { AdvisorBuiltContext } from '../src/modules/advisor/domain/context-blocks.js';
 import type {
   AiConversationRecord,
@@ -89,6 +91,7 @@ function createHarness(options?: {
   readonly settingsRow?: AiTenantSettingsRecord | null;
   readonly openai?: ReturnType<typeof createFakeIaProvider>;
   readonly anthropic?: ReturnType<typeof createFakeIaProvider>;
+  readonly rateLimiter?: ConsultantRateLimiter;
 }) {
   const openai = options?.openai ?? createFakeIaProvider({ id: 'OPENAI', text: 'Faturamento oficial: 0' });
   const anthropic = options?.anthropic ?? createFakeIaProvider({ id: 'ANTHROPIC' });
@@ -171,6 +174,7 @@ function createHarness(options?: {
       build: vi.fn(async () => builtContext()),
     },
     providers: createIaProviderRegistry({ openai, anthropic }),
+    rateLimiter: options?.rateLimiter ?? createAllowAllConsultantRateLimiter(),
   });
 
   return { send, openai, anthropic, messages, runs };
@@ -214,7 +218,7 @@ describe('send-advisor-message (F13.3)', () => {
     ).rejects.toBeInstanceOf(AdvisorExecutionError);
 
     expect(messages.map((item) => item.senderType)).toEqual(['USER']);
-    expect(runs[0]?.status).toBe('LIMIT_BLOCKED');
+    expect(runs[0]?.status).toBe('FAILED');
     expect(runs[0]?.errorCode).toBe('RATE_LIMIT');
     expect(runs[0]?.finishedAt).not.toBeNull();
   });

@@ -20,7 +20,10 @@ feat(sync): adiciona sincronizacao automatica incremental conta azul
 
 Próxima fase executável:
 
-Fase 13 — Consultor Financeiro Reativo (Fase 12 recorte V1 entregue)
+Fase 14 — Consultor Proativo e Insights (NÃO INICIADA)
+
+F13 (F13.1–F13.6, reativo): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
+Produção NÃO homologada.
 
 Estado atual
 
@@ -120,6 +123,12 @@ Estado atual
 ✔ F12-B — Relatório de Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (24/08/2026)
 ✔ F12-C — Exportação PDF/XLSX da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 ✔ F12-D — Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
+
+✔ F13 — Consultor Financeiro Reativo (F13.1–F13.6) IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL
+     Motor único; provider/model por tenant; secrets de plataforma;
+     sem BYOK; sem fallback cruzado; sem retry automático de generate;
+     rate limit Redis 20/10min user+tenant e 60/10min tenant.
+     F14 NÃO iniciada. Produção NÃO homologada.
 
 ✔ PRE-IA-4D — PDF profissional de Receita e Despesas IMPLEMENTADA (25/08/2026)
      Camada visual compartilhada. Sem alteração de DTO, filtros, XLSX ou motor.
@@ -877,7 +886,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 13 (Consultor). F12-D Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-C PDF/Excel da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. Fase 12 recorte V1 (Receita+Despesas+export) entregue; Fase 12 completa: NÃO. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: SUPERSEDED na Home pelo CASH-4C (MonthlyCashFlow).
+Próxima fase: Fase 14 (proativo/insights) — NÃO INICIADA. F13 (F13.1–F13.6) IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. Produção NÃO homologada. F12-D Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-C PDF/Excel da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. Fase 12 recorte V1 (Receita+Despesas+export) entregue; Fase 12 completa: NÃO. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: SUPERSEDED na Home pelo CASH-4C (MonthlyCashFlow).
 E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
@@ -1318,6 +1327,9 @@ Tipos V1: Receita e Despesas (entregues). Sidebar real em /relatorios (docs/05 �
 Fase 12 completa: NÃO (itens históricos do PRD fora da V1: caixa realizado,
 inadimplência de estoque ranged, listagens AR/AP).
 
+F13 (Consultor reativo F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO
+HOMOLOGAÇÃO REAL. F14 NÃO iniciada. Produção NÃO homologada.
+
 ===========================================================
 
 # ÉPICO 4
@@ -1327,23 +1339,25 @@ Consultor Financeiro IA
 
 Status:
 
-Pendente
+F13 reativo (F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
+F14 (insights / alertas / IA proativa): NÃO INICIADA.
+Produção NÃO homologada.
 
 Fases
 
-Context Builder
+Context Builder — F13.2 local
 
-Motor Analítico
+Motor Analítico — fonte única; já existente
 
-Chat
+Chat — F13.4 / F13.5 local
 
-Insights
+Insights — F14 NÃO iniciada
 
-Alertas
+Alertas — F14 NÃO iniciada
 
-Recomendações
+Recomendações — F14 NÃO iniciada
 
-IA Proativa
+IA Proativa — F14 NÃO iniciada
 
 ===========================================================
 

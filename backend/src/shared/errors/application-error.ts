@@ -158,3 +158,19 @@ export class IntegrationUnavailableError extends ApplicationError {
     super(message, options);
   }
 }
+
+export class RateLimitedError extends ApplicationError {
+  readonly category = 'dominio' as const;
+  readonly code = 'RATE_LIMITED' as const;
+  readonly httpStatus = 429;
+  readonly recoverable = true;
+
+  constructor(
+    message = 'Você atingiu o limite de mensagens do Consultor. Tente novamente em alguns minutos.',
+    options?: {
+      cause?: unknown;
+    },
+  ) {
+    super(message, options);
+  }
+}

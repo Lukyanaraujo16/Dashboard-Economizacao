@@ -24,7 +24,9 @@ type ErrorEnvelope = {
   };
 };
 
-const UNAVAILABLE_MESSAGE = 'Não foi possível conectar ao serviço. Tente novamente.';
+const UNAVAILABLE_MESSAGE = 'O Consultor está temporariamente indisponível.';
+const RATE_LIMITED_MESSAGE =
+  'Você atingiu o limite de mensagens do Consultor. Tente novamente em alguns minutos.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -144,6 +146,14 @@ function toConsultantFailure(response: Response, body: unknown): ConsultantReque
       code,
       requestId,
       details,
+    });
+  }
+
+  if (response.status === 429 || code === 'RATE_LIMITED') {
+    return new ConsultantRequestError('rate_limited', RATE_LIMITED_MESSAGE, {
+      httpStatus: response.status,
+      code,
+      requestId,
     });
   }
 

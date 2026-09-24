@@ -49,7 +49,7 @@ export async function registerConsultantRoutes(
     users: createUserRepository(prisma),
     tenants: createTenantRepository(prisma),
   });
-  const runtime = options.runtime ?? createAdvisorRuntime();
+  const runtime = options.runtime ?? createAdvisorRuntime({ redis: app.redis });
   const consultant = createConsultantService(runtime);
 
   app.get('/consultant/status', { preHandler: requireAuthentication }, async (request, reply) => {
