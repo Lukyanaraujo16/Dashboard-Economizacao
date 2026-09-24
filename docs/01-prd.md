@@ -941,12 +941,15 @@ Cada empresa deverá possuir configuração própria para o Consultor.
 
 Campos previstos
 
+* provider (OPENAI | ANTHROPIC) e model por tenant;
 * ramo de atividade;
 * descrição do negócio;
 * prompt administrativo;
 * orientações de comportamento;
 * base de conhecimento;
 * tom de comunicação quando definido.
+
+O motor do Consultor é único. Provider e model efetivos vêm da configuração do tenant. Credenciais (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) são da plataforma e não são persistidas.
 
 Critérios de aceite
 

@@ -1392,12 +1392,17 @@ Dentro da empresa, o administrador deverá conseguir configurar o Consultor.
 
 Campos iniciais:
 
+* status;
+* provider (OpenAI | Anthropic) do mesmo Consultor;
+* model (allowlist do backend);
 * ramo;
 * descrição da empresa;
 * prompt administrativo;
 * tom;
-* conhecimento adicional;
-* status.
+* conhecimento adicional.
+
+Rota administrativa implementada: `/empresas/{companyId}/consultor`.
+Acesso reativo do cliente: FAB nas superfícies de tenant (Dashboard e Relatórios), sem badge proativo (F14).
 
 ⸻
 

@@ -185,6 +185,9 @@ describe('Company appearance UI', () => {
     expect(within(nav).getByRole('link', { name: 'Integrações' }).getAttribute('href')).toBe(
       `/empresas/${companyId}/integracoes`,
     );
+    expect(within(nav).getByRole('link', { name: 'Consultor Financeiro' }).getAttribute('href')).toBe(
+      `/empresas/${companyId}/consultor`,
+    );
   });
 
   it('hub Geral também expõe Aparência', async () => {

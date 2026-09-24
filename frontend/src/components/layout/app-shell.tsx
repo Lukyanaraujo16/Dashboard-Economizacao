@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 
+import { ConsultantHost } from '../consultant';
 import { AppHeader } from './app-header';
 import { AppSidebar } from './app-sidebar';
 import styles from './app-shell.module.css';
@@ -38,6 +39,7 @@ export function AppShell({ children }: AppShellProps) {
             <div className={styles.content}>{children}</div>
           </main>
         </div>
+        <ConsultantHost />
       </div>
     </ShellBreadcrumbProvider>
   );

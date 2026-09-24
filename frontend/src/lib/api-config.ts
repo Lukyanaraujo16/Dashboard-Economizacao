@@ -581,3 +581,41 @@ export function brandingCurrentPath(): string {
 export function brandingPlatformPath(): string {
   return `${BRANDING_API_PREFIX}/platform`;
 }
+
+/** Prefixo same-origin do Consultor Financeiro (F13.4). */
+export const CONSULTANT_API_PREFIX = '/consultant';
+
+export function adminConsultantOptionsPath(): string {
+  return `${ADMIN_API_PREFIX}/consultant/options`;
+}
+
+export function adminTenantConsultantPath(tenantId: string): string {
+  return `${adminTenantPath(tenantId)}/consultant`;
+}
+
+export function adminTenantConsultantKnowledgePath(tenantId: string): string {
+  return `${adminTenantConsultantPath(tenantId)}/knowledge`;
+}
+
+export function adminTenantConsultantKnowledgeEntryPath(
+  tenantId: string,
+  entryId: string,
+): string {
+  return `${adminTenantConsultantKnowledgePath(tenantId)}/${entryId}`;
+}
+
+export function consultantStatusPath(): string {
+  return `${CONSULTANT_API_PREFIX}/status`;
+}
+
+export function consultantConversationsPath(): string {
+  return `${CONSULTANT_API_PREFIX}/conversations`;
+}
+
+export function consultantConversationPath(conversationId: string): string {
+  return `${consultantConversationsPath()}/${conversationId}`;
+}
+
+export function consultantConversationMessagesPath(conversationId: string): string {
+  return `${consultantConversationPath(conversationId)}/messages`;
+}

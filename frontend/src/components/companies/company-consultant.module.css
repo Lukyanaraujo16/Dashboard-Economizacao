@@ -1,0 +1,76 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.control {
+  display: block;
+  width: 100%;
+  min-height: 2.375rem;
+  padding: 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 90%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.control:hover:not(:disabled):not(:focus-visible):not(:focus) {
+  border-color: color-mix(in srgb, var(--color-border) 45%, var(--color-text-muted));
+  background: color-mix(in srgb, var(--color-surface) 96%, var(--color-background));
+}
+
+.control:focus,
+.control:focus-visible {
+  outline: none;
+  border-color: var(--color-focus);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-focus) 14%, transparent);
+}
+
+.control:disabled {
+  cursor: not-allowed;
+  background: color-mix(in srgb, var(--color-disabled) 8%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-border) 75%, var(--color-disabled));
+  color: var(--color-text-muted);
+}
+
+.controlInvalid {
+  border-color: color-mix(in srgb, var(--color-danger) 70%, var(--color-border));
+}
+
+.textarea {
+  min-height: 8rem;
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+}
+
+.knowledgeList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.knowledgeHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.knowledgeExcerpt {
+  margin: 0;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control {
+    transition: none;
+  }
+}

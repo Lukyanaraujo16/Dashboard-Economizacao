@@ -19,6 +19,7 @@ const SECTIONS = [
   { key: 'aparencia', label: 'Aparência', href: (id: string) => `/empresas/${id}/aparencia` },
   { key: 'usuarios', label: 'Usuários', href: (id: string) => `/empresas/${id}/usuarios` },
   { key: 'integracoes', label: 'Integrações', href: (id: string) => `/empresas/${id}/integracoes` },
+  { key: 'consultor', label: 'Consultor Financeiro', href: (id: string) => `/empresas/${id}/consultor` },
 ] as const;
 
 function resolveSectionLabel(pathname: string): string {
@@ -27,6 +28,7 @@ function resolveSectionLabel(pathname: string): string {
   if (pathname.includes('/usuarios')) return 'Usuários';
   if (pathname.includes('/aparencia')) return 'Aparência';
   if (pathname.includes('/integracoes')) return 'Integrações';
+  if (pathname.includes('/consultor')) return 'Consultor Financeiro';
   if (pathname.includes('/editar')) return 'Geral';
   return 'Empresa';
 }
