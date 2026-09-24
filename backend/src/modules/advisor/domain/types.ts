@@ -98,6 +98,7 @@ export type AiPlatformCredentialRecord = {
   readonly id: string;
   readonly provider: AiProviderId;
   readonly encryptedSecret: string;
+  readonly displayHint: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

@@ -9,6 +9,7 @@ import {
 } from '../../services/admin/consultant';
 import {
   ConsultantRequestError,
+  type ConsultantProviderCredentialSource,
   type ConsultantProviderId,
   type ConsultantProviderStatus,
 } from '../../services/admin/consultant.types';
@@ -23,12 +24,80 @@ const PROVIDER_LABEL: Record<ConsultantProviderId, string> = {
 
 const PROVIDER_ORDER: readonly ConsultantProviderId[] = ['OPENAI', 'ANTHROPIC'];
 
+const EMPTY_STATUS: Record<ConsultantProviderId, ConsultantProviderStatus> = {
+  OPENAI: {
+    provider: 'OPENAI',
+    configured: false,
+    source: 'NONE',
+    displayHint: null,
+    configuredAt: null,
+  },
+  ANTHROPIC: {
+    provider: 'ANTHROPIC',
+    configured: false,
+    source: 'NONE',
+    displayHint: null,
+    configuredAt: null,
+  },
+};
+
 function mergeStatuses(
   current: readonly ConsultantProviderStatus[],
 ): readonly ConsultantProviderStatus[] {
   return PROVIDER_ORDER.map((provider) => {
     const found = current.find((item) => item.provider === provider);
-    return found ?? { provider, configured: false };
+    return found ?? EMPTY_STATUS[provider];
+  });
+}
+
+function sourceBadge(source: ConsultantProviderCredentialSource): {
+  readonly label: string;
+  readonly variant: 'neutral' | 'success' | 'info';
+} {
+  if (source === 'MANAGED') {
+    return { label: 'Configurado pelo painel', variant: 'success' };
+  }
+  if (source === 'ENV') {
+    return { label: 'Disponível pelo servidor', variant: 'info' };
+  }
+  return { label: 'Não configurado', variant: 'neutral' };
+}
+
+function fieldCopy(provider: ConsultantProviderId, source: ConsultantProviderCredentialSource) {
+  if (source === 'MANAGED') {
+    return {
+      label: 'Substituir chave',
+      placeholder: 'Cole uma nova chave para substituir',
+      action: 'Substituir chave',
+    };
+  }
+  if (source === 'ENV') {
+    return {
+      label: 'Cadastrar chave no painel',
+      placeholder: 'Cadastre uma chave para gerenciá-la pelo painel',
+      action: 'Cadastrar chave no painel',
+    };
+  }
+  return {
+    label: 'Cadastrar chave',
+    placeholder: provider === 'OPENAI' ? 'Cole a chave da OpenAI' : 'Cole a chave da Anthropic',
+    action: 'Salvar chave',
+  };
+}
+
+function formatConfiguredAt(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'America/Sao_Paulo',
   });
 }
 
@@ -96,11 +165,17 @@ export function PlatformConsultantProvidersPage() {
     setError(null);
     setSuccess(null);
     try {
-      await deleteConsultantProviderCredential(provider);
-      const list = await listConsultantProviders();
-      setProviders(mergeStatuses(list));
+      const next = await deleteConsultantProviderCredential(provider);
+      if (next) {
+        setProviders((current) =>
+          mergeStatuses(current.map((item) => (item.provider === next.provider ? next : item))),
+        );
+      } else {
+        const list = await listConsultantProviders();
+        setProviders(mergeStatuses(list));
+      }
       setPendingDelete(null);
-      setSuccess(`Credencial de ${PROVIDER_LABEL[provider]} removida.`);
+      setSuccess(`Credencial gerenciada de ${PROVIDER_LABEL[provider]} removida.`);
     } catch (cause) {
       setError(
         cause instanceof ConsultantRequestError
@@ -120,7 +195,8 @@ export function PlatformConsultantProvidersPage() {
         </Typography>
         <Typography as="p" variant="body" className={companyStyles.formDescription}>
           Chaves globais da plataforma para OpenAI e Anthropic. Elas não pertencem a uma empresa.
-          A interface nunca mostra o valor armazenado.
+          A interface nunca mostra o valor armazenado. Uma chave no servidor não é a mesma coisa
+          que uma chave cadastrada neste painel.
         </Typography>
       </div>
 
@@ -134,93 +210,130 @@ export function PlatformConsultantProvidersPage() {
         />
       ) : (
         <div>
-          {providers.map((item) => (
-            <section
-              key={item.provider}
-              className={companyStyles.formCard}
-              data-testid={`provider-${item.provider}`}
-            >
-              <div className={companyStyles.appearanceSectionHeader}>
-                <Typography as="h2" variant="heading">
-                  {PROVIDER_LABEL[item.provider]}
-                </Typography>
-                <Badge variant={item.configured ? 'success' : 'neutral'}>
-                  {item.configured ? 'Configurado' : 'Não configurado'}
-                </Badge>
-              </div>
-
-              <form
-                onSubmit={(event) => void handleSave(item.provider, event)}
-                noValidate
+          {providers.map((item) => {
+            const badge = sourceBadge(item.source);
+            const copy = fieldCopy(item.provider, item.source);
+            const configuredDate = formatConfiguredAt(item.configuredAt);
+            return (
+              <section
+                key={item.provider}
+                className={companyStyles.formCard}
+                data-testid={`provider-${item.provider}`}
               >
-                <FormField
-                  label={item.configured ? 'Substituir chave' : 'Cadastrar chave'}
-                  htmlFor={`credential-${item.provider}`}
-                  hint="O valor digitado some após salvar. Não há botão para mostrar a chave."
-                >
-                  <Input
-                    id={`credential-${item.provider}`}
-                    name="credential"
-                    type="password"
-                    autoComplete="off"
-                    value={drafts[item.provider]}
-                    onChange={(event) =>
-                      setDrafts((current) => ({
-                        ...current,
-                        [item.provider]: event.target.value,
-                      }))
-                    }
-                  />
-                </FormField>
-                <div className={companyStyles.formActions}>
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    loading={busyProvider === item.provider}
-                    disabled={drafts[item.provider].trim().length === 0}
-                  >
-                    {item.configured ? 'Substituir chave' : 'Salvar chave'}
-                  </Button>
-                  {item.configured ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={busyProvider !== null}
-                      onClick={() => setPendingDelete(item.provider)}
-                    >
-                      Remover
-                    </Button>
-                  ) : null}
-                </div>
-              </form>
-
-              {pendingDelete === item.provider ? (
-                <div className={companyStyles.confirmPanel} role="group" aria-label="Confirmar remoção">
-                  <Typography as="p" variant="body">
-                    Remover a credencial armazenada de {PROVIDER_LABEL[item.provider]}?
+                <div className={companyStyles.appearanceSectionHeader}>
+                  <Typography as="h2" variant="heading">
+                    {PROVIDER_LABEL[item.provider]}
                   </Typography>
-                  <div className={companyStyles.confirmActions}>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      loading={busyProvider === item.provider}
-                      onClick={() => void handleDelete(item.provider)}
-                    >
-                      Confirmar remoção
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={busyProvider !== null}
-                      onClick={() => setPendingDelete(null)}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
+                  <Badge variant={badge.variant}>{badge.label}</Badge>
                 </div>
-              ) : null}
-            </section>
-          ))}
+
+                {item.source === 'ENV' ? (
+                  <Typography as="p" variant="body" className={companyStyles.formDescription}>
+                    Existe uma credencial configurada na infraestrutura. Cadastre uma chave abaixo
+                    para passar a gerenciá-la pelo painel.
+                  </Typography>
+                ) : null}
+
+                {item.source === 'NONE' ? (
+                  <Typography as="p" variant="body" className={companyStyles.formDescription}>
+                    Nenhuma credencial deste provedor está disponível para a plataforma.
+                  </Typography>
+                ) : null}
+
+                {item.source === 'MANAGED' ? (
+                  <div>
+                    <Typography as="p" variant="body">
+                      Chave cadastrada
+                    </Typography>
+                    <Typography as="p" variant="body" data-testid={`hint-${item.provider}`}>
+                      {item.displayHint ?? '••••••••'}
+                    </Typography>
+                    {configuredDate ? (
+                      <Typography as="p" variant="body" className={companyStyles.previewHint}>
+                        Cadastrada em {configuredDate}
+                      </Typography>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <form
+                  onSubmit={(event) => void handleSave(item.provider, event)}
+                  autoComplete="off"
+                  noValidate
+                >
+                  <FormField
+                    label={copy.label}
+                    htmlFor={`credential-${item.provider}`}
+                    hint="O valor digitado some após salvar. Não há botão para mostrar a chave."
+                  >
+                    <Input
+                      id={`credential-${item.provider}`}
+                      name={`new-credential-${item.provider}`}
+                      type="password"
+                      autoComplete="new-password"
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      placeholder={copy.placeholder}
+                      value={drafts[item.provider]}
+                      onChange={(event) =>
+                        setDrafts((current) => ({
+                          ...current,
+                          [item.provider]: event.target.value,
+                        }))
+                      }
+                    />
+                  </FormField>
+                  <div className={companyStyles.formActions}>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      loading={busyProvider === item.provider}
+                      disabled={drafts[item.provider].trim().length === 0}
+                    >
+                      {copy.action}
+                    </Button>
+                    {item.source === 'MANAGED' ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={busyProvider !== null}
+                        onClick={() => setPendingDelete(item.provider)}
+                      >
+                        Remover
+                      </Button>
+                    ) : null}
+                  </div>
+                </form>
+
+                {pendingDelete === item.provider ? (
+                  <div className={companyStyles.confirmPanel} role="group" aria-label="Confirmar remoção">
+                    <Typography as="p" variant="body">
+                      Remover a credencial gerenciada pelo painel?
+                    </Typography>
+                    <div className={companyStyles.confirmActions}>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        loading={busyProvider === item.provider}
+                        onClick={() => void handleDelete(item.provider)}
+                      >
+                        Confirmar remoção
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={busyProvider !== null}
+                        onClick={() => setPendingDelete(null)}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
 
           {error ? (
             <Typography as="p" variant="body" className={companyStyles.formError} role="alert">

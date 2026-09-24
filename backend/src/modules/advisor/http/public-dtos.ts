@@ -54,9 +54,14 @@ export type PublicConsultantOptions = {
   readonly tonePresets: readonly PublicConsultantTonePresetOption[];
 };
 
+export type PublicConsultantProviderCredentialSource = 'MANAGED' | 'ENV' | 'NONE';
+
 export type PublicConsultantProviderStatus = {
   readonly provider: PublicAiProviderId;
   readonly configured: boolean;
+  readonly source: PublicConsultantProviderCredentialSource;
+  readonly displayHint: string | null;
+  readonly configuredAt: string | null;
 };
 
 export type PublicKnowledgeEntry = {

@@ -43,29 +43,18 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
     knowledge: createAdvisorKnowledgeRepository(prisma),
   });
   const encryptionKey = environment.integrationEncryptionKey;
-  const adminProviders =
-    encryptionKey === null
-      ? null
-      : createAdminConsultantProvidersService({
-          credentials: createAdvisorPlatformCredentialRepository(prisma),
-          encryptionKey,
-          envOpenAi: environment.openaiApiKey,
-          envAnthropic: environment.anthropicApiKey,
-        });
+  const adminProviders = createAdminConsultantProvidersService({
+    credentials: createAdvisorPlatformCredentialRepository(prisma),
+    encryptionKey,
+    envOpenAi: environment.openaiApiKey,
+    envAnthropic: environment.anthropicApiKey,
+  });
 
   app.get('/admin/consultant/options', { preHandler: adminGuard }, async (_request, reply) => {
     return reply.status(200).send(adminConsultant.listOptions());
   });
 
   app.get('/admin/consultant/providers', { preHandler: adminGuard }, async (_request, reply) => {
-    if (adminProviders === null) {
-      return reply.status(200).send({
-        data: [
-          { provider: 'OPENAI', configured: Boolean(environment.openaiApiKey) },
-          { provider: 'ANTHROPIC', configured: Boolean(environment.anthropicApiKey) },
-        ],
-      });
-    }
     return reply.status(200).send({ data: await adminProviders.listProviders() });
   });
 
@@ -73,7 +62,7 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
     '/admin/consultant/providers/:provider/credential',
     { preHandler: adminGuard },
     async (request, reply) => {
-      if (adminProviders === null || encryptionKey === null) {
+      if (encryptionKey === null) {
         throw new IntegrationUnavailableError(
           'Criptografia de credenciais da plataforma está indisponível.',
         );
@@ -88,12 +77,8 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
     '/admin/consultant/providers/:provider/credential',
     { preHandler: adminGuard },
     async (request, reply) => {
-      if (adminProviders === null) {
-        return reply.status(204).send();
-      }
       const provider = parseProviderParam(request.params);
-      await adminProviders.deleteCredential(provider);
-      return reply.status(204).send();
+      return reply.status(200).send(await adminProviders.deleteCredential(provider));
     },
   );
 

@@ -5,8 +5,10 @@ import {
   DEFAULT_CONSULTANT_NAME,
   assertConsultantName,
   deriveConsultantConversationTitle,
+  deriveManagedCredentialDisplayHint,
   resolveConsultantDisplayName,
   resolvePlatformAiApiKey,
+  resolveProviderCredentialSource,
   resolveToneInstruction,
 } from '../src/modules/advisor/index.js';
 import { resolveConsultantAvailability } from '../src/modules/advisor/services/consultant.service.js';
@@ -37,6 +39,26 @@ describe('F13.7 tone presets', () => {
     expect(resolveToneInstruction('CONSULTIVO', 'ignorar frontend')).toContain('consultor financeiro');
     expect(resolveToneInstruction('PERSONALIZADO', 'Fale como um sócio.')).toBe('Fale como um sócio.');
     expect(resolveToneInstruction('PERSONALIZADO', '   ')).toContain('profissional');
+  });
+});
+
+describe('F13.7.1A origem da credencial', () => {
+  it('classifica MANAGED > ENV > NONE sem fallback cruzado', () => {
+    expect(resolveProviderCredentialSource({ hasManaged: true, hasEnv: true })).toBe('MANAGED');
+    expect(resolveProviderCredentialSource({ hasManaged: false, hasEnv: true })).toBe('ENV');
+    expect(resolveProviderCredentialSource({ hasManaged: false, hasEnv: false })).toBe('NONE');
+  });
+
+  it('displayHint usa só prefixo de família e nunca o restante da chave', () => {
+    const openai = 'sk-proj-abcdefghijklmnopqrstuvwxyz0123456789';
+    const anthropic = 'sk-ant-abcdefghijklmnopqrstuvwxyz0123456789';
+    const generic = 'sk-abcdefghijklmnopqrstuvwxyz0123456789';
+    expect(deriveManagedCredentialDisplayHint(openai)).toBe('sk-proj-••••••••');
+    expect(deriveManagedCredentialDisplayHint(anthropic)).toBe('sk-ant-••••••••');
+    expect(deriveManagedCredentialDisplayHint(generic)).toBe('sk-••••••••');
+    expect(deriveManagedCredentialDisplayHint('plain-token-value')).toBe('••••••••');
+    expect(deriveManagedCredentialDisplayHint(openai)).not.toContain('abcd');
+    expect(deriveManagedCredentialDisplayHint(openai)).not.toContain('6789');
   });
 });
 

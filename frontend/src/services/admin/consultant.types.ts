@@ -52,9 +52,14 @@ export type ConsultantOptions = {
   readonly tonePresets: readonly ConsultantTonePresetOption[];
 };
 
+export type ConsultantProviderCredentialSource = 'MANAGED' | 'ENV' | 'NONE';
+
 export type ConsultantProviderStatus = {
   readonly provider: ConsultantProviderId;
   readonly configured: boolean;
+  readonly source: ConsultantProviderCredentialSource;
+  readonly displayHint: string | null;
+  readonly configuredAt: string | null;
 };
 
 export type ConsultantKnowledgeEntry = {

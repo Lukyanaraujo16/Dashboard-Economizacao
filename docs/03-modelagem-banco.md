@@ -925,7 +925,7 @@ Campos conceituais:
 
 Provider e model efetivos são por tenant. Ausência de settings equivale a Consultor não configurado/desabilitado. API keys não ficam em settings (sem BYOK). Motor único (`OPENAI` | `ANTHROPIC`).
 
-`ai_platform_credentials` guarda ciphertext global por provider (AES-256-GCM). Sem plaintext.
+`ai_platform_credentials` guarda ciphertext global por provider (AES-256-GCM) e `display_hint` (metadado visual derivado no PUT; nunca o segredo). Sem plaintext.
 
 F13 (F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
 F14 (insights / regras proativas / `ai_insights` operacional): NÃO iniciada.

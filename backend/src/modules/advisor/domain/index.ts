@@ -49,6 +49,13 @@ export {
   deriveConsultantConversationTitle,
 } from './conversation-title.js';
 export { ADVISOR_PLATFORM_INSTRUCTIONS } from './platform-instructions.js';
+export { deriveManagedCredentialDisplayHint } from './credential-display-hint.js';
+export {
+  AI_PROVIDER_CREDENTIAL_SOURCES,
+  isAiProviderCredentialSource,
+  resolveProviderCredentialSource,
+} from './credential-source.js';
+export type { AiProviderCredentialSource } from './credential-source.js';
 export {
   isPlatformAiProviderConfigured,
   resolvePlatformAiApiKey,

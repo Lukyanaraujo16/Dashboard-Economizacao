@@ -876,6 +876,7 @@ model AiPlatformCredential {
   id              String     @id @default(uuid()) @db.Uuid
   provider        AiProvider @unique(map: "uq_ai_platform_credentials_provider")
   encryptedSecret String     @map("encrypted_secret") @db.Text
+  displayHint     String?    @map("display_hint")
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 

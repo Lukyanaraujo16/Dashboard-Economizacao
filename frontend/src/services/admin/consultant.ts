@@ -11,6 +11,7 @@ import {
   type ConsultantErrorDetail,
   type ConsultantKnowledgeEntry,
   type ConsultantOptions,
+  type ConsultantProviderCredentialSource,
   type ConsultantProviderId,
   type ConsultantProviderStatus,
   type ConsultantSettings,
@@ -112,16 +113,36 @@ function isConsultantOptions(value: unknown): value is ConsultantOptions {
   );
 }
 
+function isProviderSource(value: unknown): value is ConsultantProviderCredentialSource {
+  return value === 'MANAGED' || value === 'ENV' || value === 'NONE';
+}
+
 function isProviderStatus(value: unknown): value is ConsultantProviderStatus {
-  return (
-    isRecord(value) &&
-    isProviderId(value.provider) &&
-    typeof value.configured === 'boolean' &&
-    !('credential' in value) &&
-    !('apiKey' in value) &&
-    !('value' in value) &&
-    !('prefix' in value)
-  );
+  if (
+    !isRecord(value) ||
+    !isProviderId(value.provider) ||
+    typeof value.configured !== 'boolean' ||
+    !isProviderSource(value.source) ||
+    !isNullableString(value.displayHint) ||
+    !isNullableString(value.configuredAt) ||
+    'credential' in value ||
+    'apiKey' in value ||
+    'value' in value ||
+    'encryptedSecret' in value ||
+    'prefix' in value
+  ) {
+    return false;
+  }
+
+  if (value.source === 'NONE') {
+    return value.configured === false && value.displayHint === null && value.configuredAt === null;
+  }
+
+  if (value.source === 'ENV') {
+    return value.configured === true && value.displayHint === null && value.configuredAt === null;
+  }
+
+  return value.configured === true;
 }
 
 function parseProviderStatusList(value: unknown): readonly ConsultantProviderStatus[] | null {
@@ -315,19 +336,25 @@ export async function putConsultantProviderCredential(
 
 export async function deleteConsultantProviderCredential(
   provider: ConsultantProviderId,
-): Promise<void> {
+): Promise<ConsultantProviderStatus | null> {
   const response = await consultantFetch(adminConsultantProviderCredentialPath(provider), {
     method: 'DELETE',
   });
 
   if (response.status === 204) {
-    return;
+    return null;
   }
 
   const body = await readJsonBody(response);
   if (!response.ok) {
     throw toConsultantFailure(response, body);
   }
+
+  if (!isProviderStatus(body)) {
+    throw unavailableBody(response.status);
+  }
+
+  return body;
 }
 
 export async function getConsultantOptions(): Promise<ConsultantOptions> {

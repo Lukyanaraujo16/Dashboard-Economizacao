@@ -12,6 +12,7 @@ export type {
   PublicConsultantMessage,
   PublicConsultantModelOption,
   PublicConsultantOptions,
+  PublicConsultantProviderCredentialSource,
   PublicConsultantProviderOption,
   PublicConsultantProviderStatus,
   PublicConsultantStatus,

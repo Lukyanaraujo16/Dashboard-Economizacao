@@ -1,6 +1,7 @@
 import { encryptSecret } from '../../../infrastructure/crypto/secret-box.js';
 import { AI_PROVIDER_IDS, type AiProviderId } from '../domain/types.js';
-import { resolvePlatformAiApiKey } from '../domain/resolve-platform-ai-key.js';
+import { deriveManagedCredentialDisplayHint } from '../domain/credential-display-hint.js';
+import { resolveProviderCredentialSource } from '../domain/credential-source.js';
 import type { AdvisorPlatformCredentialRepository } from '../repositories/advisor-platform-credential.repository.js';
 import type { PublicConsultantProviderStatus } from '../http/public-dtos.js';
 
@@ -10,23 +11,54 @@ export type AdminConsultantProvidersService = {
   deleteCredential(provider: AiProviderId): Promise<PublicConsultantProviderStatus>;
 };
 
+function hasEnvSecret(value: string | null): boolean {
+  return (value?.trim().length ?? 0) > 0;
+}
+
 export function createAdminConsultantProvidersService(deps: {
   readonly credentials: AdvisorPlatformCredentialRepository;
-  readonly encryptionKey: Buffer;
+  readonly encryptionKey: Buffer | null;
   readonly envOpenAi: string | null;
   readonly envAnthropic: string | null;
 }): AdminConsultantProvidersService {
+  function envPresent(provider: AiProviderId): boolean {
+    return hasEnvSecret(provider === 'OPENAI' ? deps.envOpenAi : deps.envAnthropic);
+  }
+
   async function toStatus(provider: AiProviderId): Promise<PublicConsultantProviderStatus> {
     const stored = await deps.credentials.findByProvider(provider);
-    const configured = resolvePlatformAiApiKey({
-      provider,
-      platformCiphertext: stored?.encryptedSecret ?? null,
-      encryptionKey: deps.encryptionKey,
-      envOpenAi: deps.envOpenAi,
-      envAnthropic: deps.envAnthropic,
-    }) !== null;
+    const source = resolveProviderCredentialSource({
+      hasManaged: stored !== null,
+      hasEnv: envPresent(provider),
+    });
 
-    return { provider, configured };
+    if (source === 'MANAGED' && stored) {
+      return {
+        provider,
+        configured: true,
+        source,
+        displayHint: stored.displayHint,
+        configuredAt: stored.updatedAt.toISOString(),
+      };
+    }
+
+    if (source === 'ENV') {
+      return {
+        provider,
+        configured: true,
+        source,
+        displayHint: null,
+        configuredAt: null,
+      };
+    }
+
+    return {
+      provider,
+      configured: false,
+      source: 'NONE',
+      displayHint: null,
+      configuredAt: null,
+    };
   }
 
   return {
@@ -35,8 +67,12 @@ export function createAdminConsultantProvidersService(deps: {
     },
 
     async upsertCredential(provider, credential) {
+      if (deps.encryptionKey === null) {
+        throw new Error('INTEGRATION_ENCRYPTION_KEY ausente.');
+      }
+      const displayHint = deriveManagedCredentialDisplayHint(credential);
       const encryptedSecret = encryptSecret(credential, deps.encryptionKey);
-      await deps.credentials.upsert(provider, encryptedSecret);
+      await deps.credentials.upsert(provider, { encryptedSecret, displayHint });
       return toStatus(provider);
     },
 

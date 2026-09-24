@@ -144,9 +144,11 @@ async function buildTestApp() {
 
 function expectNoSecretLeak(payload: unknown) {
   const serialized = JSON.stringify(payload);
-  expect(serialized).not.toMatch(/api[_]?key/i);
-  expect(serialized).not.toMatch(/sk-/i);
-  expect(serialized).not.toMatch(/ai_runs/i);
+  const withoutHints = serialized.replace(/"displayHint":"sk-(?:proj-|ant-)?•+"/g, '"displayHint":"SAFE_HINT"');
+  expect(withoutHints).not.toMatch(/api[_]?key/i);
+  expect(withoutHints).not.toMatch(/sk-/i);
+  expect(withoutHints).not.toMatch(/ai_runs/i);
+  expect(withoutHints).not.toMatch(/encryptedSecret|encrypted_secret/);
   if (payload !== null && typeof payload === 'object' && !Array.isArray(payload)) {
     expect(payload).not.toHaveProperty('apiKey');
     expect(payload).not.toHaveProperty('credential');
@@ -628,11 +630,45 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
   });
 
   describe('GET/PUT/DELETE /admin/consultant/providers', () => {
-    it('ADMIN e SUPER_ADMIN gerenciam credencial sem devolver segredo', async () => {
-      await createPlatformUser({ email: 'admin-providers@api.test', role: 'ADMIN' });
+    const previousOpenAi = process.env.OPENAI_API_KEY;
+    const previousAnthropic = process.env.ANTHROPIC_API_KEY;
+
+    afterEach(() => {
+      if (previousOpenAi === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previousOpenAi;
+      }
+      if (previousAnthropic === undefined) {
+        delete process.env.ANTHROPIC_API_KEY;
+      } else {
+        process.env.ANTHROPIC_API_KEY = previousAnthropic;
+      }
+    });
+
+    function useProviderEnv(openai: string | null, anthropic: string | null) {
+      if (openai === null) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = openai;
+      }
+      if (anthropic === null) {
+        delete process.env.ANTHROPIC_API_KEY;
+      } else {
+        process.env.ANTHROPIC_API_KEY = anthropic;
+      }
+    }
+
+    function openaiStatus(data: unknown) {
+      expect(Array.isArray(data)).toBe(true);
+      return (data as Array<Record<string, unknown>>).find((item) => item.provider === 'OPENAI');
+    }
+
+    it('NONE quando não há MANAGED nem ENV', async () => {
+      useProviderEnv(null, null);
+      await createPlatformUser({ email: 'admin-providers-none@api.test', role: 'ADMIN' });
       const app = await buildTestApp();
-      const cookie = await loginAs(app, 'admin-providers@api.test');
-      const secret = 'sk-test-platform-openai-key';
+      const cookie = await loginAs(app, 'admin-providers-none@api.test');
 
       const listed = await app.inject({
         method: 'GET',
@@ -640,40 +676,158 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
         headers: { cookie },
       });
       expect(listed.statusCode).toBe(200);
-      expect(listed.json().data).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ provider: 'OPENAI', configured: expect.any(Boolean) }),
-          expect.objectContaining({ provider: 'ANTHROPIC', configured: expect.any(Boolean) }),
-        ]),
-      );
+      expect(listed.json().data).toEqual([
+        {
+          provider: 'OPENAI',
+          configured: false,
+          source: 'NONE',
+          displayHint: null,
+          configuredAt: null,
+        },
+        {
+          provider: 'ANTHROPIC',
+          configured: false,
+          source: 'NONE',
+          displayHint: null,
+          configuredAt: null,
+        },
+      ]);
       expectNoSecretLeak(listed.json());
-      expect(JSON.stringify(listed.json())).not.toContain(secret);
+    });
+
+    it('ENV não devolve hint nem qualquer trecho da env', async () => {
+      const envSecret = 'sk-env-openai-fixture-must-stay-server-side';
+      useProviderEnv(envSecret, null);
+      await createPlatformUser({ email: 'admin-providers-env@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-providers-env@api.test');
+
+      const listed = await app.inject({
+        method: 'GET',
+        url: '/admin/consultant/providers',
+        headers: { cookie },
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(openaiStatus(listed.json().data)).toEqual({
+        provider: 'OPENAI',
+        configured: true,
+        source: 'ENV',
+        displayHint: null,
+        configuredAt: null,
+      });
+      expectNoSecretLeak(listed.json());
+      expect(JSON.stringify(listed.json())).not.toContain(envSecret);
+      expect(JSON.stringify(listed.json())).not.toContain('sk-env');
+    });
+
+    it('ADMIN cadastra MANAGED, MANAGED vence ENV e DELETE volta para ENV', async () => {
+      const envSecret = 'sk-env-openai-still-present-after-delete';
+      const managed = 'sk-proj-managed-openai-key-value';
+      const replacement = 'sk-proj-replacement-openai-key-value';
+      useProviderEnv(envSecret, null);
+      await createPlatformUser({ email: 'admin-providers@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-providers@api.test');
 
       const put = await app.inject({
         method: 'PUT',
         url: '/admin/consultant/providers/OPENAI/credential',
         headers: { cookie },
-        payload: { credential: secret },
+        payload: { credential: managed },
       });
       expect(put.statusCode).toBe(200);
-      expect(put.json()).toEqual({ provider: 'OPENAI', configured: true });
+      expect(put.json()).toEqual({
+        provider: 'OPENAI',
+        configured: true,
+        source: 'MANAGED',
+        displayHint: 'sk-proj-••••••••',
+        configuredAt: expect.any(String),
+      });
       expectNoSecretLeak(put.json());
-      expect(JSON.stringify(put.json())).not.toContain(secret);
+      expect(JSON.stringify(put.json())).not.toContain(managed);
+      expect(JSON.stringify(put.json())).not.toContain(envSecret);
 
       const stored = await prisma.aiPlatformCredential.findUnique({ where: { provider: 'OPENAI' } });
       expect(stored?.encryptedSecret.startsWith('v1.')).toBe(true);
-      expect(stored?.encryptedSecret).not.toContain(secret);
+      expect(stored?.encryptedSecret).not.toContain(managed);
+      expect(stored?.displayHint).toBe('sk-proj-••••••••');
+      expect(stored?.displayHint).not.toContain('managed');
+
+      const listed = await app.inject({
+        method: 'GET',
+        url: '/admin/consultant/providers',
+        headers: { cookie },
+      });
+      expect(openaiStatus(listed.json().data)).toMatchObject({
+        provider: 'OPENAI',
+        configured: true,
+        source: 'MANAGED',
+        displayHint: 'sk-proj-••••••••',
+      });
+      expectNoSecretLeak(listed.json());
+
+      const replaced = await app.inject({
+        method: 'PUT',
+        url: '/admin/consultant/providers/OPENAI/credential',
+        headers: { cookie },
+        payload: { credential: replacement },
+      });
+      expect(replaced.statusCode).toBe(200);
+      expect(replaced.json().displayHint).toBe('sk-proj-••••••••');
+      const storedAfter = await prisma.aiPlatformCredential.findUnique({
+        where: { provider: 'OPENAI' },
+      });
+      expect(storedAfter?.encryptedSecret).not.toBe(stored?.encryptedSecret);
+      expect(storedAfter?.encryptedSecret).not.toContain(replacement);
+      expect(await prisma.aiPlatformCredential.count()).toBe(1);
 
       const removed = await app.inject({
         method: 'DELETE',
         url: '/admin/consultant/providers/OPENAI/credential',
         headers: { cookie },
       });
-      expect(removed.statusCode).toBe(204);
+      expect(removed.statusCode).toBe(200);
+      expect(removed.json()).toEqual({
+        provider: 'OPENAI',
+        configured: true,
+        source: 'ENV',
+        displayHint: null,
+        configuredAt: null,
+      });
       expect(await prisma.aiPlatformCredential.findUnique({ where: { provider: 'OPENAI' } })).toBeNull();
+      expect(JSON.stringify(removed.json())).not.toContain(envSecret);
+    });
+
+    it('DELETE MANAGED sem ENV volta para NONE', async () => {
+      useProviderEnv(null, null);
+      await createPlatformUser({ email: 'admin-providers-none-del@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-providers-none-del@api.test');
+
+      await app.inject({
+        method: 'PUT',
+        url: '/admin/consultant/providers/OPENAI/credential',
+        headers: { cookie },
+        payload: { credential: 'sk-proj-only-managed-key' },
+      });
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: '/admin/consultant/providers/OPENAI/credential',
+        headers: { cookie },
+      });
+      expect(removed.statusCode).toBe(200);
+      expect(removed.json()).toEqual({
+        provider: 'OPENAI',
+        configured: false,
+        source: 'NONE',
+        displayHint: null,
+        configuredAt: null,
+      });
     });
 
     it('SUPER_ADMIN também gerencia e USER recebe 403', async () => {
+      useProviderEnv(null, null);
       await createPlatformUser({ email: 'super-providers@api.test', role: 'SUPER_ADMIN' });
       await createPlatformUser({ email: 'user-providers@api.test', role: 'USER' });
       const app = await buildTestApp();
@@ -687,7 +841,13 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
         payload: { credential: 'sk-ant-platform-test-key' },
       });
       expect(put.statusCode).toBe(200);
-      expect(put.json()).toEqual({ provider: 'ANTHROPIC', configured: true });
+      expect(put.json()).toEqual({
+        provider: 'ANTHROPIC',
+        configured: true,
+        source: 'MANAGED',
+        displayHint: 'sk-ant-••••••••',
+        configuredAt: expect.any(String),
+      });
 
       const forbidden = await app.inject({
         method: 'GET',
@@ -698,6 +858,7 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
     });
 
     it('Support Mode não eleva gestão de credencial', async () => {
+      useProviderEnv(null, null);
       const tenant = await tenants.create({
         name: 'providers-support',
         displayName: 'Providers Support',
