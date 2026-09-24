@@ -527,6 +527,36 @@ describe('página /relatorios', () => {
     expect(getReportsRevenue).toHaveBeenCalledTimes(1);
   });
 
+  it('URL com costCenter ausente do catálogo ativo volta para Todos', async () => {
+    const INACTIVE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const ACTIVE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    reportsSearchParams = new URLSearchParams(
+      `from=2026-01&to=2026-02&costCenter=${INACTIVE}`,
+    );
+    vi.mocked(getDashboardCostCenters).mockResolvedValue({
+      items: [{ id: ACTIVE, name: 'Centro Ativo', code: null, active: true }],
+    });
+    vi.mocked(getReportsRevenue).mockResolvedValue(readyBody);
+    renderReports();
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith(
+        expect.stringMatching(/^\/relatorios\?type=revenue&from=2026-01&to=2026-02$/),
+      );
+    });
+    expect(
+      replaceMock.mock.calls.some((call) => String(call[0]).includes(`costCenter=${INACTIVE}`)),
+    ).toBe(false);
+    expect(await screen.findByRole('tab', { name: 'Todos' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Centro Ativo' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: 'Desenvolvedor' })).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(getDashboardCostCenters).toHaveBeenCalledWith({
+      fromKey: '2026-01',
+      toKey: '2026-02',
+    });
+  });
+
   it('troca de tenant em Support Mode recarrega catálogos de filtros', async () => {
     const CAT_A = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
     vi.mocked(getDashboardCategories).mockClear();

@@ -710,4 +710,120 @@ describe('GET /reports/revenue', () => {
     });
     expect(afterExit.statusCode).toBe(403);
   });
+
+  it('Todos inclui caixa de centro inativo; API histórica ainda aceita o id inativo', async () => {
+    const today = civilTodayInSaoPaulo(new Date());
+    const { from, monthKey } = civilMonthBounds(today);
+    const a = await seedConnected('rr-cc-inactive');
+    const scopeA = { tenantId: a.tenant.id, integrationId: a.integration.id, syncedAt: new Date() };
+    await financial.upsertCategories(scopeA, [
+      {
+        externalId: 'serv',
+        name: 'Serviços',
+        type: 'REVENUE',
+        parentExternalId: null,
+        upstreamVersion: 1,
+      },
+    ]);
+    await financial.upsertReceivables(scopeA, [
+      installment({
+        externalId: 'r-inactive',
+        dueDate: from,
+        unpaid: '0',
+        paid: '2500',
+        status: 'PAID',
+        categoryExternalIds: ['serv'],
+      }),
+    ]);
+    await ledgerWrite.upsertSettlements(scopeA, 'RECEIVABLE', [
+      baixa({
+        id: 'r-inactive-b',
+        installmentId: 'r-inactive',
+        data: iso(from),
+        bruto: '2500',
+        liquido: '2500',
+      }),
+    ]);
+    const receivable = await prisma.receivable.findFirstOrThrow({
+      where: { tenantId: a.tenant.id, externalId: 'r-inactive' },
+    });
+    const active = await prisma.costCenter.create({
+      data: {
+        tenantId: a.tenant.id,
+        integrationId: a.integration.id,
+        externalId: 'cc-live',
+        code: 'A',
+        name: 'Centro Ativo',
+        active: true,
+        syncedAt: scopeA.syncedAt,
+      },
+    });
+    const inactive = await prisma.costCenter.create({
+      data: {
+        tenantId: a.tenant.id,
+        integrationId: a.integration.id,
+        externalId: 'cc-old',
+        code: 'D',
+        name: 'Desenvolvedor',
+        active: false,
+        syncedAt: scopeA.syncedAt,
+      },
+    });
+    await prisma.installmentCostCenterAllocation.create({
+      data: {
+        tenantId: a.tenant.id,
+        costCenterId: inactive.id,
+        receivableId: receivable.id,
+        payableId: null,
+        amount: new Prisma.Decimal('2500'),
+        syncedAt: scopeA.syncedAt,
+      },
+    });
+    await prisma.receivable.update({
+      where: { id: receivable.id },
+      data: {
+        costCenterDetailStatus: 'FETCHED',
+        costCenterDetailSyncedAt: scopeA.syncedAt,
+        costCenterDetailRuleVersion: 1,
+      },
+    });
+
+    await createUser({ email: 'user@rr-cc-inactive.test', role: 'USER', tenantId: a.tenant.id });
+    const app = await buildTestApp();
+    const cookie = await loginAs(app, 'user@rr-cc-inactive.test');
+
+    const catalog = await app.inject({
+      method: 'GET',
+      url: `/dashboard/cost-centers?from=${monthKey}&to=${monthKey}`,
+      headers: { cookie },
+    });
+    expect(catalog.statusCode).toBe(200);
+    expect((catalog.json() as { items: Array<{ id: string }> }).items.map((item) => item.id)).toEqual([
+      active.id,
+    ]);
+
+    const todos = await app.inject({
+      method: 'GET',
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}`),
+      headers: { cookie },
+    });
+    expect(todos.statusCode).toBe(200);
+    expect(todos.json().receivables.received).toBe('2500');
+    expect(todos.json().receivables.total).toBe('2500');
+
+    const filteredInactive = await app.inject({
+      method: 'GET',
+      url: revenueUrl(`from=${monthKey}&to=${monthKey}&costCenter=${inactive.id}`),
+      headers: { cookie },
+    });
+    expect(filteredInactive.statusCode).toBe(200);
+    expect(filteredInactive.json().receivables.received).toBe('2500');
+    expect(filteredInactive.json().receivables.total).toBe('2500');
+
+    expect(
+      await prisma.installmentCostCenterAllocation.count({
+        where: { tenantId: a.tenant.id, costCenterId: inactive.id },
+      }),
+    ).toBe(1);
+  });
 });

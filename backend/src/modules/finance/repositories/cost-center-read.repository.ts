@@ -20,10 +20,10 @@ export type CostCenterReadRepository = {
   /**
    * Catálogo visível no seletor.
    *
-   * visibility=active_only (Dashboard mês atual/futuro, 11-A.1):
+   * visibility=active_only (Dashboard mês atual/futuro; Relatórios, 11-A.1):
    *   somente active=true
    *
-   * visibility=historical (Dashboard mês passado / Relatórios):
+   * visibility=historical (Dashboard mês passado):
    *   active=true
    *   OR allocation com parcela competenceDate no período
    *   OR allocation com parcela dueDate no período

@@ -9,7 +9,7 @@ import { ValidationError } from '../../../shared/errors/application-error.js';
 /**
  * Período civil para listagem de cost centers.
  * - `dashboard_month`: Home com `month=YYYY-MM` (regra temporal 11-A.1).
- * - `reports_range`: Relatórios com `from`+`to` (histórico completo no range).
+ * - `reports_range`: Relatórios com `from`+`to` (seletor active_only).
  * Ausente: mês civil atual em America/Sao_Paulo como dashboard_month.
  */
 export type DashboardCostCenterListContext = 'dashboard_month' | 'reports_range';

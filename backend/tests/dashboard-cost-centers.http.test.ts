@@ -321,6 +321,161 @@ describe('GET /dashboard/cost-centers', () => {
     expect(sepBody.items.map((item) => item.id)).toEqual([active.id]);
     expect(sepBody.items.some((item) => item.id === hist.id)).toBe(false);
   });
+
+  it('Relatórios from/to: somente ativos; Home passado continua historical', async () => {
+    const app = await buildTestApp();
+    const seeded = await seedConnected('cc-reports-active');
+    const other = await seedConnected('cc-reports-other');
+    await createUser({
+      email: 'user@cc-reports-active.test',
+      role: 'USER',
+      tenantId: seeded.tenant.id,
+    });
+    const cookie = await loginAs(app, 'user@cc-reports-active.test');
+    const syncedAt = new Date();
+
+    const active = await prisma.costCenter.create({
+      data: {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'cc-active',
+        code: null,
+        name: 'Ativo',
+        active: true,
+        syncedAt,
+      },
+    });
+    const hist = await prisma.costCenter.create({
+      data: {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        externalId: 'cc-hist',
+        code: null,
+        name: 'Historico Ago',
+        active: false,
+        syncedAt,
+      },
+    });
+    await prisma.costCenter.create({
+      data: {
+        tenantId: other.tenant.id,
+        integrationId: other.integration.id,
+        externalId: 'cc-other',
+        code: null,
+        name: 'Outro Tenant',
+        active: true,
+        syncedAt,
+      },
+    });
+
+    await financial.upsertReceivables(
+      {
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        syncedAt,
+      },
+      [
+        installment({
+          externalId: 'r-aug',
+          status: 'OPEN',
+          total: '100',
+          competenceDate: new Date(Date.UTC(2026, 7, 10)),
+          dueDate: new Date(Date.UTC(2026, 7, 10)),
+        }),
+        installment({
+          externalId: 'r-oct',
+          status: 'OPEN',
+          total: '50',
+          competenceDate: new Date(Date.UTC(2026, 9, 10)),
+          dueDate: new Date(Date.UTC(2026, 9, 10)),
+        }),
+      ],
+    );
+    const receivableAug = await prisma.receivable.findFirstOrThrow({
+      where: { tenantId: seeded.tenant.id, externalId: 'r-aug' },
+    });
+    const receivableOct = await prisma.receivable.findFirstOrThrow({
+      where: { tenantId: seeded.tenant.id, externalId: 'r-oct' },
+    });
+    await prisma.installmentCostCenterAllocation.createMany({
+      data: [
+        {
+          tenantId: seeded.tenant.id,
+          costCenterId: hist.id,
+          receivableId: receivableAug.id,
+          amount: new Prisma.Decimal('100'),
+          syncedAt,
+        },
+        {
+          tenantId: seeded.tenant.id,
+          costCenterId: hist.id,
+          receivableId: receivableOct.id,
+          amount: new Prisma.Decimal('50'),
+          syncedAt,
+        },
+      ],
+    });
+
+    const reportsAug = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cost-centers?from=2026-08&to=2026-08',
+      headers: { cookie },
+    });
+    expect(reportsAug.statusCode).toBe(200);
+    expect((reportsAug.json() as { items: Array<{ id: string }> }).items.map((item) => item.id)).toEqual([
+      active.id,
+    ]);
+
+    const reportsCurrent = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cost-centers?from=2026-09&to=2026-09',
+      headers: { cookie },
+    });
+    expect((reportsCurrent.json() as { items: Array<{ id: string }> }).items.map((item) => item.id)).toEqual([
+      active.id,
+    ]);
+
+    const reportsFuture = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cost-centers?from=2026-10&to=2026-11',
+      headers: { cookie },
+    });
+    expect((reportsFuture.json() as { items: Array<{ id: string }> }).items.map((item) => item.id)).toEqual([
+      active.id,
+    ]);
+
+    const homePast = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cost-centers?month=2026-08',
+      headers: { cookie },
+    });
+    expect(homePast.statusCode).toBe(200);
+    expect(
+      (homePast.json() as { items: Array<{ id: string }> }).items.map((item) => item.id).sort(),
+    ).toEqual([active.id, hist.id].sort());
+
+    const homeCurrent = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cost-centers?month=2026-09',
+      headers: { cookie },
+    });
+    expect((homeCurrent.json() as { items: Array<{ id: string }> }).items.map((item) => item.id)).toEqual([
+      active.id,
+    ]);
+
+    const homeFuture = await app.inject({
+      method: 'GET',
+      url: '/dashboard/cost-centers?month=2026-10',
+      headers: { cookie },
+    });
+    expect((homeFuture.json() as { items: Array<{ id: string }> }).items.map((item) => item.id)).toEqual([
+      active.id,
+    ]);
+
+    expect(await prisma.installmentCostCenterAllocation.count({ where: { costCenterId: hist.id } })).toBe(
+      2,
+    );
+  });
 });
 
 describe('GET /dashboard/monthly-revenue?costCenter=', () => {

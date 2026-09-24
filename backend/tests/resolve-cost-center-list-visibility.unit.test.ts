@@ -32,12 +32,24 @@ describe('resolveCostCenterListVisibility (11-A.1)', () => {
     ).toBe('active_only');
   });
 
-  it('Reports range sempre historical (mesmo incluindo mês atual)', () => {
+  it('Reports range sempre active_only (mês atual, passado ou futuro)', () => {
     expect(
       resolveCostCenterListVisibility(
         { context: 'reports_range', monthKey: null },
         now,
       ),
-    ).toBe('historical');
+    ).toBe('active_only');
+    expect(
+      resolveCostCenterListVisibility(
+        { context: 'reports_range', monthKey: '2026-08' },
+        now,
+      ),
+    ).toBe('active_only');
+    expect(
+      resolveCostCenterListVisibility(
+        { context: 'reports_range', monthKey: '2026-10' },
+        now,
+      ),
+    ).toBe('active_only');
   });
 });

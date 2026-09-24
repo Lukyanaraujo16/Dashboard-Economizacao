@@ -4,7 +4,7 @@ import type { CostCenterVisibilityMode } from '../../finance/domain/cost-center-
 import type { DashboardCostCenterListPeriod } from '../http/parse-dashboard-cost-center-list-period.js';
 
 /**
- * 11-A.1 — resolve modo de visibilidade do seletor.
+ * 11-A.1 — resolve modo de visibilidade do seletor de centros de custo.
  *
  * Dashboard (`month`):
  * - mês passado  → historical
@@ -12,14 +12,14 @@ import type { DashboardCostCenterListPeriod } from '../http/parse-dashboard-cost
  * - mês futuro   → active_only
  *
  * Relatórios (`from`/`to`):
- * - sempre historical (mesmo se o range incluir o mês atual)
+ * - sempre active_only (catálogo do seletor; não apaga histórico financeiro)
  */
 export function resolveCostCenterListVisibility(
   period: Pick<DashboardCostCenterListPeriod, 'context' | 'monthKey'>,
   now: Date = new Date(),
 ): CostCenterVisibilityMode {
   if (period.context === 'reports_range') {
-    return 'historical';
+    return 'active_only';
   }
 
   const currentMonthKey = civilMonthKey(civilTodayInSaoPaulo(now));

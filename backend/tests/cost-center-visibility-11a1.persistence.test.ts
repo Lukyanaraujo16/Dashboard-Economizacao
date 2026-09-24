@@ -4,6 +4,7 @@ import { Prisma } from '../src/generated/prisma/client.js';
 import { loadEnvironment } from '../src/config/env.js';
 import { encryptSecret } from '../src/infrastructure/crypto/secret-box.js';
 import { disconnectPrisma, getPrismaClient } from '../src/infrastructure/database/prisma.js';
+import { resolveCostCenterListVisibility } from '../src/modules/dashboard/domain/resolve-cost-center-list-visibility.js';
 import { createCostCenterReadRepository } from '../src/modules/finance/repositories/cost-center-read.repository.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
@@ -247,8 +248,9 @@ describe('11-A.1 — visibilidade temporal Dashboard vs Reports', () => {
     expect(items.map((i) => i.id)).toEqual([active.id]);
   });
 
-  it('L/M) Reports historical: range passado e range incluindo mês atual → inactive relevante aparece', async () => {
+  it('L/M) Relatórios reports_range: range passado e range incluindo mês atual → somente ativos', async () => {
     const { tenant, integration } = await seedConnected('a11a1-lm');
+    const active = await createCenter(tenant.id, integration.id, 'tik', 'TIKTOK SHOP', true);
     const inactive = await createCenter(tenant.id, integration.id, 'dev', 'Desenvolvedor', false);
     const r = await seedReceivable({
       tenantId: tenant.id,
@@ -263,6 +265,12 @@ describe('11-A.1 — visibilidade temporal Dashboard vs Reports', () => {
       receivableId: r.id,
     });
 
+    const visibility = resolveCostCenterListVisibility({
+      context: 'reports_range',
+      monthKey: null,
+    });
+    expect(visibility).toBe('active_only');
+
     const pastRange = {
       from: civilMonthBoundsFromKey('2026-07').from,
       to: civilMonthBoundsFromKey('2026-08').to,
@@ -273,23 +281,26 @@ describe('11-A.1 — visibilidade temporal Dashboard vs Reports', () => {
     };
 
     expect(
-      (
-        await costCenters.listVisibleForPeriod(tenant.id, pastRange, {
-          visibility: 'historical',
-        })
-      ).map((i) => i.id),
-    ).toEqual([inactive.id]);
+      (await costCenters.listVisibleForPeriod(tenant.id, pastRange, { visibility })).map(
+        (i) => i.id,
+      ),
+    ).toEqual([active.id]);
     expect(
-      (
-        await costCenters.listVisibleForPeriod(tenant.id, withCurrent, {
-          visibility: 'historical',
-        })
-      ).map((i) => i.id),
-    ).toEqual([inactive.id]);
+      (await costCenters.listVisibleForPeriod(tenant.id, withCurrent, { visibility })).map(
+        (i) => i.id,
+      ),
+    ).toEqual([active.id]);
+    expect(await prisma.installmentCostCenterAllocation.count({ where: { costCenterId: inactive.id } })).toBe(
+      1,
+    );
+    expect(await costCenters.findByIdForTenant(tenant.id, inactive.id)).toEqual(
+      expect.objectContaining({ id: inactive.id, active: false }),
+    );
   });
 
-  it('N) Reports range futuro: historical preserva inactive com due futura', async () => {
+  it('N) Relatórios reports_range futuro: somente ativos; inactive com due futura NÃO aparece', async () => {
     const { tenant, integration } = await seedConnected('a11a1-n');
+    const active = await createCenter(tenant.id, integration.id, 'tik', 'TIKTOK SHOP', true);
     const inactive = await createCenter(tenant.id, integration.id, 'ges', 'Gestor', false);
     const r = await seedReceivable({
       tenantId: tenant.id,
@@ -304,17 +315,92 @@ describe('11-A.1 — visibilidade temporal Dashboard vs Reports', () => {
       receivableId: r.id,
     });
 
+    const visibility = resolveCostCenterListVisibility({
+      context: 'reports_range',
+      monthKey: null,
+    });
+    expect(visibility).toBe('active_only');
+
     const futureRange = {
       from: civilMonthBoundsFromKey('2026-10').from,
       to: civilMonthBoundsFromKey('2026-11').to,
     };
     expect(
-      (
-        await costCenters.listVisibleForPeriod(tenant.id, futureRange, {
-          visibility: 'historical',
-        })
-      ).map((i) => i.id),
-    ).toEqual([inactive.id]);
+      (await costCenters.listVisibleForPeriod(tenant.id, futureRange, { visibility })).map(
+        (i) => i.id,
+      ),
+    ).toEqual([active.id]);
+    expect(await prisma.installmentCostCenterAllocation.count({ where: { costCenterId: inactive.id } })).toBe(
+      1,
+    );
+  });
+
+  it('L2) Relatórios mês atual: inactive com allocation ou baixa NÃO aparece; ativo aparece', async () => {
+    const { tenant, integration } = await seedConnected('a11a1-l2');
+    const active = await createCenter(tenant.id, integration.id, 'tik', 'TIKTOK SHOP', true);
+    const inactiveAlloc = await createCenter(tenant.id, integration.id, 'dev', 'Desenvolvedor', false);
+    const inactiveCash = await createCenter(tenant.id, integration.id, 'rec', 'Recrutador', false);
+
+    const rAlloc = await seedReceivable({
+      tenantId: tenant.id,
+      integrationId: integration.id,
+      externalId: 'r-sep-alloc',
+      competenceDate: new Date(Date.UTC(2026, 8, 10)),
+      dueDate: new Date(Date.UTC(2026, 8, 15)),
+    });
+    await linkAllocation({
+      tenantId: tenant.id,
+      costCenterId: inactiveAlloc.id,
+      receivableId: rAlloc.id,
+    });
+
+    const rCash = await seedReceivable({
+      tenantId: tenant.id,
+      integrationId: integration.id,
+      externalId: 'r-sep-cash',
+      competenceDate: new Date(Date.UTC(2026, 8, 8)),
+      dueDate: new Date(Date.UTC(2026, 8, 8)),
+    });
+    await linkAllocation({
+      tenantId: tenant.id,
+      costCenterId: inactiveCash.id,
+      receivableId: rCash.id,
+    });
+    await seedSettlement({
+      tenantId: tenant.id,
+      integrationId: integration.id,
+      installmentExternalId: 'r-sep-cash',
+      occurredOn: new Date(Date.UTC(2026, 8, 12)),
+      externalId: 'ft-sep-cash',
+    });
+
+    const visibility = resolveCostCenterListVisibility({
+      context: 'reports_range',
+      monthKey: null,
+    });
+    expect(visibility).toBe('active_only');
+    const items = await costCenters.listVisibleForPeriod(tenant.id, sep, { visibility });
+    expect(items.map((i) => i.id)).toEqual([active.id]);
+    expect(items.some((i) => i.id === inactiveAlloc.id)).toBe(false);
+    expect(items.some((i) => i.id === inactiveCash.id)).toBe(false);
+    expect(await prisma.installmentCostCenterAllocation.count({ where: { tenantId: tenant.id } })).toBe(
+      2,
+    );
+  });
+
+  it('isola tenant no catálogo reports_range', async () => {
+    const a = await seedConnected('a11a1-iso-a');
+    const b = await seedConnected('a11a1-iso-b');
+    const activeA = await createCenter(a.tenant.id, a.integration.id, 'a-live', 'Ativo A', true);
+    await createCenter(b.tenant.id, b.integration.id, 'b-live', 'Ativo B', true);
+
+    const visibility = resolveCostCenterListVisibility({
+      context: 'reports_range',
+      monthKey: null,
+    });
+    expect(
+      (await costCenters.listVisibleForPeriod(a.tenant.id, sep, { visibility })).map((i) => i.id),
+    ).toEqual([activeA.id]);
   });
 
   it('Blooty SET/2026: somente TIKTOK SHOP; AGO/2026: inativos relevantes', async () => {
