@@ -1,6 +1,8 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { assertAiProviderId, resolveAiModel } from '../domain/ai-provider-models.js';
+import { assertConsultantName } from '../domain/consultant-name.js';
+import { assertAiTonePreset, DEFAULT_TONE_PRESET } from '../domain/tone-presets.js';
 import type {
   AiConsultantStatus,
   AiTenantSettingsRecord,
@@ -34,9 +36,11 @@ function toRecord(row: {
   tenantId: string;
   provider: AiTenantSettingsRecord['provider'];
   model: string;
+  consultantName: string | null;
   businessSegment: string | null;
   businessDescription: string | null;
   adminPrompt: string | null;
+  tonePreset: AiTenantSettingsRecord['tonePreset'];
   tone: string | null;
   status: AiConsultantStatus;
   createdAt: Date;
@@ -47,9 +51,11 @@ function toRecord(row: {
     tenantId: row.tenantId,
     provider: row.provider,
     model: row.model,
+    consultantName: row.consultantName,
     businessSegment: row.businessSegment,
     businessDescription: row.businessDescription,
     adminPrompt: row.adminPrompt,
+    tonePreset: row.tonePreset,
     tone: row.tone,
     status: row.status,
     createdAt: row.createdAt,
@@ -79,6 +85,14 @@ export function createAdvisorSettingsRepository(prisma: PrismaClient): AdvisorSe
       if (input.status !== undefined) {
         assertConsultantStatus(input.status);
       }
+      const tonePreset =
+        input.tonePreset === undefined ? undefined : assertAiTonePreset(input.tonePreset);
+      const consultantName =
+        input.consultantName === undefined
+          ? undefined
+          : input.consultantName === null || input.consultantName.trim() === ''
+            ? null
+            : assertConsultantName(input.consultantName);
 
       const existing = await prisma.aiTenantSettings.findUnique({
         where: { tenantId },
@@ -91,9 +105,11 @@ export function createAdvisorSettingsRepository(prisma: PrismaClient): AdvisorSe
             tenantId,
             provider: input.provider,
             model,
+            consultantName: consultantName ?? null,
             businessSegment: normalizeOptionalText(input.businessSegment) ?? null,
             businessDescription: normalizeOptionalText(input.businessDescription) ?? null,
             adminPrompt: normalizeOptionalText(input.adminPrompt) ?? null,
+            tonePreset: tonePreset ?? DEFAULT_TONE_PRESET,
             tone: normalizeOptionalText(input.tone) ?? null,
             status: input.status ?? 'DISABLED',
           },
@@ -106,6 +122,8 @@ export function createAdvisorSettingsRepository(prisma: PrismaClient): AdvisorSe
         data: {
           provider: input.provider,
           model,
+          consultantName:
+            consultantName === undefined ? undefined : consultantName,
           businessSegment:
             input.businessSegment === undefined
               ? undefined
@@ -118,6 +136,7 @@ export function createAdvisorSettingsRepository(prisma: PrismaClient): AdvisorSe
             input.adminPrompt === undefined
               ? undefined
               : (normalizeOptionalText(input.adminPrompt) ?? null),
+          tonePreset,
           tone: input.tone === undefined ? undefined : (normalizeOptionalText(input.tone) ?? null),
           status: input.status,
         },

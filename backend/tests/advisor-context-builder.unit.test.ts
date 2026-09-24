@@ -59,7 +59,9 @@ function settingsA(overrides: Partial<AiTenantSettingsRecord> = {}): AiTenantSet
     model: 'gpt-4o-mini',
     businessSegment: 'Clínica A',
     businessDescription: 'Descrição da clínica A',
+    consultantName: null,
     adminPrompt: 'Prompt admin da clínica A',
+    tonePreset: 'PROFISSIONAL_OBJETIVO',
     tone: 'objetivo',
     status: 'ACTIVE',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -525,7 +527,13 @@ describe('Context Builder do Consultor (F13.2)', () => {
     const builder = createBuildAdvisorContext(createDeps({ settings: null }));
     const result = await builder.build({ tenantId: TENANT_A, question: 'quem somos?' });
     expect(block(result, 'TENANT_PROFILE').content).toBe(
-      ['businessSegment: ABSENT', 'businessDescription: ABSENT', 'tone: ABSENT'].join('\n'),
+      [
+        'consultantName: Consultor',
+        'tonePreset: PROFISSIONAL_OBJETIVO',
+        'toneInstruction: Fale de forma profissional, direta e objetiva. Priorize clareza e precisão. Evite floreio e informalidade.',
+        'businessSegment: ABSENT',
+        'businessDescription: ABSENT',
+      ].join('\n'),
     );
     expect(block(result, 'ADMIN_CONTEXT').content).toContain('ABSENT');
     expect(block(result, 'TENANT_PROFILE').content).not.toContain('Clínica A');

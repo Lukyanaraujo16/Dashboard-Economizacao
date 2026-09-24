@@ -45,6 +45,14 @@ const options: ConsultantOptions = {
       ],
     },
   ],
+  tonePresets: [
+    { id: 'PROFISSIONAL_OBJETIVO', label: 'Profissional e objetivo' },
+    { id: 'CONSULTIVO', label: 'Consultivo' },
+    { id: 'DIDATICO', label: 'Didático' },
+    { id: 'AMIGAVEL', label: 'Amigável' },
+    { id: 'EXECUTIVO', label: 'Executivo' },
+    { id: 'PERSONALIZADO', label: 'Personalizado' },
+  ],
 };
 
 const unconfigured: ConsultantSettings = {
@@ -52,9 +60,11 @@ const unconfigured: ConsultantSettings = {
   status: 'NOT_CONFIGURED',
   provider: null,
   model: null,
+  consultantName: null,
   businessSegment: null,
   businessDescription: null,
   adminPrompt: null,
+  tonePreset: null,
   tone: null,
   updatedAt: null,
 };
@@ -64,9 +74,11 @@ const configured: ConsultantSettings = {
   status: 'ACTIVE',
   provider: 'OPENAI',
   model: 'gpt-4o-mini',
+  consultantName: 'Clara',
   businessSegment: 'Varejo',
   businessDescription: 'Loja de bairro',
   adminPrompt: 'Seja objetivo',
+  tonePreset: 'PROFISSIONAL_OBJETIVO',
   tone: 'formal',
   updatedAt: '2026-09-24T12:00:00.000Z',
 };
@@ -221,7 +233,8 @@ describe('UI admin Consultor (F13.5)', () => {
             ...configured,
             provider: 'ANTHROPIC',
             model: 'claude-sonnet-5',
-            tone: 'direto',
+            tonePreset: 'CONSULTIVO',
+            tone: null,
           }),
         );
       }
@@ -231,7 +244,8 @@ describe('UI admin Consultor (F13.5)', () => {
 
     renderPage();
     fireEvent.change(await screen.findByLabelText('Provedor'), { target: { value: 'ANTHROPIC' } });
-    fireEvent.change(screen.getByLabelText('Tom'), { target: { value: 'direto' } });
+    fireEvent.change(screen.getByLabelText('Nome do consultor'), { target: { value: 'Clara' } });
+    fireEvent.change(screen.getByLabelText('Tom'), { target: { value: 'CONSULTIVO' } });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar configuração' }));
 
     await waitFor(() => {
@@ -248,10 +262,12 @@ describe('UI admin Consultor (F13.5)', () => {
       status: 'ACTIVE',
       provider: 'ANTHROPIC',
       model: 'claude-sonnet-5',
+      consultantName: 'Clara',
       businessSegment: 'Varejo',
       businessDescription: 'Loja de bairro',
       adminPrompt: 'Seja objetivo',
-      tone: 'direto',
+      tonePreset: 'CONSULTIVO',
+      tone: null,
     });
   });
 

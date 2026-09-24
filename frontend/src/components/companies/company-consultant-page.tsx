@@ -24,6 +24,7 @@ import {
   type ConsultantProviderId,
   type ConsultantSettings,
   type ConsultantStatus,
+  type ConsultantTonePreset,
 } from '../../services/admin/consultant.types';
 import { StateWrapper } from '../financial/state-wrapper';
 import { Badge, Button, FormField, Input, Typography } from '../ui';
@@ -60,9 +61,11 @@ function resolveDraftFromSettings(
   status: ConsultantStatus;
   provider: ConsultantProviderId;
   model: string;
+  consultantName: string;
   businessSegment: string;
   businessDescription: string;
   adminPrompt: string;
+  tonePreset: ConsultantTonePreset;
   tone: string;
 } {
   const provider =
@@ -78,9 +81,11 @@ function resolveDraftFromSettings(
     status: settings.status === 'ACTIVE' ? 'ACTIVE' : 'DISABLED',
     provider,
     model,
+    consultantName: settings.consultantName ?? '',
     businessSegment: settings.businessSegment ?? '',
     businessDescription: settings.businessDescription ?? '',
     adminPrompt: settings.adminPrompt ?? '',
+    tonePreset: settings.tonePreset ?? 'PROFISSIONAL_OBJETIVO',
     tone: settings.tone ?? '',
   };
 }
@@ -129,9 +134,11 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
   const [status, setStatus] = useState<ConsultantStatus>('DISABLED');
   const [provider, setProvider] = useState<ConsultantProviderId>('OPENAI');
   const [model, setModel] = useState('');
+  const [consultantName, setConsultantName] = useState('');
   const [businessSegment, setBusinessSegment] = useState('');
   const [businessDescription, setBusinessDescription] = useState('');
   const [adminPrompt, setAdminPrompt] = useState('');
+  const [tonePreset, setTonePreset] = useState<ConsultantTonePreset>('PROFISSIONAL_OBJETIVO');
   const [tone, setTone] = useState('');
 
   const [saving, setSaving] = useState(false);
@@ -151,9 +158,11 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     setStatus(draft.status);
     setProvider(draft.provider);
     setModel(draft.model);
+    setConsultantName(draft.consultantName);
     setBusinessSegment(draft.businessSegment);
     setBusinessDescription(draft.businessDescription);
     setAdminPrompt(draft.adminPrompt);
+    setTonePreset(draft.tonePreset);
     setTone(draft.tone);
   }, []);
 
@@ -238,10 +247,12 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
         status,
         provider,
         model,
+        consultantName: emptyToNull(consultantName),
         businessSegment: emptyToNull(businessSegment),
         businessDescription: emptyToNull(businessDescription),
         adminPrompt: emptyToNull(adminPrompt),
-        tone: emptyToNull(tone),
+        tonePreset,
+        tone: tonePreset === 'PERSONALIZADO' ? emptyToNull(tone) : null,
       });
       applySettings(saved, options);
       setSuccessMessage('Configuração do consultor salva.');
@@ -467,6 +478,21 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
               </NativeSelect>
             </FormField>
 
+            <FormField
+              label="Nome do consultor"
+              htmlFor="consultant-name"
+              hint="Aparece no chat desta empresa. Vazio usa “Consultor”."
+            >
+              <Input
+                id="consultant-name"
+                name="consultantName"
+                value={consultantName}
+                maxLength={CONSULTANT_FIELD_LIMITS.consultantName}
+                placeholder="Consultor"
+                onChange={(event) => setConsultantName(event.target.value)}
+              />
+            </FormField>
+
             <FormField label="Ramo" htmlFor="consultant-segment">
               <Input
                 id="consultant-segment"
@@ -501,15 +527,59 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
               />
             </FormField>
 
-            <FormField label="Tom" htmlFor="consultant-tone">
-              <Input
-                id="consultant-tone"
-                name="tone"
-                value={tone}
-                maxLength={CONSULTANT_FIELD_LIMITS.tone}
-                onChange={(event) => setTone(event.target.value)}
-              />
+            <FormField
+              label="Tom"
+              htmlFor="consultant-tone-preset"
+              hint="O texto de cada tom é definido pelo servidor. Personalizado aceita instrução própria."
+            >
+              <NativeSelect
+                id="consultant-tone-preset"
+                name="tonePreset"
+                value={tonePreset}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (
+                    value === 'PROFISSIONAL_OBJETIVO' ||
+                    value === 'CONSULTIVO' ||
+                    value === 'DIDATICO' ||
+                    value === 'AMIGAVEL' ||
+                    value === 'EXECUTIVO' ||
+                    value === 'PERSONALIZADO'
+                  ) {
+                    setTonePreset(value);
+                    setSuccessMessage(null);
+                  }
+                }}
+              >
+                {(options.tonePresets.length > 0
+                  ? options.tonePresets
+                  : [
+                      { id: 'PROFISSIONAL_OBJETIVO' as const, label: 'Profissional e objetivo' },
+                      { id: 'CONSULTIVO' as const, label: 'Consultivo' },
+                      { id: 'DIDATICO' as const, label: 'Didático' },
+                      { id: 'AMIGAVEL' as const, label: 'Amigável' },
+                      { id: 'EXECUTIVO' as const, label: 'Executivo' },
+                      { id: 'PERSONALIZADO' as const, label: 'Personalizado' },
+                    ]
+                ).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </NativeSelect>
             </FormField>
+
+            {tonePreset === 'PERSONALIZADO' ? (
+              <FormField label="Tom personalizado" htmlFor="consultant-tone">
+                <NativeTextarea
+                  id="consultant-tone"
+                  name="tone"
+                  value={tone}
+                  maxLength={CONSULTANT_FIELD_LIMITS.tone}
+                  onChange={(event) => setTone(event.target.value)}
+                />
+              </FormField>
+            ) : null}
 
             {formError ? (
               <Typography as="p" variant="body" className={styles.formError} role="alert">
@@ -536,7 +606,8 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
                 Conhecimento da empresa
               </Typography>
               <Typography as="p" variant="body" className={styles.pageDescription}>
-                Textos usados só por esta empresa. Sem arquivos, PDF ou embeddings neste momento.
+                Conhecimento textual ativo só nesta empresa. Arquivos (PDF, DOCX, TXT) ficam
+                para a próxima subfase — não há upload nem busca semântica agora.
                 É válido deixar a lista vazia.
               </Typography>
             </div>
