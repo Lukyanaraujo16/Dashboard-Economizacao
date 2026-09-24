@@ -41,7 +41,8 @@ export function resolveShellSystemBar(pathname: string): ShellSystemBarMeta {
     pathname === '/relatorios' ||
     pathname === '/administradores' ||
     pathname === '/configuracoes' ||
-    pathname === '/configuracoes/aparencia'
+    pathname === '/configuracoes/aparencia' ||
+    pathname === '/configuracoes/consultor'
   ) {
     return { breadcrumbs: null };
   }

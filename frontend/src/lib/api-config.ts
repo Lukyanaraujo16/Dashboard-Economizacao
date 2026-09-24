@@ -589,6 +589,14 @@ export function adminConsultantOptionsPath(): string {
   return `${ADMIN_API_PREFIX}/consultant/options`;
 }
 
+export function adminConsultantProvidersPath(): string {
+  return `${ADMIN_API_PREFIX}/consultant/providers`;
+}
+
+export function adminConsultantProviderCredentialPath(provider: string): string {
+  return `${adminConsultantProvidersPath()}/${provider}/credential`;
+}
+
 export function adminTenantConsultantPath(tenantId: string): string {
   return `${adminTenantPath(tenantId)}/consultant`;
 }

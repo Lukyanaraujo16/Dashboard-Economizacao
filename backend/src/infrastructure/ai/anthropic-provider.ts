@@ -1,5 +1,5 @@
 import type { AdvisorContextBlock } from '../../modules/advisor/domain/context-blocks.js';
-import { assertMatchingProvider, readFiniteNumber, requireApiKey } from './adapter-guards.js';
+import { assertMatchingProvider, readFiniteNumber, resolveConfiguredApiKey } from './adapter-guards.js';
 import {
   composeSystemText,
   formatDelimitedBlock,
@@ -111,7 +111,7 @@ export function createAnthropicProvider(config: IaHttpClientConfig): IaProvider 
     id: 'ANTHROPIC',
     async generate(input: GenerationInput): Promise<GenerationOutput> {
       assertMatchingProvider('ANTHROPIC', input);
-      const apiKey = requireApiKey(config.apiKey);
+      const apiKey = await resolveConfiguredApiKey(config);
       const system = composeSystemText(input.blocks);
       const json = await postIaJson({
         fetchImpl,

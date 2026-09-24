@@ -1,5 +1,5 @@
 import type { AdvisorContextBlock } from '../../modules/advisor/domain/context-blocks.js';
-import { assertMatchingProvider, readFiniteNumber, requireApiKey } from './adapter-guards.js';
+import { assertMatchingProvider, readFiniteNumber, resolveConfiguredApiKey } from './adapter-guards.js';
 import { composeSystemText, formatDelimitedBlock, isSystemContextBlock } from './context-block-mapping.js';
 import { postIaJson } from './ia-http.js';
 import { iaProviderError, isContentRejectedPayload } from './map-http-error.js';
@@ -70,7 +70,7 @@ export function createOpenAiProvider(config: IaHttpClientConfig): IaProvider {
     id: 'OPENAI',
     async generate(input: GenerationInput): Promise<GenerationOutput> {
       assertMatchingProvider('OPENAI', input);
-      const apiKey = requireApiKey(config.apiKey);
+      const apiKey = await resolveConfiguredApiKey(config);
       const json = await postIaJson({
         fetchImpl,
         timeoutMs,

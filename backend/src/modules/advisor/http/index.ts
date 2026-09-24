@@ -6,13 +6,16 @@ export {
 export type {
   PublicAdminConsultantSettings,
   PublicAiProviderId,
+  PublicAiTonePreset,
   PublicConsultantConversation,
   PublicConsultantConversationDetail,
   PublicConsultantMessage,
   PublicConsultantModelOption,
   PublicConsultantOptions,
   PublicConsultantProviderOption,
+  PublicConsultantProviderStatus,
   PublicConsultantStatus,
+  PublicConsultantTonePresetOption,
   PublicConsultantUserStatus,
   PublicKnowledgeEntry,
 } from './public-dtos.js';

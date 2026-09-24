@@ -8,15 +8,25 @@ export type ConsultantKnowledgeStatus = 'ACTIVE' | 'DISABLED';
 
 export type ConsultantKnowledgeContentType = 'TEXT';
 
+export type ConsultantTonePreset =
+  | 'PROFISSIONAL_OBJETIVO'
+  | 'CONSULTIVO'
+  | 'DIDATICO'
+  | 'AMIGAVEL'
+  | 'EXECUTIVO'
+  | 'PERSONALIZADO';
+
 /** Registro público de configuração do Consultor por empresa. */
 export type ConsultantSettings = {
   readonly configured: boolean;
   readonly status: ConsultantSettingsStatus;
   readonly provider: ConsultantProviderId | null;
   readonly model: string | null;
+  readonly consultantName: string | null;
   readonly businessSegment: string | null;
   readonly businessDescription: string | null;
   readonly adminPrompt: string | null;
+  readonly tonePreset: ConsultantTonePreset | null;
   readonly tone: string | null;
   readonly updatedAt: string | null;
 };
@@ -32,8 +42,19 @@ export type ConsultantProviderOption = {
   readonly models: readonly ConsultantModelOption[];
 };
 
+export type ConsultantTonePresetOption = {
+  readonly id: ConsultantTonePreset;
+  readonly label: string;
+};
+
 export type ConsultantOptions = {
   readonly providers: readonly ConsultantProviderOption[];
+  readonly tonePresets: readonly ConsultantTonePresetOption[];
+};
+
+export type ConsultantProviderStatus = {
+  readonly provider: ConsultantProviderId;
+  readonly configured: boolean;
 };
 
 export type ConsultantKnowledgeEntry = {
@@ -50,9 +71,11 @@ export type UpdateConsultantSettingsInput = {
   readonly status: ConsultantStatus;
   readonly provider: ConsultantProviderId;
   readonly model: string;
+  readonly consultantName: string | null;
   readonly businessSegment: string | null;
   readonly businessDescription: string | null;
   readonly adminPrompt: string | null;
+  readonly tonePreset: ConsultantTonePreset;
   readonly tone: string | null;
 };
 
@@ -70,10 +93,11 @@ export type UpdateConsultantKnowledgeInput = {
 };
 
 export const CONSULTANT_FIELD_LIMITS = {
+  consultantName: 40,
   businessSegment: 120,
   businessDescription: 2_000,
   adminPrompt: 4_000,
-  tone: 120,
+  tone: 500,
   knowledgeTitle: 200,
   knowledgeContent: 8_000,
 } as const;

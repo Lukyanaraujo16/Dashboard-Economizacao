@@ -26,9 +26,11 @@ const SETTINGS_PUBLIC_KEYS = [
   'status',
   'provider',
   'model',
+  'consultantName',
   'businessSegment',
   'businessDescription',
   'adminPrompt',
+  'tonePreset',
   'tone',
   'updatedAt',
 ] as const;
@@ -147,6 +149,8 @@ function expectNoSecretLeak(payload: unknown) {
   expect(serialized).not.toMatch(/ai_runs/i);
   if (payload !== null && typeof payload === 'object' && !Array.isArray(payload)) {
     expect(payload).not.toHaveProperty('apiKey');
+    expect(payload).not.toHaveProperty('credential');
+    expect(payload).not.toHaveProperty('encryptedSecret');
     expect(payload).not.toHaveProperty('tenantId');
     expect(payload).not.toHaveProperty('createdById');
     expect(payload).not.toHaveProperty('createdBy');
@@ -267,9 +271,11 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
         status: 'NOT_CONFIGURED',
         provider: null,
         model: null,
+        consultantName: null,
         businessSegment: null,
         businessDescription: null,
         adminPrompt: null,
+        tonePreset: null,
         tone: null,
         updatedAt: null,
       });
@@ -618,6 +624,103 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
         headers: { cookie },
       });
       expect(missing.statusCode).toBe(404);
+    });
+  });
+
+  describe('GET/PUT/DELETE /admin/consultant/providers', () => {
+    it('ADMIN e SUPER_ADMIN gerenciam credencial sem devolver segredo', async () => {
+      await createPlatformUser({ email: 'admin-providers@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-providers@api.test');
+      const secret = 'sk-test-platform-openai-key';
+
+      const listed = await app.inject({
+        method: 'GET',
+        url: '/admin/consultant/providers',
+        headers: { cookie },
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ provider: 'OPENAI', configured: expect.any(Boolean) }),
+          expect.objectContaining({ provider: 'ANTHROPIC', configured: expect.any(Boolean) }),
+        ]),
+      );
+      expectNoSecretLeak(listed.json());
+      expect(JSON.stringify(listed.json())).not.toContain(secret);
+
+      const put = await app.inject({
+        method: 'PUT',
+        url: '/admin/consultant/providers/OPENAI/credential',
+        headers: { cookie },
+        payload: { credential: secret },
+      });
+      expect(put.statusCode).toBe(200);
+      expect(put.json()).toEqual({ provider: 'OPENAI', configured: true });
+      expectNoSecretLeak(put.json());
+      expect(JSON.stringify(put.json())).not.toContain(secret);
+
+      const stored = await prisma.aiPlatformCredential.findUnique({ where: { provider: 'OPENAI' } });
+      expect(stored?.encryptedSecret.startsWith('v1.')).toBe(true);
+      expect(stored?.encryptedSecret).not.toContain(secret);
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: '/admin/consultant/providers/OPENAI/credential',
+        headers: { cookie },
+      });
+      expect(removed.statusCode).toBe(204);
+      expect(await prisma.aiPlatformCredential.findUnique({ where: { provider: 'OPENAI' } })).toBeNull();
+    });
+
+    it('SUPER_ADMIN também gerencia e USER recebe 403', async () => {
+      await createPlatformUser({ email: 'super-providers@api.test', role: 'SUPER_ADMIN' });
+      await createPlatformUser({ email: 'user-providers@api.test', role: 'USER' });
+      const app = await buildTestApp();
+      const superCookie = await loginAs(app, 'super-providers@api.test');
+      const userCookie = await loginAs(app, 'user-providers@api.test');
+
+      const put = await app.inject({
+        method: 'PUT',
+        url: '/admin/consultant/providers/ANTHROPIC/credential',
+        headers: { cookie: superCookie },
+        payload: { credential: 'sk-ant-platform-test-key' },
+      });
+      expect(put.statusCode).toBe(200);
+      expect(put.json()).toEqual({ provider: 'ANTHROPIC', configured: true });
+
+      const forbidden = await app.inject({
+        method: 'GET',
+        url: '/admin/consultant/providers',
+        headers: { cookie: userCookie },
+      });
+      expect(forbidden.statusCode).toBe(403);
+    });
+
+    it('Support Mode não eleva gestão de credencial', async () => {
+      const tenant = await tenants.create({
+        name: 'providers-support',
+        displayName: 'Providers Support',
+      });
+      await createPlatformUser({ email: 'admin-providers-support@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-providers-support@api.test');
+      const enter = await app.inject({
+        method: 'POST',
+        url: '/auth/support/enter',
+        headers: { cookie, 'user-agent': 'admin-providers-support' },
+        payload: { tenantId: tenant.id },
+      });
+      expect(enter.statusCode).toBe(200);
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/admin/consultant/providers/OPENAI/credential',
+        headers: { cookie },
+        payload: { credential: 'sk-should-not-store' },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(await prisma.aiPlatformCredential.count()).toBe(0);
     });
   });
 });

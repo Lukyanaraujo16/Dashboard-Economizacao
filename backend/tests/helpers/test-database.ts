@@ -4,6 +4,7 @@ type TestDatabaseCleaner = {
   readonly aiConversation: { deleteMany: () => Promise<unknown> };
   readonly aiKnowledgeEntry: { deleteMany: () => Promise<unknown> };
   readonly aiTenantSettings: { deleteMany: () => Promise<unknown> };
+  readonly aiPlatformCredential: { deleteMany: () => Promise<unknown> };
   readonly integrationSyncCursor: { deleteMany: () => Promise<unknown> };
   readonly syncRun: { deleteMany: () => Promise<unknown> };
   readonly revenueGoal: { deleteMany: () => Promise<unknown> };
@@ -95,6 +96,7 @@ export async function cleanTestDatabase(
   await prisma.aiConversation.deleteMany();
   await prisma.aiKnowledgeEntry.deleteMany();
   await prisma.aiTenantSettings.deleteMany();
+  await prisma.aiPlatformCredential.deleteMany();
   await prisma.integrationSyncCursor.deleteMany();
   await prisma.syncRun.deleteMany();
   await prisma.revenueGoal.deleteMany();

@@ -7,6 +7,9 @@ import {
   type IaProviderRegistry,
 } from '../../../infrastructure/ai/index.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { resolvePlatformAiApiKey } from '../domain/resolve-platform-ai-key.js';
+import type { AiProviderId } from '../domain/types.js';
+import { createAdvisorPlatformCredentialRepository } from '../repositories/advisor-platform-credential.repository.js';
 import { createAnalyticsService } from '../../analytics/services/analytics.service.js';
 import { createMonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import { createCostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
@@ -39,7 +42,8 @@ export const FAKE_ANTHROPIC_CONSULTANT_TEXT = 'Resposta simulada Anthropic do Co
 export type AdvisorRuntimeEnvironment = Pick<
   Environment,
   'nodeEnv' | 'openaiApiKey' | 'anthropicApiKey'
->;
+> &
+  Partial<Pick<Environment, 'integrationEncryptionKey'>>;
 
 export type AdvisorRuntime = {
   readonly settings: AdvisorSettingsRepository;
@@ -50,6 +54,7 @@ export type AdvisorRuntime = {
   readonly nodeEnv: string;
   readonly openaiApiKey: string | null;
   readonly anthropicApiKey: string | null;
+  readonly resolveProviderApiKey: (provider: AiProviderId) => Promise<string | null>;
 };
 
 export type CreateAdvisorRuntimeOptions = {
@@ -65,6 +70,7 @@ export type CreateAdvisorRuntimeOptions = {
  */
 export function createAdvisorIaProviderRegistry(
   environment: AdvisorRuntimeEnvironment,
+  resolveProviderApiKey?: (provider: AiProviderId) => Promise<string | null>,
 ): IaProviderRegistry {
   if (environment.nodeEnv === 'test') {
     return createIaProviderRegistry({
@@ -74,9 +80,37 @@ export function createAdvisorIaProviderRegistry(
   }
 
   return createIaProviderRegistry({
-    openai: createOpenAiProvider({ apiKey: environment.openaiApiKey }),
-    anthropic: createAnthropicProvider({ apiKey: environment.anthropicApiKey }),
+    openai: createOpenAiProvider({
+      apiKey: environment.openaiApiKey,
+      resolveApiKey: resolveProviderApiKey
+        ? () => resolveProviderApiKey('OPENAI')
+        : undefined,
+    }),
+    anthropic: createAnthropicProvider({
+      apiKey: environment.anthropicApiKey,
+      resolveApiKey: resolveProviderApiKey
+        ? () => resolveProviderApiKey('ANTHROPIC')
+        : undefined,
+    }),
   });
+}
+
+export function createResolveProviderApiKey(deps: {
+  readonly findEncryptedSecret: (provider: AiProviderId) => Promise<string | null>;
+  readonly encryptionKey: Buffer | null;
+  readonly envOpenAi: string | null;
+  readonly envAnthropic: string | null;
+}): (provider: AiProviderId) => Promise<string | null> {
+  return async (provider) => {
+    const ciphertext = await deps.findEncryptedSecret(provider);
+    return resolvePlatformAiApiKey({
+      provider,
+      platformCiphertext: ciphertext,
+      encryptionKey: deps.encryptionKey,
+      envOpenAi: deps.envOpenAi,
+      envAnthropic: deps.envAnthropic,
+    });
+  };
 }
 
 export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}): AdvisorRuntime {
@@ -85,6 +119,16 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
   const settings = createAdvisorSettingsRepository(prisma);
   const knowledge = createAdvisorKnowledgeRepository(prisma);
   const conversations = createAdvisorConversationRepository(prisma);
+  const platformCredentials = createAdvisorPlatformCredentialRepository(prisma);
+  const resolveProviderApiKey = createResolveProviderApiKey({
+    findEncryptedSecret: async (provider) => {
+      const stored = await platformCredentials.findByProvider(provider);
+      return stored?.encryptedSecret ?? null;
+    },
+    encryptionKey: environment.integrationEncryptionKey ?? null,
+    envOpenAi: environment.openaiApiKey,
+    envAnthropic: environment.anthropicApiKey,
+  });
   const runs = createAdvisorRunRepository(prisma);
   const receivables = createReceivableReadRepository(prisma);
   const payables = createPayableReadRepository(prisma);
@@ -110,7 +154,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     cashFlow,
     analytics,
   });
-  const providers = createAdvisorIaProviderRegistry(environment);
+  const providers = createAdvisorIaProviderRegistry(environment, resolveProviderApiKey);
   const rateLimiter =
     options.rateLimiter ??
     (options.redis
@@ -141,5 +185,6 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     nodeEnv: environment.nodeEnv,
     openaiApiKey: environment.openaiApiKey,
     anthropicApiKey: environment.anthropicApiKey,
+    resolveProviderApiKey,
   };
 }

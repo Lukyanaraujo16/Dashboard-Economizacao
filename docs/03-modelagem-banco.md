@@ -913,15 +913,19 @@ Campos conceituais:
 * tenant_id;
 * provider (OPENAI | ANTHROPIC);
 * model (string validada em código; não é enum de banco);
+* consultant_name;
 * business_segment;
 * business_description;
 * admin_prompt;
-* tone;
+* tone_preset;
+* tone (texto custom quando PERSONALIZADO);
 * status;
 * created_at;
 * updated_at.
 
-Provider e model efetivos são por tenant. Ausência de settings equivale a Consultor não configurado/desabilitado. Credenciais de API não são persistidas (sem BYOK). Motor único (`OPENAI` | `ANTHROPIC`).
+Provider e model efetivos são por tenant. Ausência de settings equivale a Consultor não configurado/desabilitado. API keys não ficam em settings (sem BYOK). Motor único (`OPENAI` | `ANTHROPIC`).
+
+`ai_platform_credentials` guarda ciphertext global por provider (AES-256-GCM). Sem plaintext.
 
 F13 (F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
 F14 (insights / regras proativas / `ai_insights` operacional): NÃO iniciada.

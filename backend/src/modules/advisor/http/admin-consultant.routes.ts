@@ -1,19 +1,27 @@
 import type { FastifyInstance } from 'fastify';
 
+import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
-import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
+import {
+  IntegrationUnavailableError,
+  UnauthenticatedError,
+} from '../../../shared/errors/application-error.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createRequirePlatformRole } from '../../auth/http/require-platform-role.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
 import { parseTenantIdParam } from '../../tenant/schemas/admin-tenant.schemas.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowledge.repository.js';
+import { createAdvisorPlatformCredentialRepository } from '../repositories/advisor-platform-credential.repository.js';
 import { createAdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
+import { createAdminConsultantProvidersService } from '../services/admin-consultant-providers.service.js';
 import { createAdminConsultantService } from '../services/admin-consultant.service.js';
 import {
   parseCreateAdminKnowledgeRequestBody,
   parseKnowledgeEntryIdParam,
+  parseProviderParam,
   parsePutAdminConsultantRequestBody,
+  parsePutAdminProviderCredentialBody,
   parseUpdateAdminKnowledgeRequestBody,
 } from './admin-consultant.schemas.js';
 
@@ -28,15 +36,66 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
+  const environment = loadEnvironment();
   const adminConsultant = createAdminConsultantService({
     tenants,
     settings: createAdvisorSettingsRepository(prisma),
     knowledge: createAdvisorKnowledgeRepository(prisma),
   });
+  const encryptionKey = environment.integrationEncryptionKey;
+  const adminProviders =
+    encryptionKey === null
+      ? null
+      : createAdminConsultantProvidersService({
+          credentials: createAdvisorPlatformCredentialRepository(prisma),
+          encryptionKey,
+          envOpenAi: environment.openaiApiKey,
+          envAnthropic: environment.anthropicApiKey,
+        });
 
   app.get('/admin/consultant/options', { preHandler: adminGuard }, async (_request, reply) => {
     return reply.status(200).send(adminConsultant.listOptions());
   });
+
+  app.get('/admin/consultant/providers', { preHandler: adminGuard }, async (_request, reply) => {
+    if (adminProviders === null) {
+      return reply.status(200).send({
+        data: [
+          { provider: 'OPENAI', configured: Boolean(environment.openaiApiKey) },
+          { provider: 'ANTHROPIC', configured: Boolean(environment.anthropicApiKey) },
+        ],
+      });
+    }
+    return reply.status(200).send({ data: await adminProviders.listProviders() });
+  });
+
+  app.put(
+    '/admin/consultant/providers/:provider/credential',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      if (adminProviders === null || encryptionKey === null) {
+        throw new IntegrationUnavailableError(
+          'Criptografia de credenciais da plataforma está indisponível.',
+        );
+      }
+      const provider = parseProviderParam(request.params);
+      const body = parsePutAdminProviderCredentialBody(request.body);
+      return reply.status(200).send(await adminProviders.upsertCredential(provider, body.credential));
+    },
+  );
+
+  app.delete(
+    '/admin/consultant/providers/:provider/credential',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      if (adminProviders === null) {
+        return reply.status(204).send();
+      }
+      const provider = parseProviderParam(request.params);
+      await adminProviders.deleteCredential(provider);
+      return reply.status(204).send();
+    },
+  );
 
   app.get('/admin/tenants/:tenantId/consultant', { preHandler: adminGuard }, async (request, reply) => {
     const tenantId = parseTenantIdParam(request.params);

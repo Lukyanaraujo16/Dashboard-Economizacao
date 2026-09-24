@@ -1,5 +1,7 @@
 export { createAdvisorConversationRepository } from './advisor-conversation.repository.js';
 export type { AdvisorConversationRepository } from './advisor-conversation.repository.js';
+export { createAdvisorPlatformCredentialRepository } from './advisor-platform-credential.repository.js';
+export type { AdvisorPlatformCredentialRepository } from './advisor-platform-credential.repository.js';
 export { createAdvisorKnowledgeRepository } from './advisor-knowledge.repository.js';
 export type { AdvisorKnowledgeRepository } from './advisor-knowledge.repository.js';
 export { createAdvisorRunRepository } from './advisor-run.repository.js';

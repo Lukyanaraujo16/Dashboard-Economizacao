@@ -1,3 +1,5 @@
+export { createAdminConsultantProvidersService } from './admin-consultant-providers.service.js';
+export type { AdminConsultantProvidersService } from './admin-consultant-providers.service.js';
 export { createAdminConsultantService } from './admin-consultant.service.js';
 export type { AdminConsultantService } from './admin-consultant.service.js';
 export { createBuildAdvisorContext } from './build-advisor-context.js';

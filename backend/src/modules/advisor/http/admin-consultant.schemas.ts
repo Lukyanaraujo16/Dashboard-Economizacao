@@ -5,8 +5,11 @@ import {
   type AiConsultantStatus,
   type AiKnowledgeStatus,
   type AiProviderId,
+  type AiTonePreset,
 } from '../domain/types.js';
 import { assertAllowedAiModel, isAiProviderId } from '../domain/ai-provider-models.js';
+import { CONSULTANT_NAME_MAX_LENGTH, assertConsultantName } from '../domain/consultant-name.js';
+import { isAiTonePreset } from '../domain/tone-presets.js';
 import { ADVISOR_ADMIN_FIELD_LIMITS } from './public-dtos.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -15,11 +18,14 @@ const PUT_SETTINGS_BODY_KEYS = new Set([
   'status',
   'provider',
   'model',
+  'consultantName',
   'businessSegment',
   'businessDescription',
   'adminPrompt',
+  'tonePreset',
   'tone',
 ]);
+const PUT_PROVIDER_CREDENTIAL_KEYS = new Set(['credential']);
 const CREATE_KNOWLEDGE_BODY_KEYS = new Set(['title', 'content', 'status']);
 const UPDATE_KNOWLEDGE_BODY_KEYS = new Set(['title', 'content', 'status']);
 
@@ -32,6 +38,16 @@ function assertObjectBody(body: unknown, label: string): Record<string, unknown>
   }
 
   return body as Record<string, unknown>;
+}
+
+function hasControlCharacters(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 32) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function rejectUnknownKeys(
@@ -110,10 +126,16 @@ export type PutAdminConsultantRequestBody = {
   readonly status: AiConsultantStatus;
   readonly provider: AiProviderId;
   readonly model: string;
+  readonly consultantName?: string | null;
   readonly businessSegment?: string | null;
   readonly businessDescription?: string | null;
   readonly adminPrompt?: string | null;
+  readonly tonePreset?: AiTonePreset;
   readonly tone?: string | null;
+};
+
+export type PutAdminProviderCredentialBody = {
+  readonly credential: string;
 };
 
 export function parsePutAdminConsultantRequestBody(body: unknown): PutAdminConsultantRequestBody {
@@ -164,12 +186,42 @@ export function parsePutAdminConsultantRequestBody(body: unknown): PutAdminConsu
     ADVISOR_ADMIN_FIELD_LIMITS.adminPrompt,
     details,
   );
+  const consultantName = parseOptionalNullableBoundedString(
+    record.consultantName,
+    'consultantName',
+    CONSULTANT_NAME_MAX_LENGTH,
+    details,
+  );
+  if (typeof consultantName === 'string' && consultantName.trim().length > 0) {
+    try {
+      assertConsultantName(consultantName);
+    } catch {
+      details.push({ field: 'consultantName', issue: 'invalid_content' });
+    }
+  }
+
+  let tonePreset: AiTonePreset | undefined;
+  if (record.tonePreset !== undefined) {
+    if (typeof record.tonePreset !== 'string' || !isAiTonePreset(record.tonePreset)) {
+      details.push({ field: 'tonePreset', issue: 'invalid_enum' });
+    } else {
+      tonePreset = record.tonePreset;
+    }
+  }
+
   const tone = parseOptionalNullableBoundedString(
     record.tone,
     'tone',
     ADVISOR_ADMIN_FIELD_LIMITS.tone,
     details,
   );
+
+  if (
+    tonePreset === 'PERSONALIZADO' &&
+    (tone === undefined || tone === null || (typeof tone === 'string' && tone.trim().length === 0))
+  ) {
+    details.push({ field: 'tone', issue: 'required_for_custom_preset' });
+  }
 
   if (details.length > 0) {
     throw new ValidationError('Dados do Consultor inválidos.', { details });
@@ -179,11 +231,60 @@ export function parsePutAdminConsultantRequestBody(body: unknown): PutAdminConsu
     status: record.status as AiConsultantStatus,
     provider: provider!,
     model: (record.model as string).trim(),
+    ...(consultantName !== undefined ? { consultantName } : {}),
     ...(businessSegment !== undefined ? { businessSegment } : {}),
     ...(businessDescription !== undefined ? { businessDescription } : {}),
     ...(adminPrompt !== undefined ? { adminPrompt } : {}),
+    ...(tonePreset !== undefined ? { tonePreset } : {}),
     ...(tone !== undefined ? { tone } : {}),
   };
+}
+
+export function parseProviderParam(params: unknown): AiProviderId {
+  if (params === null || typeof params !== 'object' || Array.isArray(params)) {
+    throw new ValidationError('Parâmetro de rota inválido.', {
+      details: [{ field: 'provider', issue: 'required' }],
+    });
+  }
+
+  const provider = (params as Record<string, unknown>).provider;
+  if (typeof provider !== 'string' || !isAiProviderId(provider)) {
+    throw new ValidationError('Provedor de IA inválido.', {
+      details: [{ field: 'provider', issue: 'invalid_enum' }],
+    });
+  }
+
+  return provider;
+}
+
+export function parsePutAdminProviderCredentialBody(body: unknown): PutAdminProviderCredentialBody {
+  const record = assertObjectBody(body, 'Payload de credencial');
+  rejectUnknownKeys(record, PUT_PROVIDER_CREDENTIAL_KEYS, 'Payload de credencial');
+
+  if (typeof record.credential !== 'string') {
+    throw new ValidationError('Credencial inválida.', {
+      details: [{ field: 'credential', issue: 'required_string' }],
+    });
+  }
+
+  const credential = record.credential.trim();
+  if (credential.length === 0) {
+    throw new ValidationError('Credencial inválida.', {
+      details: [{ field: 'credential', issue: 'required' }],
+    });
+  }
+  if (credential.length > ADVISOR_ADMIN_FIELD_LIMITS.credential) {
+    throw new ValidationError('Credencial inválida.', {
+      details: [{ field: 'credential', issue: 'too_long' }],
+    });
+  }
+  if (credential.length < 8 || hasControlCharacters(credential)) {
+    throw new ValidationError('Credencial inválida.', {
+      details: [{ field: 'credential', issue: 'invalid' }],
+    });
+  }
+
+  return { credential };
 }
 
 export type CreateAdminKnowledgeRequestBody = {

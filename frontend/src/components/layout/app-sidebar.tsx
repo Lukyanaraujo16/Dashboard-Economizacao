@@ -14,6 +14,7 @@ import {
   IconBuilding2,
   IconLayoutDashboard,
   IconLogOut,
+  IconKeyRound,
   IconSettings2,
   IconShieldUser,
 } from '../ui/icons';
@@ -49,6 +50,12 @@ const NAV_ITEMS = [
     label: 'Configurações',
     surface: 'platform',
     icon: IconSettings2,
+  },
+  {
+    href: '/configuracoes/consultor',
+    label: 'Consultor IA',
+    surface: 'platform',
+    icon: IconKeyRound,
   },
 ] as const;
 

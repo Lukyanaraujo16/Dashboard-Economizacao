@@ -22,6 +22,9 @@ const redactedLogPaths = [
   'client_secret',
   'clientSecret',
   'apiKey',
+  'credential',
+  'encryptedSecret',
+  'encrypted_secret',
   'authSecret',
   'req.query.code',
 ];

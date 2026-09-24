@@ -796,6 +796,17 @@ enum AiConsultantStatus {
   @@map("ai_consultant_status")
 }
 
+enum AiTonePreset {
+  PROFISSIONAL_OBJETIVO
+  CONSULTIVO
+  DIDATICO
+  AMIGAVEL
+  EXECUTIVO
+  PERSONALIZADO
+
+  @@map("ai_tone_preset")
+}
+
 enum AiKnowledgeContentType {
   TEXT
 
@@ -859,6 +870,18 @@ enum AiRunErrorCode {
   @@map("ai_run_error_code")
 }
 
+/// Credencial global de plataforma (OpenAI/Anthropic). Uma chave por provider.
+/// Ciphertext AES-256-GCM (secret-box). Sem plaintext. Não pertence a tenant.
+model AiPlatformCredential {
+  id              String     @id @default(uuid()) @db.Uuid
+  provider        AiProvider @unique(map: "uq_ai_platform_credentials_provider")
+  encryptedSecret String     @map("encrypted_secret") @db.Text
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("ai_platform_credentials")
+}
+
 /// Configuração 1:1 do Consultor por tenant. Sem settings = não configurado/desabilitado.
 /// Provider/model efetivos vêm daqui, não de env. Sem API key.
 model AiTenantSettings {
@@ -866,9 +889,11 @@ model AiTenantSettings {
   tenantId            String             @unique(map: "uq_ai_tenant_settings_tenant_id") @map("tenant_id") @db.Uuid
   provider            AiProvider
   model               String
+  consultantName      String?            @map("consultant_name")
   businessSegment     String?            @map("business_segment")
   businessDescription String?            @map("business_description") @db.Text
   adminPrompt         String?            @map("admin_prompt") @db.Text
+  tonePreset          AiTonePreset       @default(PROFISSIONAL_OBJETIVO) @map("tone_preset")
   tone                String?
   status              AiConsultantStatus @default(DISABLED)
   createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)

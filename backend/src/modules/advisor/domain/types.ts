@@ -53,14 +53,29 @@ export const AI_RUN_ERROR_CODES = [
 
 export type AiRunErrorCode = (typeof AI_RUN_ERROR_CODES)[number];
 
+export const AI_TONE_PRESETS = [
+  'PROFISSIONAL_OBJETIVO',
+  'CONSULTIVO',
+  'DIDATICO',
+  'AMIGAVEL',
+  'EXECUTIVO',
+  'PERSONALIZADO',
+] as const;
+
+export type AiTonePreset = (typeof AI_TONE_PRESETS)[number];
+
+export const DEFAULT_CONSULTANT_NAME = 'Consultor';
+
 export type AiTenantSettingsRecord = {
   readonly id: string;
   readonly tenantId: string;
   readonly provider: AiProviderId;
   readonly model: string;
+  readonly consultantName: string | null;
   readonly businessSegment: string | null;
   readonly businessDescription: string | null;
   readonly adminPrompt: string | null;
+  readonly tonePreset: AiTonePreset;
   readonly tone: string | null;
   readonly status: AiConsultantStatus;
   readonly createdAt: Date;
@@ -70,11 +85,21 @@ export type AiTenantSettingsRecord = {
 export type UpsertAiTenantSettingsInput = {
   readonly provider: AiProviderId;
   readonly model?: string;
+  readonly consultantName?: string | null;
   readonly businessSegment?: string | null;
   readonly businessDescription?: string | null;
   readonly adminPrompt?: string | null;
+  readonly tonePreset?: AiTonePreset;
   readonly tone?: string | null;
   readonly status?: AiConsultantStatus;
+};
+
+export type AiPlatformCredentialRecord = {
+  readonly id: string;
+  readonly provider: AiProviderId;
+  readonly encryptedSecret: string;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 };
 
 export type AiKnowledgeEntryRecord = {

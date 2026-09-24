@@ -1,5 +1,7 @@
 import {
   adminConsultantOptionsPath,
+  adminConsultantProviderCredentialPath,
+  adminConsultantProvidersPath,
   adminTenantConsultantKnowledgeEntryPath,
   adminTenantConsultantKnowledgePath,
   adminTenantConsultantPath,
@@ -10,7 +12,9 @@ import {
   type ConsultantKnowledgeEntry,
   type ConsultantOptions,
   type ConsultantProviderId,
+  type ConsultantProviderStatus,
   type ConsultantSettings,
+  type ConsultantTonePreset,
   type CreateConsultantKnowledgeInput,
   type UpdateConsultantKnowledgeInput,
   type UpdateConsultantSettingsInput,
@@ -37,6 +41,17 @@ function isProviderId(value: unknown): value is ConsultantProviderId {
   return value === 'OPENAI' || value === 'ANTHROPIC';
 }
 
+function isTonePreset(value: unknown): value is ConsultantTonePreset {
+  return (
+    value === 'PROFISSIONAL_OBJETIVO' ||
+    value === 'CONSULTIVO' ||
+    value === 'DIDATICO' ||
+    value === 'AMIGAVEL' ||
+    value === 'EXECUTIVO' ||
+    value === 'PERSONALIZADO'
+  );
+}
+
 async function readJsonBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) {
@@ -59,9 +74,11 @@ function isConsultantSettings(value: unknown): value is ConsultantSettings {
     (status === 'ACTIVE' || status === 'DISABLED' || status === 'NOT_CONFIGURED') &&
     (value.provider === null || isProviderId(value.provider)) &&
     isNullableString(value.model) &&
+    isNullableString(value.consultantName) &&
     isNullableString(value.businessSegment) &&
     isNullableString(value.businessDescription) &&
     isNullableString(value.adminPrompt) &&
+    (value.tonePreset === null || isTonePreset(value.tonePreset)) &&
     isNullableString(value.tone) &&
     isNullableString(value.updatedAt)
   );
@@ -81,8 +98,40 @@ function isProviderOption(value: unknown): value is ConsultantOptions['providers
   );
 }
 
+function isTonePresetOption(value: unknown): value is ConsultantOptions['tonePresets'][number] {
+  return isRecord(value) && isTonePreset(value.id) && typeof value.label === 'string';
+}
+
 function isConsultantOptions(value: unknown): value is ConsultantOptions {
-  return isRecord(value) && Array.isArray(value.providers) && value.providers.every(isProviderOption);
+  return (
+    isRecord(value) &&
+    Array.isArray(value.providers) &&
+    value.providers.every(isProviderOption) &&
+    Array.isArray(value.tonePresets) &&
+    value.tonePresets.every(isTonePresetOption)
+  );
+}
+
+function isProviderStatus(value: unknown): value is ConsultantProviderStatus {
+  return (
+    isRecord(value) &&
+    isProviderId(value.provider) &&
+    typeof value.configured === 'boolean' &&
+    !('credential' in value) &&
+    !('apiKey' in value) &&
+    !('value' in value) &&
+    !('prefix' in value)
+  );
+}
+
+function parseProviderStatusList(value: unknown): readonly ConsultantProviderStatus[] | null {
+  if (Array.isArray(value) && value.every(isProviderStatus)) {
+    return value;
+  }
+  if (isRecord(value) && Array.isArray(value.data) && value.data.every(isProviderStatus)) {
+    return value.data;
+  }
+  return null;
 }
 
 function isKnowledgeEntry(value: unknown): value is ConsultantKnowledgeEntry {
@@ -224,6 +273,61 @@ export function isValidProviderModel(
   model: string,
 ): boolean {
   return modelsForProvider(options, provider).some((item) => item.id === model);
+}
+
+export async function listConsultantProviders(): Promise<readonly ConsultantProviderStatus[]> {
+  const response = await consultantFetch(adminConsultantProvidersPath(), { method: 'GET' });
+  const body = await readJsonBody(response);
+
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
+
+  const list = parseProviderStatusList(body);
+  if (list === null) {
+    throw unavailableBody(response.status);
+  }
+
+  return list;
+}
+
+export async function putConsultantProviderCredential(
+  provider: ConsultantProviderId,
+  credential: string,
+): Promise<ConsultantProviderStatus> {
+  const response = await consultantFetch(adminConsultantProviderCredentialPath(provider), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential }),
+  });
+  const body = await readJsonBody(response);
+
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
+
+  if (!isProviderStatus(body)) {
+    throw unavailableBody(response.status);
+  }
+
+  return body;
+}
+
+export async function deleteConsultantProviderCredential(
+  provider: ConsultantProviderId,
+): Promise<void> {
+  const response = await consultantFetch(adminConsultantProviderCredentialPath(provider), {
+    method: 'DELETE',
+  });
+
+  if (response.status === 204) {
+    return;
+  }
+
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
 }
 
 export async function getConsultantOptions(): Promise<ConsultantOptions> {

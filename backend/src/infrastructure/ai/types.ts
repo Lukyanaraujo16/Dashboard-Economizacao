@@ -36,7 +36,8 @@ export class IaProviderError extends Error {
 export type IaFetch = typeof fetch;
 
 export type IaHttpClientConfig = {
-  readonly apiKey: string | null;
+  readonly apiKey?: string | null;
+  readonly resolveApiKey?: () => Promise<string | null>;
   readonly fetchImpl?: IaFetch;
   readonly timeoutMs?: number;
 };

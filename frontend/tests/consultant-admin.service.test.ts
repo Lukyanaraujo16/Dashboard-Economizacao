@@ -41,6 +41,10 @@ const options: ConsultantOptions = {
       ],
     },
   ],
+  tonePresets: [
+    { id: 'PROFISSIONAL_OBJETIVO', label: 'Profissional e objetivo' },
+    { id: 'PERSONALIZADO', label: 'Personalizado' },
+  ],
 };
 
 const settings: ConsultantSettings = {
@@ -48,9 +52,11 @@ const settings: ConsultantSettings = {
   status: 'ACTIVE',
   provider: 'OPENAI',
   model: 'gpt-4o-mini',
+  consultantName: 'Clara',
   businessSegment: 'Varejo',
   businessDescription: 'Loja de bairro',
   adminPrompt: 'Seja objetivo',
+  tonePreset: 'PROFISSIONAL_OBJETIVO',
   tone: 'formal',
   updatedAt: '2026-09-24T12:00:00.000Z',
 };
@@ -101,9 +107,11 @@ describe('admin consultant service', () => {
       status: 'DISABLED',
       provider: 'ANTHROPIC',
       model: 'claude-sonnet-5',
+      consultantName: 'Clara',
       businessSegment: null,
       businessDescription: null,
       adminPrompt: null,
+      tonePreset: 'PERSONALIZADO',
       tone: 'direto',
     });
 
@@ -115,9 +123,11 @@ describe('admin consultant service', () => {
       status: 'DISABLED',
       provider: 'ANTHROPIC',
       model: 'claude-sonnet-5',
+      consultantName: 'Clara',
       businessSegment: null,
       businessDescription: null,
       adminPrompt: null,
+      tonePreset: 'PERSONALIZADO',
       tone: 'direto',
     });
   });
@@ -179,9 +189,11 @@ describe('admin consultant service', () => {
         status: 'ACTIVE',
         provider: 'OPENAI',
         model: 'invalido',
+        consultantName: null,
         businessSegment: null,
         businessDescription: null,
         adminPrompt: null,
+        tonePreset: 'PROFISSIONAL_OBJETIVO',
         tone: null,
       }),
     ).rejects.toMatchObject({ kind: 'validation' });

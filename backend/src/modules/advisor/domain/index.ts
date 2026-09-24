@@ -37,7 +37,32 @@ export type {
   AdvisorResolvedPeriod,
   ResolveAdvisorPeriodInput,
 } from './resolve-advisor-period.js';
+export {
+  CONSULTANT_NAME_MAX_LENGTH,
+  assertConsultantName,
+  normalizeConsultantName,
+  resolveConsultantDisplayName,
+} from './consultant-name.js';
+export {
+  CONVERSATION_TITLE_MAX_LENGTH,
+  DEFAULT_CONVERSATION_TITLE,
+  deriveConsultantConversationTitle,
+} from './conversation-title.js';
 export { ADVISOR_PLATFORM_INSTRUCTIONS } from './platform-instructions.js';
+export {
+  isPlatformAiProviderConfigured,
+  resolvePlatformAiApiKey,
+} from './resolve-platform-ai-key.js';
+export type { ResolvePlatformAiApiKeyInput } from './resolve-platform-ai-key.js';
+export {
+  AI_TONE_PRESET_INSTRUCTIONS,
+  AI_TONE_PRESET_LABELS,
+  DEFAULT_TONE_PRESET,
+  assertAiTonePreset,
+  isAiTonePreset,
+  resolveToneInstruction,
+  toPublicTonePresetOptions,
+} from './tone-presets.js';
 export { delimitUntrustedContent } from './untrusted-content.js';
 export {
   AI_PROVIDER_MODEL_CATALOG,
@@ -59,10 +84,14 @@ export {
   AI_RUN_ERROR_CODES,
   AI_RUN_STATUSES,
   AI_RUN_TYPES,
+  AI_TONE_PRESETS,
+  DEFAULT_CONSULTANT_NAME,
 } from './types.js';
 export type {
   AiConsultantStatus,
   AiConversationRecord,
+  AiPlatformCredentialRecord,
+  AiTonePreset,
   AiConversationStatus,
   AiKnowledgeContentType,
   AiKnowledgeEntryRecord,

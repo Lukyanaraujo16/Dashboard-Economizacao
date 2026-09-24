@@ -1,4 +1,5 @@
 import { AI_PROVIDER_MODEL_CATALOG } from '../domain/ai-provider-models.js';
+import { toPublicTonePresetOptions } from '../domain/tone-presets.js';
 import type { AiKnowledgeEntryRecord, AiProviderId, AiTenantSettingsRecord } from '../domain/types.js';
 import type {
   PublicAdminConsultantSettings,
@@ -21,9 +22,11 @@ export function toUnconfiguredAdminConsultantSettings(): PublicAdminConsultantSe
     status: 'NOT_CONFIGURED',
     provider: null,
     model: null,
+    consultantName: null,
     businessSegment: null,
     businessDescription: null,
     adminPrompt: null,
+    tonePreset: null,
     tone: null,
     updatedAt: null,
   };
@@ -37,9 +40,11 @@ export function toPublicAdminConsultantSettings(
     status: record.status,
     provider: record.provider,
     model: record.model,
+    consultantName: record.consultantName,
     businessSegment: record.businessSegment,
     businessDescription: record.businessDescription,
     adminPrompt: record.adminPrompt,
+    tonePreset: record.tonePreset,
     tone: record.tone,
     updatedAt: record.updatedAt.toISOString(),
   };
@@ -55,6 +60,7 @@ export function toPublicConsultantOptions(): PublicConsultantOptions {
         label: modelId,
       })),
     })),
+    tonePresets: toPublicTonePresetOptions(),
   };
 }
 
