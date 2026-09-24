@@ -1,5 +1,22 @@
 export { AdvisorDomainError } from './advisor-domain-error.js';
 export {
+  ADVISOR_CONTEXT_BLOCK_TYPES,
+  ADVISOR_CONTEXT_CHAR_BUDGET,
+  ADVISOR_CONTEXT_PRESERVATION_ORDER,
+  ADVISOR_CONTEXT_TRUST_LEVELS,
+  ADVISOR_HISTORY_MESSAGE_LIMIT,
+} from './context-blocks.js';
+export type {
+  AdvisorBuiltContext,
+  AdvisorContextBlock,
+  AdvisorContextBlockSource,
+  AdvisorContextBlockType,
+  AdvisorContextTrustLevel,
+} from './context-blocks.js';
+export { ADVISOR_FINANCIAL_ABSENT, formatAdvisorFinancialAmount } from './financial-facts-text.js';
+export { ADVISOR_PLATFORM_INSTRUCTIONS } from './platform-instructions.js';
+export { delimitUntrustedContent } from './untrusted-content.js';
+export {
   AI_PROVIDER_MODEL_CATALOG,
   assertAiProviderId,
   assertAllowedAiModel,
