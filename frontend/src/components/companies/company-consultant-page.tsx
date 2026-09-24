@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type SelectH
 import { getCompany } from '../../services/admin/companies';
 import { CompaniesRequestError } from '../../services/admin/companies.types';
 import {
+  consultantKnowledgeUserMessage,
   createTenantConsultantKnowledge,
   defaultModelForProvider,
   deleteTenantConsultantKnowledge,
@@ -312,8 +313,6 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
         const created = await createTenantConsultantKnowledge(companyId, {
           title,
           content,
-          contentType: 'TEXT',
-          status: 'ACTIVE',
         });
         setKnowledge((current) => [created, ...current]);
         setKnowledgeSuccess('Conhecimento criado para esta empresa.');
@@ -323,7 +322,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     } catch (error) {
       setKnowledgeError(
         error instanceof ConsultantRequestError
-          ? error.message
+          ? consultantKnowledgeUserMessage(error, 'Não foi possível salvar o conhecimento.')
           : 'Não foi possível salvar o conhecimento.',
       );
     } finally {
@@ -350,7 +349,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     } catch (error) {
       setKnowledgeError(
         error instanceof ConsultantRequestError
-          ? error.message
+          ? consultantKnowledgeUserMessage(error, 'Não foi possível atualizar o conhecimento.')
           : 'Não foi possível atualizar o conhecimento.',
       );
     } finally {
@@ -377,7 +376,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     } catch (error) {
       setKnowledgeError(
         error instanceof ConsultantRequestError
-          ? error.message
+          ? consultantKnowledgeUserMessage(error, 'Não foi possível excluir o conhecimento.')
           : 'Não foi possível excluir o conhecimento.',
       );
     } finally {

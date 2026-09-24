@@ -310,15 +310,26 @@ describe('UI admin Consultor (F13.5)', () => {
     renderPage();
     expect(await screen.findByText('Nenhum conhecimento cadastrado para esta empresa.')).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Política de crédito' } });
+    fireEvent.change(screen.getByLabelText('Título'), {
+      target: { value: 'Meta interna de faturamento' },
+    });
     fireEvent.change(screen.getByLabelText('Conteúdo'), {
-      target: { value: 'Prazo padrão de 30 dias.' },
+      target: { value: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar conhecimento' }));
 
     expect(await screen.findByText('Conhecimento criado para esta empresa.')).toBeTruthy();
-    expect(screen.getByText('Política de crédito')).toBeTruthy();
-    expect(screen.getByText('Prazo padrão de 30 dias.')).toBeTruthy();
+    expect(screen.getByText('Meta interna de faturamento')).toBeTruthy();
+    expect(
+      screen.getByText('A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.'),
+    ).toBeTruthy();
+    expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Conteúdo') as HTMLTextAreaElement).value).toBe('');
+    const postCall = fetchMock.mock.calls.find((call) => call[1]?.method === 'POST');
+    expect(JSON.parse(String(postCall?.[1]?.body))).toEqual({
+      title: 'Meta interna de faturamento',
+      content: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.',
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
     fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Política revisada' } });
@@ -334,6 +345,47 @@ describe('UI admin Consultor (F13.5)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar exclusão' }));
     expect(await screen.findByText('Conhecimento excluído.')).toBeTruthy();
     expect(screen.getByText('Nenhum conhecimento cadastrado para esta empresa.')).toBeTruthy();
+  });
+
+  it('mostra erro de validação de conhecimento sem detalhe interno', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith(`/admin/tenants/${companyId}`)) {
+        return Promise.resolve(jsonResponse(company));
+      }
+      if (url.endsWith('/admin/consultant/options')) {
+        return Promise.resolve(jsonResponse(options));
+      }
+      if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`) && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              error: {
+                code: 'VALIDATION_ERROR',
+                message: 'Verifique os dados informados.',
+                details: [{ field: 'title', issue: 'required' }],
+              },
+            },
+            422,
+          ),
+        );
+      }
+      if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`)) {
+        return Promise.resolve(jsonResponse({ data: [] }));
+      }
+      return Promise.resolve(jsonResponse(configured));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Título'), {
+      target: { value: 'Meta interna de faturamento' },
+    });
+    fireEvent.change(screen.getByLabelText('Conteúdo'), {
+      target: { value: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar conhecimento' }));
+    expect(await screen.findByText('Informe um título válido.')).toBeTruthy();
+    expect(screen.queryByText('Verifique os dados informados.')).toBeNull();
   });
 
   it('mostra erro quando o carregamento falha', async () => {

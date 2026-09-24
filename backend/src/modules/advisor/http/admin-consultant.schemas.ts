@@ -26,7 +26,7 @@ const PUT_SETTINGS_BODY_KEYS = new Set([
   'tone',
 ]);
 const PUT_PROVIDER_CREDENTIAL_KEYS = new Set(['credential']);
-const CREATE_KNOWLEDGE_BODY_KEYS = new Set(['title', 'content', 'status']);
+const CREATE_KNOWLEDGE_BODY_KEYS = new Set(['title', 'content', 'status', 'contentType']);
 const UPDATE_KNOWLEDGE_BODY_KEYS = new Set(['title', 'content', 'status']);
 
 function assertObjectBody(body: unknown, label: string): Record<string, unknown> {
@@ -290,7 +290,7 @@ export function parsePutAdminProviderCredentialBody(body: unknown): PutAdminProv
 export type CreateAdminKnowledgeRequestBody = {
   readonly title: string;
   readonly content: string;
-  readonly status?: AiKnowledgeStatus;
+  readonly status: AiKnowledgeStatus;
 };
 
 export function parseCreateAdminKnowledgeRequestBody(
@@ -321,6 +321,10 @@ export function parseCreateAdminKnowledgeRequestBody(
     details.push({ field: 'status', issue: 'invalid_enum' });
   }
 
+  if (record.contentType !== undefined && record.contentType !== 'TEXT') {
+    details.push({ field: 'contentType', issue: 'invalid_enum' });
+  }
+
   if (details.length > 0) {
     throw new ValidationError('Dados de conhecimento inválidos.', { details });
   }
@@ -328,7 +332,8 @@ export function parseCreateAdminKnowledgeRequestBody(
   return {
     title: (record.title as string).trim(),
     content: (record.content as string).trim(),
-    ...(record.status !== undefined ? { status: record.status as AiKnowledgeStatus } : {}),
+    status:
+      record.status === undefined ? 'ACTIVE' : (record.status as AiKnowledgeStatus),
   };
 }
 

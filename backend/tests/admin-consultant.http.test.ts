@@ -10,7 +10,13 @@ import {
   createUserCredentialRepository,
   createUserRepository,
 } from '../src/modules/auth/index.js';
-import { AI_PROVIDER_MODEL_CATALOG } from '../src/modules/advisor/index.js';
+import { Prisma } from '../src/generated/prisma/client.js';
+import {
+  AI_PROVIDER_MODEL_CATALOG,
+  createAdvisorKnowledgeRepository,
+  createAdvisorSettingsRepository,
+  createBuildAdvisorContext,
+} from '../src/modules/advisor/index.js';
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
 import { cleanTestDatabase } from './helpers/test-database.js';
 
@@ -544,6 +550,189 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
         headers: { cookie },
       });
       expect(afterDelete.json().data).toHaveLength(0);
+    });
+
+    it('aceita o cadastro textual homologado sem contentType no payload', async () => {
+      const tenant = await tenants.create({
+        name: 'consultant-knowledge-life',
+        displayName: 'Clínica Life',
+      });
+      const other = await tenants.create({
+        name: 'consultant-knowledge-other',
+        displayName: 'Outra Empresa',
+      });
+      await createPlatformUser({ email: 'admin-knowledge-life@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-knowledge-life@api.test');
+      const title = 'Meta interna de faturamento';
+      const content =
+        'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.';
+
+      const created = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge`,
+        headers: { cookie },
+        payload: { title, content },
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json()).toMatchObject({
+        title,
+        content,
+        contentType: 'TEXT',
+        status: 'ACTIVE',
+      });
+      expectNoSecretLeak(created.json());
+
+      const withType = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge`,
+        headers: { cookie },
+        payload: { title: 'Observação operacional', content: 'Atendimento até 18h.', contentType: 'TEXT' },
+      });
+      expect(withType.statusCode).toBe(201);
+
+      const rejectedType = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge`,
+        headers: { cookie },
+        payload: { title, content, contentType: 'PDF' },
+      });
+      expect(rejectedType.statusCode).toBe(422);
+
+      const otherKnowledge = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${other.id}/consultant/knowledge`,
+        headers: { cookie },
+        payload: { title: 'Segredo de outro tenant', content: 'CROSS_TENANT_KNOWLEDGE' },
+      });
+      expect(otherKnowledge.statusCode).toBe(201);
+
+      const disabled = await app.inject({
+        method: 'PATCH',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge/${withType.json().id}`,
+        headers: { cookie },
+        payload: { status: 'DISABLED' },
+      });
+      expect(disabled.statusCode).toBe(200);
+      expect(disabled.json().status).toBe('DISABLED');
+
+      const settings = createAdvisorSettingsRepository(prisma);
+      await settings.upsertSettings(tenant.id, { provider: 'OPENAI', status: 'ACTIVE' });
+      const knowledge = createAdvisorKnowledgeRepository(prisma);
+      const context = await createBuildAdvisorContext({
+        settings,
+        knowledge,
+        conversations: {
+          findConversation: async () => null,
+          listMessages: async () => [],
+        },
+        cashFlow: {
+          getMonthlyCashFlow: async ({ tenantId }) => ({
+            tenantId,
+            today: new Date('2026-09-24T00:00:00.000Z'),
+            monthKey: '2026-09',
+            from: new Date('2026-09-01T00:00:00.000Z'),
+            to: new Date('2026-09-30T00:00:00.000Z'),
+            costCenterCashSplit: true,
+            realized: {
+              inflows: new Prisma.Decimal('0'),
+              outflows: new Prisma.Decimal('0'),
+              result: new Prisma.Decimal('0'),
+            },
+            realizedByCategory: { inflows: null, outflows: null },
+            expected: {
+              receivables: new Prisma.Decimal('0'),
+              payables: new Prisma.Decimal('0'),
+              result: new Prisma.Decimal('0'),
+            },
+            overdue: {
+              receivables: new Prisma.Decimal('0'),
+              payables: new Prisma.Decimal('0'),
+              ofMonth: { receivables: new Prisma.Decimal('0'), payables: new Prisma.Decimal('0') },
+            },
+            stock: {
+              receivables: { open: null, overdue: null, dueToday: null, upcoming: null },
+              payables: { open: null, overdue: null, dueToday: null, upcoming: null },
+            },
+            coverage: null,
+            daily: { realized: [], expected: [] },
+          }),
+        },
+        analytics: {
+          getFinancialStockSnapshot: async ({ tenantId }) => ({
+            tenantId,
+            today: new Date('2026-09-24T00:00:00.000Z'),
+            receivables: {
+              open: new Prisma.Decimal('0'),
+              overdue: new Prisma.Decimal('0'),
+              upcoming: new Prisma.Decimal('0'),
+            },
+            payables: {
+              open: new Prisma.Decimal('0'),
+              overdue: new Prisma.Decimal('0'),
+              upcoming: new Prisma.Decimal('0'),
+            },
+            receivableDelinquency: {
+              overdueUnpaid: new Prisma.Decimal('0'),
+              openUnpaid: new Prisma.Decimal('0'),
+              rate: new Prisma.Decimal('0'),
+            },
+          }),
+        },
+      }).build({
+        tenantId: tenant.id,
+        question: 'Qual é a meta interna de faturamento?',
+      });
+
+      const knowledgeBlock = context.blocks.find((block) => block.type === 'TENANT_KNOWLEDGE');
+      expect(knowledgeBlock?.trustLevel).toBe('UNTRUSTED');
+      expect(knowledgeBlock?.content).toContain(title);
+      expect(knowledgeBlock?.content).toContain(content);
+      expect(knowledgeBlock?.content).not.toContain('CROSS_TENANT_KNOWLEDGE');
+      expect(knowledgeBlock?.content).not.toContain('Atendimento até 18h.');
+      expect(context.blocks.find((block) => block.type === 'PLATFORM_INSTRUCTIONS')?.content).toBeTruthy();
+    });
+
+    it('USER e Support Mode não cadastram conhecimento', async () => {
+      const tenant = await tenants.create({
+        name: 'consultant-knowledge-auth',
+        displayName: 'Consultant Auth',
+      });
+      await createPlatformUser({ email: 'user-knowledge@api.test', role: 'USER', tenantId: tenant.id });
+      await createPlatformUser({ email: 'admin-knowledge-auth@api.test', role: 'ADMIN' });
+      const app = await buildTestApp();
+      const userCookie = await loginAs(app, 'user-knowledge@api.test');
+      const adminCookie = await loginAs(app, 'admin-knowledge-auth@api.test');
+
+      const forbidden = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge`,
+        headers: { cookie: userCookie },
+        payload: {
+          title: 'Meta interna de faturamento',
+          content: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.',
+        },
+      });
+      expect(forbidden.statusCode).toBe(403);
+
+      const enter = await app.inject({
+        method: 'POST',
+        url: '/auth/support/enter',
+        headers: { cookie: adminCookie, 'user-agent': 'admin-knowledge-auth' },
+        payload: { tenantId: tenant.id },
+      });
+      expect(enter.statusCode).toBe(200);
+      const support = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge`,
+        headers: { cookie: adminCookie },
+        payload: {
+          title: 'Meta interna de faturamento',
+          content: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.',
+        },
+      });
+      expect(support.statusCode).toBe(403);
+      expect(await prisma.aiKnowledgeEntry.count()).toBe(0);
     });
 
     it('retorna 404 ao acessar conhecimento de outro tenant', async () => {

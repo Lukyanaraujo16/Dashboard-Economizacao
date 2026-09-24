@@ -7,6 +7,7 @@ import {
   adminTenantConsultantPath,
 } from '../src/lib/api-config';
 import {
+  consultantKnowledgeUserMessage,
   createTenantConsultantKnowledge,
   defaultModelForProvider,
   deleteTenantConsultantKnowledge,
@@ -17,6 +18,7 @@ import {
   updateTenantConsultant,
   updateTenantConsultantKnowledge,
 } from '../src/services/admin/consultant';
+import { ConsultantRequestError } from '../src/services/admin/consultant.types';
 import type {
   ConsultantKnowledgeEntry,
   ConsultantOptions,
@@ -143,8 +145,8 @@ describe('admin consultant service', () => {
 
     await listTenantConsultantKnowledge(tenantId);
     await createTenantConsultantKnowledge(tenantId, {
-      title: 'Política de crédito',
-      content: 'Prazo padrão de 30 dias.',
+      title: 'Meta interna de faturamento',
+      content: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.',
     });
     await updateTenantConsultantKnowledge(tenantId, knowledge.id, { title: 'Atualizado' });
     await deleteTenantConsultantKnowledge(tenantId, knowledge.id);
@@ -152,10 +154,14 @@ describe('admin consultant service', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(adminTenantConsultantKnowledgePath(tenantId));
     expect(fetchMock.mock.calls[1]?.[0]).toBe(adminTenantConsultantKnowledgePath(tenantId));
     expect(fetchMock.mock.calls[1]?.[1]?.method).toBe('POST');
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      title: 'Meta interna de faturamento',
+      content: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.',
+    });
     expect(fetchMock.mock.calls[2]?.[0]).toBe(
       adminTenantConsultantKnowledgeEntryPath(tenantId, knowledge.id),
     );
-    expect(fetchMock.mock.calls[2]?.[1]?.method).toBe('PUT');
+    expect(fetchMock.mock.calls[2]?.[1]?.method).toBe('PATCH');
     expect(fetchMock.mock.calls[3]?.[1]?.method).toBe('DELETE');
     for (const [, init] of fetchMock.mock.calls) {
       expect(init?.credentials).toBe('include');
@@ -165,6 +171,31 @@ describe('admin consultant service', () => {
   it('aceita lista de knowledge como array nu', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse([knowledge])));
     await expect(listTenantConsultantKnowledge(tenantId)).resolves.toEqual([knowledge]);
+  });
+
+  it('mensagem de validação de knowledge aponta o campo', () => {
+    expect(
+      consultantKnowledgeUserMessage(
+        new ConsultantRequestError('validation', 'Verifique os dados informados.', {
+          details: [{ field: 'title', issue: 'required' }],
+        }),
+        'fallback',
+      ),
+    ).toBe('Informe um título válido.');
+    expect(
+      consultantKnowledgeUserMessage(
+        new ConsultantRequestError('validation', 'Verifique os dados informados.', {
+          details: [{ field: 'content', issue: 'required' }],
+        }),
+        'fallback',
+      ),
+    ).toBe('Informe o conteúdo do conhecimento.');
+    expect(
+      consultantKnowledgeUserMessage(
+        new ConsultantRequestError('forbidden', 'Você não tem permissão para esta operação.'),
+        'fallback',
+      ),
+    ).toBe('Você não tem permissão para esta operação.');
   });
 
   it('422 mapeia envelope de validação', async () => {

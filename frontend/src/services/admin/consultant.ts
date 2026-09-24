@@ -429,6 +429,33 @@ export async function listTenantConsultantKnowledge(
   return list;
 }
 
+export function consultantKnowledgeUserMessage(
+  error: ConsultantRequestError,
+  fallback: string,
+): string {
+  if (
+    error.kind === 'unauthenticated' ||
+    error.kind === 'forbidden' ||
+    error.kind === 'conflict' ||
+    error.kind === 'not_found'
+  ) {
+    return error.message;
+  }
+
+  if (error.kind === 'validation' || error.kind === 'bad_request') {
+    const fields = error.details ?? [];
+    if (fields.some((item) => item.field === 'title')) {
+      return 'Informe um título válido.';
+    }
+    if (fields.some((item) => item.field === 'content')) {
+      return 'Informe o conteúdo do conhecimento.';
+    }
+    return 'Verifique o título e o conteúdo informados.';
+  }
+
+  return fallback;
+}
+
 export async function createTenantConsultantKnowledge(
   tenantId: string,
   input: CreateConsultantKnowledgeInput,
@@ -439,8 +466,6 @@ export async function createTenantConsultantKnowledge(
     body: JSON.stringify({
       title: input.title,
       content: input.content,
-      contentType: input.contentType ?? 'TEXT',
-      ...(input.status !== undefined ? { status: input.status } : {}),
     }),
   });
   const body = await readJsonBody(response);
@@ -462,7 +487,7 @@ export async function updateTenantConsultantKnowledge(
   input: UpdateConsultantKnowledgeInput,
 ): Promise<ConsultantKnowledgeEntry> {
   const response = await consultantFetch(adminTenantConsultantKnowledgeEntryPath(tenantId, entryId), {
-    method: 'PUT',
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });
