@@ -15,6 +15,11 @@ import {
   revenueReportPeriodLabel,
   type ExpensesExportContext,
 } from './expenses-export-presentation.js';
+import {
+  buildExportLancamentosRows,
+  exportPartyColumnLabel,
+  resolveExportCashDetails,
+} from './report-export-cash-details.js';
 import { sanitizeSpreadsheetText } from './sanitize-spreadsheet-text.js';
 
 export async function renderExpensesReportXlsx(context: ExpensesExportContext): Promise<Buffer> {
@@ -26,6 +31,7 @@ export async function renderExpensesReportXlsx(context: ExpensesExportContext): 
   addSummarySheet(workbook, context);
   addMonthlySheet(workbook, context);
   addCategoriesSheet(workbook, context);
+  addLancamentosSheet(workbook, context);
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
@@ -99,6 +105,42 @@ function addCategoriesSheet(workbook: Workbook, context: ExpensesExportContext):
       percentage: parseDecimalNumber(item.percentage),
     });
     applyMoneyFormats(row, [3]);
+  }
+}
+
+function addLancamentosSheet(workbook: Workbook, context: ExpensesExportContext): void {
+  const sheet = workbook.addWorksheet('Lançamentos');
+  const partyHeader = exportPartyColumnLabel('expenses');
+  sheet.columns = [
+    { header: 'Data', key: 'date', width: 14 },
+    { header: 'Descrição', key: 'description', width: 36 },
+    { header: partyHeader, key: 'party', width: 28 },
+    { header: 'Categoria', key: 'category', width: 28 },
+    { header: 'Centro de custo', key: 'costCenter', width: 28 },
+    { header: 'Situação', key: 'situation', width: 16 },
+    { header: 'Valor', key: 'amount', width: 16 },
+  ];
+  styleHeader(sheet);
+  sheet.views = [{ state: 'frozen', ySplit: 1 }];
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: 7 },
+  };
+  const rows = buildExportLancamentosRows(
+    'expenses',
+    resolveExportCashDetails('expenses', context.cashDetails),
+  );
+  for (const item of rows) {
+    const row = sheet.addRow({
+      date: sanitizeSpreadsheetText(item.date),
+      description: sanitizeSpreadsheetText(item.description),
+      party: sanitizeSpreadsheetText(item.party),
+      category: sanitizeSpreadsheetText(item.category),
+      costCenter: sanitizeSpreadsheetText(item.costCenter),
+      situation: sanitizeSpreadsheetText(item.situation),
+      amount: item.amount,
+    });
+    applyMoneyFormats(row, [7]);
   }
 }
 

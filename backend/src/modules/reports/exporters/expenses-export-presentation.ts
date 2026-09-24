@@ -11,6 +11,7 @@ import {
   situationFilterLabel,
   type RevenueExportFilters,
 } from './revenue-export-presentation.js';
+import type { ReportExportCashDetailsBundle } from './report-export-cash-details.js';
 import type { ReportPdfBranding } from './report-pdf-presentation.js';
 
 export const EXPENSES_REPORT_TITLE = 'Relatório financeiro — Regime de caixa';
@@ -27,6 +28,8 @@ export type ExpensesExportContext = {
   readonly filters: ExpensesExportFilters;
   /** Somente PDF. XLSX ignora. Ausente = wordmark, sem logo. */
   readonly pdfBranding?: ReportPdfBranding;
+  /** Universo canônico da Fase 2. Ausente = seção/aba vazia disponível. */
+  readonly cashDetails?: ReportExportCashDetailsBundle;
 };
 
 export {

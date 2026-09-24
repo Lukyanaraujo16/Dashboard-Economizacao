@@ -162,7 +162,7 @@ function installment(input: {
   const total = new Prisma.Decimal(input.total ?? unpaid.plus(paid).toString());
   return {
     externalId: input.externalId,
-    description: 'descricao-secreta-nao-vazar',
+    description: 'Honorários do período',
     dueDate: input.dueDate,
     competenceDate: input.dueDate,
     upstreamCreatedAt: null,
@@ -330,14 +330,16 @@ describe('GET /reports/expenses export', () => {
     const pdfText = decodedPdfStrings(pdfBytes);
     expect(pdfText.toUpperCase()).toContain('REGIME DE CAIXA');
     expect(pdfText).toContain('Saídas realizadas');
+    expect(pdfText).toContain('Lançamentos do período');
+    expect(pdfText).toContain('Honorários do período');
     expect(pdfText).toContain('20.000,00');
     expect(pdfText).toContain('8.000,00');
     expect(pdfText).toContain('7.000,00');
     expect(pdfText.toLowerCase()).not.toContain('competência');
     expect(pdfText).not.toContain('333');
     expect(pdfText).not.toContain(a.tenant.id);
-    expect(pdfText).not.toContain('descricao-secreta-nao-vazar');
     expect(pdfText).not.toContain('access-token-secret');
+    expect(pdfText).not.toContain('refresh-token-secret');
 
     const xlsx = await app.inject({
       method: 'GET',
@@ -351,7 +353,16 @@ describe('GET /reports/expenses export', () => {
     );
     const workbook = new Workbook();
     await workbook.xlsx.load(Buffer.from(xlsx.rawPayload));
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Resumo', 'Mensal', 'Categorias']);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+      'Resumo',
+      'Mensal',
+      'Categorias',
+      'Lançamentos',
+    ]);
+    const lancamentos = workbook.getWorksheet('Lançamentos');
+    expect(lancamentos?.getCell('A1').value).toBe('Data');
+    expect(lancamentos?.getCell('C1').value).toBe('Fornecedor');
+    expect(lancamentos?.rowCount).toBeGreaterThan(1);
     expect(String(workbook.getWorksheet('Resumo')?.getCell('B1').value)).toContain('Regime de caixa');
     expect(workbook.getWorksheet('Resumo')?.getCell('B7').value).toBe(20000);
     expect(workbook.getWorksheet('Resumo')?.getCell('B8').value).toBe(12000);

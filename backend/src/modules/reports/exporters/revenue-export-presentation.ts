@@ -1,5 +1,6 @@
 import type { DashboardMonthlyRevenueCompositionItem } from '../../dashboard/domain/types.js';
 import type { RevenueReportResponse } from '../domain/types.js';
+import type { ReportExportCashDetailsBundle } from './report-export-cash-details.js';
 import type { ReportPdfBranding } from './report-pdf-presentation.js';
 
 const MONTHS_PT = [
@@ -36,6 +37,8 @@ export type RevenueExportContext = {
   readonly filters: RevenueExportFilters;
   /** Somente PDF. XLSX ignora. Ausente = wordmark, sem logo. */
   readonly pdfBranding?: ReportPdfBranding;
+  /** Universo canônico da Fase 2. Ausente = seção/aba vazia disponível. */
+  readonly cashDetails?: ReportExportCashDetailsBundle;
 };
 
 export function formatMonthKeyPtBr(key: string): string {

@@ -25,6 +25,13 @@ export type ReportPdfTableSpec = {
   readonly emptyMessage: string;
 };
 
+export type ReportPdfTransactionBlock = {
+  readonly title: string;
+  readonly summary: string | null;
+  readonly unavailableMessage: string | null;
+  readonly table: ReportPdfTableSpec;
+};
+
 export type ReportPdfDocumentSpec = {
   readonly title: string;
   readonly companyName: string;
@@ -36,6 +43,10 @@ export type ReportPdfDocumentSpec = {
   readonly emptyNotice: string | null;
   readonly composition: ReportPdfTableSpec;
   readonly monthly: ReportPdfTableSpec;
+  readonly transactions?: {
+    readonly title: string;
+    readonly blocks: readonly ReportPdfTransactionBlock[];
+  };
 };
 
 const MARGIN = THEME.margin;
@@ -87,6 +98,9 @@ function drawDocument(doc: PDFKit.PDFDocument, spec: ReportPdfDocumentSpec): voi
   }
   drawSectionTable(doc, spec.composition);
   drawSectionTable(doc, spec.monthly);
+  if (spec.transactions) {
+    drawTransactions(doc, spec.transactions);
+  }
 }
 
 function drawHeader(doc: PDFKit.PDFDocument, spec: ReportPdfDocumentSpec): void {
@@ -221,6 +235,46 @@ function drawEmptyNotice(doc: PDFKit.PDFDocument, notice: string): void {
     .fillColor(THEME.textSecondary)
     .text(notice, MARGIN + 8, y + 8, { width: CONTENT_WIDTH - 16 });
   doc.y = y + height + 12;
+}
+
+function drawTransactions(
+  doc: PDFKit.PDFDocument,
+  transactions: NonNullable<ReportPdfDocumentSpec['transactions']>,
+): void {
+  ensureSpace(doc, 28);
+  doc
+    .fillColor(THEME.primary)
+    .font('Helvetica-Bold')
+    .fontSize(12)
+    .text(transactions.title, MARGIN, doc.y, { width: CONTENT_WIDTH });
+  doc.moveDown(0.45);
+  for (const block of transactions.blocks) {
+    ensureSpace(doc, 36);
+    doc
+      .fillColor(THEME.primary)
+      .font('Helvetica-Bold')
+      .fontSize(11)
+      .text(block.title, MARGIN, doc.y, { width: CONTENT_WIDTH });
+    if (block.summary) {
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor(THEME.textSecondary)
+        .text(block.summary, MARGIN, doc.y + 2, { width: CONTENT_WIDTH });
+    }
+    if (block.unavailableMessage) {
+      doc
+        .font('Helvetica-Oblique')
+        .fontSize(9)
+        .fillColor(THEME.textSecondary)
+        .text(block.unavailableMessage, MARGIN, doc.y + 4, { width: CONTENT_WIDTH });
+      doc.moveDown(0.7);
+      continue;
+    }
+    doc.moveDown(0.3);
+    drawTable(doc, block.table);
+    doc.moveDown(0.55);
+  }
 }
 
 function drawSectionTable(doc: PDFKit.PDFDocument, table: ReportPdfTableSpec): void {

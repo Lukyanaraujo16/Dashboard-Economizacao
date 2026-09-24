@@ -4,7 +4,11 @@ import {
   formatReportPdfPeriod,
   toReportPdfFilterChips,
 } from './report-pdf-presentation.js';
-import { renderSharedReportPdf } from './report-pdf-layout.js';
+import { renderSharedReportPdf, type ReportPdfDocumentSpec } from './report-pdf-layout.js';
+import {
+  buildExportPdfTransactions,
+  resolveExportCashDetails,
+} from './report-export-cash-details.js';
 import {
   REVENUE_REPORT_TITLE,
   compositionKindLabel,
@@ -73,5 +77,31 @@ export async function renderRevenueReportPdf(context: RevenueExportContext): Pro
       ]),
       emptyMessage: 'Não há meses neste recorte.',
     },
+    transactions: toPdfTransactions(
+      buildExportPdfTransactions(
+        'revenue',
+        resolveExportCashDetails('revenue', context.cashDetails),
+        formatMoneyPtBr,
+      ),
+    ),
   });
+}
+
+function toPdfTransactions(
+  spec: ReturnType<typeof buildExportPdfTransactions>,
+): NonNullable<ReportPdfDocumentSpec['transactions']> {
+  return {
+    title: spec.title,
+    blocks: spec.blocks.map((block) => ({
+      title: block.title,
+      summary: block.summary,
+      unavailableMessage: block.unavailableMessage,
+      table: {
+        title: block.title,
+        columns: block.columns,
+        rows: block.rows,
+        emptyMessage: block.emptyMessage,
+      },
+    })),
+  };
 }

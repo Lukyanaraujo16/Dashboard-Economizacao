@@ -136,6 +136,14 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
       tenantBranding,
       platformBranding,
       storage,
+      cashDetails: await loadExportCashDetails({
+        tenantId: resolveOperationalTenantId(auth),
+        direction: 'revenue',
+        fromKey: range.from,
+        toKey: range.to,
+        costCenterId,
+        categoryId,
+      }),
     });
     const filename = buildRevenueExportFilename(range.from, range.to, format);
     const file =
@@ -187,6 +195,14 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
       tenantBranding,
       platformBranding,
       storage,
+      cashDetails: await loadExportCashDetails({
+        tenantId: resolveOperationalTenantId(auth),
+        direction: 'expenses',
+        fromKey: range.from,
+        toKey: range.to,
+        costCenterId,
+        categoryId,
+      }),
     });
     const filename = buildExpensesExportFilename(range.from, range.to, format);
     const file =
@@ -209,6 +225,43 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
   app.get('/reports/expenses/details', { preHandler: requireAuthentication }, async (request, reply) => {
     return replyReportCashDetails(request, reply, 'expenses');
   });
+
+  async function loadExportCashDetails(input: {
+    readonly tenantId: string | null;
+    readonly direction: ReportDetailDirection;
+    readonly fromKey: string;
+    readonly toKey: string;
+    readonly costCenterId: string | null;
+    readonly categoryId: string | null;
+  }) {
+    if (input.tenantId === null) {
+      return undefined;
+    }
+    let resolvedCostCenterId: string | undefined;
+    if (input.costCenterId !== null) {
+      const found = await costCenters.findByIdForTenant(input.tenantId, input.costCenterId);
+      if (found === null) {
+        throw new NotFoundError('Centro de custo não encontrado.');
+      }
+      resolvedCostCenterId = found.id;
+    }
+    let categoryFilter: DashboardCategoryFilter | undefined;
+    if (input.categoryId !== null) {
+      const found = await categories.findByIdForTenant(input.tenantId, input.categoryId);
+      if (found === null) {
+        throw new NotFoundError('Categoria não encontrada.');
+      }
+      categoryFilter = { externalId: found.externalId, type: found.type };
+    }
+    return reportCashDetails.listExportReportCashDetails({
+      tenantId: input.tenantId,
+      direction: input.direction,
+      fromKey: input.fromKey,
+      toKey: input.toKey,
+      ...(resolvedCostCenterId === undefined ? {} : { costCenterId: resolvedCostCenterId }),
+      ...(categoryFilter === undefined ? {} : { categoryFilter }),
+    });
+  }
 
   async function replyReportCashDetails(
     request: FastifyRequest,

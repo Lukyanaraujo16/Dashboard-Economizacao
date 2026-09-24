@@ -34,14 +34,26 @@ export type GetReportCashDetailsInput = {
   readonly limit?: number;
   readonly offset?: number;
   readonly now?: Date;
+  /** `all` une IDs realizados + em aberto — usado pelo export sem paginação. */
+  readonly nameScope?: 'situation' | 'all';
+};
+
+export type ReportExportCashDetailsBundle = {
+  readonly realized: ReportCashDetailsUniverse;
+  readonly expected: ReportCashDetailsUniverse;
+  readonly overdue: ReportCashDetailsUniverse;
 };
 
 export type ReportCashDetailsService = {
   getReportCashDetails(input: GetReportCashDetailsInput): Promise<ReportCashDetails>;
-  /** Universo sem paginação — fonte canônica para exporters futuros. */
+  /** Universo sem paginação — fonte canônica para exporters. */
   listAllReportCashDetails(
     input: Omit<GetReportCashDetailsInput, 'limit' | 'offset'>,
   ): Promise<ReportCashDetailsUniverse>;
+  /** Uma carga de caixa + três universos canônicos (REALIZED/EXPECTED/OVERDUE). */
+  listExportReportCashDetails(
+    input: Omit<GetReportCashDetailsInput, 'situation' | 'limit' | 'offset' | 'nameScope'>,
+  ): Promise<ReportExportCashDetailsBundle>;
 };
 
 export type ReportCashDetailsServiceDependencies = {
@@ -157,12 +169,16 @@ async function loadCashFlowInput(
   const partyNames = await deps.parties.findNamesByIds(scope, partyIds);
 
   const nameKind = input.direction === 'revenue' ? 'RECEIVABLE' : 'PAYABLE';
+  const realizedNameIds = nameKind === 'RECEIVABLE' ? receivableIds : payableIds;
+  const expectedNameIds = (nameKind === 'RECEIVABLE' ? receivables : payables).map(
+    (row) => row.externalId,
+  );
   const nameIds =
-    input.situation === 'REALIZED'
-      ? nameKind === 'RECEIVABLE'
-        ? receivableIds
-        : payableIds
-      : (nameKind === 'RECEIVABLE' ? receivables : payables).map((row) => row.externalId);
+    input.nameScope === 'all'
+      ? [...new Set([...realizedNameIds, ...expectedNameIds])]
+      : input.situation === 'REALIZED'
+        ? realizedNameIds
+        : expectedNameIds;
 
   let costCenterNamesByInstallment: ReadonlyMap<string, readonly string[]> = new Map();
   let filteredCostCenterName: string | null = null;
@@ -250,6 +266,31 @@ export function createReportCashDetailsService(
         direction: input.direction,
         situation: input.situation,
       });
+    },
+
+    async listExportReportCashDetails(input) {
+      const loaded = await loadCashFlowInput(deps, {
+        ...input,
+        situation: 'EXPECTED',
+        nameScope: 'all',
+      });
+      return {
+        realized: collectReportCashDetailUniverse({
+          ...loaded,
+          direction: input.direction,
+          situation: 'REALIZED',
+        }),
+        expected: collectReportCashDetailUniverse({
+          ...loaded,
+          direction: input.direction,
+          situation: 'EXPECTED',
+        }),
+        overdue: collectReportCashDetailUniverse({
+          ...loaded,
+          direction: input.direction,
+          situation: 'OVERDUE',
+        }),
+      };
     },
   };
 }

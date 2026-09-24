@@ -106,6 +106,7 @@ describe('exporters de despesas', () => {
     expect(text).toContain('8.000,00');
     expect(text).toContain('7.000,00');
     expect(text).toContain('15.000,00');
+    expect(text).toContain('Lançamentos do período');
     expect(text).not.toContain('tenant-');
     expect(text).not.toContain('descricao-secreta-nao-vazar');
   });
@@ -172,7 +173,12 @@ describe('exporters de despesas', () => {
     expect(xlsx.subarray(0, 2).toString()).toBe('PK');
     const workbook = new Workbook();
     await workbook.xlsx.load(xlsx);
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Resumo', 'Mensal', 'Categorias']);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+      'Resumo',
+      'Mensal',
+      'Categorias',
+      'Lançamentos',
+    ]);
 
     const summary = workbook.getWorksheet('Resumo');
     expect(summary?.getCell('B7').value).toBe(15000);

@@ -9,6 +9,7 @@ import type { TenantBrandingRepository } from '../../branding/repositories/tenan
 import type { TenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import type { ExpensesReportResponse } from '../domain/types.js';
 import { resolveReportPdfBranding } from '../exporters/report-pdf-branding.js';
+import type { ReportExportCashDetailsBundle } from '../exporters/report-export-cash-details.js';
 import {
   situationFilterLabel,
   type ExpensesExportContext,
@@ -27,6 +28,7 @@ export async function buildExpensesExportContext(input: {
   readonly tenantBranding: TenantBrandingRepository;
   readonly platformBranding: PlatformBrandingRepository;
   readonly storage: FileStorage;
+  readonly cashDetails?: ReportExportCashDetailsBundle;
 }): Promise<ExpensesExportContext> {
   const tenantId = resolveOperationalTenantId(input.auth);
   const tenant = tenantId === null ? null : await input.tenants.findById(tenantId);
@@ -58,5 +60,6 @@ export async function buildExpensesExportContext(input: {
       category: input.categoryId === null ? 'Todas' : (categoryName?.trim() || 'Categoria selecionada'),
     },
     pdfBranding,
+    ...(input.cashDetails === undefined ? {} : { cashDetails: input.cashDetails }),
   };
 }
