@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { reportsExpensesPath, reportsRevenuePath } from '../src/lib/api-config';
+import {
+  reportsExpensesDetailsPath,
+  reportsExpensesPath,
+  reportsRevenueDetailsPath,
+  reportsRevenuePath,
+} from '../src/lib/api-config';
 import {
   REPORT_TYPE_EXPENSES,
   REPORT_TYPE_REVENUE,
@@ -122,5 +127,42 @@ describe('reportsExpensesPath', () => {
       }),
     ).toBe('/reports/expenses?from=2026-01&to=2026-06&format=pdf');
     expect(reportsExpensesPath({ from: '2026-01', to: '2026-06' })).not.toContain('format=');
+  });
+});
+
+describe('reportsRevenueDetailsPath', () => {
+  it('monta GET /reports/revenue/details com situation obrigatória', () => {
+    expect(
+      reportsRevenueDetailsPath({
+        from: '2026-09',
+        to: '2026-09',
+        situation: 'REALIZED',
+        costCenterId: '11111111-1111-4111-8111-111111111111',
+        categoryId: '22222222-2222-4222-8222-222222222222',
+        limit: 25,
+        offset: 50,
+      }),
+    ).toBe(
+      '/reports/revenue/details?from=2026-09&to=2026-09&situation=REALIZED&costCenter=11111111-1111-4111-8111-111111111111&category=22222222-2222-4222-8222-222222222222&limit=25&offset=50',
+    );
+    expect(
+      reportsRevenueDetailsPath({ from: '2026-01', to: '2026-02', situation: 'OVERDUE' }),
+    ).not.toContain('tenantId');
+  });
+});
+
+describe('reportsExpensesDetailsPath', () => {
+  it('monta GET /reports/expenses/details com situation obrigatória', () => {
+    expect(
+      reportsExpensesDetailsPath({
+        from: '2026-01',
+        to: '2026-02',
+        situation: 'EXPECTED',
+        limit: 25,
+        offset: 0,
+      }),
+    ).toBe(
+      '/reports/expenses/details?from=2026-01&to=2026-02&situation=EXPECTED&limit=25&offset=0',
+    );
   });
 });

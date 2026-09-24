@@ -6,6 +6,11 @@ import { getDashboardCategories } from '../src/services/dashboard/categories';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
 import { getReportsExpenses, downloadReportsExpensesExport } from '../src/services/reports/expenses';
 import { type ReportsExpensesResponse } from '../src/services/reports/expenses.types';
+import {
+  getReportsExpensesDetails,
+  getReportsRevenueDetails,
+} from '../src/services/reports/details';
+import type { ReportCashDetailSituation, ReportCashDetailsResponse } from '../src/services/reports/details.types';
 import { getReportsRevenue, downloadReportsRevenueExport } from '../src/services/reports/revenue';
 import {
   ReportsRevenueRequestError,
@@ -38,6 +43,19 @@ vi.mock('../src/services/reports/revenue', () => ({
 vi.mock('../src/services/reports/expenses', () => ({
   getReportsExpenses: vi.fn(),
   downloadReportsExpensesExport: vi.fn(),
+}));
+
+vi.mock('../src/services/reports/details', () => ({
+  getReportsRevenueDetails: vi.fn(),
+  getReportsExpensesDetails: vi.fn(),
+  ReportsCashDetailsRequestError: class ReportsCashDetailsRequestError extends Error {
+    readonly kind: string;
+    constructor(kind: string, message: string) {
+      super(message);
+      this.kind = kind;
+      this.name = 'ReportsCashDetailsRequestError';
+    }
+  },
 }));
 
 vi.mock('../src/services/dashboard/categories', () => ({
@@ -200,6 +218,31 @@ const expensesReadyBody: ReportsExpensesResponse = {
   ],
 };
 
+function emptyDetails(situation: ReportCashDetailSituation): ReportCashDetailsResponse {
+  return {
+    today: '2026-08-19',
+    from: '2026-01',
+    to: '2026-02',
+    situation,
+    available: true,
+    unavailableReason: null,
+    totalAmount: '0',
+    itemCount: 0,
+    limit: 25,
+    offset: 0,
+    items: [],
+  };
+}
+
+function mockEmptyDetails() {
+  vi.mocked(getReportsRevenueDetails).mockImplementation(async (options) =>
+    emptyDetails(options.situation),
+  );
+  vi.mocked(getReportsExpensesDetails).mockImplementation(async (options) =>
+    emptyDetails(options.situation),
+  );
+}
+
 function renderReports(options?: {
   readonly role?: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
   readonly support?: { readonly active: true; readonly tenantId: string; readonly tenantDisplayName: string };
@@ -240,6 +283,9 @@ describe('página /relatorios', () => {
     vi.mocked(getReportsExpenses).mockReset();
     vi.mocked(downloadReportsExpensesExport).mockReset();
     vi.mocked(downloadReportsExpensesExport).mockResolvedValue(undefined);
+    vi.mocked(getReportsRevenueDetails).mockReset();
+    vi.mocked(getReportsExpensesDetails).mockReset();
+    mockEmptyDetails();
   });
 
   afterEach(() => {
@@ -282,8 +328,8 @@ describe('página /relatorios', () => {
     expect(await screen.findByText('Serviços')).toBeTruthy();
     expect(screen.getByText('Entradas por mês civil (caixa)')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Faturamento' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Entradas realizadas' })).toBeTruthy();
-    expect(screen.getByRole('table')).toBeTruthy();
+    expect(screen.getAllByRole('heading', { name: 'Entradas realizadas' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Entradas por mês civil (caixa)').closest('table')).toBeTruthy();
     expect(screen.queryByText(/competência/i)).toBeNull();
     expect(screen.queryByText(/Snapshot atual/i)).toBeNull();
   });
@@ -498,8 +544,8 @@ describe('página /relatorios', () => {
     expect(await screen.findByText('Aluguel')).toBeTruthy();
     expect(screen.getByText('Saídas por mês civil (caixa)')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Despesas' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Saídas realizadas' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'A pagar' })).toBeTruthy();
+    expect(screen.getAllByRole('heading', { name: 'Saídas realizadas' }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole('heading', { name: 'A pagar' }).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/competência/i)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Exportar PDF' }));
@@ -581,5 +627,95 @@ describe('página /relatorios', () => {
       support: { active: true, tenantId: 'tenant-b', tenantDisplayName: 'Empresa B' },
     });
     await waitFor(() => expect(getDashboardCategories).toHaveBeenCalledTimes(2));
+  });
+
+  it('detalhes usam filtros aplicados e ignoram draft até Visualizar', async () => {
+    const CATEGORY = '22222222-2222-4222-8222-222222222222';
+    const CENTER = '11111111-1111-4111-8111-111111111111';
+    vi.mocked(getDashboardCategories).mockResolvedValue({
+      items: [{ id: CATEGORY, name: 'Serviços', type: 'REVENUE' }],
+    });
+    vi.mocked(getDashboardCostCenters).mockResolvedValue({
+      items: [{ id: CENTER, name: 'Operações', code: null, active: true }],
+    });
+    vi.mocked(getReportsRevenue).mockResolvedValue(readyBody);
+    renderReports();
+    fireEvent.click(await screen.findByRole('tab', { name: 'Operações' }));
+    fireEvent.click(screen.getByLabelText(/Categoria:/));
+    fireEvent.click(await screen.findByRole('option', { name: 'Serviços' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Visualizar relatório' }));
+    await waitFor(() => {
+      expect(getReportsRevenueDetails).toHaveBeenCalled();
+    });
+    const applied = vi.mocked(getReportsRevenue).mock.calls[0]?.[0];
+    expect(getReportsRevenueDetails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: applied?.from,
+        to: applied?.to,
+        situation: 'REALIZED',
+        categoryId: CATEGORY,
+        costCenterId: CENTER,
+      }),
+    );
+    expect(getReportsRevenueDetails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        situation: 'EXPECTED',
+        from: applied?.from,
+        to: applied?.to,
+        categoryId: CATEGORY,
+        costCenterId: CENTER,
+      }),
+    );
+    expect(getReportsRevenueDetails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        situation: 'OVERDUE',
+        from: applied?.from,
+        to: applied?.to,
+        categoryId: CATEGORY,
+        costCenterId: CENTER,
+      }),
+    );
+    expect(await screen.findByRole('heading', { name: 'Lançamentos do período' })).toBeTruthy();
+    expect(screen.getByText('Entradas por mês civil (caixa)')).toBeTruthy();
+
+    const callsAfterApply = vi.mocked(getReportsRevenueDetails).mock.calls.length;
+    const fromRegion = screen.getByRole('region', { name: 'De' });
+    fireEvent.click(within(fromRegion).getByRole('button', { name: 'Mês anterior' }));
+    fireEvent.change(screen.getByLabelText('Tipo de relatório'), { target: { value: 'expenses' } });
+    expect(getReportsRevenueDetails).toHaveBeenCalledTimes(callsAfterApply);
+    expect(getReportsExpensesDetails).not.toHaveBeenCalled();
+    expect(getReportsExpenses).not.toHaveBeenCalled();
+    expect(screen.getByText('Entradas por mês civil (caixa)')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Lançamentos do período' })).toBeTruthy();
+    expect(screen.getByText(/Filtros alterados — clique em Visualizar/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Exportar PDF' })).toHaveProperty('disabled', true);
+  });
+
+  it('erro nos detalhes não apaga o consolidado', async () => {
+    vi.mocked(getReportsRevenue).mockResolvedValue(readyBody);
+    vi.mocked(getReportsRevenueDetails).mockImplementation(async (options) => {
+      if (options.situation === 'EXPECTED') {
+        throw new Error('boom');
+      }
+      return emptyDetails(options.situation);
+    });
+    renderReports();
+    fireEvent.click(await screen.findByRole('button', { name: 'Visualizar relatório' }));
+    expect(await screen.findByText('Serviços')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Faturamento' })).toBeTruthy();
+    expect(screen.getByText('Entradas por mês civil (caixa)')).toBeTruthy();
+    expect(await screen.findByText('Não foi possível carregar os lançamentos de receita.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Exportar PDF' })).toBeTruthy();
+  });
+
+  it('erro no consolidado não monta a seção de lançamentos', async () => {
+    vi.mocked(getReportsRevenue).mockRejectedValue(
+      new ReportsRevenueRequestError('unavailable', 'Não foi possível carregar o relatório de receita.'),
+    );
+    renderReports();
+    fireEvent.click(await screen.findByRole('button', { name: 'Visualizar relatório' }));
+    expect(await screen.findByText('Não foi possível carregar o relatório de receita.')).toBeTruthy();
+    expect(getReportsRevenueDetails).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: 'Lançamentos do período' })).toBeNull();
   });
 });

@@ -43,6 +43,7 @@ import { DashboardMonthSelector } from '../dashboard/dashboard-month-selector';
 import { hasOperationalDashboardTenant, resolveOperationalTenantId } from '../dashboard/dashboard-overview-view';
 import { formatMonthKeyPtBr } from '../dashboard/dashboard-forecast-view';
 import { Button, Typography } from '../ui';
+import { ReportTransactionsSection } from './report-transactions-section';
 import { isExpensesReportEmpty } from './reports-expenses-view';
 import { isRevenueReportEmpty, revenueReportPeriodLabel } from './reports-revenue-view';
 import styles from './reports-page.module.css';
@@ -693,6 +694,13 @@ export function ReportsPage() {
                 </tbody>
               </table>
             </div>
+
+            {appliedFilters ? (
+              <ReportTransactionsSection
+                key={requestKeyOf(appliedFilters)}
+                filters={appliedFilters}
+              />
+            ) : null}
           </>
         ) : null}
 
@@ -772,7 +780,21 @@ export function ReportsPage() {
                 </tbody>
               </table>
             </div>
+
+            {appliedFilters ? (
+              <ReportTransactionsSection
+                key={requestKeyOf(appliedFilters)}
+                filters={appliedFilters}
+              />
+            ) : null}
           </>
+        ) : null}
+
+        {viewState === 'empty' && appliedFilters ? (
+          <ReportTransactionsSection
+            key={requestKeyOf(appliedFilters)}
+            filters={appliedFilters}
+          />
         ) : null}
       </div>
     </div>

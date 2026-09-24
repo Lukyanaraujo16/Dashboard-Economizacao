@@ -518,6 +518,48 @@ export function reportsExpensesExportFilename(
   return `relatorio-despesas-${from}-a-${to}.${format}`;
 }
 
+export type ReportCashDetailSituation = 'REALIZED' | 'EXPECTED' | 'OVERDUE';
+
+export type ReportsCashDetailsPathOptions = {
+  readonly from: string;
+  readonly to: string;
+  readonly situation: ReportCashDetailSituation;
+  readonly costCenterId?: string | null;
+  readonly categoryId?: string | null;
+  readonly limit?: number;
+  readonly offset?: number;
+};
+
+function reportsCashDetailsQueryString(options: ReportsCashDetailsPathOptions): string {
+  const params = new URLSearchParams();
+  params.set('from', options.from);
+  params.set('to', options.to);
+  params.set('situation', options.situation);
+  const costCenterId = options.costCenterId?.trim();
+  if (costCenterId) {
+    params.set('costCenter', costCenterId);
+  }
+  const categoryId = options.categoryId?.trim();
+  if (categoryId) {
+    params.set('category', categoryId);
+  }
+  if (options.limit !== undefined) {
+    params.set('limit', String(options.limit));
+  }
+  if (options.offset !== undefined) {
+    params.set('offset', String(options.offset));
+  }
+  return params.toString();
+}
+
+export function reportsRevenueDetailsPath(options: ReportsCashDetailsPathOptions): string {
+  return `${REPORTS_API_PREFIX}/revenue/details?${reportsCashDetailsQueryString(options)}`;
+}
+
+export function reportsExpensesDetailsPath(options: ReportsCashDetailsPathOptions): string {
+  return `${REPORTS_API_PREFIX}/expenses/details?${reportsCashDetailsQueryString(options)}`;
+}
+
 export function dashboardMonthEndCashPressurePath(
   costCenterId?: string | null,
   categoryId?: string | null,
