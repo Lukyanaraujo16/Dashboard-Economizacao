@@ -14,6 +14,8 @@ export interface ContaAzulEnvironment {
   redirectUri: string;
 }
 
+export type AiDefaultProvider = 'OPENAI' | 'ANTHROPIC';
+
 export interface Environment {
   allowInsecureHttpSession: boolean;
   authSecret: string;
@@ -30,6 +32,15 @@ export interface Environment {
   autoSyncIntervalMinutes: number;
   /** 11-E.1 — dry-run seguro quando ausente/false; mutação só com true explícito. */
   installmentPresenceAutoTombstone: boolean;
+  /** Credencial da plataforma. Ausência não impede boot. Nunca persistir/logar. */
+  openaiApiKey: string | null;
+  /** Credencial da plataforma. Ausência não impede boot. Nunca persistir/logar. */
+  anthropicApiKey: string | null;
+  /**
+   * Default apenas para criação/configuração nova.
+   * Provider efetivo da execução vem de ai_tenant_settings.provider.
+   */
+  aiDefaultProvider: AiDefaultProvider | null;
 }
 
 const TEST_INTEGRATION_ENCRYPTION_KEY = '0'.repeat(64);
@@ -227,6 +238,22 @@ function parseEncryptionKey(value: string | undefined, nodeEnv: NodeEnvironment)
   return parseIntegrationEncryptionKey(raw);
 }
 
+export function parseOptionalSecret(value: string | undefined): string | null {
+  const raw = value?.trim() ?? '';
+  return raw.length === 0 ? null : raw;
+}
+
+export function parseAiDefaultProvider(value: string | undefined): AiDefaultProvider | null {
+  const raw = value?.trim().toUpperCase() ?? '';
+  if (!raw) {
+    return null;
+  }
+  if (raw === 'OPENAI' || raw === 'ANTHROPIC') {
+    return raw;
+  }
+  throw new Error('AI_PROVIDER deve ser OPENAI ou ANTHROPIC quando definido.');
+}
+
 export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Environment {
   const nodeEnv = parseNodeEnvironment(source.NODE_ENV);
   const appUrl = parseAppUrl(source.APP_URL, nodeEnv);
@@ -253,5 +280,8 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
     installmentPresenceAutoTombstone: resolveContaAzulInstallmentPresenceAutoTombstone(
       source.CONTA_AZUL_INSTALLMENT_PRESENCE_AUTO_TOMBSTONE,
     ),
+    openaiApiKey: parseOptionalSecret(source.OPENAI_API_KEY),
+    anthropicApiKey: parseOptionalSecret(source.ANTHROPIC_API_KEY),
+    aiDefaultProvider: parseAiDefaultProvider(source.AI_PROVIDER),
   };
 }

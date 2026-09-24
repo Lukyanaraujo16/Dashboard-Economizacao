@@ -911,6 +911,8 @@ Campos conceituais:
 
 * id;
 * tenant_id;
+* provider (OPENAI | ANTHROPIC);
+* model (string validada em código; não é enum de banco);
 * business_segment;
 * business_description;
 * admin_prompt;
@@ -918,6 +920,8 @@ Campos conceituais:
 * status;
 * created_at;
 * updated_at.
+
+Provider e model efetivos são por tenant. Ausência de settings equivale a Consultor não configurado/desabilitado. Credenciais de API não são persistidas.
 
 ⸻
 

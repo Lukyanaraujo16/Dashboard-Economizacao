@@ -1,4 +1,9 @@
 type TestDatabaseCleaner = {
+  readonly aiRun: { deleteMany: () => Promise<unknown> };
+  readonly aiMessage: { deleteMany: () => Promise<unknown> };
+  readonly aiConversation: { deleteMany: () => Promise<unknown> };
+  readonly aiKnowledgeEntry: { deleteMany: () => Promise<unknown> };
+  readonly aiTenantSettings: { deleteMany: () => Promise<unknown> };
   readonly integrationSyncCursor: { deleteMany: () => Promise<unknown> };
   readonly syncRun: { deleteMany: () => Promise<unknown> };
   readonly revenueGoal: { deleteMany: () => Promise<unknown> };
@@ -85,6 +90,11 @@ export async function cleanTestDatabase(
   }
   assertTestDatabaseUrl(databaseUrl);
 
+  await prisma.aiRun.deleteMany();
+  await prisma.aiMessage.deleteMany();
+  await prisma.aiConversation.deleteMany();
+  await prisma.aiKnowledgeEntry.deleteMany();
+  await prisma.aiTenantSettings.deleteMany();
   await prisma.integrationSyncCursor.deleteMany();
   await prisma.syncRun.deleteMany();
   await prisma.revenueGoal.deleteMany();

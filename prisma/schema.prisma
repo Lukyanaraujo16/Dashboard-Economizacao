@@ -61,6 +61,11 @@ model Tenant {
   installmentPresenceCheckpoints InstallmentPresenceCheckpoint[]
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
+  aiSettings          AiTenantSettings?
+  aiKnowledgeEntries  AiKnowledgeEntry[]
+  aiConversations     AiConversation[]
+  aiMessages          AiMessage[]
+  aiRuns              AiRun[]
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
@@ -154,6 +159,9 @@ model User {
   tenant                 Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   credential             UserCredential?
   supportSessions        SupportSession[] @relation("SupportSessionOperator")
+  aiKnowledgeCreated     AiKnowledgeEntry[]
+  aiConversations        AiConversation[]
+  aiRuns                 AiRun[]
 
   @@index([tenantId], map: "idx_users_tenant_id")
   @@map("users")
@@ -772,4 +780,184 @@ model UserCredential {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_credentials")
+}
+
+enum AiProvider {
+  OPENAI
+  ANTHROPIC
+
+  @@map("ai_provider")
+}
+
+enum AiConsultantStatus {
+  ACTIVE
+  DISABLED
+
+  @@map("ai_consultant_status")
+}
+
+enum AiKnowledgeContentType {
+  TEXT
+
+  @@map("ai_knowledge_content_type")
+}
+
+enum AiKnowledgeStatus {
+  ACTIVE
+  DISABLED
+
+  @@map("ai_knowledge_status")
+}
+
+enum AiConversationStatus {
+  OPEN
+  CLOSED
+
+  @@map("ai_conversation_status")
+}
+
+enum AiMessageSenderType {
+  USER
+  CONSULTANT
+  SYSTEM
+
+  @@map("ai_message_sender_type")
+}
+
+enum AiMessageType {
+  TEXT
+
+  @@map("ai_message_type")
+}
+
+enum AiRunType {
+  QUESTION_REPLY
+
+  @@map("ai_run_type")
+}
+
+enum AiRunStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  TIMEOUT
+  LIMIT_BLOCKED
+
+  @@map("ai_run_status")
+}
+
+enum AiRunErrorCode {
+  AUTH
+  RATE_LIMIT
+  TIMEOUT
+  MODEL_UNAVAILABLE
+  BAD_REQUEST
+  CONTENT_REJECTED
+  PROVIDER_ERROR
+  UNKNOWN
+
+  @@map("ai_run_error_code")
+}
+
+/// Configuração 1:1 do Consultor por tenant. Sem settings = não configurado/desabilitado.
+/// Provider/model efetivos vêm daqui, não de env. Sem API key.
+model AiTenantSettings {
+  id                  String             @id @default(uuid()) @db.Uuid
+  tenantId            String             @unique(map: "uq_ai_tenant_settings_tenant_id") @map("tenant_id") @db.Uuid
+  provider            AiProvider
+  model               String
+  businessSegment     String?            @map("business_segment")
+  businessDescription String?            @map("business_description") @db.Text
+  adminPrompt         String?            @map("admin_prompt") @db.Text
+  tone                String?
+  status              AiConsultantStatus @default(DISABLED)
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@map("ai_tenant_settings")
+}
+
+/// Conhecimento textual exclusivo do tenant. Conteúdo não é interpolado na persistência.
+model AiKnowledgeEntry {
+  id          String                 @id @default(uuid()) @db.Uuid
+  tenantId    String                 @map("tenant_id") @db.Uuid
+  title       String
+  content     String                 @db.Text
+  contentType AiKnowledgeContentType @default(TEXT) @map("content_type")
+  status      AiKnowledgeStatus      @default(DISABLED)
+  createdById String                 @map("created_by") @db.Uuid
+  createdAt   DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy   User                   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([tenantId], map: "idx_ai_knowledge_entries_tenant_id")
+  @@map("ai_knowledge_entries")
+}
+
+/// Conversa do Consultor: pertence ao tenant e ao usuário.
+model AiConversation {
+  id            String               @id @default(uuid()) @db.Uuid
+  tenantId      String               @map("tenant_id") @db.Uuid
+  userId        String               @map("user_id") @db.Uuid
+  status        AiConversationStatus @default(OPEN)
+  title         String?
+  startedAt     DateTime             @map("started_at") @db.Timestamptz(3)
+  lastMessageAt DateTime             @map("last_message_at") @db.Timestamptz(3)
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  messages      AiMessage[]
+  runs          AiRun[]
+
+  @@index([tenantId], map: "idx_ai_conversations_tenant_id")
+  @@index([tenantId, userId], map: "idx_ai_conversations_tenant_user")
+  @@index([tenantId, lastMessageAt], map: "idx_ai_conversations_tenant_last_message_at")
+  @@map("ai_conversations")
+}
+
+/// Mensagem de uma conversa. Sem related_insight_id (F14).
+model AiMessage {
+  id             String              @id @default(uuid()) @db.Uuid
+  conversationId String              @map("conversation_id") @db.Uuid
+  tenantId       String              @map("tenant_id") @db.Uuid
+  senderType     AiMessageSenderType @map("sender_type")
+  content        String              @db.Text
+  messageType    AiMessageType       @default(TEXT) @map("message_type")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  conversation   AiConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  runs           AiRun[]
+
+  @@index([tenantId], map: "idx_ai_messages_tenant_id")
+  @@index([conversationId, createdAt], map: "idx_ai_messages_conversation_created_at")
+  @@map("ai_messages")
+}
+
+/// Auditoria de execução do provedor. Sem API key, prompt financeiro, body/headers do vendor.
+model AiRun {
+  id             String          @id @default(uuid()) @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  userId         String?         @map("user_id") @db.Uuid
+  conversationId String?         @map("conversation_id") @db.Uuid
+  messageId      String?         @map("message_id") @db.Uuid
+  runType        AiRunType       @default(QUESTION_REPLY) @map("run_type")
+  provider       AiProvider
+  model          String
+  status         AiRunStatus
+  inputTokens    Int?            @map("input_tokens")
+  outputTokens   Int?            @map("output_tokens")
+  durationMs     Int?            @map("duration_ms")
+  errorCode      AiRunErrorCode? @map("error_code")
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  finishedAt     DateTime?       @map("finished_at") @db.Timestamptz(3)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  conversation   AiConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  message        AiMessage?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt], map: "idx_ai_runs_tenant_created_at")
+  @@map("ai_runs")
 }

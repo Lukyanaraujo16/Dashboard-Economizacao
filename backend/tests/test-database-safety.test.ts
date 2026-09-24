@@ -11,6 +11,11 @@ const DEV_URL = 'postgresql://placeholder:placeholder@127.0.0.1:5432/dashboard_e
 
 function createCleanerMock() {
   return {
+    aiRun: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    aiMessage: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    aiConversation: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    aiKnowledgeEntry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    aiTenantSettings: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     userCredential: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     user: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     tenantBranding: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
