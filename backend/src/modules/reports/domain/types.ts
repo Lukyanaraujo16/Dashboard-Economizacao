@@ -82,3 +82,34 @@ export type ExpensesReportResponse = {
   readonly payables: ExpensesReportPayables;
   readonly months: readonly ExpensesReportMonth[];
 };
+
+export type ReportCashDetailSituation = 'REALIZED' | 'EXPECTED' | 'OVERDUE';
+
+export type ReportCashDetailItemResponse = {
+  readonly date: string;
+  readonly description: string | null;
+  readonly partyName: string | null;
+  readonly categoryNames: readonly string[];
+  readonly costCenterNames: readonly string[];
+  readonly situation: ReportCashDetailSituation;
+  readonly amount: string;
+  readonly installmentKind: 'RECEIVABLE' | 'PAYABLE';
+  readonly installmentExternalId: string;
+  readonly settlementExternalId?: string;
+};
+
+/** Resposta de `GET /reports/revenue|expenses/details`. */
+export type ReportCashDetailsResponse = {
+  readonly today: string;
+  readonly from: string;
+  readonly to: string;
+  readonly situation: ReportCashDetailSituation;
+  readonly available: boolean;
+  readonly unavailableReason: 'COST_CENTER_SPLIT' | null;
+  /** Soma do universo filtrado (não da página). null = split indisponível. */
+  readonly totalAmount: string | null;
+  readonly itemCount: number;
+  readonly limit: number;
+  readonly offset: number;
+  readonly items: readonly ReportCashDetailItemResponse[];
+};

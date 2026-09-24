@@ -62,6 +62,16 @@ export type CostCenterAllocationReadRepository = {
       readonly externalIds: readonly string[];
     },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
+  /**
+   * Nomes de centros associados a parcelas — batch para detalhes de Relatórios.
+   * Não altera totais; só metadata do seletor invertido (sem N+1).
+   */
+  findCostCenterNamesByInstallmentExternalIds(
+    query: FinanceReadScope & {
+      readonly kind: 'RECEIVABLE' | 'PAYABLE';
+      readonly externalIds: readonly string[];
+    },
+  ): Promise<ReadonlyMap<string, readonly string[]>>;
 };
 
 export function createCostCenterAllocationReadRepository(
@@ -259,6 +269,51 @@ export function createCostCenterAllocationReadRepository(
         amount: row.amount,
         installment: mapPayableReadRecord(asPayable(row.payable)),
       }));
+    },
+
+    async findCostCenterNamesByInstallmentExternalIds(query) {
+      assertTenantId(query.tenantId);
+      const unique = [...new Set(query.externalIds.filter((id) => id.trim() !== ''))];
+      if (unique.length === 0) {
+        return new Map();
+      }
+      const installmentWhere =
+        query.integrationId !== undefined && query.integrationId.trim() !== ''
+          ? { tenantId: query.tenantId, integrationId: query.integrationId, externalId: { in: unique } }
+          : { tenantId: query.tenantId, externalId: { in: unique } };
+      const rows = await prisma.installmentCostCenterAllocation.findMany({
+        where:
+          query.kind === 'RECEIVABLE'
+            ? { tenantId: query.tenantId, receivable: installmentWhere }
+            : { tenantId: query.tenantId, payable: installmentWhere },
+        select: {
+          costCenter: { select: { name: true } },
+          receivable: { select: { externalId: true } },
+          payable: { select: { externalId: true } },
+        },
+        orderBy: { id: 'asc' },
+      });
+      const grouped = new Map<string, string[]>();
+      for (const row of rows) {
+        const externalId =
+          query.kind === 'RECEIVABLE' ? row.receivable?.externalId : row.payable?.externalId;
+        const name = row.costCenter.name.trim();
+        if (!externalId || name === '') {
+          continue;
+        }
+        const key = `${query.kind}:${externalId}`;
+        const current = grouped.get(key) ?? [];
+        if (!current.includes(name)) {
+          current.push(name);
+        }
+        grouped.set(key, current);
+      }
+      return new Map(
+        [...grouped.entries()].map(([key, names]) => [
+          key,
+          [...names].sort((left, right) => left.localeCompare(right, 'pt-BR')),
+        ]),
+      );
     },
   };
 }

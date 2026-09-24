@@ -4,7 +4,10 @@ import type { FinancialInstallmentReadRecord } from '../../finance/domain/types.
 import { isCivilDateInInclusiveRange } from './civil-calendar.js';
 import type { CashCostCenterAllocationSource } from './monthly-cash-flow.js';
 import { deriveInstallmentCostCenterCashSplit } from './cost-center-cash-split.js';
-import { isExpectedOpenReceivable } from './expected-open-receivables.js';
+import {
+  isExpectedOpenReceivable,
+  type OverdueOfMonthItem,
+} from './expected-open-receivables.js';
 import {
   isDashboardOverdue,
   matchesDashboardCategoryFilter,
@@ -115,6 +118,8 @@ export type AccumulatePayableOverdueResult = {
   readonly available: boolean;
   readonly overdue: Prisma.Decimal;
   readonly overdueOfMonth: Prisma.Decimal;
+  /** Parcelas que entram em overdue.ofMonth (amount > 0). */
+  readonly ofMonthItems: readonly OverdueOfMonthItem[];
 };
 
 /** Vencidos de pagáveis — espelha o ramo EXPENSE de consumePayableStock no cash flow. */
@@ -124,6 +129,7 @@ export function accumulatePayableOverdue(
   let available = true;
   let overdue = ZERO;
   let overdueOfMonth = ZERO;
+  const ofMonthItems: OverdueOfMonthItem[] = [];
 
   for (const row of input.rows) {
     if (!isActiveInstallment(row.installment)) {
@@ -149,6 +155,9 @@ export function accumulatePayableOverdue(
       overdue = overdue.plus(split.overdue);
       if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
         overdueOfMonth = overdueOfMonth.plus(split.overdue);
+        if (split.overdue.greaterThan(0)) {
+          ofMonthItems.push({ installment: row.installment, amount: split.overdue });
+        }
       }
       continue;
     }
@@ -157,11 +166,17 @@ export function accumulatePayableOverdue(
       overdue = overdue.plus(row.installment.unpaid);
       if (isCivilDateInInclusiveRange(row.installment.dueDate, input.from, input.to)) {
         overdueOfMonth = overdueOfMonth.plus(row.installment.unpaid);
+        if (row.installment.unpaid.greaterThan(0)) {
+          ofMonthItems.push({
+            installment: row.installment,
+            amount: row.installment.unpaid,
+          });
+        }
       }
     }
   }
 
-  return { available, overdue, overdueOfMonth };
+  return { available, overdue, overdueOfMonth, ofMonthItems };
 }
 
 export function compareExpectedOpenPayableItems(
