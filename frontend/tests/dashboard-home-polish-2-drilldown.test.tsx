@@ -14,6 +14,10 @@ import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal'
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
 import { getDashboardCategories } from '../src/services/dashboard/categories';
+import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
+import { getDashboardExpectedPayableDetails } from '../src/services/dashboard/expected-payable-details';
+import { getDashboardReceivableStockDetails } from '../src/services/dashboard/receivable-stock-details';
+import { getDashboardPayableStockDetails } from '../src/services/dashboard/payable-stock-details';
 import { ThemeProvider } from '../src/theme';
 import {
   cashFlowHomeFixture,
@@ -52,6 +56,18 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
 }));
 vi.mock('../src/services/dashboard/cost-centers', () => ({ getDashboardCostCenters: vi.fn() }));
 vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories: vi.fn() }));
+vi.mock('../src/services/dashboard/expected-receivable-details', () => ({
+  getDashboardExpectedReceivableDetails: vi.fn(),
+}));
+vi.mock('../src/services/dashboard/expected-payable-details', () => ({
+  getDashboardExpectedPayableDetails: vi.fn(),
+}));
+vi.mock('../src/services/dashboard/receivable-stock-details', () => ({
+  getDashboardReceivableStockDetails: vi.fn(),
+}));
+vi.mock('../src/services/dashboard/payable-stock-details', () => ({
+  getDashboardPayableStockDetails: vi.fn(),
+}));
 
 const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
@@ -61,6 +77,10 @@ const getHorizon = vi.mocked(getDashboardCashExpectedHorizon);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
+const getExpectedReceivableDetails = vi.mocked(getDashboardExpectedReceivableDetails);
+const getExpectedPayableDetails = vi.mocked(getDashboardExpectedPayableDetails);
+const getReceivableStockDetails = vi.mocked(getDashboardReceivableStockDetails);
+const getPayableStockDetails = vi.mocked(getDashboardPayableStockDetails);
 
 const syncedOverview: DashboardOverviewResponse = {
   today: '2026-08-19',
@@ -209,6 +229,42 @@ beforeEach(() => {
   getRevenueGoal.mockResolvedValue(goal);
   getCostCenters.mockResolvedValue({ items: [] });
   getCategories.mockResolvedValue({ items: [] });
+  getExpectedReceivableDetails.mockResolvedValue({
+    today: '2026-08-19',
+    monthKey: '2026-08',
+    from: '2026-08-01',
+    to: '2026-08-31',
+    available: true,
+    total: '0',
+    items: [],
+  });
+  getExpectedPayableDetails.mockResolvedValue({
+    today: '2026-08-19',
+    monthKey: '2026-08',
+    from: '2026-08-01',
+    to: '2026-08-31',
+    available: true,
+    total: '0',
+    items: [],
+  });
+  getReceivableStockDetails.mockResolvedValue({
+    today: '2026-08-19',
+    available: true,
+    total: '111111.11',
+    overdue: '0',
+    dueToday: '0',
+    upcoming: '111111.11',
+    items: [],
+  });
+  getPayableStockDetails.mockResolvedValue({
+    today: '2026-08-19',
+    available: true,
+    total: '22222.22',
+    overdue: '0',
+    dueToday: '0',
+    upcoming: '22222.22',
+    items: [],
+  });
 });
 
 afterEach(() => {

@@ -9,6 +9,8 @@ import type { DashboardMonthEndCashPressureResponse } from '../src/services/dash
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardReceivableStockDetails } from '../src/services/dashboard/receivable-stock-details';
+import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
+import { getDashboardExpectedPayableDetails } from '../src/services/dashboard/expected-payable-details';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -43,6 +45,12 @@ vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
 vi.mock('../src/services/dashboard/receivable-stock-details', () => ({
   getDashboardReceivableStockDetails: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/expected-receivable-details', () => ({
+  getDashboardExpectedReceivableDetails: vi.fn(),
+}));
+vi.mock('../src/services/dashboard/expected-payable-details', () => ({
+  getDashboardExpectedPayableDetails: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -54,6 +62,8 @@ const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getReceivableStockDetails = vi.mocked(getDashboardReceivableStockDetails);
+const getExpectedReceivableDetails = vi.mocked(getDashboardExpectedReceivableDetails);
+const getExpectedPayableDetails = vi.mocked(getDashboardExpectedPayableDetails);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
@@ -184,6 +194,24 @@ beforeEach(() => {
     overdue: '1.00',
     dueToday: '0',
     upcoming: '111110.11',
+    items: [],
+  });
+  getExpectedReceivableDetails.mockResolvedValue({
+    today: '2026-08-19',
+    monthKey: '2026-08',
+    from: '2026-08-01',
+    to: '2026-08-31',
+    available: true,
+    total: '0',
+    items: [],
+  });
+  getExpectedPayableDetails.mockResolvedValue({
+    today: '2026-08-19',
+    monthKey: '2026-08',
+    from: '2026-08-01',
+    to: '2026-08-31',
+    available: true,
+    total: '0',
     items: [],
   });
   getRevenueGoal.mockResolvedValue(goal);

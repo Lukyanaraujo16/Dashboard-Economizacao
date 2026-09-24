@@ -11,6 +11,8 @@ import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard
 import { getDashboardCashMovementHistory } from '../src/services/dashboard/cash-movement-history';
 import { getDashboardReceivableStockDetails } from '../src/services/dashboard/receivable-stock-details';
 import { getDashboardPayableStockDetails } from '../src/services/dashboard/payable-stock-details';
+import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
+import { getDashboardExpectedPayableDetails } from '../src/services/dashboard/expected-payable-details';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -51,6 +53,12 @@ vi.mock('../src/services/dashboard/receivable-stock-details', () => ({
 vi.mock('../src/services/dashboard/payable-stock-details', () => ({
   getDashboardPayableStockDetails: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/expected-receivable-details', () => ({
+  getDashboardExpectedReceivableDetails: vi.fn(),
+}));
+vi.mock('../src/services/dashboard/expected-payable-details', () => ({
+  getDashboardExpectedPayableDetails: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -64,7 +72,12 @@ const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getHistory = vi.mocked(getDashboardCashMovementHistory);
 const getReceivableStockDetails = vi.mocked(getDashboardReceivableStockDetails);
 const getPayableStockDetails = vi.mocked(getDashboardPayableStockDetails);
+const getExpectedReceivableDetails = vi.mocked(getDashboardExpectedReceivableDetails);
+const getExpectedPayableDetails = vi.mocked(getDashboardExpectedPayableDetails);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
+
+const CENTER = '11111111-1111-4111-8111-111111111111';
+const CATEGORY = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
 
@@ -101,6 +114,134 @@ const previousMonthCashFlow: DashboardMonthlyCashFlowResponse = {
     ],
     expected: [],
   },
+};
+
+const futureMonthCashFlow: DashboardMonthlyCashFlowResponse = {
+  ...cashFlowHomeFixture,
+  monthKey: '2026-10',
+  from: '2026-10-01',
+  to: '2026-10-31',
+  billing: '50000.00',
+  realized: { inflows: '0', outflows: '0', result: '0' },
+  expected: { receivables: '50000.00', payables: '166188.45', result: '-116188.45' },
+  overdue: {
+    receivables: '0',
+    payables: '0',
+    ofMonth: { receivables: '0', payables: '0' },
+  },
+  stock: {
+    receivables: { open: '50000.00', overdue: '0', dueToday: '0', upcoming: '50000.00' },
+    payables: { open: '166188.45', overdue: '0', dueToday: '0', upcoming: '166188.45' },
+  },
+  coverage: null,
+  realizedByCategory: {
+    inflows: emptyCashCategoryComposition('0'),
+    outflows: emptyCashCategoryComposition('0'),
+  },
+  daily: {
+    realized: [{ date: '2026-10-01', inflows: '0', outflows: '0', result: '0' }],
+    expected: [
+      { date: '2026-10-15', receivables: '50000.00', payables: '166188.45', result: '-116188.45' },
+    ],
+  },
+};
+
+const currentExpectedReceivableDetails = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  available: true,
+  total: '111111.11',
+  items: [
+    {
+      id: 'exp-ar-1',
+      externalId: 'ext-exp-ar-1',
+      dueDate: '2026-08-28',
+      amount: '111111.11',
+      description: 'Mensalidade prevista',
+      customerName: 'Cliente Previsto',
+      categoryNames: ['Serviços'],
+    },
+  ],
+};
+
+const currentExpectedPayableDetails = {
+  today: '2026-08-19',
+  monthKey: '2026-08',
+  from: '2026-08-01',
+  to: '2026-08-31',
+  available: true,
+  total: '22222.22',
+  items: [
+    {
+      id: 'exp-ap-1',
+      externalId: 'ext-exp-ap-1',
+      dueDate: '2026-08-28',
+      amount: '22222.22',
+      description: 'Honorários previstos',
+      supplierName: 'Fornecedor Previsto',
+      categoryNames: ['Contabilidade'],
+    },
+  ],
+};
+
+const pastExpectedReceivableDetails = {
+  ...currentExpectedReceivableDetails,
+  monthKey: '2026-07',
+  from: '2026-07-01',
+  to: '2026-07-31',
+  total: '0',
+  items: [],
+};
+
+const pastExpectedPayableDetails = {
+  ...currentExpectedPayableDetails,
+  monthKey: '2026-07',
+  from: '2026-07-01',
+  to: '2026-07-31',
+  total: '0',
+  items: [],
+};
+
+const futureExpectedReceivableDetails = {
+  today: '2026-08-19',
+  monthKey: '2026-10',
+  from: '2026-10-01',
+  to: '2026-10-31',
+  available: true,
+  total: '50000.00',
+  items: [
+    {
+      id: 'fut-ar-1',
+      externalId: 'ext-fut-ar-1',
+      dueDate: '2026-10-20',
+      amount: '50000.00',
+      description: 'Parcela outubro',
+      customerName: 'Cliente Outubro',
+      categoryNames: ['Serviços'],
+    },
+  ],
+};
+
+const futureExpectedPayableDetails = {
+  today: '2026-08-19',
+  monthKey: '2026-10',
+  from: '2026-10-01',
+  to: '2026-10-31',
+  available: true,
+  total: '166188.45',
+  items: [
+    {
+      id: 'fut-ap-1',
+      externalId: 'ext-fut-ap-1',
+      dueDate: '2026-10-15',
+      amount: '166188.45',
+      description: 'Despesa outubro',
+      supplierName: 'Fornecedor Outubro',
+      categoryNames: ['Aluguel'],
+    },
+  ],
 };
 
 const monthEnd: DashboardMonthEndCashPressureResponse = {
@@ -173,8 +314,28 @@ beforeEach(() => {
   dashboardSearchParams = new URLSearchParams();
   getOverview.mockResolvedValue(syncedOverview);
   getMonthEnd.mockResolvedValue(monthEnd);
-  getMonthlyCashFlow.mockImplementation(async (month) =>
-    month === '2026-07' ? previousMonthCashFlow : cashFlowHomeFixture,
+  getMonthlyCashFlow.mockImplementation(async (month) => {
+    if (month === '2026-07') {
+      return previousMonthCashFlow;
+    }
+    if (month === '2026-10') {
+      return futureMonthCashFlow;
+    }
+    return cashFlowHomeFixture;
+  });
+  getExpectedReceivableDetails.mockImplementation(async (month) =>
+    month === '2026-07'
+      ? pastExpectedReceivableDetails
+      : month === '2026-10'
+        ? futureExpectedReceivableDetails
+        : currentExpectedReceivableDetails,
+  );
+  getExpectedPayableDetails.mockImplementation(async (month) =>
+    month === '2026-07'
+      ? pastExpectedPayableDetails
+      : month === '2026-10'
+        ? futureExpectedPayableDetails
+        : currentExpectedPayableDetails,
   );
   getHistory.mockResolvedValue({
     today: '2026-08-19',
@@ -252,6 +413,12 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getAllByText(/R\$\s*888\.888,88/).length).toBeGreaterThan(0);
     expect(within(dialog).getByText('A receber')).toBeTruthy();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
+    await waitFor(() => {
+      expect(getExpectedReceivableDetails).toHaveBeenCalledWith(null, null, null);
+    });
+    expect(getReceivableStockDetails).not.toHaveBeenCalled();
+    expect(within(dialog).getByText('Títulos a receber no prazo')).toBeTruthy();
+    expect(within(dialog).getByText('Cliente Previsto')).toBeTruthy();
   });
 
   it('Z4 — Já recebido não aparece como card principal; Faturamento mantém Recebido', async () => {
@@ -282,6 +449,7 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     await waitFor(() => {
       expect(getReceivableStockDetails).toHaveBeenCalled();
     });
+    expect(getExpectedReceivableDetails).not.toHaveBeenCalled();
     expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
     expect(within(dialog).getByText('Cliente Teste')).toBeTruthy();
     expect(
@@ -300,6 +468,7 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     await waitFor(() => {
       expect(getPayableStockDetails).toHaveBeenCalled();
     });
+    expect(getExpectedPayableDetails).not.toHaveBeenCalled();
     expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
     expect(within(dialog).getByText('Fornecedor XYZ')).toBeTruthy();
   });
@@ -326,6 +495,12 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
 
     expect(within(dialog).getByText('Maiores categorias das saídas realizadas')).toBeTruthy();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
+    await waitFor(() => {
+      expect(getExpectedPayableDetails).toHaveBeenCalledWith(null, null, null);
+    });
+    expect(getPayableStockDetails).not.toHaveBeenCalled();
+    expect(within(dialog).getByText('Títulos a pagar no prazo')).toBeTruthy();
+    expect(within(dialog).getByText('Fornecedor Previsto')).toBeTruthy();
   });
 
   it('Z11/Z12 — Resultado abre com managerialResult', async () => {
@@ -493,5 +668,121 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getAllByText(/R\$\s*50,00/).length).toBeGreaterThan(0);
     expect(within(dialog).getByText('Vencidos')).toBeTruthy();
     expect(within(dialog).queryByText(/Sem previsão a receber no prazo/i)).toBeNull();
+  });
+});
+
+describe('Home — detalhe previsto de Faturamento e Despesas', () => {
+  it('Despesas em mês futuro lista títulos de expected-details e mantém baixa vazia', async () => {
+    dashboardSearchParams = new URLSearchParams('month=2026-10');
+    const dialog = await openKpiExpand('Despesas');
+    expect(within(dialog).getByRole('heading', { name: 'Despesas' })).toBeTruthy();
+    expect(within(dialog).getByText('A pagar')).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*166\.188,45/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('A pagar por vencimento (no prazo)')).toBeTruthy();
+    await waitFor(() => {
+      expect(getExpectedPayableDetails).toHaveBeenCalledWith('2026-10', null, null);
+    });
+    expect(getPayableStockDetails).not.toHaveBeenCalled();
+    expect(within(dialog).getByText('Títulos a pagar no prazo')).toBeTruthy();
+    expect(within(dialog).getByText('Fornecedor Outubro')).toBeTruthy();
+    expect(within(dialog).getByText(/15\/10\/2026/)).toBeTruthy();
+    expect(within(dialog).queryByText('Maiores categorias das saídas realizadas')).toBeNull();
+    expect(within(dialog).getAllByText('Sem movimento').length).toBeGreaterThan(0);
+  });
+
+  it('Faturamento em mês futuro lista títulos de expected-details e mantém baixa vazia', async () => {
+    dashboardSearchParams = new URLSearchParams('month=2026-10');
+    const dialog = await openKpiExpand('Faturamento previsto');
+    expect(within(dialog).getByText('A receber')).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*50\.000,00/).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(getExpectedReceivableDetails).toHaveBeenCalledWith('2026-10', null, null);
+    });
+    expect(getReceivableStockDetails).not.toHaveBeenCalled();
+    expect(within(dialog).getByText('Títulos a receber no prazo')).toBeTruthy();
+    expect(within(dialog).getByText('Cliente Outubro')).toBeTruthy();
+    expect(within(dialog).getByText(/20\/10\/2026/)).toBeTruthy();
+    expect(within(dialog).queryByText('Categorias das entradas realizadas')).toBeNull();
+    expect(within(dialog).getAllByText('Sem movimento').length).toBeGreaterThan(0);
+  });
+
+  it('mês atual lista somente títulos no prazo do expected, sem virar vencido em previsto', async () => {
+    const dialog = await openKpiExpand('Despesas');
+    await waitFor(() => {
+      expect(getExpectedPayableDetails).toHaveBeenCalledWith(null, null, null);
+    });
+    expect(within(dialog).getByText('Fornecedor Previsto')).toBeTruthy();
+    expect(within(dialog).getByText(/28\/08\/2026/)).toBeTruthy();
+    expect(within(dialog).queryByText('Fornecedor XYZ')).toBeNull();
+    expect(within(dialog).queryByText(/vencido/i)).toBeNull();
+    expect(getPayableStockDetails).not.toHaveBeenCalled();
+  });
+
+  it('mês passado mantém realizado e expected pode ficar vazio', async () => {
+    dashboardSearchParams = new URLSearchParams('month=2026-07');
+    const dialog = await openKpiExpand('Despesas');
+    expect(within(dialog).getByText('Pago')).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*100\.000,00/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Pago por dia de baixa')).toBeTruthy();
+    expect(within(dialog).getByText('Saídas realizadas acumuladas (dia de baixa)')).toBeTruthy();
+    await waitFor(() => {
+      expect(getExpectedPayableDetails).toHaveBeenCalledWith('2026-07', null, null);
+    });
+    expect(within(dialog).getByText('Nenhum pagamento previsto no prazo neste período.')).toBeTruthy();
+    expect(within(dialog).queryByText('Fornecedor Outubro')).toBeNull();
+    expect(within(dialog).queryByText('Fornecedor Previsto')).toBeNull();
+  });
+
+  it('envia centro de custo e categoria ao expected-details de Despesas', async () => {
+    dashboardSearchParams = new URLSearchParams(
+      `month=2026-10&costCenter=${CENTER}&category=${CATEGORY}`,
+    );
+    getCostCenters.mockResolvedValue({
+      items: [{ id: CENTER, name: 'Centro A', code: null, active: true }],
+    });
+    getCategories.mockResolvedValue({
+      items: [{ id: CATEGORY, name: 'Categoria A', type: 'EXPENSE' }],
+    });
+    await openKpiExpand('Despesas');
+    await waitFor(() => {
+      expect(getExpectedPayableDetails).toHaveBeenCalledWith('2026-10', CENTER, CATEGORY);
+    });
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-10', CENTER, CATEGORY);
+  });
+
+  it('envia centro de custo e categoria ao expected-details de Faturamento', async () => {
+    dashboardSearchParams = new URLSearchParams(`costCenter=${CENTER}&category=${CATEGORY}`);
+    getCostCenters.mockResolvedValue({
+      items: [{ id: CENTER, name: 'Centro A', code: null, active: true }],
+    });
+    getCategories.mockResolvedValue({
+      items: [{ id: CATEGORY, name: 'Categoria A', type: 'REVENUE' }],
+    });
+    await openKpiExpand('Faturamento');
+    await waitFor(() => {
+      expect(getExpectedReceivableDetails).toHaveBeenCalledWith(null, CENTER, CATEGORY);
+    });
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, CENTER, CATEGORY);
+  });
+
+  it('A receber e Contas a pagar continuam no stock-details', async () => {
+    const receivable = await openKpiExpand('A receber');
+    await waitFor(() => {
+      expect(getReceivableStockDetails).toHaveBeenCalled();
+    });
+    expect(getExpectedReceivableDetails).not.toHaveBeenCalled();
+    expect(within(receivable).getByText('Títulos em aberto')).toBeTruthy();
+    fireEvent.click(within(receivable).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    fireEvent.click(kpiScope('Contas a pagar').getByRole('button', { name: 'Expandir' }));
+    const payable = await screen.findByRole('dialog');
+    await waitFor(() => {
+      expect(getPayableStockDetails).toHaveBeenCalled();
+    });
+    expect(getExpectedPayableDetails).not.toHaveBeenCalled();
+    expect(within(payable).getByText('Títulos em aberto')).toBeTruthy();
   });
 });
