@@ -663,15 +663,15 @@ ADR-028 — Provedor de IA
 
 Status
 
-Parcialmente aprovada
+Aprovada para o motor reativo (F13)
 
 Decisão
 
-A arquitetura possuirá abstração de provedor de inteligência artificial.
+A arquitetura possui abstração de provedor de inteligência artificial (`IaProvider`).
 
-O sistema não deverá ficar acoplado diretamente a um modelo específico.
+O sistema não fica acoplado a um vendor específico.
 
-O primeiro provedor poderá ser OpenAI, mas a decisão sobre modelo, SDK e política de custos será registrada posteriormente.
+Providers suportados: OPENAI e ANTHROPIC. A escolha é por tenant (`ai_tenant_settings.provider` / `model`), sem migration para trocar vendor. Credenciais são da plataforma. Não há fallback cruzado entre vendors.
 
 ⸻
 

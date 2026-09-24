@@ -17,6 +17,10 @@ import {
 import { registerPublicFileRoutes } from '../modules/branding/http/public-file.routes.js';
 import { registerDashboardOverviewRoutes } from '../modules/dashboard/index.js';
 import { registerReportsRoutes } from '../modules/reports/index.js';
+import {
+  registerAdminConsultantRoutes,
+  registerConsultantRoutes,
+} from '../modules/advisor/http/index.js';
 import { registerAdminTenantRoutes } from '../modules/tenant/index.js';
 import {
   registerAdminContaAzulRoutes,
@@ -39,6 +43,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerPublicFileRoutes);
   await app.register(registerDashboardOverviewRoutes);
   await app.register(registerReportsRoutes);
+  await app.register(registerAdminConsultantRoutes);
+  await app.register(registerConsultantRoutes);
 
   const environment = loadEnvironment();
   if (environment.nodeEnv === 'test') {

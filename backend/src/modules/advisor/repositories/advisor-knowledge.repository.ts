@@ -59,6 +59,7 @@ export type AdvisorKnowledgeRepository = {
     entryId: string,
     input: UpdateAiKnowledgeEntryInput,
   ): Promise<AiKnowledgeEntryRecord>;
+  deleteKnowledge(tenantId: string, entryId: string): Promise<void>;
 };
 
 export function createAdvisorKnowledgeRepository(prisma: PrismaClient): AdvisorKnowledgeRepository {
@@ -156,6 +157,21 @@ export function createAdvisorKnowledgeRepository(prisma: PrismaClient): AdvisorK
         data,
       });
       return toRecord(row);
+    },
+
+    async deleteKnowledge(tenantId, entryId) {
+      assertAdvisorTenantId(tenantId);
+      const existing = await prisma.aiKnowledgeEntry.findFirst({
+        where: { id: entryId, tenantId },
+        select: { id: true },
+      });
+      if (existing === null) {
+        throw new AdvisorDomainError(
+          'KNOWLEDGE_NOT_FOUND',
+          'Entrada de conhecimento não encontrada neste tenant.',
+        );
+      }
+      await prisma.aiKnowledgeEntry.delete({ where: { id: existing.id } });
     },
   };
 }
