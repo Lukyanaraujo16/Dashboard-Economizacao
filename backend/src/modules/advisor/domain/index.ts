@@ -57,6 +57,7 @@ export type {
   CreateAiKnowledgeEntryInput,
   CreateAiMessageInput,
   CreateAiRunInput,
+  UpdateAiRunInput,
   UpdateAiKnowledgeEntryInput,
   UpsertAiTenantSettingsInput,
 } from './types.js';

@@ -38,4 +38,15 @@ describe('allowlist de provider/model do Consultor (F13.1)', () => {
     expect(resolveAiModel('OPENAI')).toBe(AI_PROVIDER_MODEL_CATALOG.OPENAI.defaultModel);
     expect(resolveAiModel('ANTHROPIC')).toBe(AI_PROVIDER_MODEL_CATALOG.ANTHROPIC.defaultModel);
   });
+
+  it('mantém IDs oficiais na allowlist (F13.3) e o legado Anthropic', () => {
+    expect([...AI_PROVIDER_MODEL_CATALOG.OPENAI.models]).toEqual(['gpt-4o-mini']);
+    expect(AI_PROVIDER_MODEL_CATALOG.OPENAI.defaultModel).toBe('gpt-4o-mini');
+    expect([...AI_PROVIDER_MODEL_CATALOG.ANTHROPIC.models]).toEqual([
+      'claude-sonnet-5',
+      'claude-sonnet-4-5',
+    ]);
+    expect(AI_PROVIDER_MODEL_CATALOG.ANTHROPIC.defaultModel).toBe('claude-sonnet-5');
+    expect(isAllowedAiModel('ANTHROPIC', 'claude-sonnet-4-5')).toBe(true);
+  });
 });

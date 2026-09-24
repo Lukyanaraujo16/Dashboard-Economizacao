@@ -4,3 +4,10 @@ export type {
   BuildAdvisorContextDependencies,
   BuildAdvisorContextInput,
 } from './build-advisor-context.js';
+export { AdvisorExecutionError, createSendAdvisorMessage } from './send-advisor-message.js';
+export type {
+  SendAdvisorMessage,
+  SendAdvisorMessageDependencies,
+  SendAdvisorMessageInput,
+  SendAdvisorMessageResult,
+} from './send-advisor-message.js';

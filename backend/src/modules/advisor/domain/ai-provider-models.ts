@@ -2,9 +2,14 @@ import { AdvisorDomainError } from './advisor-domain-error.js';
 import { AI_PROVIDER_IDS, type AiProviderId } from './types.js';
 
 /**
- * Allowlist mínima e reversível (F13.1).
+ * Allowlist mínima e reversível (F13.1 / F13.3).
  * Modelos dos vendors evoluem sem migration — esta lista é atualizada em código.
- * Defaults técnicos, não contrato de produto. F13.3 pode trocá-los antes da chamada real.
+ * Defaults técnicos, não contrato de produto.
+ *
+ * Fontes oficiais (2026-09-24):
+ * - OpenAI: https://developers.openai.com/api/docs/models/gpt-4o-mini → gpt-4o-mini
+ * - Anthropic: https://docs.anthropic.com/en/docs/about-claude/models
+ *   → claude-sonnet-5 (atual); claude-sonnet-4-5 permanece legado na allowlist
  */
 export const AI_PROVIDER_MODEL_CATALOG = {
   OPENAI: {
@@ -12,8 +17,8 @@ export const AI_PROVIDER_MODEL_CATALOG = {
     defaultModel: 'gpt-4o-mini',
   },
   ANTHROPIC: {
-    models: ['claude-sonnet-4-5'] as const,
-    defaultModel: 'claude-sonnet-4-5',
+    models: ['claude-sonnet-5', 'claude-sonnet-4-5'] as const,
+    defaultModel: 'claude-sonnet-5',
   },
 } as const satisfies Record<
   AiProviderId,

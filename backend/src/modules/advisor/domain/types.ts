@@ -151,6 +151,16 @@ export type AiRunRecord = {
   readonly finishedAt: Date | null;
 };
 
+export type UpdateAiRunInput = {
+  readonly status: AiRunStatus;
+  readonly inputTokens?: number | null;
+  readonly outputTokens?: number | null;
+  readonly durationMs?: number | null;
+  readonly errorCode?: AiRunErrorCode | null;
+  readonly finishedAt?: Date | null;
+  readonly messageId?: string | null;
+};
+
 export type CreateAiRunInput = {
   readonly userId?: string | null;
   readonly conversationId?: string | null;

@@ -1,7 +1,13 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { assertAiProviderId, assertAllowedAiModel } from '../domain/ai-provider-models.js';
-import type { AiRunErrorCode, AiRunRecord, AiRunStatus, CreateAiRunInput } from '../domain/types.js';
+import type {
+  AiRunErrorCode,
+  AiRunRecord,
+  AiRunStatus,
+  CreateAiRunInput,
+  UpdateAiRunInput,
+} from '../domain/types.js';
 import { AI_RUN_ERROR_CODES, AI_RUN_STATUSES } from '../domain/types.js';
 import { assertAdvisorTenantId } from './assert-tenant-id.js';
 
@@ -56,6 +62,7 @@ function toRecord(row: {
 export type AdvisorRunRepository = {
   createRun(tenantId: string, input: CreateAiRunInput): Promise<AiRunRecord>;
   findRunById(tenantId: string, runId: string): Promise<AiRunRecord | null>;
+  updateRun(tenantId: string, runId: string, input: UpdateAiRunInput): Promise<AiRunRecord>;
 };
 
 export function createAdvisorRunRepository(prisma: PrismaClient): AdvisorRunRepository {
@@ -137,6 +144,36 @@ export function createAdvisorRunRepository(prisma: PrismaClient): AdvisorRunRepo
         where: { id: runId, tenantId },
       });
       return row === null ? null : toRecord(row);
+    },
+
+    async updateRun(tenantId, runId, input) {
+      assertAdvisorTenantId(tenantId);
+      assertRunStatus(input.status);
+      if (input.errorCode != null) {
+        assertErrorCode(input.errorCode);
+      }
+
+      const existing = await prisma.aiRun.findFirst({
+        where: { id: runId, tenantId },
+        select: { id: true },
+      });
+      if (existing === null) {
+        throw new AdvisorDomainError('RUN_NOT_FOUND', 'Execução de IA não encontrada neste tenant.');
+      }
+
+      const row = await prisma.aiRun.update({
+        where: { id: existing.id },
+        data: {
+          status: input.status,
+          inputTokens: input.inputTokens,
+          outputTokens: input.outputTokens,
+          durationMs: input.durationMs,
+          errorCode: input.errorCode,
+          finishedAt: input.finishedAt,
+          messageId: input.messageId,
+        },
+      });
+      return toRecord(row);
     },
   };
 }
