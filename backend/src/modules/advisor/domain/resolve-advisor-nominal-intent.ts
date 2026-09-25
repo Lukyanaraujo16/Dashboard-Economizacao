@@ -27,7 +27,7 @@ export function resolveAdvisorNominalIntent(
 ): AdvisorNominalIntent | null {
   const folded = foldPt(content);
   const convenioCue = /\bconvenios?\b/.test(folded);
-  const entityQuery = extractEntityQuery(content);
+  const entityQuery = extractAdvisorNominalEntityQuery(content);
   const wantsRank =
     /\b(mais fatur|que mais fatur|top\s+\d+|quanto recebi de cada|quais foram os\s+\d+\s+convenios|representam do total)\b/.test(
       folded,
@@ -67,10 +67,10 @@ export function resolveAdvisorNominalIntent(
   return null;
 }
 
-function extractEntityQuery(content: string): string | null {
+export function extractAdvisorNominalEntityQuery(content: string): string | null {
   const received = /quanto(?:\s+eu)?\s+recebi\s+(?:da|do|de)\s+(.+)/i.exec(content);
   const grew = /quanto\s+(?:a|o)\s+(.+?)\s+cresceu/i.exec(content);
-  const compare = /compare\s+(.+?)(?:\s+ness|\s+em\s+|\s+de\s+jul|\s+de\s+ago|$)/i.exec(content);
+  const compare = /compare\s+(.+?)(?:\s+ness|\s+em\s+|\s+de\s+jul|\s+de\s+ago|[?.!]|$)/i.exec(content);
   const raw = received?.[1] ?? grew?.[1] ?? compare?.[1];
   if (raw === undefined) {
     return null;

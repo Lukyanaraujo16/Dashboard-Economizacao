@@ -107,8 +107,18 @@ export {
   resolveAdvisorDrilldownIntent,
 } from './resolve-advisor-drilldown-intent.js';
 export type { AdvisorDrilldownIntent } from './resolve-advisor-drilldown-intent.js';
-export { resolveAdvisorNominalIntent } from './resolve-advisor-nominal-intent.js';
+export { resolveAdvisorNominalIntent, extractAdvisorNominalEntityQuery } from './resolve-advisor-nominal-intent.js';
 export type { AdvisorNominalIntent } from './resolve-advisor-nominal-intent.js';
+export {
+  extractExplicitNominalEntities,
+  isAdvisorNominalAnaphora,
+  isAdvisorNominalPeriodFollowUp,
+  resolveAdvisorConversationalNominal,
+} from './resolve-advisor-conversational-nominal.js';
+export type {
+  AdvisorConversationalNominal,
+  AdvisorNominalAnaphoraStatus,
+} from './resolve-advisor-conversational-nominal.js';
 export {
   ADVISOR_NOMINAL_COMPARE_FACT_KIND,
   ADVISOR_NOMINAL_DOES_NOT_PROVE,
@@ -133,6 +143,7 @@ export {
   serializeAdvisorNominalComparison,
   serializeAdvisorNominalLookup,
   serializeAdvisorNominalRanking,
+  readAdvisorNominalRankingWinner,
 } from './advisor-nominal-dimension.js';
 export { identifyAdvisorNominalDimension } from './advisor-nominal-identity.js';
 export {

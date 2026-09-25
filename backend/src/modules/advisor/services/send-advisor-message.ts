@@ -19,10 +19,12 @@ import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { deriveConsultantConversationTitle } from '../domain/conversation-title.js';
 import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-conversational-period.js';
 import { resolveAdvisorDrilldownIntent } from '../domain/resolve-advisor-drilldown-intent.js';
-import { resolveAdvisorNominalIntent } from '../domain/resolve-advisor-nominal-intent.js';
+import { resolveAdvisorConversationalNominal } from '../domain/resolve-advisor-conversational-nominal.js';
 import {
   COMPARE_CASH_NOMINAL_TOOL_NAME,
+  CASH_NOMINAL_LOOKUP_TOOL_NAME,
   CASH_NOMINAL_RANKING_TOOL_NAME,
+  readAdvisorNominalRankingWinner,
 } from '../domain/advisor-nominal-dimension.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
 import {
@@ -192,11 +194,59 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             })
           : undefined;
 
-      const nominalIntent = resolveAdvisorNominalIntent(question, {
+      const conversationalNominal = resolveAdvisorConversationalNominal({
+        content: question,
+        priorUserContents,
         comparison: period.comparison,
       });
+      let nominalIntent = conversationalNominal.intent;
+      let anaphoraStatus = conversationalNominal.anaphora;
+      if (
+        conversationalNominal.needsRankingWinner &&
+        (conversationalNominal.rankingQuestion === null || deps.analyticalTools === undefined)
+      ) {
+        anaphoraStatus = 'UNRESOLVED';
+      } else if (
+        conversationalNominal.needsRankingWinner &&
+        conversationalNominal.rankingQuestion !== null &&
+        deps.analyticalTools !== undefined
+      ) {
+        const rankingPeriod = resolveAdvisorConversationalPeriod({
+          content: conversationalNominal.rankingQuestion,
+          referenceMonthKey: input.monthKey,
+          now: input.now,
+          priorUserContents,
+        });
+        const ranked = await deps.analyticalTools.execute({
+          tenantId,
+          resolvedMonthKey: rankingPeriod.monthKey,
+          now: input.now,
+          call: {
+            id: 'preload-nominal-winner',
+            name: CASH_NOMINAL_RANKING_TOOL_NAME,
+            arguments: {
+              monthKey: rankingPeriod.monthKey,
+              categoryReference: 'convenio',
+            },
+          },
+        });
+        const winner = ranked.ok ? readWinnerFromToolContent(ranked.content) : null;
+        if (winner !== null) {
+          nominalIntent = {
+            toolName: CASH_NOMINAL_LOOKUP_TOOL_NAME,
+            entityQuery: winner.displayName,
+            categoryReference: 'convenio',
+            limit: 5,
+          };
+          anaphoraStatus = 'RESOLVED';
+        } else {
+          anaphoraStatus = 'UNRESOLVED';
+        }
+      }
       const drilldownIntent =
-        nominalIntent === null && period.comparison === false
+        nominalIntent === null &&
+        anaphoraStatus === 'NONE' &&
+        period.comparison === false
           ? resolveAdvisorDrilldownIntent(question)
           : null;
       const preloadedTool =
@@ -247,7 +297,24 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
                     },
                   },
                 })
-              : null;
+              : anaphoraStatus === 'AMBIGUOUS' || anaphoraStatus === 'UNRESOLVED'
+                ? {
+                    id: 'preload-nominal-anaphora',
+                    name: CASH_NOMINAL_LOOKUP_TOOL_NAME,
+                    ok: true,
+                    content: JSON.stringify({
+                      status: anaphoraStatus,
+                      monthKey: period.monthKey,
+                      scope: 'PERIOD',
+                      reason:
+                        anaphoraStatus === 'AMBIGUOUS'
+                          ? 'MULTIPLE_NOMINAL_ANTECEDENTS'
+                          : 'NO_UNEQUIVOCAL_NOMINAL_ANTECEDENT',
+                      entity: null,
+                    }),
+                    monthKey: period.monthKey,
+                  }
+                : null;
       const drilldown = preloadedTool;
 
       const built = await deps.context.build({
@@ -490,6 +557,16 @@ function sumNullable(left: number | null, right: number | null): number | null {
     return null;
   }
   return (left ?? 0) + (right ?? 0);
+}
+
+function readWinnerFromToolContent(
+  content: string,
+): { readonly displayName: string; readonly normalizedKey: string } | null {
+  try {
+    return readAdvisorNominalRankingWinner(JSON.parse(content) as Record<string, unknown>);
+  } catch {
+    return null;
+  }
 }
 
 function isRunErrorCode(code: string): code is AiRunErrorCode {

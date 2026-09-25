@@ -6,9 +6,11 @@ export const ADVISOR_NOMINAL_RANKING_PROVES = [
   'IDENTIFIED_NOMINAL_AGGREGATION',
   'NOMINAL_RANKING_WITHIN_CATEGORY_PERIOD',
   'COVERAGE',
+  'TOP_N_SHARE',
   'IDENTIFIED_AMOUNTS',
   'SHARES',
   'MOVEMENT_COUNTS',
+  'IDENTIFIED_ENTITY_COUNT',
 ] as const;
 
 export const ADVISOR_NOMINAL_DOES_NOT_PROVE = [
@@ -36,6 +38,9 @@ export function advisorNominalRankingFactContract(): Record<string, unknown> {
     proves: [...ADVISOR_NOMINAL_RANKING_PROVES],
     doesNotProve: [...ADVISOR_NOMINAL_DOES_NOT_PROVE],
     topNIndividualMovementsAreNotThisFact: true,
+    coverageIsNotTopNShare: true,
+    rankingContainsOnlyIdentified: true,
+    displayNameMustNotBeInvented: true,
     tenantSegmentIsNotBenchmark: true,
   };
 }

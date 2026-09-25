@@ -37,6 +37,7 @@ export type AdvisorNominalGroup = {
   readonly groupKey: string;
   readonly normalizedKey: string;
   readonly displayName: string;
+  readonly identityStatus: 'IDENTIFIED' | 'AMBIGUOUS';
   readonly amount: Prisma.Decimal;
   readonly movementCount: number;
   readonly variantCount: number;
@@ -70,6 +71,7 @@ export type AdvisorNominalRankedEntity = {
   readonly rank: number;
   readonly normalizedKey: string;
   readonly displayName: string;
+  readonly identityStatus: 'IDENTIFIED';
   readonly amount: Prisma.Decimal;
   readonly shareOfIdentified: Prisma.Decimal | null;
   readonly shareOfPopulation: Prisma.Decimal | null;
@@ -118,18 +120,15 @@ export function aggregateAdvisorNominalDimension(input: {
       groupKey: string;
       normalizedKey: string;
       displayName: string;
+      identityStatus: 'IDENTIFIED' | 'AMBIGUOUS';
       amount: Prisma.Decimal;
       movementCount: number;
       variants: Set<string>;
       sourceKinds: Set<string>;
     }
   >();
-  let identifiedAmount = ZERO;
   let unknownAmount = ZERO;
-  let ambiguousAmount = ZERO;
-  let identifiedCount = 0;
   let unknownCount = 0;
-  let ambiguousCount = 0;
   let totalAmount = ZERO;
 
   for (const item of input.details.items) {
@@ -141,12 +140,25 @@ export function aggregateAdvisorNominalDimension(input: {
       continue;
     }
     if (identity.status === 'AMBIGUOUS') {
-      ambiguousAmount = ambiguousAmount.plus(item.attributedAmount);
-      ambiguousCount += 1;
+      const ambiguousKey = `ambiguous:${identity.normalizedKey ?? item.settlementExternalId}`;
+      const currentAmbiguous = groups.get(ambiguousKey);
+      if (currentAmbiguous === undefined) {
+        groups.set(ambiguousKey, {
+          groupKey: ambiguousKey,
+          normalizedKey: identity.normalizedKey ?? 'ambiguous',
+          displayName: identity.displayName ?? 'AMBIGUOUS',
+          identityStatus: 'AMBIGUOUS',
+          amount: item.attributedAmount,
+          movementCount: 1,
+          variants: new Set(),
+          sourceKinds: new Set(),
+        });
+      } else {
+        currentAmbiguous.amount = currentAmbiguous.amount.plus(item.attributedAmount);
+        currentAmbiguous.movementCount += 1;
+      }
       continue;
     }
-    identifiedAmount = identifiedAmount.plus(item.attributedAmount);
-    identifiedCount += 1;
     const current = groups.get(identity.groupKey);
     const variant = variantLabel(item);
     if (current === undefined) {
@@ -154,6 +166,7 @@ export function aggregateAdvisorNominalDimension(input: {
         groupKey: identity.groupKey,
         normalizedKey: identity.normalizedKey,
         displayName: identity.displayName ?? identity.normalizedKey,
+        identityStatus: 'IDENTIFIED',
         amount: item.attributedAmount,
         movementCount: 1,
         variants: new Set(variant === null ? [] : [variant]),
@@ -174,6 +187,14 @@ export function aggregateAdvisorNominalDimension(input: {
     }
   }
 
+  reconcileDescriptionCollisions(groups);
+
+  const identifiedGroups = [...groups.values()].filter((group) => group.identityStatus === 'IDENTIFIED');
+  const ambiguousGroups = [...groups.values()].filter((group) => group.identityStatus === 'AMBIGUOUS');
+  const identifiedAmount = identifiedGroups.reduce((sum, group) => sum.plus(group.amount), ZERO);
+  const ambiguousAmount = ambiguousGroups.reduce((sum, group) => sum.plus(group.amount), ZERO);
+  const identifiedCount = identifiedGroups.reduce((sum, group) => sum + group.movementCount, 0);
+  const ambiguousCount = ambiguousGroups.reduce((sum, group) => sum + group.movementCount, 0);
   const identifiedPercent = totalAmount.isZero()
     ? null
     : identifiedAmount.div(totalAmount).times(HUNDRED);
@@ -182,6 +203,7 @@ export function aggregateAdvisorNominalDimension(input: {
       groupKey: group.groupKey,
       normalizedKey: group.normalizedKey,
       displayName: group.displayName,
+      identityStatus: group.identityStatus,
       amount: group.amount,
       movementCount: group.movementCount,
       variantCount: group.variants.size,
@@ -227,12 +249,14 @@ export function rankAdvisorNominalDimension(
   readonly ranking: readonly AdvisorNominalRankedEntity[];
 } {
   const limits = clampAdvisorDrilldownLimit(limit);
+  const identifiedGroups = aggregation.groups.filter((group) => group.identityStatus === 'IDENTIFIED');
   const identified = aggregation.coverage.identifiedAmount;
   const population = aggregation.coverage.totalPopulationAmount;
-  const ranking = aggregation.groups.slice(0, limits.effectiveLimit).map((group, index) => ({
+  const ranking = identifiedGroups.slice(0, limits.effectiveLimit).map((group, index) => ({
     rank: index + 1,
     normalizedKey: group.normalizedKey,
     displayName: group.displayName,
+    identityStatus: 'IDENTIFIED' as const,
     amount: group.amount,
     shareOfIdentified: share(group.amount, identified),
     shareOfPopulation: share(group.amount, population),
@@ -243,7 +267,7 @@ export function rankAdvisorNominalDimension(
   return {
     requestedLimit: limits.requestedLimit,
     effectiveLimit: limits.effectiveLimit,
-    hasMore: aggregation.groups.length > limits.effectiveLimit,
+    hasMore: identifiedGroups.length > limits.effectiveLimit,
     ranking,
   };
 }
@@ -255,7 +279,17 @@ export function lookupAdvisorNominalEntity(
   readonly status: 'OK' | 'NOT_FOUND' | 'AMBIGUOUS';
   readonly matches: readonly AdvisorNominalGroup[];
 } {
-  const matches = matchNominalEntities(aggregation.groups, entityQuery);
+  const identified = aggregation.groups.filter((group) => group.identityStatus === 'IDENTIFIED');
+  const matches = matchNominalEntities(identified, entityQuery);
+  if (matches.length === 0) {
+    const ambiguous = matchNominalEntities(
+      aggregation.groups.filter((group) => group.identityStatus === 'AMBIGUOUS'),
+      entityQuery,
+    );
+    if (ambiguous.length > 0) {
+      return { status: 'AMBIGUOUS', matches: ambiguous };
+    }
+  }
   if (matches.length === 0) {
     return { status: 'NOT_FOUND', matches: [] };
   }
@@ -363,6 +397,17 @@ export function serializeAdvisorNominalRanking(input: {
   readonly ranking: ReturnType<typeof rankAdvisorNominalDimension>;
 }): Record<string, unknown> {
   const { aggregation, ranking } = input;
+  const identifiedGroups = aggregation.groups.filter((group) => group.identityStatus === 'IDENTIFIED');
+  const topNAmount = ranking.ranking.reduce((sum, row) => sum.plus(row.amount), ZERO);
+  const winner =
+    ranking.ranking[0] !== undefined && aggregation.conclusionSafety !== 'INSUFFICIENT'
+      ? {
+          normalizedKey: ranking.ranking[0].normalizedKey,
+          displayName: ranking.ranking[0].displayName,
+          identityStatus: 'IDENTIFIED',
+          amount: formatAdvisorFinancialAmount(ranking.ranking[0].amount),
+        }
+      : null;
   return {
     status: input.status,
     monthKey: aggregation.monthKey,
@@ -379,11 +424,15 @@ export function serializeAdvisorNominalRanking(input: {
       count: aggregation.coverage.totalPopulationCount,
     },
     coverage: serializeCoverage(aggregation),
+    identifiedEntityCount: identifiedGroups.length,
+    ambiguousEntityCount: aggregation.groups.filter((group) => group.identityStatus === 'AMBIGUOUS').length,
+    unknownMovementCount: aggregation.coverage.unknownCount,
     conclusionSafety: aggregation.conclusionSafety,
     ranking: ranking.ranking.map((row) => ({
       rank: row.rank,
       normalizedKey: row.normalizedKey,
       displayName: row.displayName,
+      identityStatus: row.identityStatus,
       amount: formatAdvisorFinancialAmount(row.amount),
       shareOfIdentified: formatAdvisorPercent(row.shareOfIdentified),
       shareOfPopulation: formatAdvisorPercent(row.shareOfPopulation),
@@ -391,6 +440,16 @@ export function serializeAdvisorNominalRanking(input: {
       variantCount: row.variantCount,
       sourceKinds: [...row.sourceKinds],
     })),
+    topN: {
+      returnedCount: ranking.ranking.length,
+      amount: formatAdvisorFinancialAmount(topNAmount),
+      shareOfIdentified: formatAdvisorPercent(share(topNAmount, aggregation.coverage.identifiedAmount)),
+      shareOfPopulation: formatAdvisorPercent(
+        share(topNAmount, aggregation.coverage.totalPopulationAmount),
+      ),
+      hasMore: ranking.hasMore,
+    },
+    winner,
     requestedLimit: ranking.requestedLimit ?? ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
     effectiveLimit: ranking.effectiveLimit,
     returnedCount: ranking.ranking.length,
@@ -426,6 +485,7 @@ export function serializeAdvisorNominalLookup(input: {
         : {
             normalizedKey: input.match.normalizedKey,
             displayName: input.match.displayName,
+            identityStatus: input.match.identityStatus,
             amount: formatAdvisorFinancialAmount(input.match.amount),
             movementCount: input.match.movementCount,
             shareOfIdentified: formatAdvisorPercent(share(input.match.amount, identified)),
@@ -525,6 +585,8 @@ function serializeCoverage(aggregation: AdvisorNominalAggregation): Record<strin
     amountPercent: formatAdvisorPercent(amountPercent),
     countPercent: formatAdvisorPercent(countPercent),
     status: aggregation.conclusionSafety,
+    identifiedEntityCount: aggregation.groups.filter((group) => group.identityStatus === 'IDENTIFIED').length,
+    ambiguousEntityCount: aggregation.groups.filter((group) => group.identityStatus === 'AMBIGUOUS').length,
   };
 }
 
@@ -533,6 +595,54 @@ function share(amount: Prisma.Decimal, denominator: Prisma.Decimal): Prisma.Deci
     return null;
   }
   return amount.div(denominator).times(HUNDRED);
+}
+
+function reconcileDescriptionCollisions(
+  groups: Map<
+    string,
+    {
+      groupKey: string;
+      normalizedKey: string;
+      identityStatus: 'IDENTIFIED' | 'AMBIGUOUS';
+    }
+  >,
+): void {
+  const byKey = new Map<string, Array<{ groupKey: string; identityStatus: 'IDENTIFIED' | 'AMBIGUOUS' }>>();
+  for (const group of groups.values()) {
+    const list = byKey.get(group.normalizedKey) ?? [];
+    list.push(group);
+    byKey.set(group.normalizedKey, list);
+  }
+  for (const list of byKey.values()) {
+    const hasStructuredParty = list.some((group) => group.groupKey.startsWith('party:'));
+    if (!hasStructuredParty) {
+      continue;
+    }
+    for (const group of list) {
+      if (group.groupKey.startsWith('desc:')) {
+        group.identityStatus = 'AMBIGUOUS';
+      }
+    }
+  }
+}
+
+export function readAdvisorNominalRankingWinner(
+  serialized: Record<string, unknown>,
+): { readonly displayName: string; readonly normalizedKey: string } | null {
+  const winner = serialized.winner;
+  if (winner === null || winner === undefined || typeof winner !== 'object') {
+    return null;
+  }
+  const record = winner as { displayName?: unknown; normalizedKey?: unknown; identityStatus?: unknown };
+  if (
+    record.identityStatus !== 'IDENTIFIED' ||
+    typeof record.displayName !== 'string' ||
+    record.displayName.trim() === '' ||
+    typeof record.normalizedKey !== 'string'
+  ) {
+    return null;
+  }
+  return { displayName: record.displayName, normalizedKey: record.normalizedKey };
 }
 
 function compareNominalGroups(left: AdvisorNominalGroup, right: AdvisorNominalGroup): number {
@@ -559,10 +669,11 @@ function filterGroups(
   groups: readonly AdvisorNominalGroup[],
   entityQuery: string | undefined,
 ): readonly AdvisorNominalGroup[] {
+  const identified = groups.filter((group) => group.identityStatus === 'IDENTIFIED');
   if (entityQuery === undefined || entityQuery.trim() === '') {
-    return groups;
+    return identified;
   }
-  return matchNominalEntities(groups, entityQuery);
+  return matchNominalEntities(identified, entityQuery);
 }
 
 function uniqueGroups(groups: readonly AdvisorNominalGroup[]): AdvisorNominalGroup[] {
