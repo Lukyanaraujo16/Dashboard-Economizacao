@@ -135,4 +135,31 @@ describe('resolveAdvisorPeriod (F13.6.1)', () => {
     expect(countAdvisorNamedPeriods('Como está meu faturamento em agosto de 2026?')).toBe(1);
     expect(countAdvisorNamedPeriods('E quanto faltou para a meta?')).toBe(0);
   });
+
+  it('ano compartilhado completa o mês nu e preserva anos distintos', () => {
+    expect(
+      listAdvisorNamedPeriodKeys({
+        content: 'Compare julho e agosto de 2026.',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual(['2026-07', '2026-08']);
+    expect(
+      listAdvisorNamedPeriodKeys({
+        content: 'Compare junho e julho de 2026.',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual(['2026-06', '2026-07']);
+    expect(
+      listAdvisorNamedPeriodKeys({
+        content: 'Compare dezembro de 2025 e janeiro de 2026.',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual(['2025-12', '2026-01']);
+    expect(
+      listAdvisorNamedPeriodKeys({
+        content: 'Em agosto de 2026...',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual(['2026-08']);
+  });
 });

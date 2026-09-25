@@ -14,7 +14,7 @@ import {
 import type { AdvisorCostCenterAnaphoraStatus } from './resolve-advisor-conversational-cost-center.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
 
-export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3-1';
+export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3.2-1';
 
 export type AdvisorFactualAnswerMeta = {
   readonly classification: 'FACTUAL_CLOSED';
@@ -87,7 +87,11 @@ export function composeAdvisorFactualAnswer(
                     ? composeCostCenterMovements(facts)
                     : classification.intentKind.startsWith('COST_CENTER_')
                       ? composeCostCenter(facts, classification.intentKind)
-                      : composeLimitation(facts, input.anaphora);
+                      : classification.intentKind === 'MONTHLY_COMPARISON'
+                        ? composeMonthlyComparison(facts)
+                        : classification.intentKind === 'MONTHLY_BILLING_WINNER'
+                          ? composeMonthlyBillingWinner(facts)
+                          : composeLimitation(facts, input.anaphora);
 
   if (answer === null) {
     return {
@@ -521,6 +525,90 @@ function composeCostCenterMovements(facts: Record<string, unknown>): string | nu
     ? ' Esses são os maiores lançamentos que compõem o total; existem outros lançamentos no período.'
     : '';
   return `${header} ${intro}\n${listed.join('\n')}.${closer}`;
+}
+
+function composeMonthlyComparison(facts: Record<string, unknown>): string | null {
+  const periodA = asRecord(facts.periodA);
+  const periodB = asRecord(facts.periodB);
+  const difference = asRecord(facts.difference);
+  const monthA = formatAdvisorFactualMonth(asString(periodA?.monthKey) ?? asString(facts.comparisonMonthKey) ?? '');
+  const monthB = formatAdvisorFactualMonth(asString(periodB?.monthKey) ?? asString(facts.monthKey) ?? '');
+  if (monthA === null || monthB === null || periodA === null || periodB === null || difference === null) {
+    return null;
+  }
+  const billingARaw = asString(periodA.billing);
+  const billingBRaw = asString(periodB.billing);
+  if (billingARaw === 'ABSENT' || billingBRaw === 'ABSENT' || billingARaw === null || billingBRaw === null) {
+    return `Não há faturamento oficial disponível para comparar ${monthA} e ${monthB}.`;
+  }
+  const billingA = formatAdvisorFactualBrl(billingARaw);
+  const billingB = formatAdvisorFactualBrl(billingBRaw);
+  const deltaRaw = asString(difference.billing);
+  const delta = deltaRaw === 'ABSENT' || deltaRaw === null ? null : formatAdvisorFactualBrl(deltaRaw);
+  if (billingA === null || billingB === null || delta === null) {
+    return null;
+  }
+  const percentRaw = asString(difference.billingPercent);
+  const percent =
+    percentRaw === null || percentRaw === 'NOT_APPLICABLE' || percentRaw === 'ABSENT'
+      ? null
+      : formatAdvisorFactualPercent(percentRaw);
+  const direction = monthlyTrendLabel(deltaRaw);
+  if (percent === null) {
+    return `O faturamento em ${monthA} foi ${billingA} e em ${monthB} foi ${billingB}, ${direction} de ${delta}. A variação percentual não é aplicável porque a base era zero.`;
+  }
+  return `O faturamento em ${monthA} foi ${billingA} e em ${monthB} foi ${billingB}, ${direction} de ${delta} (${percent}).`;
+}
+
+function composeMonthlyBillingWinner(facts: Record<string, unknown>): string | null {
+  const periodA = asRecord(facts.periodA);
+  const periodB = asRecord(facts.periodB);
+  const monthA = formatAdvisorFactualMonth(asString(periodA?.monthKey) ?? '');
+  const monthB = formatAdvisorFactualMonth(asString(periodB?.monthKey) ?? '');
+  const billingARaw = asString(periodA?.billing);
+  const billingBRaw = asString(periodB?.billing);
+  if (
+    monthA === null ||
+    monthB === null ||
+    billingARaw === null ||
+    billingBRaw === null ||
+    billingARaw === 'ABSENT' ||
+    billingBRaw === 'ABSENT'
+  ) {
+    return null;
+  }
+  const billingA = formatAdvisorFactualBrl(billingARaw);
+  const billingB = formatAdvisorFactualBrl(billingBRaw);
+  if (billingA === null || billingB === null) {
+    return null;
+  }
+  try {
+    const left = Number(billingARaw);
+    const right = Number(billingBRaw);
+    if (!Number.isFinite(left) || !Number.isFinite(right)) {
+      return null;
+    }
+    if (right > left) {
+      return `O maior faturamento foi o de ${monthB}, ${billingB}.`;
+    }
+    if (left > right) {
+      return `O maior faturamento foi o de ${monthA}, ${billingA}.`;
+    }
+    return `${monthA} e ${monthB} tiveram o mesmo faturamento, ${billingB}.`;
+  } catch {
+    return null;
+  }
+}
+
+function monthlyTrendLabel(deltaRaw: string | null): string {
+  if (deltaRaw === null) {
+    return 'uma variação';
+  }
+  const numeric = Number(deltaRaw);
+  if (!Number.isFinite(numeric) || numeric === 0) {
+    return 'uma variação';
+  }
+  return numeric > 0 ? 'um aumento' : 'uma redução';
 }
 
 function composeLimitation(

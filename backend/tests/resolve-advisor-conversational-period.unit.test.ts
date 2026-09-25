@@ -253,4 +253,72 @@ describe('resolveAdvisorConversationalPeriod (F13.8.1C)', () => {
       comparisonMonthKey: '2026-07',
     });
   });
+
+  it('ano compartilhado forma o par comparativo e não inventa comparison sem cue', () => {
+    expect(
+      resolveAdvisorConversationalPeriod({
+        content: 'Compare julho e agosto de 2026.',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual({
+      monthKey: '2026-08',
+      source: 'EXPLICIT',
+      comparison: true,
+      comparisonMonthKey: '2026-07',
+    });
+    expect(
+      resolveAdvisorConversationalPeriod({
+        content: 'Compare julho de 2026 com agosto de 2026.',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual({
+      monthKey: '2026-08',
+      source: 'EXPLICIT',
+      comparison: true,
+      comparisonMonthKey: '2026-07',
+    });
+    expect(
+      resolveAdvisorConversationalPeriod({
+        content: 'Compare agosto de 2026 com julho de 2026.',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual({
+      monthKey: '2026-08',
+      source: 'EXPLICIT',
+      comparison: true,
+      comparisonMonthKey: '2026-07',
+    });
+    expect(
+      resolveAdvisorConversationalPeriod({
+        content: 'Compare dezembro de 2025 e janeiro de 2026.',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual({
+      monthKey: '2026-01',
+      source: 'EXPLICIT',
+      comparison: true,
+      comparisonMonthKey: '2025-12',
+    });
+    expect(
+      resolveAdvisorConversationalPeriod({
+        content: 'julho e agosto de 2026',
+        now: SEPTEMBER_2026,
+      }),
+    ).toMatchObject({
+      monthKey: '2026-08',
+      comparison: false,
+    });
+    expect(
+      resolveAdvisorConversationalPeriod({
+        content: 'E qual mês teve maior faturamento?',
+        now: SEPTEMBER_2026,
+        priorUserContents: ['Compare julho e agosto de 2026.'],
+      }),
+    ).toEqual({
+      monthKey: '2026-08',
+      source: 'CONVERSATION_CONTEXT',
+      comparison: true,
+      comparisonMonthKey: '2026-07',
+    });
+  });
 });

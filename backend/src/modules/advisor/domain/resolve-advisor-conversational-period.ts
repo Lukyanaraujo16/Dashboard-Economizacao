@@ -61,6 +61,27 @@ export function isAdvisorComparisonQuestion(content: string): boolean {
   return COMPARISON_PATTERN.test(foldPt(content));
 }
 
+export function isAdvisorMonthlyFactualCompareQuestion(content: string): boolean {
+  const folded = foldPt(content);
+  return (
+    isAdvisorComparisonQuestion(content) ||
+    /\baumentou(?:\s+o)?\s+faturamento\b/.test(folded) ||
+    /\bdiferenca(?:\s+de)?\s+faturamento\b/.test(folded) ||
+    /\bmaior faturamento\b/.test(folded)
+  );
+}
+
+export function isAdvisorMonthlyBillingFollowUp(content: string): boolean {
+  const folded = foldPt(content);
+  return (
+    /\bqual(?:\s+dos\s+dois)?\s+mes(?:es)?\b/.test(folded) ||
+    /\bqual mes\b/.test(folded) ||
+    /\bmaior faturamento\b/.test(folded) ||
+    /\bdiferenca(?:\s+de)?\s+faturamento\b/.test(folded) ||
+    /\baumentou(?:\s+o)?\s+faturamento\b/.test(folded)
+  );
+}
+
 export function isInheritableAdvisorPeriodSource(source: AdvisorPeriodSource): boolean {
   return source === 'EXPLICIT';
 }
@@ -82,7 +103,7 @@ export function resolveAdvisorConversationalPeriod(
   const comparison = isAdvisorComparisonQuestion(input.content);
 
   if (namedKeys.length >= 2) {
-    if (comparison) {
+    if (comparison || isAdvisorMonthlyFactualCompareQuestion(input.content)) {
       return pairToConversational(namedKeys, 'EXPLICIT');
     }
     return toConversational(current, false);
@@ -105,7 +126,10 @@ export function resolveAdvisorConversationalPeriod(
     return toConversational(current, false);
   }
 
-  if (comparison && inheritable.length >= 2) {
+  if (
+    (comparison || isAdvisorMonthlyBillingFollowUp(input.content)) &&
+    inheritable.length >= 2
+  ) {
     return pairToConversational(inheritable, 'CONVERSATION_CONTEXT');
   }
 
@@ -134,6 +158,21 @@ function findInheritableMonthKeys(
   for (let index = window.length - 1; index >= 0; index -= 1) {
     const content = window[index];
     if (content === undefined || content.trim().length === 0) {
+      continue;
+    }
+    const namedFromPrior = listAdvisorNamedPeriodKeys({
+      content,
+      referenceMonthKey: input.referenceMonthKey,
+      now: input.now,
+    });
+    if (namedFromPrior.length >= 2 && isAdvisorComparisonQuestion(content)) {
+      for (const key of namedFromPrior) {
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        keys.push(key);
+      }
       continue;
     }
     const resolved = resolveAdvisorPeriod({

@@ -25,7 +25,7 @@ export type ParsedConversationTurn = {
   readonly text: string;
 };
 
-const CONVERSATION_ROLE_LINE = /^(USER|CONSULTANT)\s*:\s*(.*)$/;
+const CONVERSATION_ROLE_LINE = /^(?:\[)?(USER|CONSULTANT)(?:\])?\s*:\s*(.*)$/;
 
 /**
  * Parse simples de CONVERSATION_HISTORY.

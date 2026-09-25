@@ -8,6 +8,7 @@ import {
   isAdvisorCurrentSnapshotIntentKind,
   type AdvisorCurrentSnapshotIntentKind,
 } from './resolve-advisor-current-snapshot-intent.js';
+import { COMPARE_CASH_MONTHS_TOOL_NAME } from './advisor-analytical-tools.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
@@ -51,6 +52,8 @@ export const ADVISOR_FACTUAL_INTENT_KINDS = [
   'COST_CENTER_SHARE',
   'COST_CENTER_COMPARE',
   'COST_CENTER_MOVEMENT_LINES',
+  'MONTHLY_COMPARISON',
+  'MONTHLY_BILLING_WINNER',
   'FACTUAL_LIMITATION',
   'INTERPRETIVE',
   'NONE',
@@ -228,6 +231,22 @@ export function classifyAdvisorFactualResponse(
     return { kind: 'UNRESOLVED', intentKind: 'COMPARISON', factKind };
   }
 
+  if (input.toolName === COMPARE_CASH_MONTHS_TOOL_NAME) {
+    if (status === 'OK' && hasMonthlyComparisonFacts(facts)) {
+      return {
+        kind: 'FACTUAL_CLOSED',
+        intentKind: isAdvisorMonthlyBillingWinnerQuestion(input.content)
+          ? 'MONTHLY_BILLING_WINNER'
+          : 'MONTHLY_COMPARISON',
+        factKind,
+      };
+    }
+    if (isKnownAbsentStatus(status)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    return { kind: 'UNRESOLVED', intentKind: 'MONTHLY_COMPARISON', factKind };
+  }
+
   return { kind: 'UNRESOLVED', intentKind: 'NONE', factKind };
 }
 
@@ -243,7 +262,18 @@ export function isAdvisorInterpretiveQuestion(content: string): boolean {
     /\b(?:isso |esse crescimento |essa concentracao )?e (?:bom|ruim)\b/.test(folded) ||
     /\bpor que .{0,80}(?:cresceu|aumentou|caiu|diminuiu|mudou|gastou)\b/.test(folded) ||
     /\bpreocupante\b/.test(folded) ||
-    /\bdevo (?:reduzir|cortar|diminuir|gastar menos)\b/.test(folded)
+    /\bdevo (?:reduzir|cortar|diminuir|gastar menos)\b/.test(folded) ||
+    /\bchama atencao\b/.test(folded) ||
+    /\banalis[ea]\b/.test(folded) ||
+    /\bfoi (?:bom|ruim)\b/.test(folded)
+  );
+}
+
+export function isAdvisorMonthlyBillingWinnerQuestion(content: string): boolean {
+  const folded = foldPt(content);
+  return (
+    /\bqual(?:\s+dos\s+dois)?\s+mes(?:es)?\b/.test(folded) ||
+    /\bmaior faturamento\b/.test(folded)
   );
 }
 
@@ -317,6 +347,23 @@ function hasLookupClosedFacts(facts: Record<string, unknown>): boolean {
     isAmount(entity.amount) &&
     isAmount(entity.shareOfPopulation) &&
     isAmount(facts.populationAmount)
+  );
+}
+
+function hasMonthlyComparisonFacts(facts: Record<string, unknown>): boolean {
+  const periodA = asRecord(facts.periodA);
+  const periodB = asRecord(facts.periodB);
+  const difference = asRecord(facts.difference);
+  return (
+    typeof facts.monthKey === 'string' &&
+    typeof facts.comparisonMonthKey === 'string' &&
+    periodA !== null &&
+    periodB !== null &&
+    typeof periodA.monthKey === 'string' &&
+    typeof periodB.monthKey === 'string' &&
+    difference !== null &&
+    (isAmount(periodA.billing) || periodA.billing === 'ABSENT') &&
+    (isAmount(periodB.billing) || periodB.billing === 'ABSENT')
   );
 }
 

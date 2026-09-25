@@ -145,6 +145,18 @@ export function resolveAdvisorComparisonBillingCoverage(
   return 'REALIZED_ONLY';
 }
 
+export const ADVISOR_MONTHLY_COMPARISON_FACT_KIND = 'PERIOD_CASH_MONTH_COMPARISON';
+
+export function serializeAdvisorMonthlyComparisonFacts(
+  value: AdvisorCashMonthComparison,
+): Record<string, unknown> {
+  return {
+    status: 'OK',
+    factKind: ADVISOR_MONTHLY_COMPARISON_FACT_KIND,
+    ...serializeAdvisorCashMonthComparison(value),
+  };
+}
+
 export function serializeAdvisorCashMonthComparison(
   value: AdvisorCashMonthComparison,
 ): Record<string, unknown> {

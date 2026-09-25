@@ -131,6 +131,7 @@ export {
   ADVISOR_FACTUAL_RESPONSE_KINDS,
   classifyAdvisorFactualResponse,
   isAdvisorInterpretiveQuestion,
+  isAdvisorMonthlyBillingWinnerQuestion,
   isAdvisorNominalIdentityFollowUp,
   isAdvisorNominalShareQuestion,
   isAdvisorNominalWinnerQuestion,
@@ -291,6 +292,8 @@ export {
   resolveAdvisorBillingCoverage,
   resolveAdvisorComparisonBillingCoverage,
   serializeAdvisorCashMonthComparison,
+  serializeAdvisorMonthlyComparisonFacts,
+  ADVISOR_MONTHLY_COMPARISON_FACT_KIND,
 } from './compare-advisor-cash-months.js';
 export type {
   AdvisorBillingCoverage,
@@ -328,6 +331,8 @@ export {
   ADVISOR_CONVERSATION_CONTEXT_USER_LIMIT,
   ADVISOR_CONVERSATIONAL_PERIOD_SOURCES,
   isAdvisorComparisonQuestion,
+  isAdvisorMonthlyBillingFollowUp,
+  isAdvisorMonthlyFactualCompareQuestion,
   isInheritableAdvisorPeriodSource,
   resolveAdvisorConversationalPeriod,
 } from './resolve-advisor-conversational-period.js';

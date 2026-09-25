@@ -12,9 +12,11 @@ import {
 } from '../../../shared/errors/application-error.js';
 import {
   ADVISOR_MAX_TOOL_ROUNDS,
+  COMPARE_CASH_MONTHS_TOOL_NAME,
   type AdvisorAnalyticalToolExecutor,
   type AdvisorCashComparisonService,
 } from '../domain/advisor-analytical-tools.js';
+import { serializeAdvisorMonthlyComparisonFacts } from '../domain/compare-advisor-cash-months.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { deriveConsultantConversationTitle } from '../domain/conversation-title.js';
 import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-conversational-period.js';
@@ -475,21 +477,34 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         now: input.now,
       });
 
+      const monthlyComparisonFacts =
+        !hasCostCenterFollowUp && comparison !== undefined && comparison !== null
+          ? serializeAdvisorMonthlyComparisonFacts(comparison)
+          : null;
       const composed = composeAdvisorFactualAnswer({
         content: question,
         anaphora: hasCostCenterFollowUp ? costCenterAnaphora : anaphoraStatus,
         toolName:
           snapshotIntent !== null
             ? ADVISOR_CURRENT_SNAPSHOT_FACT_NAME
-            : (drilldown?.name ?? null),
-        toolOk: snapshotIntent !== null ? built.currentSnapshot !== null && built.currentSnapshot !== undefined : (drilldown?.ok ?? false),
+            : monthlyComparisonFacts !== null
+              ? COMPARE_CASH_MONTHS_TOOL_NAME
+              : (drilldown?.name ?? null),
+        toolOk:
+          snapshotIntent !== null
+            ? built.currentSnapshot !== null && built.currentSnapshot !== undefined
+            : monthlyComparisonFacts !== null
+              ? true
+              : (drilldown?.ok ?? false),
         toolContent:
           snapshotIntent !== null && built.currentSnapshot !== null && built.currentSnapshot !== undefined
             ? JSON.stringify({
                 ...built.currentSnapshot,
                 intentKind: snapshotIntent,
               })
-            : (drilldown?.content ?? null),
+            : monthlyComparisonFacts !== null
+              ? JSON.stringify(monthlyComparisonFacts)
+              : (drilldown?.content ?? null),
       });
       if (composed.answer !== null && composed.meta !== null) {
         const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
@@ -503,6 +518,12 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             conversationId: conversation.id,
             intentKind: composed.meta.intentKind,
             factKind: composed.meta.factKind,
+            toolName:
+              snapshotIntent !== null
+                ? ADVISOR_CURRENT_SNAPSHOT_FACT_NAME
+                : monthlyComparisonFacts !== null
+                  ? COMPARE_CASH_MONTHS_TOOL_NAME
+                  : (drilldown?.name ?? null),
             monthKey: period.monthKey,
             comparisonMonthKey: period.comparisonMonthKey ?? null,
             identityStatus: composed.meta.identityStatus,

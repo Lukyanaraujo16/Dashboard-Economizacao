@@ -450,21 +450,6 @@ function isWinnerCue(folded: string): boolean {
   );
 }
 
-const BARE_MONTHS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\bjan(?:eiro)?\b/, '01'],
-  [/\bfev(?:ereiro)?\b/, '02'],
-  [/\bmar(?:co)?\b/, '03'],
-  [/\babr(?:il)?\b/, '04'],
-  [/\bmai(?:o)?\b/, '05'],
-  [/\bjun(?:ho)?\b/, '06'],
-  [/\bjul(?:ho)?\b/, '07'],
-  [/\bago(?:sto)?\b/, '08'],
-  [/\bset(?:embro)?\b/, '09'],
-  [/\bout(?:ubro)?\b/, '10'],
-  [/\bnov(?:embro)?\b/, '11'],
-  [/\bdez(?:embro)?\b/, '12'],
-];
-
 function resolveLocalComparisonPair(
   content: string,
   period: AdvisorConversationalPeriod,
@@ -475,15 +460,7 @@ function resolveLocalComparisonPair(
     return { monthKey: period.monthKey, comparisonMonthKey: period.comparisonMonthKey };
   }
   const official = listAdvisorNamedPeriodKeys({ content, now, referenceMonthKey });
-  const folded = foldPt(content);
-  const year = (official[0] ?? referenceMonthKey ?? period.monthKey).slice(0, 4);
-  const keys = new Set(official);
-  for (const [pattern, month] of BARE_MONTHS) {
-    if (pattern.test(folded)) {
-      keys.add(`${year}-${month}`);
-    }
-  }
-  const sorted = [...keys].sort();
+  const sorted = [...new Set(official)].sort();
   if (sorted.length < 2) {
     return null;
   }

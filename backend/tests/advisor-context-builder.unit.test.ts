@@ -396,6 +396,8 @@ describe('Context Builder do Consultor (F13.2)', () => {
     });
     const history = block(result, 'CONVERSATION_HISTORY');
     expect(history.trustLevel).toBe('UNTRUSTED');
+    expect(history.content).toContain('HISTORY_UNTRUSTED');
+    expect(history.content).toContain('USER:');
     expect(history.content).not.toContain('OLD_MSG_1');
     expect(history.content).not.toContain('OLD_MSG_2');
     expect(history.content).toContain('RECENT_MSG_3');

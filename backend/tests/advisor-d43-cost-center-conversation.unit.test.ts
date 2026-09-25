@@ -314,7 +314,35 @@ function createHarness() {
           tenantId: 'tenant-a',
           monthKey: '2026-08',
           comparisonMonthKey: '2026-07',
-        } as never;
+          periodA: {
+            monthKey: '2026-07',
+            billing: new Prisma.Decimal('136659.99'),
+            realizedInflows: new Prisma.Decimal('136659.99'),
+            realizedOutflows: new Prisma.Decimal('135897.54'),
+            realizedResult: new Prisma.Decimal('762.45'),
+            expectedReceivables: new Prisma.Decimal('0'),
+            expectedPayables: new Prisma.Decimal('0'),
+          },
+          periodB: {
+            monthKey: '2026-08',
+            billing: new Prisma.Decimal('224790.3'),
+            realizedInflows: new Prisma.Decimal('224790.3'),
+            realizedOutflows: new Prisma.Decimal('98941.52'),
+            realizedResult: new Prisma.Decimal('125848.78'),
+            expectedReceivables: new Prisma.Decimal('0'),
+            expectedPayables: new Prisma.Decimal('0'),
+          },
+          difference: {
+            billing: new Prisma.Decimal('88130.31'),
+            billingPercent: new Prisma.Decimal('64.49'),
+            realizedInflows: new Prisma.Decimal('88130.31'),
+            realizedOutflows: new Prisma.Decimal('-36955.98'),
+            realizedResult: new Prisma.Decimal('125086.33'),
+          },
+          billingCoverage: 'FULL_BILLING' as const,
+          inflowCategories: { available: false, items: [], increases: [], decreases: [] },
+          outflowCategories: { available: false, items: [], increases: [], decreases: [] },
+        };
       },
     },
     analyticalTools: {
@@ -917,8 +945,13 @@ describe('F13.8.1D4.3 compositor, interpretativo e send', () => {
       question: 'Compare julho e agosto.',
       now: new Date('2026-09-25T18:00:00.000Z'),
     });
-    expect(d1.factualAnswer).toBeNull();
+    expect(d1.factualAnswer?.classification).toBe('FACTUAL_CLOSED');
+    expect(d1.factualAnswer?.providerCalled).toBe(false);
+    expect(d1.run).toBeNull();
     expect(toolCalls).toContain('compare_cash_months');
+    expect(d1.consultantMessage.content).toContain('R$ 136.659,99');
+    expect(d1.consultantMessage.content).toContain('R$ 224.790,30');
+    expect(d1.consultantMessage.content).toContain('64,49%');
     expect(isAdvisorInterpretiveQuestion('Por que Laranjeiras gastou mais?')).toBe(true);
     expect(isAdvisorInterpretiveQuestion('Devo reduzir gastos em Laranjeiras?')).toBe(true);
     expect(isAdvisorInterpretiveQuestion('Esse aumento é preocupante?')).toBe(true);
@@ -959,10 +992,19 @@ describe('F13.8.1D4.3 compositor, interpretativo e send', () => {
       question: 'Compare julho e agosto de 2026.',
       now: new Date('2026-09-25T18:00:00.000Z'),
     });
-    expect(generic.factualAnswer).toBeNull();
+    expect(generic.factualAnswer?.classification).toBe('FACTUAL_CLOSED');
+    expect(generic.factualAnswer?.providerCalled).toBe(false);
+    expect(generic.run).toBeNull();
     expect(toolCalls.at(-1)).toBe('compare_cash_months');
     expect(toolCalls.filter((name) => name === COMPARE_CASH_COST_CENTER_TOOL_NAME)).toHaveLength(0);
+    expect(generic.consultantMessage.content).toContain('R$ 136.659,99');
+    expect(generic.consultantMessage.content).toContain('R$ 224.790,30');
+    expect(generic.consultantMessage.content).toContain('R$ 88.130,31');
+    expect(generic.consultantMessage.content).toContain('64,49%');
     expect(generic.consultantMessage.content).not.toContain('Administrativo');
+    expect(generic.consultantMessage.content).not.toContain('84.568,61');
+    expect(generic.consultantMessage.content).not.toContain('63.032,88');
+    expect(generic.consultantMessage.content).not.toContain('25,47');
     info.mockRestore();
   });
 

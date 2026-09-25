@@ -65,18 +65,35 @@ export function countAdvisorNamedPeriods(content: string): number {
 /**
  * Períodos nomeados na pergunta, na ordem de aparição.
  * Com ano: YYYY-MM explícito. Sem ano: mês nu no ano da referência ou civil SP.
+ * Ano compartilhado: "julho e agosto de 2026" → 2026-07 e 2026-08.
+ * Anos distintos explícitos são preservados.
  */
 export function listAdvisorNamedPeriodKeys(input: ResolveAdvisorPeriodInput): string[] {
   const now = input.now ?? new Date();
   const currentMonthKey = civilMonthKey(civilTodayInSaoPaulo(now));
   const referenceMonthKey = sanitizeReference(input.referenceMonthKey);
   const folded = foldPt(input.content);
-  const uniqueExplicit = uniqueMonthKeys(collectExplicitWithYear(folded));
-  if (uniqueExplicit.length > 0) {
-    return uniqueExplicit;
+  const fallbackYear = (referenceMonthKey ?? currentMonthKey).slice(0, 4);
+  const mentions = collectNamedPeriodMentions(folded);
+  if (mentions.length === 0) {
+    return [];
   }
-  const year = (referenceMonthKey ?? currentMonthKey).slice(0, 4);
-  return uniqueValues(collectBareMonthNumbers(folded)).map((month) => `${year}-${month}`);
+  const explicitYears = uniqueValues(
+    mentions.flatMap((mention) => (mention.year === undefined ? [] : [mention.year])),
+  );
+  const sharedYear = explicitYears.length === 1 ? explicitYears[0] : undefined;
+  const keys: string[] = [];
+  for (const mention of mentions) {
+    const year = mention.year ?? sharedYear ?? (explicitYears.length === 0 ? fallbackYear : undefined);
+    if (year === undefined) {
+      continue;
+    }
+    const key = `${year}-${mention.month}`;
+    if (!keys.includes(key)) {
+      keys.push(key);
+    }
+  }
+  return keys;
 }
 
 export function resolveAdvisorPeriod(input: ResolveAdvisorPeriodInput): AdvisorResolvedPeriod {
@@ -142,6 +159,93 @@ function monthNumberFromName(name: string): string | undefined {
     }
   }
   return undefined;
+}
+
+type NamedPeriodMention = {
+  readonly index: number;
+  readonly month: string;
+  readonly year?: string;
+};
+
+function collectNamedPeriodMentions(folded: string): NamedPeriodMention[] {
+  const mentions: NamedPeriodMention[] = [];
+  const occupied: Array<{ readonly start: number; readonly end: number }> = [];
+  const pushMention = (mention: NamedPeriodMention, start: number, end: number): void => {
+    mentions.push(mention);
+    occupied.push({ start, end });
+  };
+
+  pushMatches(folded, /\b(\d{4})-(0[1-9]|1[0-2])\b/g, (match) => {
+    if (match.index === undefined) {
+      return;
+    }
+    pushMention(
+      { index: match.index, month: match[2]!, year: match[1] },
+      match.index,
+      match.index + match[0].length,
+    );
+  });
+  pushMatches(folded, /\b(0?[1-9]|1[0-2])[/-](\d{4})\b/g, (match) => {
+    if (match.index === undefined) {
+      return;
+    }
+    pushMention(
+      {
+        index: match.index,
+        month: (match[1] ?? '').padStart(2, '0'),
+        year: match[2],
+      },
+      match.index,
+      match.index + match[0].length,
+    );
+  });
+  const namedWithYear = new RegExp(`\\b(${MONTH_NAME_PATTERN})\\b\\s*(?:de\\s*)?(\\d{4})`, 'g');
+  pushMatches(folded, namedWithYear, (match) => {
+    if (match.index === undefined) {
+      return;
+    }
+    const month = monthNumberFromName(match[1] ?? '');
+    if (month === undefined) {
+      return;
+    }
+    pushMention(
+      { index: match.index, month, year: match[2] },
+      match.index,
+      match.index + match[0].length,
+    );
+  });
+  const namedSlashYear = new RegExp(`\\b(${MONTH_NAME_PATTERN})\\b\\s*/\\s*(\\d{4})`, 'g');
+  pushMatches(folded, namedSlashYear, (match) => {
+    if (match.index === undefined) {
+      return;
+    }
+    const month = monthNumberFromName(match[1] ?? '');
+    if (month === undefined) {
+      return;
+    }
+    pushMention(
+      { index: match.index, month, year: match[2] },
+      match.index,
+      match.index + match[0].length,
+    );
+  });
+  pushMatches(folded, new RegExp(`\\b(${MONTH_NAME_PATTERN})\\b`, 'g'), (match) => {
+    if (match.index === undefined) {
+      return;
+    }
+    const overlaps = occupied.some(
+      (span) => match.index! < span.end && match.index! + match[0].length > span.start,
+    );
+    if (overlaps) {
+      return;
+    }
+    const month = monthNumberFromName(match[1] ?? '');
+    if (month === undefined) {
+      return;
+    }
+    mentions.push({ index: match.index, month });
+  });
+  return mentions.sort((left, right) => left.index - right.index);
 }
 
 function collectExplicitWithYear(folded: string): string[] {

@@ -781,12 +781,14 @@ describe('send-advisor-message (F13.3)', () => {
         comparisonMonthKey: '2026-07',
       }),
     );
-    expect(result.consultantMessage.content).toBe('A diferença oficial é 88130.31.');
-    expect(result.run).not.toBeNull();
-    expect(result.run!.status).toBe('SUCCEEDED');
-    expect(openai.generateCalls).toHaveLength(2);
-    expect(executeTool).toHaveBeenCalled();
-    expect(openai.generateCalls[1]?.toolRounds?.[0]?.results[0]?.content).toContain('UNAVAILABLE');
+    expect(result.factualAnswer?.classification).toBe('FACTUAL_CLOSED');
+    expect(result.factualAnswer?.providerCalled).toBe(false);
+    expect(result.run).toBeNull();
+    expect(result.consultantMessage.content).toContain('R$ 136.659,99');
+    expect(result.consultantMessage.content).toContain('R$ 224.790,30');
+    expect(result.consultantMessage.content).toContain('64,49%');
+    expect(openai.generateCalls).toHaveLength(0);
+    expect(executeTool).not.toHaveBeenCalled();
   });
 
   it('excede o máximo de tool rounds sem fabricar zero', async () => {
