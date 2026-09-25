@@ -23,7 +23,8 @@ import {
 import { buildMonthlyExecutiveInsights } from '../domain/monthly-executive-insights.js';
 import { buildDailyCompetenceTotals } from '../domain/daily-competence-series.js';
 import { buildMonthEndCashPressureResult } from '../domain/month-end-cash-pressure.js';
-import { calculateInstallmentStockSnapshot } from '../domain/installment-snapshot.js';
+import { calculateInstallmentPendingStock } from '../domain/installment-snapshot.js';
+import type { InstallmentSnapshotInput } from '../domain/installment-snapshot.js';
 import {
   calculateMonthlyCompetenceRevenue,
   collectMonthlyRevenueCategoryExternalIds,
@@ -96,33 +97,18 @@ export function createAnalyticsService(deps: AnalyticsServiceDependencies): Anal
           allocations.findActiveReceivableAllocations({ ...scope, costCenterId }),
           allocations.findActivePayableAllocations({ ...scope, costCenterId }),
         ]);
-        const receivables = calculateInstallmentStockSnapshot(
-          toAllocationExposureInstallments(receivableRows),
-          today,
-        );
-        return {
+        return buildOfficialStockSnapshot(
           tenantId,
           today,
-          receivables,
-          payables: calculateInstallmentStockSnapshot(
-            toAllocationExposureInstallments(payableRows),
-            today,
-          ),
-          receivableDelinquency: calculateReceivableDelinquency(receivables),
-        };
+          toAllocationExposureInstallments(receivableRows),
+          toAllocationExposureInstallments(payableRows),
+        );
       }
       const [receivableRows, payableRows] = await Promise.all([
         deps.receivables.findActiveByTenant(scope),
         deps.payables.findActiveByTenant(scope),
       ]);
-      const receivables = calculateInstallmentStockSnapshot(receivableRows, today);
-      return {
-        tenantId,
-        today,
-        receivables,
-        payables: calculateInstallmentStockSnapshot(payableRows, today),
-        receivableDelinquency: calculateReceivableDelinquency(receivables),
-      };
+      return buildOfficialStockSnapshot(tenantId, today, receivableRows, payableRows);
     },
 
     async getOpenPayablesCategoryComposition(input) {
@@ -242,6 +228,37 @@ export function createAnalyticsService(deps: AnalyticsServiceDependencies): Anal
 
     async getCashFlowForecast(input) {
       return loadCashFlowForecast(deps, input);
+    },
+  };
+}
+
+function buildOfficialStockSnapshot(
+  tenantId: string,
+  today: Date,
+  receivableRows: readonly InstallmentSnapshotInput[],
+  payableRows: readonly InstallmentSnapshotInput[],
+): FinancialStockSnapshot {
+  const receivablePending = calculateInstallmentPendingStock(receivableRows, today);
+  const payablePending = calculateInstallmentPendingStock(payableRows, today);
+  const receivables = {
+    open: receivablePending.open,
+    overdue: receivablePending.overdue,
+    upcoming: receivablePending.dueToday.plus(receivablePending.upcoming),
+  };
+  const payables = {
+    open: payablePending.open,
+    overdue: payablePending.overdue,
+    upcoming: payablePending.dueToday.plus(payablePending.upcoming),
+  };
+  return {
+    tenantId,
+    today,
+    receivables,
+    payables,
+    receivableDelinquency: calculateReceivableDelinquency(receivables),
+    pending: {
+      receivables: receivablePending,
+      payables: payablePending,
     },
   };
 }

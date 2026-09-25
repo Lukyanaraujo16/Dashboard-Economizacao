@@ -13,7 +13,7 @@ import {
 } from './classify-advisor-factual-response.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
 
-export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd3.3-1';
+export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.1-1';
 
 export type AdvisorFactualAnswerMeta = {
   readonly classification: 'FACTUAL_CLOSED';
@@ -78,7 +78,9 @@ export function composeAdvisorFactualAnswer(
               ? composeComparison(facts)
               : classification.intentKind === 'IDENTITY_AMBIGUITY'
                 ? composeIdentityAmbiguity(facts, input.content)
-                : composeLimitation(facts, input.anaphora);
+                : classification.intentKind.startsWith('SNAPSHOT_')
+                  ? composeCurrentSnapshot(facts, classification.intentKind)
+                  : composeLimitation(facts, input.anaphora);
 
   if (answer === null) {
     return {
@@ -287,6 +289,91 @@ function composeIdentityAmbiguity(
   return `Não é seguro consolidar ${ambiguous} em uma entidade identificada. Esses valores permanecem ambíguos porque não há identificador estruturado compartilhado suficiente para comprovar a mesma identidade.`;
 }
 
+function composeCurrentSnapshot(
+  facts: Record<string, unknown>,
+  intentKind: AdvisorFactualIntentKind,
+): string | null {
+  const receivables = asRecord(facts.receivables);
+  const payables = asRecord(facts.payables);
+  const delinquency = asRecord(facts.receivableDelinquency);
+  if (intentKind === 'SNAPSHOT_OPEN_RECEIVABLES') {
+    const amount = formatAdvisorFactualBrl(asString(receivables?.open) ?? '');
+    return amount === null ? null : `Hoje, você tem ${amount} em contas a receber em aberto.`;
+  }
+  if (intentKind === 'SNAPSHOT_OPEN_PAYABLES') {
+    const amount = formatAdvisorFactualBrl(asString(payables?.open) ?? '');
+    return amount === null ? null : `Hoje, você tem ${amount} em contas a pagar em aberto.`;
+  }
+  if (intentKind === 'SNAPSHOT_OPEN_BOTH') {
+    const receive = formatAdvisorFactualBrl(asString(receivables?.open) ?? '');
+    const pay = formatAdvisorFactualBrl(asString(payables?.open) ?? '');
+    return receive === null || pay === null
+      ? null
+      : `Hoje, você tem ${receive} em contas a receber em aberto e ${pay} em contas a pagar em aberto.`;
+  }
+  if (intentKind === 'SNAPSHOT_OVERDUE_RECEIVABLES') {
+    const amount = formatAdvisorFactualBrl(asString(receivables?.overdue) ?? '');
+    return amount === null ? null : `Hoje, há ${amount} em contas a receber vencidas.`;
+  }
+  if (intentKind === 'SNAPSHOT_OVERDUE_PAYABLES') {
+    const amount = formatAdvisorFactualBrl(asString(payables?.overdue) ?? '');
+    return amount === null ? null : `Hoje, há ${amount} em contas a pagar vencidas.`;
+  }
+  if (intentKind === 'SNAPSHOT_OVERDUE_BOTH') {
+    const receive = formatAdvisorFactualBrl(asString(receivables?.overdue) ?? '');
+    const pay = formatAdvisorFactualBrl(asString(payables?.overdue) ?? '');
+    return receive === null || pay === null
+      ? null
+      : `Hoje, há ${receive} em contas a receber vencidas e ${pay} em contas a pagar vencidas.`;
+  }
+  if (intentKind === 'SNAPSHOT_DELINQUENCY') {
+    const overdue = formatAdvisorFactualBrl(asString(delinquency?.overdueAmount) ?? '');
+    const open = formatAdvisorFactualBrl(asString(delinquency?.openAmount) ?? '');
+    const rateRaw = asString(delinquency?.percentage);
+    if (overdue === null || open === null) {
+      return null;
+    }
+    if (rateRaw === null || rateRaw === 'ABSENT' || rateRaw === 'NOT_APPLICABLE') {
+      return `Não há recebíveis em aberto hoje; a taxa de inadimplência dos recebíveis não se aplica. O vencido atual dos recebíveis é ${overdue}.`;
+    }
+    const rate = formatAdvisorFactualPercent(rateRaw);
+    return rate === null
+      ? null
+      : `A inadimplência atual dos recebíveis é de ${rate}, equivalente a ${overdue} vencidos sobre ${open} em aberto.`;
+  }
+  if (intentKind === 'SNAPSHOT_DUE_TODAY_RECEIVABLES') {
+    const amount = formatAdvisorFactualBrl(asString(receivables?.dueToday) ?? '');
+    return amount === null ? null : `Hoje, vencem ${amount} em contas a receber.`;
+  }
+  if (intentKind === 'SNAPSHOT_DUE_TODAY_PAYABLES') {
+    const amount = formatAdvisorFactualBrl(asString(payables?.dueToday) ?? '');
+    return amount === null ? null : `Hoje, vencem ${amount} em contas a pagar.`;
+  }
+  if (intentKind === 'SNAPSHOT_DUE_TODAY_BOTH') {
+    const receive = formatAdvisorFactualBrl(asString(receivables?.dueToday) ?? '');
+    const pay = formatAdvisorFactualBrl(asString(payables?.dueToday) ?? '');
+    return receive === null || pay === null
+      ? null
+      : `Hoje, vencem ${receive} em contas a receber e ${pay} em contas a pagar.`;
+  }
+  if (intentKind === 'SNAPSHOT_UPCOMING_RECEIVABLES') {
+    const amount = formatAdvisorFactualBrl(asString(receivables?.upcomingFuture) ?? '');
+    return amount === null ? null : `Há ${amount} em contas a receber ainda a vencer após hoje.`;
+  }
+  if (intentKind === 'SNAPSHOT_UPCOMING_PAYABLES') {
+    const amount = formatAdvisorFactualBrl(asString(payables?.upcomingFuture) ?? '');
+    return amount === null ? null : `Há ${amount} em contas a pagar ainda a vencer após hoje.`;
+  }
+  if (intentKind === 'SNAPSHOT_UPCOMING_BOTH') {
+    const receive = formatAdvisorFactualBrl(asString(receivables?.upcomingFuture) ?? '');
+    const pay = formatAdvisorFactualBrl(asString(payables?.upcomingFuture) ?? '');
+    return receive === null || pay === null
+      ? null
+      : `Há ${receive} em contas a receber e ${pay} em contas a pagar ainda a vencer após hoje.`;
+  }
+  return null;
+}
+
 function composeLimitation(
   facts: Record<string, unknown>,
   anaphora: AdvisorNominalAnaphoraStatus,
@@ -304,6 +391,9 @@ function composeLimitation(
   }
   if (status === 'INSUFFICIENT' || status === 'UNAVAILABLE' || status === 'ABSENT') {
     return 'Não há fatos nominais suficientes para responder objetivamente a essa pergunta.';
+  }
+  if (asString(facts.factKind) === 'CURRENT_FINANCIAL_SNAPSHOT') {
+    return 'Não há um recorte oficial separado de vence-hoje ou a vencer nesta posição atual para responder objetivamente.';
   }
   return null;
 }

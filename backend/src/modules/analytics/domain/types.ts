@@ -38,6 +38,15 @@ export type FinancialStockSnapshot = {
   readonly receivables: InstallmentStockSnapshot;
   readonly payables: InstallmentStockSnapshot;
   readonly receivableDelinquency: ReceivableDelinquency;
+  /**
+   * Baldes exclusivos da mesma população do snapshot.
+   * `pending.*.upcoming` é apenas dueDate > today (não inclui vence-hoje).
+   * Opcional para não quebrar construtores de teste; o serviço oficial sempre preenche.
+   */
+  readonly pending?: {
+    readonly receivables: InstallmentPendingStock;
+    readonly payables: InstallmentPendingStock;
+  };
 };
 
 export type GetFinancialStockSnapshotInput = {

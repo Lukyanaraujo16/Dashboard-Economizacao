@@ -1,8 +1,13 @@
+import { ADVISOR_CURRENT_SNAPSHOT_FACT_NAME } from './advisor-current-snapshot-facts.js';
 import {
   COMPARE_CASH_NOMINAL_TOOL_NAME,
   CASH_NOMINAL_LOOKUP_TOOL_NAME,
   CASH_NOMINAL_RANKING_TOOL_NAME,
 } from './advisor-nominal-dimension.js';
+import {
+  isAdvisorCurrentSnapshotIntentKind,
+  type AdvisorCurrentSnapshotIntentKind,
+} from './resolve-advisor-current-snapshot-intent.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
 
 export const ADVISOR_FACTUAL_RESPONSE_KINDS = [
@@ -20,6 +25,19 @@ export const ADVISOR_FACTUAL_INTENT_KINDS = [
   'LOOKUP',
   'COMPARISON',
   'IDENTITY_AMBIGUITY',
+  'SNAPSHOT_OPEN_RECEIVABLES',
+  'SNAPSHOT_OPEN_PAYABLES',
+  'SNAPSHOT_OPEN_BOTH',
+  'SNAPSHOT_OVERDUE_RECEIVABLES',
+  'SNAPSHOT_OVERDUE_PAYABLES',
+  'SNAPSHOT_OVERDUE_BOTH',
+  'SNAPSHOT_DELINQUENCY',
+  'SNAPSHOT_DUE_TODAY_RECEIVABLES',
+  'SNAPSHOT_DUE_TODAY_PAYABLES',
+  'SNAPSHOT_DUE_TODAY_BOTH',
+  'SNAPSHOT_UPCOMING_RECEIVABLES',
+  'SNAPSHOT_UPCOMING_PAYABLES',
+  'SNAPSHOT_UPCOMING_BOTH',
   'FACTUAL_LIMITATION',
   'INTERPRETIVE',
   'NONE',
@@ -74,6 +92,20 @@ export function classifyAdvisorFactualResponse(
       };
     }
     return { kind: 'UNRESOLVED', intentKind: 'IDENTITY_AMBIGUITY', factKind };
+  }
+
+  if (input.toolName === ADVISOR_CURRENT_SNAPSHOT_FACT_NAME) {
+    const snapshotIntent = readSnapshotIntent(facts);
+    if (!input.toolOk || facts === null || status !== 'OK' || snapshotIntent === null) {
+      return { kind: 'UNRESOLVED', intentKind: 'NONE', factKind };
+    }
+    if (requiresExclusiveDueBucket(snapshotIntent) && !hasExclusiveDueBucket(facts, snapshotIntent)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    if (hasSnapshotClosedFacts(facts, snapshotIntent)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: snapshotIntent, factKind };
+    }
+    return { kind: 'UNRESOLVED', intentKind: snapshotIntent, factKind };
   }
 
   if (!input.toolOk || facts === null) {
@@ -220,6 +252,65 @@ function hasIdentityAmbiguityFacts(facts: Record<string, unknown>): boolean {
     identityCoverage!.ambiguousAmount !== '0' &&
     ranking.some((row) => asRecord(row)?.identityStatus === 'IDENTIFIED')
   );
+}
+
+function readSnapshotIntent(facts: Record<string, unknown> | null): AdvisorCurrentSnapshotIntentKind | null {
+  const raw = typeof facts?.intentKind === 'string' ? facts.intentKind : null;
+  return raw !== null && isAdvisorCurrentSnapshotIntentKind(raw) ? raw : null;
+}
+
+function requiresExclusiveDueBucket(intent: AdvisorCurrentSnapshotIntentKind): boolean {
+  return intent.startsWith('SNAPSHOT_DUE_TODAY_') || intent.startsWith('SNAPSHOT_UPCOMING_');
+}
+
+function hasExclusiveDueBucket(
+  facts: Record<string, unknown>,
+  intent: AdvisorCurrentSnapshotIntentKind,
+): boolean {
+  const receivables = asRecord(facts.receivables);
+  const payables = asRecord(facts.payables);
+  const field = intent.startsWith('SNAPSHOT_DUE_TODAY_') ? 'dueToday' : 'upcomingFuture';
+  if (intent.endsWith('_RECEIVABLES')) {
+    return isAmount(receivables?.[field]);
+  }
+  if (intent.endsWith('_PAYABLES')) {
+    return isAmount(payables?.[field]);
+  }
+  return isAmount(receivables?.[field]) && isAmount(payables?.[field]);
+}
+
+function hasSnapshotClosedFacts(
+  facts: Record<string, unknown>,
+  intent: AdvisorCurrentSnapshotIntentKind,
+): boolean {
+  const receivables = asRecord(facts.receivables);
+  const payables = asRecord(facts.payables);
+  const delinquency = asRecord(facts.receivableDelinquency);
+  if (typeof facts.asOf !== 'string' || facts.asOf === 'ABSENT') {
+    return false;
+  }
+  if (intent === 'SNAPSHOT_DELINQUENCY') {
+    return isAmount(delinquency?.overdueAmount) && isAmount(delinquency?.openAmount);
+  }
+  if (intent.includes('RECEIVABLES') && !isAmount(receivables?.open)) {
+    return false;
+  }
+  if (intent.includes('PAYABLES') && !isAmount(payables?.open)) {
+    return false;
+  }
+  if (intent.endsWith('_BOTH')) {
+    return isAmount(receivables?.open) && isAmount(payables?.open);
+  }
+  if (intent.startsWith('SNAPSHOT_OVERDUE_')) {
+    if (intent.endsWith('_RECEIVABLES')) {
+      return isAmount(receivables?.overdue);
+    }
+    if (intent.endsWith('_PAYABLES')) {
+      return isAmount(payables?.overdue);
+    }
+    return isAmount(receivables?.overdue) && isAmount(payables?.overdue);
+  }
+  return true;
 }
 
 function isKnownAbsentStatus(status: string | null): boolean {

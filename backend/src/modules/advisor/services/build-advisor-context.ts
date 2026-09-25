@@ -13,6 +13,7 @@ import {
   compareAdvisorCashMonths,
   type AdvisorCashMonthComparison,
 } from '../domain/compare-advisor-cash-months.js';
+import { serializeAdvisorCurrentSnapshotFacts } from '../domain/advisor-current-snapshot-facts.js';
 import { ADVISOR_HISTORY_MESSAGE_LIMIT, type AdvisorBuiltContext } from '../domain/context-blocks.js';
 import {
   applyAdvisorContextCharBudget,
@@ -233,6 +234,8 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
         monthKey,
         ...(comparisonMonthKey === undefined ? {} : { comparisonMonthKey }),
         blocks: applyAdvisorContextCharBudget(drafts),
+        currentSnapshot:
+          safeSnapshot === null ? null : serializeAdvisorCurrentSnapshotFacts(safeSnapshot),
       };
     },
   };

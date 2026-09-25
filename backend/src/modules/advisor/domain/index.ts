@@ -141,6 +141,22 @@ export type {
   AdvisorFactualResponseKind,
 } from './classify-advisor-factual-response.js';
 export {
+  ADVISOR_CURRENT_SNAPSHOT_FACT_KIND,
+  ADVISOR_CURRENT_SNAPSHOT_FACT_NAME,
+  ADVISOR_CURRENT_SNAPSHOT_TIMEZONE,
+  serializeAdvisorCurrentSnapshotFacts,
+} from './advisor-current-snapshot-facts.js';
+export type {
+  AdvisorCurrentSnapshotFacts,
+  AdvisorCurrentSnapshotSideFacts,
+} from './advisor-current-snapshot-facts.js';
+export {
+  ADVISOR_CURRENT_SNAPSHOT_INTENT_KINDS,
+  isAdvisorCurrentSnapshotIntentKind,
+  resolveAdvisorCurrentSnapshotIntent,
+} from './resolve-advisor-current-snapshot-intent.js';
+export type { AdvisorCurrentSnapshotIntentKind } from './resolve-advisor-current-snapshot-intent.js';
+export {
   ADVISOR_FACTUAL_COMPOSER_VERSION,
   composeAdvisorFactualAnswer,
 } from './compose-advisor-factual-answer.js';

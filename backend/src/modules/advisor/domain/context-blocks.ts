@@ -1,3 +1,5 @@
+import type { AdvisorCurrentSnapshotFacts } from './advisor-current-snapshot-facts.js';
+
 /**
  * Contrato neutro do Context Builder (F13.2).
  * Nenhum tipo OpenAI/Anthropic. Adapters (F13.3) convertem estes blocos.
@@ -44,6 +46,7 @@ export type AdvisorBuiltContext = {
   readonly monthKey: string;
   readonly comparisonMonthKey?: string;
   readonly blocks: readonly AdvisorContextBlock[];
+  readonly currentSnapshot?: AdvisorCurrentSnapshotFacts | null;
 };
 
 /** Default técnico do histórico enviado ao provider. Persistência pode ser maior. */

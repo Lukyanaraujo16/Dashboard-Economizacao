@@ -21,10 +21,14 @@ import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-co
 import { resolveAdvisorDrilldownIntent } from '../domain/resolve-advisor-drilldown-intent.js';
 import { resolveAdvisorConversationalNominal } from '../domain/resolve-advisor-conversational-nominal.js';
 import {
+  ADVISOR_CURRENT_SNAPSHOT_FACT_NAME,
+} from '../domain/advisor-current-snapshot-facts.js';
+import {
   ADVISOR_FACTUAL_COMPOSER_VERSION,
   composeAdvisorFactualAnswer,
   type AdvisorFactualAnswerMeta,
 } from '../domain/compose-advisor-factual-answer.js';
+import { resolveAdvisorCurrentSnapshotIntent } from '../domain/resolve-advisor-current-snapshot-intent.js';
 import {
   COMPARE_CASH_NOMINAL_TOOL_NAME,
   CASH_NOMINAL_LOOKUP_TOOL_NAME,
@@ -322,6 +326,13 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
                   }
                 : null;
       const drilldown = preloadedTool;
+      const snapshotIntent =
+        period.comparison === false &&
+        nominalIntent === null &&
+        anaphoraStatus === 'NONE' &&
+        drilldownIntent === null
+          ? resolveAdvisorCurrentSnapshotIntent({ content: question, period })
+          : null;
 
       const built = await deps.context.build({
         tenantId,
@@ -346,9 +357,18 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       const composed = composeAdvisorFactualAnswer({
         content: question,
         anaphora: anaphoraStatus,
-        toolName: drilldown?.name ?? null,
-        toolOk: drilldown?.ok ?? false,
-        toolContent: drilldown?.content ?? null,
+        toolName:
+          snapshotIntent !== null
+            ? ADVISOR_CURRENT_SNAPSHOT_FACT_NAME
+            : (drilldown?.name ?? null),
+        toolOk: snapshotIntent !== null ? built.currentSnapshot !== null && built.currentSnapshot !== undefined : (drilldown?.ok ?? false),
+        toolContent:
+          snapshotIntent !== null && built.currentSnapshot !== null && built.currentSnapshot !== undefined
+            ? JSON.stringify({
+                ...built.currentSnapshot,
+                intentKind: snapshotIntent,
+              })
+            : (drilldown?.content ?? null),
       });
       if (composed.answer !== null && composed.meta !== null) {
         const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {

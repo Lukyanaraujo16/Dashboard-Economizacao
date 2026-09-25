@@ -687,7 +687,7 @@ describe('F13.8.1D3.3 comparison e isolamento', () => {
 
 describe('F13.8.1D3.3 composer version', () => {
   it('expõe versão explícita sem fingir provider', () => {
-    expect(ADVISOR_FACTUAL_COMPOSER_VERSION).toBe('d3.3-1');
+    expect(ADVISOR_FACTUAL_COMPOSER_VERSION).toBe('d4.1-1');
     const composed = composeAdvisorFactualAnswer({
       content: 'Qual convênio individual mais faturou em agosto de 2026?',
       anaphora: 'NONE',
@@ -695,7 +695,7 @@ describe('F13.8.1D3.3 composer version', () => {
       toolOk: true,
       toolContent: JSON.stringify(agoRankingFacts()),
     });
-    expect(composed.meta?.composerVersion).toBe('d3.3-1');
+    expect(composed.meta?.composerVersion).toBe('d4.1-1');
     expect(composed.meta?.providerCalled).toBe(false);
   });
 });
