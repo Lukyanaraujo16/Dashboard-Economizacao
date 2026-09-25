@@ -919,6 +919,7 @@ Campos conceituais:
 * admin_prompt;
 * tone_preset;
 * tone (texto custom quando PERSONALIZADO);
+* emoji_preference (`NONE` | `MODERATE` | `FREE`, default `MODERATE`);
 * status;
 * created_at;
 * updated_at.

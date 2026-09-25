@@ -15,6 +15,7 @@ import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowle
 import { createAdvisorPlatformCredentialRepository } from '../repositories/advisor-platform-credential.repository.js';
 import { createAdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
 import { createAdminConsultantProvidersService } from '../services/admin-consultant-providers.service.js';
+import { createResolveProviderApiKey } from './create-advisor-runtime.js';
 import { createAdminConsultantService } from '../services/admin-consultant.service.js';
 import {
   parseCreateAdminKnowledgeRequestBody,
@@ -37,12 +38,24 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
   const environment = loadEnvironment();
+  const encryptionKey = environment.integrationEncryptionKey;
+  const platformCredentials = createAdvisorPlatformCredentialRepository(prisma);
+  const resolveProviderApiKey = createResolveProviderApiKey({
+    findEncryptedSecret: async (provider) => {
+      const stored = await platformCredentials.findByProvider(provider);
+      return stored?.encryptedSecret ?? null;
+    },
+    encryptionKey,
+    envOpenAi: environment.openaiApiKey,
+    envAnthropic: environment.anthropicApiKey,
+  });
   const adminConsultant = createAdminConsultantService({
     tenants,
     settings: createAdvisorSettingsRepository(prisma),
     knowledge: createAdvisorKnowledgeRepository(prisma),
+    nodeEnv: environment.nodeEnv,
+    resolveProviderApiKey,
   });
-  const encryptionKey = environment.integrationEncryptionKey;
   const adminProviders = createAdminConsultantProvidersService({
     credentials: createAdvisorPlatformCredentialRepository(prisma),
     encryptionKey,

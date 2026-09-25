@@ -17,6 +17,7 @@ export function mapAdvisorDomainError(error: AdvisorDomainError): never {
     case 'AI_CONSULTANT_STATUS_INVALID':
     case 'AI_PROVIDER_INVALID':
     case 'AI_MODEL_NOT_ALLOWED':
+    case 'AI_EMOJI_PREFERENCE_INVALID':
     case 'AI_KNOWLEDGE_STATUS_INVALID':
     case 'KNOWLEDGE_TITLE_REQUIRED':
     case 'KNOWLEDGE_CONTENT_REQUIRED':

@@ -2,6 +2,7 @@ import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { assertAiProviderId, resolveAiModel } from '../domain/ai-provider-models.js';
 import { assertConsultantName } from '../domain/consultant-name.js';
+import { assertAiEmojiPreference, DEFAULT_EMOJI_PREFERENCE } from '../domain/emoji-preference.js';
 import { assertAiTonePreset, DEFAULT_TONE_PRESET } from '../domain/tone-presets.js';
 import type {
   AiConsultantStatus,
@@ -42,6 +43,7 @@ function toRecord(row: {
   adminPrompt: string | null;
   tonePreset: AiTenantSettingsRecord['tonePreset'];
   tone: string | null;
+  emojiPreference: AiTenantSettingsRecord['emojiPreference'];
   status: AiConsultantStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -57,6 +59,7 @@ function toRecord(row: {
     adminPrompt: row.adminPrompt,
     tonePreset: row.tonePreset,
     tone: row.tone,
+    emojiPreference: row.emojiPreference,
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -87,6 +90,10 @@ export function createAdvisorSettingsRepository(prisma: PrismaClient): AdvisorSe
       }
       const tonePreset =
         input.tonePreset === undefined ? undefined : assertAiTonePreset(input.tonePreset);
+      const emojiPreference =
+        input.emojiPreference === undefined
+          ? undefined
+          : assertAiEmojiPreference(input.emojiPreference);
       const consultantName =
         input.consultantName === undefined
           ? undefined
@@ -111,6 +118,7 @@ export function createAdvisorSettingsRepository(prisma: PrismaClient): AdvisorSe
             adminPrompt: normalizeOptionalText(input.adminPrompt) ?? null,
             tonePreset: tonePreset ?? DEFAULT_TONE_PRESET,
             tone: normalizeOptionalText(input.tone) ?? null,
+            emojiPreference: emojiPreference ?? DEFAULT_EMOJI_PREFERENCE,
             status: input.status ?? 'DISABLED',
           },
         });
@@ -138,6 +146,7 @@ export function createAdvisorSettingsRepository(prisma: PrismaClient): AdvisorSe
               : (normalizeOptionalText(input.adminPrompt) ?? null),
           tonePreset,
           tone: input.tone === undefined ? undefined : (normalizeOptionalText(input.tone) ?? null),
+          emojiPreference,
           status: input.status,
         },
       });

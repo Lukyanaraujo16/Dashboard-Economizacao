@@ -807,6 +807,14 @@ enum AiTonePreset {
   @@map("ai_tone_preset")
 }
 
+enum AiEmojiPreference {
+  NONE
+  MODERATE
+  FREE
+
+  @@map("ai_emoji_preference")
+}
+
 enum AiKnowledgeContentType {
   TEXT
 
@@ -896,6 +904,7 @@ model AiTenantSettings {
   adminPrompt         String?            @map("admin_prompt") @db.Text
   tonePreset          AiTonePreset       @default(PROFISSIONAL_OBJETIVO) @map("tone_preset")
   tone                String?
+  emojiPreference     AiEmojiPreference  @default(MODERATE) @map("emoji_preference")
   status              AiConsultantStatus @default(DISABLED)
   createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)

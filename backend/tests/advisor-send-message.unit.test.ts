@@ -36,6 +36,7 @@ function settings(overrides: Partial<AiTenantSettingsRecord> = {}): AiTenantSett
     adminPrompt: null,
     tonePreset: 'PROFISSIONAL_OBJETIVO',
     tone: 'objetivo',
+    emojiPreference: 'MODERATE',
     status: 'ACTIVE',
     createdAt: now,
     updatedAt: now,

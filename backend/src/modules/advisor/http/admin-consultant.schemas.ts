@@ -5,10 +5,12 @@ import {
   type AiConsultantStatus,
   type AiKnowledgeStatus,
   type AiProviderId,
+  type AiEmojiPreference,
   type AiTonePreset,
 } from '../domain/types.js';
 import { assertAllowedAiModel, isAiProviderId } from '../domain/ai-provider-models.js';
 import { CONSULTANT_NAME_MAX_LENGTH, assertConsultantName } from '../domain/consultant-name.js';
+import { isAiEmojiPreference } from '../domain/emoji-preference.js';
 import { isAiTonePreset } from '../domain/tone-presets.js';
 import { ADVISOR_ADMIN_FIELD_LIMITS } from './public-dtos.js';
 
@@ -24,6 +26,7 @@ const PUT_SETTINGS_BODY_KEYS = new Set([
   'adminPrompt',
   'tonePreset',
   'tone',
+  'emojiPreference',
 ]);
 const PUT_PROVIDER_CREDENTIAL_KEYS = new Set(['credential']);
 const CREATE_KNOWLEDGE_BODY_KEYS = new Set(['title', 'content', 'status', 'contentType']);
@@ -132,6 +135,7 @@ export type PutAdminConsultantRequestBody = {
   readonly adminPrompt?: string | null;
   readonly tonePreset?: AiTonePreset;
   readonly tone?: string | null;
+  readonly emojiPreference?: AiEmojiPreference;
 };
 
 export type PutAdminProviderCredentialBody = {
@@ -216,6 +220,15 @@ export function parsePutAdminConsultantRequestBody(body: unknown): PutAdminConsu
     details,
   );
 
+  let emojiPreference: AiEmojiPreference | undefined;
+  if (record.emojiPreference !== undefined) {
+    if (typeof record.emojiPreference !== 'string' || !isAiEmojiPreference(record.emojiPreference)) {
+      details.push({ field: 'emojiPreference', issue: 'invalid_enum' });
+    } else {
+      emojiPreference = record.emojiPreference;
+    }
+  }
+
   if (
     tonePreset === 'PERSONALIZADO' &&
     (tone === undefined || tone === null || (typeof tone === 'string' && tone.trim().length === 0))
@@ -237,6 +250,7 @@ export function parsePutAdminConsultantRequestBody(body: unknown): PutAdminConsu
     ...(adminPrompt !== undefined ? { adminPrompt } : {}),
     ...(tonePreset !== undefined ? { tonePreset } : {}),
     ...(tone !== undefined ? { tone } : {}),
+    ...(emojiPreference !== undefined ? { emojiPreference } : {}),
   };
 }
 

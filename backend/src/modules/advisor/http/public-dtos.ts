@@ -19,6 +19,8 @@ export type PublicAiTonePreset =
   | 'EXECUTIVO'
   | 'PERSONALIZADO';
 
+export type PublicAiEmojiPreference = 'NONE' | 'MODERATE' | 'FREE';
+
 export type PublicAdminConsultantSettings = {
   readonly configured: boolean;
   readonly status: 'ACTIVE' | 'DISABLED' | 'NOT_CONFIGURED';
@@ -30,6 +32,7 @@ export type PublicAdminConsultantSettings = {
   readonly adminPrompt: string | null;
   readonly tonePreset: PublicAiTonePreset | null;
   readonly tone: string | null;
+  readonly emojiPreference: PublicAiEmojiPreference | null;
   readonly updatedAt: string | null;
 };
 
@@ -49,9 +52,15 @@ export type PublicConsultantTonePresetOption = {
   readonly label: string;
 };
 
+export type PublicConsultantEmojiPreferenceOption = {
+  readonly id: PublicAiEmojiPreference;
+  readonly label: string;
+};
+
 export type PublicConsultantOptions = {
   readonly providers: readonly PublicConsultantProviderOption[];
   readonly tonePresets: readonly PublicConsultantTonePresetOption[];
+  readonly emojiPreferences: readonly PublicConsultantEmojiPreferenceOption[];
 };
 
 export type PublicConsultantProviderCredentialSource = 'MANAGED' | 'ENV' | 'NONE';

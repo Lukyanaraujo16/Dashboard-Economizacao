@@ -1,12 +1,14 @@
-import { NotFoundError } from '../../../shared/errors/application-error.js';
+import { ConflictError, NotFoundError } from '../../../shared/errors/application-error.js';
 import type { TenantRepository } from '../../tenant/repositories/tenant.repository.js';
-import type { AdvisorKnowledgeRepository } from '../repositories/advisor-knowledge.repository.js';
-import type { AdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
+import { consultantActivationBlockedReason } from '../domain/consultant-activation.js';
 import type {
+  AiProviderId,
   CreateAiKnowledgeEntryInput,
   UpdateAiKnowledgeEntryInput,
   UpsertAiTenantSettingsInput,
 } from '../domain/types.js';
+import type { AdvisorKnowledgeRepository } from '../repositories/advisor-knowledge.repository.js';
+import type { AdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
 import type {
   PublicAdminConsultantSettings,
   PublicConsultantOptions,
@@ -45,6 +47,8 @@ export function createAdminConsultantService(deps: {
   readonly tenants: TenantRepository;
   readonly settings: AdvisorSettingsRepository;
   readonly knowledge: AdvisorKnowledgeRepository;
+  readonly nodeEnv?: string;
+  readonly resolveProviderApiKey?: (provider: AiProviderId) => Promise<string | null>;
 }): AdminConsultantService {
   async function requireTenant(tenantId: string): Promise<void> {
     const tenant = await deps.tenants.findById(tenantId);
@@ -71,6 +75,20 @@ export function createAdminConsultantService(deps: {
     async upsertSettings(tenantId, input) {
       await requireTenant(tenantId);
       return withAdvisorDomainError(async () => {
+        if (input.status === 'ACTIVE') {
+          const key = deps.resolveProviderApiKey
+            ? await deps.resolveProviderApiKey(input.provider)
+            : null;
+          const blocked = consultantActivationBlockedReason({
+            status: input.status,
+            provider: input.provider,
+            credentialAvailable: key !== null && key.trim().length > 0,
+            nodeEnv: deps.nodeEnv ?? process.env.NODE_ENV ?? 'development',
+          });
+          if (blocked) {
+            throw new ConflictError(blocked);
+          }
+        }
         const settings = await deps.settings.upsertSettings(tenantId, input);
         return toPublicAdminConsultantSettings(settings);
       });

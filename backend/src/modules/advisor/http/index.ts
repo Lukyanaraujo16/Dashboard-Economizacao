@@ -6,7 +6,9 @@ export {
 export type {
   PublicAdminConsultantSettings,
   PublicAiProviderId,
+  PublicAiEmojiPreference,
   PublicAiTonePreset,
+  PublicConsultantEmojiPreferenceOption,
   PublicConsultantConversation,
   PublicConsultantConversationDetail,
   PublicConsultantMessage,

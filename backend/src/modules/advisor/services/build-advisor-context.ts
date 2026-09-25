@@ -11,6 +11,7 @@ import {
   type AdvisorContextBlockDraft,
 } from '../domain/context-char-budget.js';
 import { resolveConsultantDisplayName } from '../domain/consultant-name.js';
+import { DEFAULT_EMOJI_PREFERENCE, resolveEmojiInstruction } from '../domain/emoji-preference.js';
 import { buildFinancialFactsContent } from '../domain/financial-facts-text.js';
 import { ADVISOR_PLATFORM_INSTRUCTIONS } from '../domain/platform-instructions.js';
 import { DEFAULT_TONE_PRESET, resolveToneInstruction } from '../domain/tone-presets.js';
@@ -219,10 +220,13 @@ function presentOrAbsent(value: string | null | undefined): string {
 
 function formatTenantProfile(settings: AiTenantSettingsRecord | null): string {
   const tonePreset = settings?.tonePreset ?? DEFAULT_TONE_PRESET;
+  const emojiPreference = settings?.emojiPreference ?? DEFAULT_EMOJI_PREFERENCE;
   return [
     `consultantName: ${resolveConsultantDisplayName(settings?.consultantName)}`,
     `tonePreset: ${tonePreset}`,
     `toneInstruction: ${resolveToneInstruction(tonePreset, settings?.tone)}`,
+    `emojiPreference: ${emojiPreference}`,
+    `emojiInstruction: ${resolveEmojiInstruction(emojiPreference)}`,
     `businessSegment: ${presentOrAbsent(settings?.businessSegment)}`,
     `businessDescription: ${presentOrAbsent(settings?.businessDescription)}`,
   ].join('\n');

@@ -64,6 +64,10 @@ export const AI_TONE_PRESETS = [
 
 export type AiTonePreset = (typeof AI_TONE_PRESETS)[number];
 
+export const AI_EMOJI_PREFERENCES = ['NONE', 'MODERATE', 'FREE'] as const;
+
+export type AiEmojiPreference = (typeof AI_EMOJI_PREFERENCES)[number];
+
 export const DEFAULT_CONSULTANT_NAME = 'Consultor';
 
 export type AiTenantSettingsRecord = {
@@ -77,6 +81,7 @@ export type AiTenantSettingsRecord = {
   readonly adminPrompt: string | null;
   readonly tonePreset: AiTonePreset;
   readonly tone: string | null;
+  readonly emojiPreference: AiEmojiPreference;
   readonly status: AiConsultantStatus;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -91,6 +96,7 @@ export type UpsertAiTenantSettingsInput = {
   readonly adminPrompt?: string | null;
   readonly tonePreset?: AiTonePreset;
   readonly tone?: string | null;
+  readonly emojiPreference?: AiEmojiPreference;
   readonly status?: AiConsultantStatus;
 };
 

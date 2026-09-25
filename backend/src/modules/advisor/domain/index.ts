@@ -70,6 +70,19 @@ export {
   resolveToneInstruction,
   toPublicTonePresetOptions,
 } from './tone-presets.js';
+export {
+  AI_EMOJI_PREFERENCE_INSTRUCTIONS,
+  AI_EMOJI_PREFERENCE_LABELS,
+  DEFAULT_EMOJI_PREFERENCE,
+  assertAiEmojiPreference,
+  isAiEmojiPreference,
+  resolveEmojiInstruction,
+  toPublicEmojiPreferenceOptions,
+} from './emoji-preference.js';
+export {
+  consultantActivationBlockedReason,
+  consultantActivationCredentialMessage,
+} from './consultant-activation.js';
 export { delimitUntrustedContent } from './untrusted-content.js';
 export {
   AI_PROVIDER_MODEL_CATALOG,
@@ -92,11 +105,13 @@ export {
   AI_RUN_STATUSES,
   AI_RUN_TYPES,
   AI_TONE_PRESETS,
+  AI_EMOJI_PREFERENCES,
   DEFAULT_CONSULTANT_NAME,
 } from './types.js';
 export type {
   AiConsultantStatus,
   AiConversationRecord,
+  AiEmojiPreference,
   AiPlatformCredentialRecord,
   AiTonePreset,
   AiConversationStatus,

@@ -63,6 +63,7 @@ function settingsA(overrides: Partial<AiTenantSettingsRecord> = {}): AiTenantSet
     adminPrompt: 'Prompt admin da clínica A',
     tonePreset: 'PROFISSIONAL_OBJETIVO',
     tone: 'objetivo',
+    emojiPreference: 'MODERATE',
     status: 'ACTIVE',
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -531,6 +532,8 @@ describe('Context Builder do Consultor (F13.2)', () => {
         'consultantName: Consultor',
         'tonePreset: PROFISSIONAL_OBJETIVO',
         'toneInstruction: Fale de forma profissional, direta e objetiva. Priorize clareza e precisão. Evite floreio e informalidade.',
+        'emojiPreference: MODERATE',
+        'emojiInstruction: Use emojis sparingly and only when they improve readability.',
         'businessSegment: ABSENT',
         'businessDescription: ABSENT',
       ].join('\n'),
@@ -566,6 +569,35 @@ describe('Context Builder do Consultor (F13.2)', () => {
     expect(block(result, 'USER_QUESTION').content).toContain('ok?');
     expect(block(result, 'FINANCIAL_FACTS').content).toContain('cash.realized.inflows: 10.25');
     expect(block(result, 'FINANCIAL_FACTS').content).toContain('billing: 15.25');
+  });
+
+  it('emojiPreference entra no PROFILE sem alterar fatos financeiros', async () => {
+    const factsBilling = 'billing: 15';
+    for (const preference of ['NONE', 'MODERATE', 'FREE'] as const) {
+      const builder = createBuildAdvisorContext(
+        createDeps({
+          settings: settingsA({ emojiPreference: preference }),
+        }),
+      );
+      const result = await builder.build({
+        tenantId: TENANT_A,
+        question: 'faturamento?',
+        monthKey: '2026-09',
+      });
+      const profile = block(result, 'TENANT_PROFILE').content;
+      const facts = block(result, 'FINANCIAL_FACTS').content;
+      expect(profile).toContain(`emojiPreference: ${preference}`);
+      expect(profile).toContain(
+        preference === 'NONE'
+          ? 'Do not use emojis.'
+          : preference === 'FREE'
+            ? 'Emojis may be used naturally when appropriate.'
+            : 'Use emojis sparingly and only when they improve readability.',
+      );
+      expect(facts).toContain(factsBilling);
+      expect(facts).toContain('cash.overdue.receivables: 999');
+      expect(block(result, 'PLATFORM_INSTRUCTIONS').content).toBe(ADVISOR_PLATFORM_INSTRUCTIONS);
+    }
   });
 
   it('não importa conta-azul nem recálculo de caixa no módulo de contexto', () => {

@@ -38,6 +38,7 @@ const SETTINGS_PUBLIC_KEYS = [
   'adminPrompt',
   'tonePreset',
   'tone',
+  'emojiPreference',
   'updatedAt',
 ] as const;
 
@@ -240,6 +241,11 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expectNoSecretLeak(body);
+      expect(body.emojiPreferences).toEqual([
+        { id: 'NONE', label: 'Não usar emojis' },
+        { id: 'MODERATE', label: 'Usar com moderação' },
+        { id: 'FREE', label: 'Usar livremente' },
+      ]);
       expect(body.providers).toEqual(
         (Object.keys(AI_PROVIDER_MODEL_CATALOG) as Array<keyof typeof AI_PROVIDER_MODEL_CATALOG>).map(
           (id) => ({
@@ -285,6 +291,7 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
         adminPrompt: null,
         tonePreset: null,
         tone: null,
+        emojiPreference: null,
         updatedAt: null,
       });
       expectNoSecretLeak(body);

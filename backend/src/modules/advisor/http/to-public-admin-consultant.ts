@@ -1,4 +1,5 @@
 import { AI_PROVIDER_MODEL_CATALOG } from '../domain/ai-provider-models.js';
+import { toPublicEmojiPreferenceOptions } from '../domain/emoji-preference.js';
 import { toPublicTonePresetOptions } from '../domain/tone-presets.js';
 import type { AiKnowledgeEntryRecord, AiProviderId, AiTenantSettingsRecord } from '../domain/types.js';
 import type {
@@ -28,6 +29,7 @@ export function toUnconfiguredAdminConsultantSettings(): PublicAdminConsultantSe
     adminPrompt: null,
     tonePreset: null,
     tone: null,
+    emojiPreference: null,
     updatedAt: null,
   };
 }
@@ -46,6 +48,7 @@ export function toPublicAdminConsultantSettings(
     adminPrompt: record.adminPrompt,
     tonePreset: record.tonePreset,
     tone: record.tone,
+    emojiPreference: record.emojiPreference,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
@@ -61,6 +64,7 @@ export function toPublicConsultantOptions(): PublicConsultantOptions {
       })),
     })),
     tonePresets: toPublicTonePresetOptions(),
+    emojiPreferences: toPublicEmojiPreferenceOptions(),
   };
 }
 

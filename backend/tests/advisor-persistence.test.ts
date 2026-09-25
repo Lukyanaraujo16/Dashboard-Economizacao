@@ -127,6 +127,32 @@ describe('persistência do Consultor (F13.1)', () => {
     const raw = await prisma.aiTenantSettings.findUnique({ where: { tenantId: tenant.id } });
     expect(raw).not.toBeNull();
     expect(JSON.stringify(raw)).not.toMatch(/sk-|api[_]?key/i);
+    expect(saved.emojiPreference).toBe('MODERATE');
+  });
+
+  it('persiste emojiPreference NONE/MODERATE/FREE sem alterar fatos', async () => {
+    const { tenant } = await seedTenantUser('emoji-pref');
+    const created = await settings.upsertSettings(tenant.id, {
+      provider: 'OPENAI',
+      model: AI_PROVIDER_MODEL_CATALOG.OPENAI.defaultModel,
+      emojiPreference: 'NONE',
+    });
+    expect(created.emojiPreference).toBe('NONE');
+
+    const moderate = await settings.upsertSettings(tenant.id, {
+      provider: 'OPENAI',
+      model: AI_PROVIDER_MODEL_CATALOG.OPENAI.defaultModel,
+      emojiPreference: 'MODERATE',
+    });
+    expect(moderate.emojiPreference).toBe('MODERATE');
+    expect(moderate.id).toBe(created.id);
+
+    const free = await settings.upsertSettings(tenant.id, {
+      provider: 'OPENAI',
+      model: AI_PROVIDER_MODEL_CATALOG.OPENAI.defaultModel,
+      emojiPreference: 'FREE',
+    });
+    expect(free.emojiPreference).toBe('FREE');
   });
 
   it('isola knowledge entre tenants e impede alteração cruzada', async () => {
