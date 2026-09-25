@@ -1,3 +1,4 @@
+import { Prisma } from '../../../generated/prisma/client.js';
 import { isValidMonthKey } from '../../analytics/domain/civil-calendar.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import type { ReportCashDetailsService } from '../../reports/services/report-cash-details.service.js';
@@ -26,6 +27,18 @@ import {
   serializeAdvisorCashMonthComparison,
   type AdvisorCashMonthComparison,
 } from './compare-advisor-cash-months.js';
+import {
+  assertCashNominalLookupArgs,
+  assertCashNominalRankingArgs,
+  assertCompareCashNominalArgs,
+  listAdvisorNominalTools,
+  type AdvisorNominalDimensionService,
+} from './advisor-nominal-tools.js';
+import {
+  COMPARE_CASH_NOMINAL_TOOL_NAME,
+  CASH_NOMINAL_LOOKUP_TOOL_NAME,
+  CASH_NOMINAL_RANKING_TOOL_NAME,
+} from './advisor-nominal-dimension.js';
 
 export const ADVISOR_MAX_TOOL_ROUNDS = 3;
 export const ADVISOR_ANALYTICAL_TOOL_TIMEOUT_MS = 10_000;
@@ -198,7 +211,12 @@ export const CASH_MOVEMENT_LINES_TOOL: AdvisorAnalyticalToolDefinition = {
 };
 
 export function listAdvisorAnalyticalTools(): readonly AdvisorAnalyticalToolDefinition[] {
-  return [COMPARE_CASH_MONTHS_TOOL, CASH_REALIZED_BREAKDOWN_TOOL, CASH_MOVEMENT_LINES_TOOL];
+  return [
+    COMPARE_CASH_MONTHS_TOOL,
+    CASH_REALIZED_BREAKDOWN_TOOL,
+    CASH_MOVEMENT_LINES_TOOL,
+    ...listAdvisorNominalTools(),
+  ];
 }
 
 export function createAdvisorCashComparisonService(deps: {
@@ -325,6 +343,7 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
   readonly cashComparison: AdvisorCashComparisonService;
   readonly cashBreakdown?: AdvisorCashBreakdownService;
   readonly cashMovements?: AdvisorCashMovementLinesService;
+  readonly cashNominal?: AdvisorNominalDimensionService;
 }): AdvisorAnalyticalToolExecutor {
   const allowlist = new Set(listAdvisorAnalyticalTools().map((tool) => tool.name));
 
@@ -369,6 +388,26 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
           }
           return await executeMovements(
             deps.cashMovements,
+            tenantId,
+            call,
+            input.resolvedMonthKey,
+            input.now,
+            startedAt,
+          );
+        }
+        if (
+          call.name === CASH_NOMINAL_RANKING_TOOL_NAME ||
+          call.name === CASH_NOMINAL_LOOKUP_TOOL_NAME ||
+          call.name === COMPARE_CASH_NOMINAL_TOOL_NAME
+        ) {
+          if (deps.cashNominal === undefined) {
+            throw new AdvisorDomainError(
+              'ANALYTICAL_TOOL_FAILED',
+              'Não consegui obter a dimensão nominal agora.',
+            );
+          }
+          return await executeNominal(
+            deps.cashNominal,
             tenantId,
             call,
             input.resolvedMonthKey,
@@ -642,6 +681,120 @@ async function executeMovements(
   };
 }
 
+async function executeNominal(
+  cashNominal: AdvisorNominalDimensionService,
+  tenantId: string,
+  call: AdvisorAnalyticalToolCall,
+  resolvedMonthKey: string | undefined,
+  now: Date | undefined,
+  startedAt: number,
+): Promise<AdvisorAnalyticalToolResult> {
+  if (call.name === CASH_NOMINAL_RANKING_TOOL_NAME) {
+    const args = assertCashNominalRankingArgs(call.arguments);
+    const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+    const serialized = await withToolTimeout(
+      cashNominal.rank({
+        tenantId,
+        monthKey,
+        categoryReference: args.categoryReference,
+        limit: args.limit,
+        now,
+      }),
+    );
+    return finishNominal(call, startedAt, serialized, monthKey, args.categoryReference, args.limit);
+  }
+  if (call.name === CASH_NOMINAL_LOOKUP_TOOL_NAME) {
+    const args = assertCashNominalLookupArgs(call.arguments);
+    const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+    const serialized = await withToolTimeout(
+      cashNominal.lookup({
+        tenantId,
+        monthKey,
+        categoryReference: args.categoryReference,
+        entityQuery: args.entityQuery,
+        now,
+      }),
+    );
+    return finishNominal(call, startedAt, serialized, monthKey, args.categoryReference, null);
+  }
+  const args = assertCompareCashNominalArgs(call.arguments);
+  const serialized = await withToolTimeout(
+    cashNominal.compare({
+      tenantId,
+      monthKey: args.monthKey,
+      comparisonMonthKey: args.comparisonMonthKey,
+      categoryReference: args.categoryReference,
+      entityQuery: args.entityQuery,
+      limit: args.limit,
+      now,
+    }),
+  );
+  return finishNominal(
+    call,
+    startedAt,
+    serialized,
+    args.monthKey,
+    args.categoryReference,
+    args.limit,
+    args.comparisonMonthKey,
+  );
+}
+
+function finishNominal(
+  call: AdvisorAnalyticalToolCall,
+  startedAt: number,
+  serialized: Record<string, unknown>,
+  monthKey: string,
+  categoryReference: string | undefined,
+  limit: number | null | undefined,
+  comparisonMonthKey?: string,
+): AdvisorAnalyticalToolResult {
+  const limits = clampAdvisorDrilldownLimit(limit ?? undefined);
+  const coverage = serialized.coverage as { amountPercent?: string } | undefined;
+  const coveragePercent =
+    typeof coverage?.amountPercent === 'string' && coverage.amountPercent !== 'NOT_APPLICABLE'
+      ? Number(new Prisma.Decimal(coverage.amountPercent).toFixed(1))
+      : null;
+  const category =
+    serialized.category && typeof serialized.category === 'object'
+      ? (serialized.category as { name?: string }).name
+      : categoryReference;
+  logToolExecution({
+    toolName: call.name,
+    durationMs: Date.now() - startedAt,
+    ok: serialized.status !== 'UNAVAILABLE',
+    resultCardinality: Array.isArray(serialized.ranking)
+      ? serialized.ranking.length
+      : Array.isArray(serialized.items)
+        ? serialized.items.length
+        : serialized.entity
+          ? 1
+          : 0,
+    monthKey,
+    comparisonMonthKey: comparisonMonthKey ?? null,
+    direction: 'INFLOW',
+    requestedLimit: limits.requestedLimit,
+    effectiveLimit: limits.effectiveLimit,
+    categoryReference: typeof category === 'string' ? category : null,
+    coveragePercent,
+  });
+  return {
+    id: call.id,
+    name: call.name,
+    ok: serialized.status !== 'UNAVAILABLE',
+    content: JSON.stringify(serialized),
+    resultCardinality: Array.isArray(serialized.ranking)
+      ? serialized.ranking.length
+      : Array.isArray(serialized.items)
+        ? serialized.items.length
+        : serialized.entity
+          ? 1
+          : 0,
+    monthKey,
+    comparisonMonthKey,
+  };
+}
+
 function assertNoForbiddenArgs(raw: Record<string, unknown>): void {
   const keys = Object.keys(raw);
   for (const key of keys) {
@@ -760,6 +913,16 @@ function normalizeToolFailure(
       message: 'Não consegui obter o ranking oficial de categorias agora.',
     };
   }
+  if (
+    toolName === CASH_NOMINAL_RANKING_TOOL_NAME ||
+    toolName === CASH_NOMINAL_LOOKUP_TOOL_NAME ||
+    toolName === COMPARE_CASH_NOMINAL_TOOL_NAME
+  ) {
+    return {
+      code: 'ANALYTICAL_TOOL_FAILED',
+      message: 'Não consegui obter a dimensão nominal agora.',
+    };
+  }
   return {
     code: 'ANALYTICAL_TOOL_FAILED',
     message: 'Não foi possível obter o detalhe analítico solicitado.',
@@ -776,6 +939,8 @@ function logToolExecution(input: {
   readonly direction: AdvisorCashDirection | null;
   readonly requestedLimit: number | null;
   readonly effectiveLimit: number | null;
+  readonly categoryReference?: string | null;
+  readonly coveragePercent?: number | null;
 }): void {
   console.info(
     JSON.stringify({
@@ -789,6 +954,8 @@ function logToolExecution(input: {
       direction: input.direction,
       requestedLimit: input.requestedLimit,
       effectiveLimit: input.effectiveLimit,
+      categoryReference: input.categoryReference ?? null,
+      coveragePercent: input.coveragePercent ?? null,
     }),
   );
 }

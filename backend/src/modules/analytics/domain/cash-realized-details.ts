@@ -35,6 +35,7 @@ export type CashRealizedDetailItem = {
    */
   readonly attributedAmount: Prisma.Decimal;
   readonly description: string | null;
+  readonly partyId: string | null;
   readonly partyName: string | null;
   readonly categoryNames: readonly string[];
   readonly categoryExternalIds: readonly string[];
@@ -152,6 +153,7 @@ function toDetailItem(input: {
     netAmount: row.settlement.netAmount,
     attributedAmount: row.attributedAmount,
     description: installment?.description ?? null,
+    partyId,
     partyName: partyId ? (input.partyNames.get(partyId) ?? null) : null,
     categoryNames: resolveCategoryNames(
       row.categoryExternalIds,

@@ -38,15 +38,25 @@ export function buildAnalyticalFactsContent(input: {
   return [
     ...comparisonBlock,
     '',
-    'scope: PERIOD_DRILLDOWN',
+    isNominalTool(drilldown.toolName) ? 'scope: PERIOD_NOMINAL' : 'scope: PERIOD_DRILLDOWN',
     `tool: ${drilldown.toolName}`,
     `monthKey: ${drilldown.monthKey}`,
     `ok: ${drilldown.ok ? 'true' : 'false'}`,
     'note: fatos oficiais já obtidos pelo backend para a pergunta atual. Não afirme que não conseguiu obter se ok=true.',
     'note: obedeça result.factKind, result.proves e result.doesNotProve. Não invente subcategorias nem benchmark.',
-    'note: description/partyName de uma linha é metadado do movimento individual, não ranking de cliente/convênio. Não sabemos é resposta válida.',
+    isNominalTool(drilldown.toolName)
+      ? 'note: agregação nominal completa do backend. Coverage e conclusionSafety limitam o que se pode afirmar. Não some movimentos. Top N da D2 não substitui este fato.'
+      : 'note: description/partyName de uma linha é metadado do movimento individual, não ranking de cliente/convênio. Não sabemos é resposta válida.',
     `result: ${drilldown.content}`,
   ].join('\n');
+}
+
+function isNominalTool(toolName: string): boolean {
+  return (
+    toolName === 'cash_nominal_dimension_ranking' ||
+    toolName === 'cash_nominal_dimension_lookup' ||
+    toolName === 'compare_cash_nominal_dimension'
+  );
 }
 
 function buildComparisonFacts(comparison: AdvisorCashMonthComparison): string[] {

@@ -19,6 +19,11 @@ import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { deriveConsultantConversationTitle } from '../domain/conversation-title.js';
 import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-conversational-period.js';
 import { resolveAdvisorDrilldownIntent } from '../domain/resolve-advisor-drilldown-intent.js';
+import { resolveAdvisorNominalIntent } from '../domain/resolve-advisor-nominal-intent.js';
+import {
+  COMPARE_CASH_NOMINAL_TOOL_NAME,
+  CASH_NOMINAL_RANKING_TOOL_NAME,
+} from '../domain/advisor-nominal-dimension.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
 import {
   CONSULTANT_PLATFORM_LIMIT_MESSAGE,
@@ -187,28 +192,63 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             })
           : undefined;
 
+      const nominalIntent = resolveAdvisorNominalIntent(question, {
+        comparison: period.comparison,
+      });
       const drilldownIntent =
-        period.comparison === false ? resolveAdvisorDrilldownIntent(question) : null;
-      const drilldown =
-        drilldownIntent !== null && deps.analyticalTools !== undefined
-          ? await deps.analyticalTools.execute({
-              tenantId,
-              resolvedMonthKey: period.monthKey,
-              now: input.now,
-              call: {
-                id: 'preload-drilldown',
-                name: drilldownIntent.toolName,
-                arguments: {
-                  monthKey: period.monthKey,
-                  direction: drilldownIntent.direction,
-                  limit: drilldownIntent.limit,
-                  ...(drilldownIntent.toolName === 'cash_movement_lines'
-                    ? { sort: drilldownIntent.sort }
-                    : {}),
-                },
-              },
-            })
+        nominalIntent === null && period.comparison === false
+          ? resolveAdvisorDrilldownIntent(question)
           : null;
+      const preloadedTool =
+        deps.analyticalTools === undefined
+          ? null
+          : nominalIntent !== null
+            ? await deps.analyticalTools.execute({
+                tenantId,
+                resolvedMonthKey: period.monthKey,
+                now: input.now,
+                call: {
+                  id: 'preload-nominal',
+                  name: nominalIntent.toolName,
+                  arguments: {
+                    monthKey: period.monthKey,
+                    ...(nominalIntent.toolName === COMPARE_CASH_NOMINAL_TOOL_NAME &&
+                    period.comparisonMonthKey !== undefined
+                      ? { comparisonMonthKey: period.comparisonMonthKey }
+                      : {}),
+                    ...(nominalIntent.categoryReference !== undefined
+                      ? { categoryReference: nominalIntent.categoryReference }
+                      : {}),
+                    ...(nominalIntent.entityQuery !== undefined
+                      ? { entityQuery: nominalIntent.entityQuery }
+                      : {}),
+                    ...(nominalIntent.toolName === CASH_NOMINAL_RANKING_TOOL_NAME ||
+                    nominalIntent.toolName === COMPARE_CASH_NOMINAL_TOOL_NAME
+                      ? { limit: nominalIntent.limit }
+                      : {}),
+                  },
+                },
+              })
+            : drilldownIntent !== null
+              ? await deps.analyticalTools.execute({
+                  tenantId,
+                  resolvedMonthKey: period.monthKey,
+                  now: input.now,
+                  call: {
+                    id: 'preload-drilldown',
+                    name: drilldownIntent.toolName,
+                    arguments: {
+                      monthKey: period.monthKey,
+                      direction: drilldownIntent.direction,
+                      limit: drilldownIntent.limit,
+                      ...(drilldownIntent.toolName === 'cash_movement_lines'
+                        ? { sort: drilldownIntent.sort }
+                        : {}),
+                    },
+                  },
+                })
+              : null;
+      const drilldown = preloadedTool;
 
       const built = await deps.context.build({
         tenantId,

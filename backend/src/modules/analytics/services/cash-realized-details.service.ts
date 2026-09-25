@@ -19,6 +19,7 @@ import type { GetMonthlyCashFlowInput } from '../domain/types.js';
 
 export const CASH_REALIZED_DETAILS_DEFAULT_LIMIT = 100;
 export const CASH_REALIZED_DETAILS_MAX_LIMIT = 200;
+export const CASH_REALIZED_DETAILS_ALL_MAX = 5_000;
 
 export type GetCashRealizedDetailsInput = GetMonthlyCashFlowInput & {
   readonly direction: CashRealizedDetailsDirection;
@@ -30,6 +31,9 @@ export type GetCashRealizedDetailsInput = GetMonthlyCashFlowInput & {
 
 export type CashRealizedDetailsService = {
   getCashRealizedDetails(input: GetCashRealizedDetailsInput): Promise<CashRealizedDetails>;
+  listAllCashRealizedDetails(
+    input: Omit<GetCashRealizedDetailsInput, 'limit' | 'offset'>,
+  ): Promise<CashRealizedDetails>;
 };
 
 export type CashRealizedDetailsServiceDependencies = {
@@ -89,11 +93,11 @@ function requireAllocations(
   return deps.costCenterAllocations;
 }
 
-function clampLimit(limit: number | undefined): number {
+function clampLimit(limit: number | undefined, max = CASH_REALIZED_DETAILS_MAX_LIMIT): number {
   if (limit === undefined || Number.isNaN(limit)) {
     return CASH_REALIZED_DETAILS_DEFAULT_LIMIT;
   }
-  return Math.min(Math.max(0, Math.trunc(limit)), CASH_REALIZED_DETAILS_MAX_LIMIT);
+  return Math.min(Math.max(0, Math.trunc(limit)), max);
 }
 
 function clampOffset(offset: number | undefined): number {
@@ -110,14 +114,15 @@ function clampOffset(offset: number | undefined): number {
 export function createCashRealizedDetailsService(
   deps: CashRealizedDetailsServiceDependencies,
 ): CashRealizedDetailsService {
-  return {
-    async getCashRealizedDetails(input) {
+  async function loadDetails(
+    input: GetCashRealizedDetailsInput,
+    limit: number,
+    offset: number,
+  ): Promise<CashRealizedDetails> {
       const { tenantId, today, from, to, monthKey, scope, costCenterId } = resolveMonth(input);
       const categoryFilter = input.categoryFilter ?? null;
       const categoryKey = input.categoryKey.trim();
       const categoryKind = input.categoryKind ?? null;
-      const limit = clampLimit(input.limit);
-      const offset = clampOffset(input.offset);
 
       const [settlements, receivables, payables] = await Promise.all([
         deps.ledger.listActiveByOccurredOn({ ...scope, from, to }),
@@ -228,6 +233,18 @@ export function createCashRealizedDetailsService(
           realizedPayables: realizedPayableAllocations,
         },
       });
+  }
+
+  return {
+    getCashRealizedDetails(input) {
+      return loadDetails(input, clampLimit(input.limit), clampOffset(input.offset));
+    },
+    listAllCashRealizedDetails(input) {
+      return loadDetails(
+        { ...input, limit: CASH_REALIZED_DETAILS_ALL_MAX, offset: 0 },
+        CASH_REALIZED_DETAILS_ALL_MAX,
+        0,
+      );
     },
   };
 }

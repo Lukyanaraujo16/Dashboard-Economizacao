@@ -51,6 +51,9 @@ describe('Analytical Tools do Consultor (F13.8.1D1)', () => {
       COMPARE_CASH_MONTHS_TOOL_NAME,
       'cash_realized_breakdown',
       'cash_movement_lines',
+      'cash_nominal_dimension_ranking',
+      'cash_nominal_dimension_lookup',
+      'compare_cash_nominal_dimension',
     ]);
     expect(ADVISOR_MAX_TOOL_ROUNDS).toBe(3);
     const executor = createAdvisorAnalyticalToolExecutor({

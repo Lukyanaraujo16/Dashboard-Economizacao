@@ -88,6 +88,9 @@ describe('F13.8.1D2 drill-down analítico', () => {
       COMPARE_CASH_MONTHS_TOOL_NAME,
       CASH_REALIZED_BREAKDOWN_TOOL_NAME,
       CASH_MOVEMENT_LINES_TOOL_NAME,
+      'cash_nominal_dimension_ranking',
+      'cash_nominal_dimension_lookup',
+      'compare_cash_nominal_dimension',
     ]);
     expect(JSON.stringify(listAdvisorAnalyticalTools())).not.toContain('tenantId');
   });

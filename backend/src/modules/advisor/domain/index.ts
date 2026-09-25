@@ -107,6 +107,49 @@ export {
   resolveAdvisorDrilldownIntent,
 } from './resolve-advisor-drilldown-intent.js';
 export type { AdvisorDrilldownIntent } from './resolve-advisor-drilldown-intent.js';
+export { resolveAdvisorNominalIntent } from './resolve-advisor-nominal-intent.js';
+export type { AdvisorNominalIntent } from './resolve-advisor-nominal-intent.js';
+export {
+  ADVISOR_NOMINAL_COMPARE_FACT_KIND,
+  ADVISOR_NOMINAL_DOES_NOT_PROVE,
+  ADVISOR_NOMINAL_LOOKUP_FACT_KIND,
+  ADVISOR_NOMINAL_RANKING_FACT_KIND,
+  ADVISOR_NOMINAL_RANKING_PROVES,
+  advisorNominalCompareFactContract,
+  advisorNominalLookupFactContract,
+  advisorNominalRankingFactContract,
+} from './advisor-nominal-fact-contract.js';
+export {
+  COMPARE_CASH_NOMINAL_TOOL_NAME,
+  CASH_NOMINAL_LOOKUP_TOOL_NAME,
+  CASH_NOMINAL_RANKING_TOOL_NAME,
+  ADVISOR_NOMINAL_PARTIAL_COVERAGE_THRESHOLD,
+  aggregateAdvisorNominalDimension,
+  compareAdvisorNominalAggregations,
+  lookupAdvisorNominalEntity,
+  matchNominalEntities,
+  rankAdvisorNominalDimension,
+  resolveConclusionSafety,
+  serializeAdvisorNominalComparison,
+  serializeAdvisorNominalLookup,
+  serializeAdvisorNominalRanking,
+} from './advisor-nominal-dimension.js';
+export { identifyAdvisorNominalDimension } from './advisor-nominal-identity.js';
+export {
+  displayAdvisorNominalName,
+  foldAdvisorNominalText,
+  isGenericAdvisorNominalKey,
+  normalizeAdvisorNominalKey,
+  tokenizeAdvisorNominalText,
+} from './advisor-nominal-text.js';
+export { resolveAdvisorOfficialCategory } from './advisor-nominal-category-resolver.js';
+export {
+  assertCashNominalLookupArgs,
+  assertCashNominalRankingArgs,
+  assertCompareCashNominalArgs,
+  createAdvisorNominalDimensionService,
+  listAdvisorNominalTools,
+} from './advisor-nominal-tools.js';
 export {
   ADVISOR_BILLING_COVERAGES,
   ADVISOR_CASH_CATEGORY_TOP_N,

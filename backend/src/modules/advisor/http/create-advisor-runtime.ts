@@ -20,6 +20,7 @@ import { createPayableReadRepository } from '../../finance/repositories/payable-
 import { createPartyReadRepository } from '../../finance/repositories/party-read.repository.js';
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { createReportCashDetailsService } from '../../reports/services/report-cash-details.service.js';
+import { createCashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
 import { createAdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowledge.repository.js';
@@ -33,6 +34,7 @@ import {
   createAdvisorCashComparisonService,
   createAdvisorCashMovementLinesService,
 } from '../domain/advisor-analytical-tools.js';
+import { createAdvisorNominalDimensionService } from '../domain/advisor-nominal-tools.js';
 import { createBuildAdvisorContext } from '../services/build-advisor-context.js';
 import {
   createAllowAllConsultantRateLimiter,
@@ -170,10 +172,22 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
       costCenterAllocations,
     }),
   });
+  const cashNominal = createAdvisorNominalDimensionService({
+    details: createCashRealizedDetailsService({
+      ledger,
+      receivables,
+      payables,
+      categories,
+      parties: createPartyReadRepository(prisma),
+      costCenterAllocations,
+    }),
+    categories,
+  });
   const analyticalTools = createAdvisorAnalyticalToolExecutor({
     cashComparison,
     cashBreakdown,
     cashMovements,
+    cashNominal,
   });
   const context = createBuildAdvisorContext({
     settings,
