@@ -8,9 +8,10 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type UIEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { History, Plus, X } from 'lucide-react';
+import { ChevronDown, History, Plus, Sparkles, X } from 'lucide-react';
 
 import type {
   ConsultantConversation,
@@ -20,6 +21,10 @@ import type {
 import { Button, IconButton, Spinner, Typography } from '../ui';
 import { UI_ICON_STROKE } from '../ui/icons';
 import { cx } from '../ui/utils/cx';
+import { isNearChatBottom } from './consultant-chat-scroll';
+import { groupConversations, conversationTimeLabel } from './consultant-history-groups';
+import { ConsultantMarkdown } from './consultant-markdown';
+import { ConsultantPresence } from './consultant-presence';
 import {
   CONSULTANT_UNAVAILABLE_MESSAGE,
   type ConsultantUiState,
@@ -28,6 +33,12 @@ import styles from './consultant.module.css';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const EMPTY_SUGGESTIONS = [
+  'Como está meu faturamento este mês?',
+  'Tenho valores vencidos?',
+  'Como estão minhas despesas?',
+] as const;
 
 export type ConsultantPanelProps = {
   readonly uiState: Exclude<ConsultantUiState, 'CLOSED'>;
@@ -47,6 +58,7 @@ export type ConsultantPanelProps = {
   readonly onNewConversation: () => void;
   readonly onDeleteConversation: (conversationId: string) => void;
   readonly onSend: () => void;
+  readonly onRetry?: () => void;
 };
 
 function conversationLabel(conversation: ConsultantConversation): string {
@@ -62,6 +74,12 @@ function senderClass(senderType: ConsultantMessage['senderType']): string {
     return styles.messageConsultant ?? '';
   }
   return styles.messageSystem ?? '';
+}
+
+function emptyGreeting(consultantName: string): string {
+  return consultantName.trim() === 'Consultor' || consultantName.trim().length === 0
+    ? 'Olá, sou o Consultor'
+    : `Olá, sou a ${consultantName}`;
 }
 
 export function ConsultantPanel({
@@ -82,16 +100,46 @@ export function ConsultantPanel({
   onNewConversation,
   onDeleteConversation,
   onSend,
+  onRetry,
 }: ConsultantPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const followRef = useRef(true);
   const titleId = useId();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const canCompose = uiState === 'OPEN' && !sending;
   const showDesktopBackdrop =
     typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(min-width: 768px)').matches;
+  const historyGroups = groupConversations(conversations);
+  const messages = activeConversation?.messages ?? [];
+  const showEmpty =
+    uiState === 'OPEN' && !loadingMessages && (activeConversation === null || messages.length === 0);
+
+  const scrollToLatest = useCallback((behavior: ScrollBehavior) => {
+    const node = threadRef.current;
+    if (!node) {
+      return;
+    }
+    if (typeof node.scrollTo === 'function') {
+      node.scrollTo({ top: node.scrollHeight, behavior });
+      return;
+    }
+    try {
+      node.scrollTop = node.scrollHeight;
+    } catch {
+      // jsdom may expose a read-only scrollTop in tests
+    }
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    followRef.current = true;
+    setShowJumpToLatest(false);
+    scrollToLatest('smooth');
+  }, [scrollToLatest]);
 
   useEffect(() => {
     restoreFocusRef.current =
@@ -126,6 +174,31 @@ export function ConsultantPanel({
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [historyOpen, onClose, onToggleHistory, pendingDeleteId]);
+
+  useEffect(() => {
+    followRef.current = true;
+    setShowJumpToLatest(false);
+    const frame = window.requestAnimationFrame(() => scrollToLatest('auto'));
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeConversation?.id, scrollToLatest]);
+
+  useEffect(() => {
+    if (!followRef.current) {
+      return;
+    }
+    scrollToLatest('smooth');
+  }, [messages.length, sending, scrollToLatest]);
+
+  const handleThreadScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
+    const near = isNearChatBottom({
+      scrollTop: target.scrollTop,
+      scrollHeight: target.scrollHeight,
+      clientHeight: target.clientHeight,
+    });
+    followRef.current = near;
+    setShowJumpToLatest(!near);
+  }, []);
 
   const handleTabTrap = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Tab' || !panelRef.current) {
@@ -186,10 +259,7 @@ export function ConsultantPanel({
       >
         <header className={styles.header}>
           <div className={styles.heading}>
-            <span
-              className={cx(styles.headerStatus, available && styles.headerStatusAvailable)}
-              aria-hidden="true"
-            />
+            <ConsultantPresence available={available} />
             <Typography as="h2" variant="title" id={titleId} className={styles.title}>
               {consultantName}
             </Typography>
@@ -199,6 +269,7 @@ export function ConsultantPanel({
               size="sm"
               variant="ghost"
               aria-label="Histórico de conversas"
+              title="Histórico de conversas"
               aria-expanded={historyOpen}
               onClick={onToggleHistory}
               disabled={uiState !== 'OPEN'}
@@ -209,12 +280,19 @@ export function ConsultantPanel({
               size="sm"
               variant="ghost"
               aria-label="Nova conversa"
+              title="Nova conversa"
               onClick={onNewConversation}
-              disabled={uiState !== 'OPEN' || sending}
+              disabled={uiState !== 'OPEN'}
             >
               <Plus size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
             </IconButton>
-            <IconButton size="sm" variant="ghost" aria-label="Fechar o Consultor" onClick={onClose}>
+            <IconButton
+              size="sm"
+              variant="ghost"
+              aria-label="Fechar o Consultor"
+              title="Fechar o Consultor"
+              onClick={onClose}
+            >
               <X size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
             </IconButton>
           </div>
@@ -232,63 +310,79 @@ export function ConsultantPanel({
                 {conversations.length === 0 ? (
                   <p className={styles.statusText}>Nenhuma conversa ainda.</p>
                 ) : (
-                  <ul className={styles.conversationList}>
-                    {conversations.map((conversation) => (
-                      <li key={conversation.id}>
-                        {pendingDeleteId === conversation.id ? (
-                          <div className={styles.confirmDelete} role="group" aria-label="Confirmar exclusão">
-                            <Typography as="p" variant="caption">
-                              Excluir esta conversa?
-                            </Typography>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => {
-                                onDeleteConversation(conversation.id);
-                                setPendingDeleteId(null);
-                              }}
-                            >
-                              Excluir conversa
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setPendingDeleteId(null)}
-                            >
-                              Cancelar
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className={styles.conversationRow}>
-                            <button
-                              type="button"
-                              className={styles.conversationButton}
-                              aria-current={
-                                activeConversation?.id === conversation.id ? 'true' : undefined
-                              }
-                              onClick={() => onSelectConversation(conversation.id)}
-                            >
-                              {conversationLabel(conversation)}
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.menuButton}
-                              aria-label={`Ações de ${conversationLabel(conversation)}`}
-                              onClick={() => setPendingDeleteId(conversation.id)}
-                            >
-                              ⋯
-                            </button>
-                          </div>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                  historyGroups.map((group) => (
+                    <div key={group.label}>
+                      <p className={styles.historyGroupLabel}>{group.label}</p>
+                      <ul className={styles.historyGroup}>
+                        {group.items.map((conversation) => (
+                          <li key={conversation.id}>
+                            {pendingDeleteId === conversation.id ? (
+                              <div className={styles.confirmDelete} role="group" aria-label="Confirmar exclusão">
+                                <Typography as="p" variant="caption">
+                                  Excluir esta conversa?
+                                </Typography>
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  onClick={() => {
+                                    onDeleteConversation(conversation.id);
+                                    setPendingDeleteId(null);
+                                  }}
+                                >
+                                  Excluir conversa
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setPendingDeleteId(null)}
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className={styles.conversationRow}>
+                                <button
+                                  type="button"
+                                  className={styles.conversationButton}
+                                  aria-current={
+                                    activeConversation?.id === conversation.id ? 'true' : undefined
+                                  }
+                                  title={conversationLabel(conversation)}
+                                  onClick={() => onSelectConversation(conversation.id)}
+                                >
+                                  <span className={styles.conversationTitle}>
+                                    {conversationLabel(conversation)}
+                                  </span>
+                                  <span className={styles.conversationMeta}>
+                                    {conversationTimeLabel(conversation.lastMessageAt)}
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.menuButton}
+                                  aria-label={`Ações de ${conversationLabel(conversation)}`}
+                                  onClick={() => setPendingDeleteId(conversation.id)}
+                                >
+                                  ⋯
+                                </button>
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))
                 )}
               </aside>
             </>
           ) : null}
 
-          <div className={styles.thread}>
+          <div
+            ref={threadRef}
+            className={styles.thread}
+            data-testid="consultant-thread"
+            onScroll={handleThreadScroll}
+          >
             {uiState === 'LOADING' ? (
               <div className={styles.statusBlock}>
                 <Spinner label={`Carregando ${consultantName}`} />
@@ -301,61 +395,111 @@ export function ConsultantPanel({
               </div>
             ) : null}
 
-            {uiState === 'OPEN' && sendError ? (
-              <div className={styles.statusBlock} role="alert">
-                <p className={styles.statusText}>{sendError}</p>
-              </div>
-            ) : null}
-
             {uiState === 'OPEN' && loadingMessages ? (
               <div className={styles.statusBlock}>
                 <Spinner label="Carregando mensagens" />
               </div>
             ) : null}
 
-            {uiState === 'OPEN' && !loadingMessages && !activeConversation ? (
-              <div className={styles.statusBlock} data-empty-state="true">
-                <p className={styles.statusText}>
-                  Envie a primeira pergunta ou abra o histórico para continuar uma conversa.
-                </p>
+            {showEmpty ? (
+              <div className={styles.emptyState} data-empty-state="true" data-testid="consultant-empty">
+                <span className={styles.emptyMark} aria-hidden="true">
+                  <Sparkles size={18} strokeWidth={UI_ICON_STROKE} />
+                </span>
+                <Typography as="h3" variant="title">
+                  {emptyGreeting(consultantName)}
+                </Typography>
+                <Typography as="p" variant="body" className={styles.statusText}>
+                  Posso ajudar você a entender seus números e tomar decisões com mais contexto.
+                </Typography>
+                <ul className={styles.emptySuggestions}>
+                  {EMPTY_SUGGESTIONS.map((suggestion) => (
+                    <li key={suggestion}>
+                      <button
+                        type="button"
+                        className={styles.suggestionChip}
+                        disabled={!canCompose}
+                        onClick={() => onDraftChange(suggestion)}
+                      >
+                        {suggestion}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : null}
 
-            {uiState === 'OPEN' && !loadingMessages && activeConversation ? (
+            {uiState === 'OPEN' && !loadingMessages && messages.length > 0 ? (
               <div className={styles.messages} aria-live="polite">
-                {activeConversation.messages.length === 0 ? (
-                  <div className={styles.statusBlock} data-empty-state="true">
-                    <p className={styles.statusText}>Nenhuma mensagem ainda. Envie a primeira pergunta.</p>
-                  </div>
-                ) : (
-                  activeConversation.messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={cx(styles.message, senderClass(message.senderType))}
-                      data-sender={message.senderType}
-                    >
-                      <Typography as="p" variant="caption" className={styles.messageMeta}>
-                        {message.senderType === 'USER'
-                          ? 'Você'
-                          : message.senderType === 'CONSULTANT'
-                            ? consultantName
-                            : 'Sistema'}
-                      </Typography>
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={cx(styles.message, senderClass(message.senderType))}
+                    data-sender={message.senderType}
+                    data-optimistic={message.id.startsWith('optimistic-') ? 'true' : undefined}
+                  >
+                    <Typography as="p" variant="caption" className={styles.messageMeta}>
+                      {message.senderType === 'USER'
+                        ? 'Você'
+                        : message.senderType === 'CONSULTANT'
+                          ? consultantName
+                          : 'Sistema'}
+                    </Typography>
+                    {message.senderType === 'CONSULTANT' ? (
+                      <ConsultantMarkdown text={message.content} className={styles.markdown} />
+                    ) : (
                       <Typography as="p" variant="body">
                         {message.content}
                       </Typography>
-                    </div>
-                  ))
-                )}
+                    )}
+                  </div>
+                ))}
                 {sending ? (
-                  <div className={cx(styles.message, styles.messageConsultant)} aria-live="polite">
-                    <Spinner size="sm" label={`O ${consultantName} está respondendo`} />
+                  <div
+                    className={cx(styles.message, styles.messageConsultant)}
+                    data-testid="consultant-thinking"
+                  >
+                    <Typography as="p" variant="caption" className={styles.messageMeta}>
+                      {consultantName}
+                    </Typography>
+                    <div
+                      className={styles.thinking}
+                      role="status"
+                      aria-label={`${consultantName} está analisando`}
+                    >
+                      <span className={styles.thinkingDot} />
+                      <span className={styles.thinkingDot} />
+                      <span className={styles.thinkingDot} />
+                    </div>
                   </div>
                 ) : null}
               </div>
             ) : null}
+
+            {showJumpToLatest && messages.length > 0 ? (
+              <button
+                type="button"
+                className={styles.scrollBottom}
+                aria-label="Ir para as mensagens recentes"
+                data-testid="consultant-scroll-latest"
+                onClick={jumpToLatest}
+              >
+                <ChevronDown size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
+              </button>
+            ) : null}
           </div>
         </div>
+
+        {uiState === 'OPEN' && sendError ? (
+          <div className={styles.composerError} role="alert">
+            <p className={styles.statusText}>{sendError}</p>
+            {onRetry ? (
+              <button type="button" className={styles.retryButton} onClick={onRetry}>
+                Tentar novamente
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <form className={styles.composer} onSubmit={handleSubmit}>
           <label className={styles.srOnly} htmlFor={`${titleId}-composer`}>

@@ -1,7 +1,7 @@
-import { MessageCircle } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 import { UI_ICON_STROKE } from '../ui/icons';
-import { cx } from '../ui/utils/cx';
+import { ConsultantPresence } from './consultant-presence';
 import styles from './consultant.module.css';
 
 export type ConsultantFabProps = {
@@ -16,23 +16,23 @@ export function ConsultantFab({
   consultantName = 'Consultor',
 }: ConsultantFabProps) {
   const label = available
-    ? `Abrir o ${consultantName} — Consultor disponível`
-    : `Abrir o ${consultantName}`;
+    ? `Falar com ${consultantName}`
+    : `Falar com ${consultantName} — indisponível`;
 
   return (
     <button
       type="button"
       className={styles.fab}
       aria-label={label}
-      title={available ? 'Consultor disponível' : consultantName}
+      title={label}
       aria-haspopup="dialog"
       onClick={onOpen}
     >
-      <MessageCircle size={20} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
-      <span
-        className={cx(styles.fabStatus, available && styles.fabStatusAvailable)}
-        aria-hidden="true"
-      />
+      <Sparkles size={18} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
+      <span className={styles.fabLabel}>{`Falar com ${consultantName}`}</span>
+      <span className={styles.fabStatus}>
+        <ConsultantPresence available={available} />
+      </span>
     </button>
   );
 }

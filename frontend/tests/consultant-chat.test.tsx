@@ -121,8 +121,13 @@ function renderChat(user: AuthenticatedUser = mockAuthenticatedUser, support?: S
 }
 
 async function openConsultant() {
-  fireEvent.click(await screen.findByRole('button', { name: /Abrir o Consultor/ }));
+  fireEvent.click(await screen.findByRole('button', { name: /Falar com/ }));
   expect(await screen.findByRole('dialog', { name: /Consultor/ })).toBeTruthy();
+}
+
+async function openHistoryConversation(title: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
+  fireEvent.click(await screen.findByTitle(title));
 }
 
 afterEach(() => {
@@ -130,6 +135,7 @@ afterEach(() => {
   pathname = '/';
   searchParams = new URLSearchParams('month=2026-09');
   replaceMock.mockReset();
+  sessionStorage.clear();
   vi.mocked(getConsultantStatus).mockReset();
   vi.mocked(listConsultantConversations).mockReset();
   vi.mocked(getConsultantConversation).mockReset();
@@ -163,7 +169,7 @@ describe('chat do Consultor', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /Consultor/ })).toBeNull();
     });
-    expect(screen.getByRole('button', { name: /Abrir o Consultor/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Falar com/ })).toBeTruthy();
   });
 
   it('fecha com Escape no desktop', async () => {
@@ -186,8 +192,7 @@ describe('chat do Consultor', () => {
       expect(listConsultantConversations).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Caixa de setembro' }));
+    await openHistoryConversation('Caixa de setembro');
 
     expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
     expect(screen.getByText('O caixa do mês está estável.')).toBeTruthy();
@@ -205,8 +210,7 @@ describe('chat do Consultor', () => {
 
     renderChat();
     await openConsultant();
-    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
+    await openHistoryConversation('Caixa de setembro');
     expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
@@ -214,7 +218,10 @@ describe('chat do Consultor', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
 
-    expect(await screen.findByLabelText('O Consultor está respondendo')).toBeTruthy();
+    expect(await screen.findByText('Qual a receita?')).toBeTruthy();
+    expect((screen.getByLabelText('Mensagem para o Consultor') as HTMLTextAreaElement).value).toBe('');
+    expect(await screen.findByLabelText('Consultor está analisando')).toBeTruthy();
+    expect(screen.getByTestId('consultant-thinking')).toBeTruthy();
     await waitFor(() => {
       expect(sendConsultantMessage).toHaveBeenCalledWith('conv-1', {
         content: 'Qual a receita?',
@@ -242,10 +249,11 @@ describe('chat do Consultor', () => {
       },
     });
 
-    expect(await screen.findByText('Qual a receita?')).toBeTruthy();
+    expect(screen.getAllByText('Qual a receita?')).toHaveLength(1);
     expect(await screen.findByText('A receita oficial do mês é 0.')).toBeTruthy();
     await waitFor(() => {
-      expect(screen.queryByLabelText('O Consultor está respondendo')).toBeNull();
+      expect(screen.queryByLabelText('Consultor está analisando')).toBeNull();
+      expect(screen.queryByTestId('consultant-thinking')).toBeNull();
     });
   });
 
@@ -330,8 +338,7 @@ describe('chat do Consultor', () => {
 
     renderChat();
     await openConsultant();
-    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
+    await openHistoryConversation('Caixa de setembro');
     expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
@@ -367,7 +374,7 @@ describe('chat do Consultor', () => {
       expect(deleteConsultantConversation).toHaveBeenCalledWith('conv-1');
     });
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Caixa de setembro' })).toBeNull();
+      expect(screen.queryByTitle('Caixa de setembro')).toBeNull();
     });
   });
 
@@ -381,7 +388,7 @@ describe('chat do Consultor', () => {
     await waitFor(() => {
       expect(getConsultantStatus).toHaveBeenCalled();
     });
-    expect(screen.queryByRole('button', { name: /Abrir o Consultor/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Falar com/ })).toBeNull();
     expect(listConsultantConversations).not.toHaveBeenCalled();
   });
 
@@ -413,8 +420,7 @@ describe('chat do Consultor', () => {
   it('limpa o estado ao trocar o tenant operacional', async () => {
     renderChat();
     await openConsultant();
-    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
+    await openHistoryConversation('Caixa de setembro');
     expect(await screen.findByText('O caixa do mês está estável.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Trocar tenant' }));
@@ -424,7 +430,7 @@ describe('chat do Consultor', () => {
       expect(screen.queryByText('O caixa do mês está estável.')).toBeNull();
       expect(screen.queryByText('Caixa de setembro')).toBeNull();
     });
-    expect(await screen.findByRole('button', { name: /Abrir o Consultor/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Falar com/ })).toBeTruthy();
   });
 
   it('limpa o estado ao sair do Support Mode', async () => {
@@ -454,15 +460,14 @@ describe('chat do Consultor', () => {
     );
 
     await openConsultant();
-    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
+    await openHistoryConversation('Caixa de setembro');
     expect(await screen.findByText('O caixa do mês está estável.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Trocar tenant' }));
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /Consultor/ })).toBeNull();
-      expect(screen.queryByRole('button', { name: /Abrir o Consultor/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Falar com/ })).toBeNull();
       expect(screen.queryByText('O caixa do mês está estável.')).toBeNull();
     });
   });
@@ -482,8 +487,7 @@ describe('chat do Consultor', () => {
 
     renderChat();
     await openConsultant();
-    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Caixa de setembro' }));
+    await openHistoryConversation('Caixa de setembro');
 
     const bubble = await screen.findByText('<script>window.__consultantPwned = true</script>');
     expect(bubble.querySelector('script')).toBeNull();
@@ -491,5 +495,235 @@ describe('chat do Consultor', () => {
     expect(
       (window as unknown as { __consultantPwned?: boolean }).__consultantPwned,
     ).toBeUndefined();
+  });
+
+  it('fecha e reabre restaurando a conversa ativa', async () => {
+    renderChat();
+    await openConsultant();
+    await openHistoryConversation('Caixa de setembro');
+    expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar o Consultor' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    await openConsultant();
+    expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
+    expect(await screen.findByText('O caixa do mês está estável.')).toBeTruthy();
+  });
+
+  it('restaura a conversa persistida após um novo mount', async () => {
+    sessionStorage.setItem('de.consultant.activeConversation.v1:user-1:tenant-1', 'conv-1');
+    renderChat();
+    await openConsultant();
+    expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
+    expect(getConsultantConversation).toHaveBeenCalledWith('conv-1');
+  });
+
+  it('cai no empty state quando a referência persistida foi excluída', async () => {
+    sessionStorage.setItem('de.consultant.activeConversation.v1:user-1:tenant-1', 'conv-gone');
+    vi.mocked(getConsultantConversation).mockRejectedValue(
+      new ConsultantRequestError('not_found', 'Conversa não encontrada.', { httpStatus: 404 }),
+    );
+    renderChat();
+    await openConsultant();
+    expect(await screen.findByTestId('consultant-empty')).toBeTruthy();
+    expect(screen.queryByText('Como está o caixa?')).toBeNull();
+    expect(sessionStorage.getItem('de.consultant.activeConversation.v1:user-1:tenant-1')).toBeNull();
+  });
+
+  it('não expõe conversa de outro tenant pela referência persistida', async () => {
+    sessionStorage.setItem('de.consultant.activeConversation.v1:user-1:tenant-1', 'conv-1');
+    vi.mocked(getConsultantConversation).mockRejectedValue(
+      new ConsultantRequestError('forbidden', 'Você não tem permissão para esta operação.', {
+        httpStatus: 403,
+      }),
+    );
+    renderChat();
+    await openConsultant();
+    expect(await screen.findByTestId('consultant-empty')).toBeTruthy();
+    expect(screen.queryByText('O caixa do mês está estável.')).toBeNull();
+  });
+
+  it('o botão + inicia uma nova conversa sem criar registro vazio', async () => {
+    renderChat();
+    await openConsultant();
+    await openHistoryConversation('Caixa de setembro');
+    expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Nova conversa' }));
+    expect(await screen.findByTestId('consultant-empty')).toBeTruthy();
+    expect(screen.queryByText('Como está o caixa?')).toBeNull();
+    expect(createConsultantConversation).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('de.consultant.activeConversation.v1:user-1:tenant-1')).toBeNull();
+  });
+
+  it('selecionar no histórico atualiza a conversa ativa', async () => {
+    const second: ConsultantConversation = {
+      ...conversation,
+      id: 'conv-2',
+      title: 'Despesas de agosto',
+      lastMessageAt: '2026-08-01T10:00:00.000Z',
+    };
+    vi.mocked(listConsultantConversations).mockResolvedValue([conversation, second]);
+    vi.mocked(getConsultantConversation).mockImplementation(async (id: string) => {
+      if (id === 'conv-2') {
+        return {
+          ...second,
+          messages: [
+            {
+              id: 'msg-2',
+              senderType: 'CONSULTANT',
+              content: 'As despesas caíram.',
+              createdAt: '2026-08-01T10:00:00.000Z',
+            },
+          ],
+        };
+      }
+      return conversationDetail;
+    });
+    renderChat();
+    await openConsultant();
+    await openHistoryConversation('Despesas de agosto');
+    expect(await screen.findByText('As despesas caíram.')).toBeTruthy();
+    expect(sessionStorage.getItem('de.consultant.activeConversation.v1:user-1:tenant-1')).toBe(
+      'conv-2',
+    );
+  });
+
+  it('mantém a pergunta e remove o thinking quando o envio falha', async () => {
+    vi.mocked(sendConsultantMessage).mockRejectedValue(
+      new ConsultantRequestError('unavailable', 'O Consultor está temporariamente indisponível.', {
+        httpStatus: 503,
+      }),
+    );
+    renderChat();
+    await openConsultant();
+    await openHistoryConversation('Caixa de setembro');
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'Qual a receita?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    expect(await screen.findByText('Qual a receita?')).toBeTruthy();
+    expect(await screen.findByText('O Consultor está temporariamente indisponível.')).toBeTruthy();
+    expect(screen.queryByTestId('consultant-thinking')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeTruthy();
+  });
+
+  it('protege contra double submit enquanto a resposta está pendente', async () => {
+    vi.mocked(sendConsultantMessage).mockImplementation(() => new Promise(() => undefined));
+    renderChat();
+    await openConsultant();
+    await openHistoryConversation('Caixa de setembro');
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'Qual a receita?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Enviar/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Enviar/ }));
+    await waitFor(() => {
+      expect(sendConsultantMessage).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByRole('button', { name: /Enviar/ })).toHaveProperty('disabled', true);
+  });
+
+  it('Enter envia e Shift+Enter não envia', async () => {
+    vi.mocked(sendConsultantMessage).mockImplementation(() => new Promise(() => undefined));
+    renderChat();
+    await openConsultant();
+    const field = await screen.findByLabelText('Mensagem para o Consultor');
+    fireEvent.change(field, { target: { value: 'Primeira pergunta' } });
+    fireEvent.keyDown(field, { key: 'Enter', shiftKey: true });
+    expect(sendConsultantMessage).not.toHaveBeenCalled();
+    fireEvent.keyDown(field, { key: 'Enter' });
+    await waitFor(() => {
+      expect(sendConsultantMessage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('mostra o botão de voltar ao final quando o usuário lê mensagens antigas', async () => {
+    renderChat();
+    await openConsultant();
+    await openHistoryConversation('Caixa de setembro');
+    expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
+    const thread = screen.getByTestId('consultant-thread');
+    Object.defineProperty(thread, 'scrollHeight', { configurable: true, value: 900 });
+    Object.defineProperty(thread, 'clientHeight', { configurable: true, value: 240 });
+    Object.defineProperty(thread, 'scrollTop', { configurable: true, value: 0 });
+    fireEvent.scroll(thread);
+    expect(await screen.findByTestId('consultant-scroll-latest')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('consultant-scroll-latest'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('consultant-scroll-latest')).toBeNull();
+    });
+  });
+
+  it('mostra presence apenas quando ACTIVE e aceita reduced-motion', async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('prefers-reduced-motion') || query.includes('min-width: 768px'),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    renderChat();
+    const fabPresence = await screen.findByTestId('consultant-presence');
+    expect(fabPresence.getAttribute('data-available')).toBe('true');
+    await openConsultant();
+    expect(screen.getAllByTestId('consultant-presence')[0]?.getAttribute('data-available')).toBe(
+      'true',
+    );
+  });
+
+  it('agrupa histórico e trunca título longo', async () => {
+    const longTitle =
+      'Uma conversa com um título extremamente longo que precisa ser truncado na lista do histórico do consultor';
+    vi.mocked(listConsultantConversations).mockResolvedValue([
+      { ...conversation, lastMessageAt: new Date().toISOString() },
+      {
+        ...conversation,
+        id: 'conv-old',
+        title: longTitle,
+        lastMessageAt: '2026-08-01T10:00:00.000Z',
+      },
+    ]);
+    renderChat();
+    await openConsultant();
+    fireEvent.click(screen.getByRole('button', { name: 'Histórico de conversas' }));
+    expect(await screen.findByText('Hoje')).toBeTruthy();
+    expect(screen.getByText('Anteriores')).toBeTruthy();
+    expect(screen.getByTitle(longTitle)).toBeTruthy();
+  });
+
+  it('renderiza Markdown simples sem interpretar HTML', async () => {
+    vi.mocked(getConsultantConversation).mockResolvedValue({
+      ...conversation,
+      messages: [
+        {
+          id: 'msg-md',
+          senderType: 'CONSULTANT',
+          content: '**Análise de serviços**\n\n1. Caixa\n2. Despesas\n\n<img src=x onerror=alert(1)>',
+          createdAt: '2026-09-01T10:05:00.000Z',
+        },
+      ],
+    });
+    renderChat();
+    await openConsultant();
+    await openHistoryConversation('Caixa de setembro');
+    const strong = await screen.findByText('Análise de serviços');
+    expect(strong.tagName).toBe('STRONG');
+    expect(screen.getByText('Caixa')).toBeTruthy();
+    expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeTruthy();
+    expect(document.body.innerHTML).not.toContain('<img src=x');
+  });
+
+  it('preenche o composer com sugestão do empty state', async () => {
+    renderChat();
+    await openConsultant();
+    fireEvent.click(screen.getByRole('button', { name: 'Como está meu faturamento este mês?' }));
+    expect((screen.getByLabelText('Mensagem para o Consultor') as HTMLTextAreaElement).value).toBe(
+      'Como está meu faturamento este mês?',
+    );
+    expect(sendConsultantMessage).not.toHaveBeenCalled();
   });
 });
