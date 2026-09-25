@@ -91,6 +91,12 @@ export type {
   AdvisorMovementStatus,
 } from './advisor-cash-movement-lines.js';
 export { buildAnalyticalFactsContent } from './analytical-facts-text.js';
+export type { AdvisorDrilldownFacts } from './analytical-facts-text.js';
+export {
+  extractAdvisorDrilldownLimit,
+  resolveAdvisorDrilldownIntent,
+} from './resolve-advisor-drilldown-intent.js';
+export type { AdvisorDrilldownIntent } from './resolve-advisor-drilldown-intent.js';
 export {
   ADVISOR_BILLING_COVERAGES,
   ADVISOR_CASH_CATEGORY_TOP_N,

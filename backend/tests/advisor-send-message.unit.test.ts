@@ -880,7 +880,7 @@ describe('send-advisor-message (F13.3)', () => {
     expect(result.consultantMessage.content).toBe(
       'As categorias oficiais de agosto foram ranqueadas no backend.',
     );
-    expect(executeTool).toHaveBeenCalledOnce();
+    expect(executeTool).toHaveBeenCalled();
     expect(openai.generateCalls).toHaveLength(2);
   });
 
@@ -946,6 +946,82 @@ describe('send-advisor-message (F13.3)', () => {
     expect(result.consultantMessage.content).toBe(
       'Estou mostrando os 5 maiores recebimentos individuais de julho.',
     );
-    expect(executeTool).toHaveBeenCalledOnce();
+    expect(executeTool).toHaveBeenCalled();
+  });
+
+  it('pré-carrega os 10 maiores recebimentos de julho no período explícito', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const executeTool = vi.fn(async (input: {
+      tenantId: string;
+      resolvedMonthKey?: string;
+      call: { id: string; name: string; arguments: Record<string, unknown> };
+    }) => {
+      expect(input.tenantId).toBe('tenant-a');
+      expect(input.resolvedMonthKey).toBe('2026-07');
+      expect(input.call.name).toBe('cash_movement_lines');
+      expect(input.call.arguments).toEqual({
+        monthKey: '2026-07',
+        direction: 'INFLOW',
+        sort: 'AMOUNT_DESC',
+        limit: 10,
+      });
+      return {
+        id: input.call.id,
+        name: input.call.name,
+        ok: true,
+        monthKey: '2026-07',
+        content: JSON.stringify({
+          status: 'OK',
+          monthKey: '2026-07',
+          direction: 'INFLOW',
+          sort: 'AMOUNT_DESC',
+          requestedLimit: 10,
+          effectiveLimit: 10,
+          returnedCount: 10,
+          hasMore: true,
+        }),
+      };
+    });
+    const openai = createFakeIaProvider({
+      id: 'OPENAI',
+      text: 'Estes são os 10 maiores recebimentos individuais de julho.',
+    });
+    const { send, messages } = createHarness({
+      openai,
+      context: { build: contextBuild },
+      analyticalTools: {
+        tools: [{ name: 'cash_movement_lines', description: 'mv', inputSchema: {} }],
+        execute: executeTool,
+      },
+    });
+    messages.push(
+      message('seed-ago', 'USER', 'Quais foram os 5 maiores recebimentos de agosto?'),
+      message('seed-cmp', 'USER', 'Qual foi a diferença entre julho e agosto?'),
+    );
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Me mostre os 10 maiores recebimentos de julho.',
+      monthKey: '2026-09',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    expect(contextBuild).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        monthKey: '2026-07',
+        drilldown: expect.objectContaining({
+          toolName: 'cash_movement_lines',
+          monthKey: '2026-07',
+          ok: true,
+        }),
+      }),
+    );
+    expect(result.consultantMessage.content).toBe(
+      'Estes são os 10 maiores recebimentos individuais de julho.',
+    );
+    expect(executeTool).toHaveBeenCalled();
   });
 });

@@ -3,7 +3,10 @@ import { civilMonthKey, isValidMonthKey } from '../../analytics/domain/civil-cal
 import type { FinancialStockSnapshot, MonthlyCashFlow } from '../../analytics/domain/types.js';
 import type { AnalyticsService } from '../../analytics/services/analytics.service.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
-import { buildAnalyticalFactsContent } from '../domain/analytical-facts-text.js';
+import {
+  buildAnalyticalFactsContent,
+  type AdvisorDrilldownFacts,
+} from '../domain/analytical-facts-text.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import type { AdvisorCashComparisonService } from '../domain/advisor-analytical-tools.js';
 import {
@@ -37,6 +40,7 @@ export type BuildAdvisorContextInput = {
   readonly monthKey?: string;
   readonly comparisonMonthKey?: string;
   readonly comparison?: AdvisorCashMonthComparison | null;
+  readonly drilldown?: AdvisorDrilldownFacts | null;
   readonly now?: Date;
 };
 
@@ -200,6 +204,7 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
             monthKey,
             comparisonMonthKey,
             comparison,
+            drilldown: input.drilldown ?? null,
           }),
           trustLevel: 'ANALYTICAL_FACT',
           source: {

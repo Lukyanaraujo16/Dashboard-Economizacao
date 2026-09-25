@@ -7,21 +7,48 @@ import {
 } from './compare-advisor-cash-months.js';
 import { ADVISOR_FINANCIAL_ABSENT, formatAdvisorFinancialAmount } from './financial-facts-text.js';
 
+export type AdvisorDrilldownFacts = {
+  readonly toolName: string;
+  readonly monthKey: string;
+  readonly ok: boolean;
+  readonly content: string;
+};
+
 export function buildAnalyticalFactsContent(input: {
   readonly monthKey: string;
   readonly comparisonMonthKey?: string;
   readonly comparison: AdvisorCashMonthComparison | null;
+  readonly drilldown?: AdvisorDrilldownFacts | null;
 }): string {
-  if (input.comparison === null || input.comparisonMonthKey === undefined) {
-    return [
-      'scope: PERIOD_COMPARISON',
-      'comparison: ABSENT',
-      'comparisonMonthKey: ABSENT',
-      'note: comparação oficial só é pré-carregada quando o resolvedor detecta dois períodos.',
-    ].join('\n');
+  const comparisonBlock =
+    input.comparison === null || input.comparisonMonthKey === undefined
+      ? [
+          'scope: PERIOD_COMPARISON',
+          'comparison: ABSENT',
+          'comparisonMonthKey: ABSENT',
+          'note: comparação oficial só é pré-carregada quando o resolvedor detecta dois períodos.',
+        ]
+      : buildComparisonFacts(input.comparison);
+
+  const drilldown = input.drilldown;
+  if (drilldown === undefined || drilldown === null) {
+    return comparisonBlock.join('\n');
   }
 
-  const comparison = input.comparison;
+  return [
+    ...comparisonBlock,
+    '',
+    'scope: PERIOD_DRILLDOWN',
+    `tool: ${drilldown.toolName}`,
+    `monthKey: ${drilldown.monthKey}`,
+    `ok: ${drilldown.ok ? 'true' : 'false'}`,
+    'note: fatos oficiais já obtidos pelo backend para a pergunta atual. Não afirme que não conseguiu obter se ok=true.',
+    'note: description/partyName de uma linha é metadado do movimento individual, não ranking de cliente/convênio.',
+    `result: ${drilldown.content}`,
+  ].join('\n');
+}
+
+function buildComparisonFacts(comparison: AdvisorCashMonthComparison): string[] {
   return [
     'scope: PERIOD_COMPARISON',
     'temporalScope: periodA e periodB são PERIOD; difference é comparação entre esses dois monthKeys',
@@ -52,7 +79,7 @@ export function buildAnalyticalFactsContent(input: {
       increases: comparison.outflowCategories.increases,
       decreases: comparison.outflowCategories.decreases,
     }),
-  ].join('\n');
+  ];
 }
 
 function formatPeriodBlock(label: string, period: AdvisorCashPeriodSnapshot): string {

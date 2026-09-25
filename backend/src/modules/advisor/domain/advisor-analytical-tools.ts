@@ -316,6 +316,7 @@ export type AdvisorAnalyticalToolExecutor = {
   execute(input: {
     readonly tenantId: string;
     readonly call: AdvisorAnalyticalToolCall;
+    readonly resolvedMonthKey?: string;
     readonly now?: Date;
   }): Promise<AdvisorAnalyticalToolResult>;
 };
@@ -350,7 +351,14 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
               'Não consegui obter o ranking oficial de categorias agora.',
             );
           }
-          return await executeBreakdown(deps.cashBreakdown, tenantId, call, input.now, startedAt);
+          return await executeBreakdown(
+            deps.cashBreakdown,
+            tenantId,
+            call,
+            input.resolvedMonthKey,
+            input.now,
+            startedAt,
+          );
         }
         if (call.name === CASH_MOVEMENT_LINES_TOOL_NAME) {
           if (deps.cashMovements === undefined) {
@@ -359,7 +367,14 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
               'Não consegui obter o detalhamento das movimentações agora.',
             );
           }
-          return await executeMovements(deps.cashMovements, tenantId, call, input.now, startedAt);
+          return await executeMovements(
+            deps.cashMovements,
+            tenantId,
+            call,
+            input.resolvedMonthKey,
+            input.now,
+            startedAt,
+          );
         }
         throw new AdvisorDomainError('ANALYTICAL_TOOL_UNKNOWN', 'Tool analítica desconhecida.');
       } catch (error) {
@@ -540,15 +555,17 @@ async function executeBreakdown(
   cashBreakdown: AdvisorCashBreakdownService,
   tenantId: string,
   call: AdvisorAnalyticalToolCall,
+  resolvedMonthKey: string | undefined,
   now: Date | undefined,
   startedAt: number,
 ): Promise<AdvisorAnalyticalToolResult> {
   const args = assertCashRealizedBreakdownArgs(call.arguments);
+  const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
   const limits = clampAdvisorDrilldownLimit(args.limit);
   const breakdown = await withToolTimeout(
     cashBreakdown.breakdown({
       tenantId,
-      monthKey: args.monthKey,
+      monthKey,
       direction: args.direction,
       limit: args.limit,
       now,
@@ -560,7 +577,7 @@ async function executeBreakdown(
     durationMs: Date.now() - startedAt,
     ok: true,
     resultCardinality: breakdown.categories.length,
-    monthKey: args.monthKey,
+    monthKey,
     comparisonMonthKey: null,
     direction: args.direction,
     requestedLimit: limits.requestedLimit,
@@ -572,7 +589,7 @@ async function executeBreakdown(
     ok: true,
     content: JSON.stringify(serialized),
     resultCardinality: breakdown.categories.length,
-    monthKey: args.monthKey,
+    monthKey,
   };
 }
 
@@ -580,15 +597,17 @@ async function executeMovements(
   cashMovements: AdvisorCashMovementLinesService,
   tenantId: string,
   call: AdvisorAnalyticalToolCall,
+  resolvedMonthKey: string | undefined,
   now: Date | undefined,
   startedAt: number,
 ): Promise<AdvisorAnalyticalToolResult> {
   const args = assertCashMovementLinesArgs(call.arguments);
+  const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
   const limits = clampAdvisorDrilldownLimit(args.limit);
   const window = await withToolTimeout(
     cashMovements.list({
       tenantId,
-      monthKey: args.monthKey,
+      monthKey,
       direction: args.direction,
       sort: args.sort,
       limit: args.limit,
@@ -607,7 +626,7 @@ async function executeMovements(
     durationMs: Date.now() - startedAt,
     ok: true,
     resultCardinality: window.returnedCount,
-    monthKey: args.monthKey,
+    monthKey,
     comparisonMonthKey: null,
     direction: args.direction,
     requestedLimit: limits.requestedLimit,
@@ -619,7 +638,7 @@ async function executeMovements(
     ok: true,
     content: JSON.stringify(serialized),
     resultCardinality: window.returnedCount,
-    monthKey: args.monthKey,
+    monthKey,
   };
 }
 
@@ -664,6 +683,12 @@ function requireMonthKey(value: string, field: string): string {
 }
 
 function requireLimit(value: unknown): number {
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new AdvisorDomainError(
       'ANALYTICAL_TOOL_INVALID_INPUT',
@@ -671,6 +696,14 @@ function requireLimit(value: unknown): number {
     );
   }
   return value;
+}
+
+function bindResolvedMonthKey(requested: string, resolvedMonthKey: string | undefined): string {
+  if (resolvedMonthKey === undefined || resolvedMonthKey.trim() === '') {
+    return requested;
+  }
+  const resolved = requireMonthKey(resolvedMonthKey, 'resolvedMonthKey');
+  return resolved;
 }
 
 function readOptionalMonth(value: unknown): string | undefined {

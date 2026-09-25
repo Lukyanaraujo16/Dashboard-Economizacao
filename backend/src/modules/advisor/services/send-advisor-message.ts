@@ -18,6 +18,7 @@ import {
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { deriveConsultantConversationTitle } from '../domain/conversation-title.js';
 import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-conversational-period.js';
+import { resolveAdvisorDrilldownIntent } from '../domain/resolve-advisor-drilldown-intent.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
 import {
   CONSULTANT_PLATFORM_LIMIT_MESSAGE,
@@ -186,6 +187,29 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             })
           : undefined;
 
+      const drilldownIntent =
+        period.comparison === false ? resolveAdvisorDrilldownIntent(question) : null;
+      const drilldown =
+        drilldownIntent !== null && deps.analyticalTools !== undefined
+          ? await deps.analyticalTools.execute({
+              tenantId,
+              resolvedMonthKey: period.monthKey,
+              now: input.now,
+              call: {
+                id: 'preload-drilldown',
+                name: drilldownIntent.toolName,
+                arguments: {
+                  monthKey: period.monthKey,
+                  direction: drilldownIntent.direction,
+                  limit: drilldownIntent.limit,
+                  ...(drilldownIntent.toolName === 'cash_movement_lines'
+                    ? { sort: drilldownIntent.sort }
+                    : {}),
+                },
+              },
+            })
+          : null;
+
       const built = await deps.context.build({
         tenantId,
         userId,
@@ -194,6 +218,15 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         monthKey: period.monthKey,
         comparisonMonthKey: period.comparison ? period.comparisonMonthKey : undefined,
         comparison: comparison ?? null,
+        drilldown:
+          drilldown === null
+            ? null
+            : {
+                toolName: drilldown.name,
+                monthKey: drilldown.monthKey ?? period.monthKey,
+                ok: drilldown.ok,
+                content: drilldown.content,
+              },
         now: input.now,
       });
 
@@ -215,6 +248,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
 
         const generated = await runAdvisorGeneration({
           tenantId,
+          resolvedMonthKey: period.monthKey,
           providerId: ready.provider,
           model,
           blocks: built.blocks,
@@ -360,6 +394,7 @@ async function persistBlockedRun(
 
 async function runAdvisorGeneration(input: {
   readonly tenantId: string;
+  readonly resolvedMonthKey: string;
   readonly providerId: GenerationInput['provider'];
   readonly model: string;
   readonly blocks: GenerationInput['blocks'];
@@ -391,6 +426,7 @@ async function runAdvisorGeneration(input: {
       results.push(
         await input.analyticalTools.execute({
           tenantId: input.tenantId,
+          resolvedMonthKey: input.resolvedMonthKey,
           call,
           now: input.now,
         }),
