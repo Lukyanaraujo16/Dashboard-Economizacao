@@ -10,8 +10,11 @@ import {
 } from './resolve-advisor-current-snapshot-intent.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
+  COMPARE_CASH_COST_CENTER_TOOL_NAME,
 } from './advisor-cost-center-dimension.js';
+import type { AdvisorCostCenterAnaphoraStatus } from './resolve-advisor-conversational-cost-center.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
 
 export const ADVISOR_FACTUAL_RESPONSE_KINDS = [
@@ -46,6 +49,8 @@ export const ADVISOR_FACTUAL_INTENT_KINDS = [
   'COST_CENTER_RANKING_TOPN',
   'COST_CENTER_LOOKUP',
   'COST_CENTER_SHARE',
+  'COST_CENTER_COMPARE',
+  'COST_CENTER_MOVEMENT_LINES',
   'FACTUAL_LIMITATION',
   'INTERPRETIVE',
   'NONE',
@@ -61,7 +66,7 @@ export type AdvisorFactualClassification = {
 
 export type ClassifyAdvisorFactualResponseInput = {
   readonly content: string;
-  readonly anaphora: AdvisorNominalAnaphoraStatus;
+  readonly anaphora: AdvisorNominalAnaphoraStatus | AdvisorCostCenterAnaphoraStatus;
   readonly toolName: string | null;
   readonly toolOk: boolean;
   readonly facts: Record<string, unknown> | null;
@@ -182,10 +187,35 @@ export function classifyAdvisorFactualResponse(
         factKind,
       };
     }
-    if (isKnownAbsentStatus(status)) {
+    if (
+      isKnownAbsentStatus(status) ||
+      input.anaphora === 'AMBIGUOUS' ||
+      input.anaphora === 'UNRESOLVED' ||
+      input.anaphora === 'ORDINAL_UNSUPPORTED'
+    ) {
       return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
     }
     return { kind: 'UNRESOLVED', intentKind: 'COST_CENTER_LOOKUP', factKind };
+  }
+
+  if (input.toolName === COMPARE_CASH_COST_CENTER_TOOL_NAME) {
+    if (status === 'OK' && hasCostCenterCompareFacts(facts)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'COST_CENTER_COMPARE', factKind };
+    }
+    if (isKnownAbsentStatus(status)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    return { kind: 'UNRESOLVED', intentKind: 'COST_CENTER_COMPARE', factKind };
+  }
+
+  if (input.toolName === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME) {
+    if ((status === 'OK' || status === 'EMPTY_RESULT') && hasCostCenterMovementFacts(facts)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'COST_CENTER_MOVEMENT_LINES', factKind };
+    }
+    if (isKnownAbsentStatus(status)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    return { kind: 'UNRESOLVED', intentKind: 'COST_CENTER_MOVEMENT_LINES', factKind };
   }
 
   if (input.toolName === COMPARE_CASH_NOMINAL_TOOL_NAME) {
@@ -211,8 +241,9 @@ export function isAdvisorInterpretiveQuestion(content: string): boolean {
     /\bo que (?:posso |devo )?fazer\b/.test(folded) ||
     /\bpriorizar\b/.test(folded) ||
     /\b(?:isso |esse crescimento |essa concentracao )?e (?:bom|ruim)\b/.test(folded) ||
-    /\bpor que .{0,80}(?:cresceu|aumentou|caiu|diminuiu|mudou)\b/.test(folded) ||
-    /\bpreocupante\b/.test(folded)
+    /\bpor que .{0,80}(?:cresceu|aumentou|caiu|diminuiu|mudou|gastou)\b/.test(folded) ||
+    /\bpreocupante\b/.test(folded) ||
+    /\bdevo (?:reduzir|cortar|diminuir|gastar menos)\b/.test(folded)
   );
 }
 
@@ -326,6 +357,35 @@ function hasCostCenterLookupFacts(facts: Record<string, unknown>): boolean {
     center.name.trim() !== '' &&
     isAmount(center.amount) &&
     isAmount(facts.populationAmount)
+  );
+}
+
+function hasCostCenterCompareFacts(facts: Record<string, unknown>): boolean {
+  const center = asRecord(facts.costCenter);
+  const base = asRecord(facts.base);
+  const target = asRecord(facts.target);
+  return (
+    typeof facts.monthKey === 'string' &&
+    typeof facts.comparisonMonthKey === 'string' &&
+    center !== null &&
+    typeof center.name === 'string' &&
+    base !== null &&
+    target !== null &&
+    isAmount(base.amount) &&
+    isAmount(target.amount) &&
+    isAmount(facts.absoluteDelta)
+  );
+}
+
+function hasCostCenterMovementFacts(facts: Record<string, unknown>): boolean {
+  const center = asRecord(facts.costCenter);
+  return (
+    center !== null &&
+    typeof center.name === 'string' &&
+    isAmount(facts.costCenterAmount) &&
+    isAmount(facts.movementPopulationAmount) &&
+    typeof facts.hasMore === 'boolean' &&
+    Array.isArray(facts.lines)
   );
 }
 

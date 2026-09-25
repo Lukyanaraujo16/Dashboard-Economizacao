@@ -27,6 +27,8 @@ const HUNDRED = new Prisma.Decimal(100);
 
 export const CASH_COST_CENTER_RANKING_TOOL_NAME = 'cash_cost_center_ranking';
 export const CASH_COST_CENTER_LOOKUP_TOOL_NAME = 'cash_cost_center_lookup';
+export const COMPARE_CASH_COST_CENTER_TOOL_NAME = 'compare_cash_cost_center';
+export const CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME = 'cash_cost_center_movement_lines';
 
 export type AdvisorCostCenterCatalogItem = {
   readonly id: string;
@@ -81,6 +83,16 @@ export type AdvisorCostCenterLookupMatch =
       readonly candidates: readonly AdvisorCostCenterCatalogItem[];
     };
 
+export type AdvisorCostCenterAttributedShare = {
+  readonly costCenterId: string;
+  readonly occurredOn: Date;
+  readonly attributedAmount: Prisma.Decimal;
+  readonly originalSettlementAmount: Prisma.Decimal;
+  readonly settlementKey: string;
+  readonly installmentKind: CashSettlementSource['installmentKind'];
+  readonly installmentExternalId: string;
+};
+
 function installmentKey(kind: CashSettlementSource['installmentKind'], externalId: string): string {
   return `${kind}:${externalId}`;
 }
@@ -105,18 +117,16 @@ function compareCenters(left: AdvisorCostCenterIdentified, right: AdvisorCostCen
 }
 
 /**
- * Agrega caixa realizado por centro. Population é o total oficial da direção.
- * Só atribui allocation FETCHED (`confirmed`) com split oficial EXATO.
+ * Mesma regra FETCHED/EXACT da agregação D4.2, emitindo cada share por settlement.
+ * UNRESOLVED/ERROR/UNAVAILABLE e ausência de allocation não geram linha.
  */
-export function aggregateAdvisorCostCenterDimension(input: {
-  readonly monthKey: string;
+export function collectAdvisorCostCenterAttributedShares(input: {
   readonly direction: AdvisorCashDirection;
   readonly today: Date;
-  readonly populationAmount: Prisma.Decimal;
   readonly settlements: readonly CashSettlementSource[];
   readonly allocations: readonly AdvisorCostCenterAllocationInput[];
   readonly catalog: readonly AdvisorCostCenterCatalogItem[];
-}): AdvisorCostCenterAggregation {
+}): readonly AdvisorCostCenterAttributedShare[] {
   const wantedType = input.direction === 'INFLOW' ? 'RECEIPT' : 'DISBURSEMENT';
   const catalog = new Map(input.catalog.map((row) => [row.id, row]));
   const byInstallment = new Map<string, AdvisorCostCenterAllocationInput[]>();
@@ -127,21 +137,19 @@ export function aggregateAdvisorCostCenterDimension(input: {
     byInstallment.set(key, current);
   }
 
-  const totals = new Map<string, Prisma.Decimal>();
-  let identifiedAmount = ZERO;
-
+  const shares: AdvisorCostCenterAttributedShare[] = [];
   for (const settlement of input.settlements) {
     if (settlement.transactionType !== wantedType) {
       continue;
     }
-    const rows = byInstallment.get(
-      installmentKey(settlement.installmentKind, settlement.installmentExternalId),
-    ) ?? [];
+    const rows =
+      byInstallment.get(installmentKey(settlement.installmentKind, settlement.installmentExternalId)) ??
+      [];
     const confirmed = rows.filter((row) => row.confirmed);
     if (confirmed.length === 0) {
       continue;
     }
-    const attributed: Array<{ readonly costCenterId: string; readonly amount: Prisma.Decimal }> = [];
+    const attributed: AdvisorCostCenterAttributedShare[] = [];
     let unavailable = false;
     for (const row of confirmed) {
       const share = attributeSettlementNetToCostCenter({
@@ -157,18 +165,67 @@ export function aggregateAdvisorCostCenterDimension(input: {
         unavailable = true;
         break;
       }
-      attributed.push({ costCenterId: row.costCenterId, amount: share });
+      if (!catalog.has(row.costCenterId)) {
+        continue;
+      }
+      attributed.push({
+        costCenterId: row.costCenterId,
+        occurredOn: settlement.occurredOn,
+        attributedAmount: share,
+        originalSettlementAmount: settlement.netAmount,
+        settlementKey: settlementKeyOf(settlement),
+        installmentKind: settlement.installmentKind,
+        installmentExternalId: settlement.installmentExternalId,
+      });
     }
     if (unavailable) {
       continue;
     }
-    for (const item of attributed) {
-      if (!catalog.has(item.costCenterId)) {
-        continue;
-      }
-      identifiedAmount = identifiedAmount.plus(item.amount);
-      totals.set(item.costCenterId, (totals.get(item.costCenterId) ?? ZERO).plus(item.amount));
+    shares.push(...attributed);
+  }
+  return shares;
+}
+
+/**
+ * Agrega caixa realizado por centro. Population é o total oficial da direção.
+ * Só atribui allocation FETCHED (`confirmed`) com split oficial EXATO.
+ */
+export function aggregateAdvisorCostCenterDimension(input: {
+  readonly monthKey: string;
+  readonly direction: AdvisorCashDirection;
+  readonly today: Date;
+  readonly populationAmount: Prisma.Decimal;
+  readonly settlements: readonly CashSettlementSource[];
+  readonly allocations: readonly AdvisorCostCenterAllocationInput[];
+  readonly catalog: readonly AdvisorCostCenterCatalogItem[];
+}): AdvisorCostCenterAggregation {
+  return buildAdvisorCostCenterAggregation(
+    input,
+    collectAdvisorCostCenterAttributedShares(input),
+  );
+}
+
+export function buildAdvisorCostCenterAggregation(
+  input: {
+    readonly monthKey: string;
+    readonly direction: AdvisorCashDirection;
+    readonly populationAmount: Prisma.Decimal;
+    readonly catalog: readonly AdvisorCostCenterCatalogItem[];
+  },
+  shares: readonly AdvisorCostCenterAttributedShare[],
+): AdvisorCostCenterAggregation {
+  const catalog = new Map(input.catalog.map((row) => [row.id, row]));
+  const totals = new Map<string, Prisma.Decimal>();
+  let identifiedAmount = ZERO;
+  for (const share of shares) {
+    if (!catalog.has(share.costCenterId)) {
+      continue;
     }
+    identifiedAmount = identifiedAmount.plus(share.attributedAmount);
+    totals.set(
+      share.costCenterId,
+      (totals.get(share.costCenterId) ?? ZERO).plus(share.attributedAmount),
+    );
   }
 
   const unidentifiedAmount = input.populationAmount.minus(identifiedAmount);
@@ -197,6 +254,56 @@ export function aggregateAdvisorCostCenterDimension(input: {
     identifiedCardinality: centers.length,
     centers,
   };
+}
+
+function settlementKeyOf(settlement: CashSettlementSource): string {
+  const explicit = settlement.settlementExternalId?.trim();
+  if (explicit !== undefined && explicit !== '') {
+    return explicit;
+  }
+  return `${settlement.installmentKind}:${settlement.installmentExternalId}:${settlement.occurredOn.getTime()}`;
+}
+
+export function identifiedCenterOrZero(
+  aggregation: AdvisorCostCenterAggregation,
+  costCenterId: string,
+  fallback: AdvisorCostCenterCatalogItem,
+): AdvisorCostCenterIdentified {
+  return (
+    aggregation.centers.find((row) => row.costCenterId === costCenterId) ?? {
+      costCenterId,
+      name: fallback.name,
+      code: fallback.code,
+      amount: ZERO,
+      shareOfPopulation: shareOf(ZERO, aggregation.populationAmount),
+      shareOfIdentified: shareOf(ZERO, aggregation.identifiedAmount),
+    }
+  );
+}
+
+export function readAdvisorCostCenterRankingWinner(
+  facts: Record<string, unknown>,
+): { readonly costCenterId: string; readonly name: string } | null {
+  const winner = asWinnerRecord(facts.winner);
+  if (winner !== null) {
+    return winner;
+  }
+  const ranking = Array.isArray(facts.ranking) ? facts.ranking : [];
+  const first = asWinnerRecord(ranking[0]);
+  return first;
+}
+
+function asWinnerRecord(value: unknown): { readonly costCenterId: string; readonly name: string } | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const row = value as Record<string, unknown>;
+  const costCenterId = typeof row.costCenterId === 'string' ? row.costCenterId.trim() : '';
+  const name = typeof row.name === 'string' ? row.name.trim() : '';
+  if (costCenterId === '' || name === '') {
+    return null;
+  }
+  return { costCenterId, name };
 }
 
 export function rankAdvisorCostCenterDimension(

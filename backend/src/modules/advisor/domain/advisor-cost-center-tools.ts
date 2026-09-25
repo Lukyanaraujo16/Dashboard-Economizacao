@@ -1,3 +1,4 @@
+import { Prisma } from '../../../generated/prisma/client.js';
 import { isValidMonthKey } from '../../analytics/domain/civil-calendar.js';
 import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
 import { collectAttributedCashSettlements } from '../../analytics/domain/monthly-cash-flow.js';
@@ -16,17 +17,34 @@ import {
   isAdvisorCashDirection,
   type AdvisorCashDirection,
 } from './advisor-cash-realized-breakdown.js';
+import type { FinancialCategoryReadRecord } from '../../finance/domain/types.js';
+import type { PartyReadRepository } from '../../finance/repositories/party-read.repository.js';
+import type { FinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
-  aggregateAdvisorCostCenterDimension,
+  COMPARE_CASH_COST_CENTER_TOOL_NAME,
+  buildAdvisorCostCenterAggregation,
+  collectAdvisorCostCenterAttributedShares,
   lookupAdvisorCostCenter,
   rankAdvisorCostCenterDimension,
+  resolveAdvisorCostCenterQuery,
   serializeAdvisorCostCenterLookup,
   serializeAdvisorCostCenterRanking,
   type AdvisorCostCenterAllocationInput,
   type AdvisorCostCenterAggregation,
+  type AdvisorCostCenterAttributedShare,
+  type AdvisorCostCenterCatalogItem,
 } from './advisor-cost-center-dimension.js';
+import {
+  compareAdvisorCostCenterDimension,
+  serializeAdvisorCostCenterComparison,
+} from './advisor-cost-center-comparison.js';
+import {
+  listAdvisorCostCenterMovementLines,
+  serializeAdvisorCostCenterMovementLines,
+} from './advisor-cost-center-movement-lines.js';
 
 type AdvisorAnalyticalToolDefinition = {
   readonly name: string;
@@ -91,8 +109,50 @@ export const CASH_COST_CENTER_LOOKUP_TOOL: AdvisorAnalyticalToolDefinition = {
   },
 };
 
+export const COMPARE_CASH_COST_CENTER_TOOL: AdvisorAnalyticalToolDefinition = {
+  name: COMPARE_CASH_COST_CENTER_TOOL_NAME,
+  description:
+    'Compara o caixa realizado de um centro de custo entre dois meses. Junta pelo id interno. Não recebe tenant.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['monthKey', 'comparisonMonthKey', 'direction', 'costCenterQuery'],
+    properties: {
+      monthKey: MONTH_KEY_SCHEMA,
+      comparisonMonthKey: {
+        ...MONTH_KEY_SCHEMA,
+        description: 'Mês-base (mais antigo) no formato YYYY-MM.',
+      },
+      direction: DIRECTION_SCHEMA,
+      costCenterQuery: COST_CENTER_QUERY_SCHEMA,
+    },
+  },
+};
+
+export const CASH_COST_CENTER_MOVEMENT_LINES_TOOL: AdvisorAnalyticalToolDefinition = {
+  name: CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
+  description:
+    'Linhas de caixa realizado atribuídas a um centro (share FETCHED/EXACT). Total do centro ≠ soma do TOP N.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['monthKey', 'direction', 'costCenterQuery'],
+    properties: {
+      monthKey: MONTH_KEY_SCHEMA,
+      direction: DIRECTION_SCHEMA,
+      costCenterQuery: COST_CENTER_QUERY_SCHEMA,
+      limit: LIMIT_SCHEMA,
+    },
+  },
+};
+
 export function listAdvisorCostCenterTools(): readonly AdvisorAnalyticalToolDefinition[] {
-  return [CASH_COST_CENTER_RANKING_TOOL, CASH_COST_CENTER_LOOKUP_TOOL];
+  return [
+    CASH_COST_CENTER_RANKING_TOOL,
+    CASH_COST_CENTER_LOOKUP_TOOL,
+    COMPARE_CASH_COST_CENTER_TOOL,
+    CASH_COST_CENTER_MOVEMENT_LINES_TOOL,
+  ];
 }
 
 export type AdvisorCostCenterDimensionService = {
@@ -110,9 +170,25 @@ export type AdvisorCostCenterDimensionService = {
     readonly costCenterQuery: string;
     readonly now?: Date;
   }): Promise<Record<string, unknown>>;
+  compare(input: {
+    readonly tenantId: string;
+    readonly monthKey: string;
+    readonly comparisonMonthKey: string;
+    readonly direction: AdvisorCashDirection;
+    readonly costCenterQuery: string;
+    readonly now?: Date;
+  }): Promise<Record<string, unknown>>;
+  movementLines(input: {
+    readonly tenantId: string;
+    readonly monthKey: string;
+    readonly direction: AdvisorCashDirection;
+    readonly costCenterQuery: string;
+    readonly limit?: number;
+    readonly now?: Date;
+  }): Promise<Record<string, unknown>>;
 };
 
-export function createAdvisorCostCenterDimensionService(deps: {
+type CostCenterServiceDeps = {
   readonly cashFlow: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'>;
   readonly ledger: LedgerReadRepository;
   readonly receivables: ReceivableReadRepository;
@@ -122,7 +198,13 @@ export function createAdvisorCostCenterDimensionService(deps: {
     CostCenterAllocationReadRepository,
     'findConfirmedAllocationsByInstallmentExternalIds'
   >;
-}): AdvisorCostCenterDimensionService {
+  readonly parties?: Pick<PartyReadRepository, 'findNamesByIds'>;
+  readonly categories?: Pick<FinancialCategoryReadRepository, 'listByTenant'>;
+};
+
+export function createAdvisorCostCenterDimensionService(
+  deps: CostCenterServiceDeps,
+): AdvisorCostCenterDimensionService {
   return {
     async rank(input) {
       const loaded = await loadAggregation(deps, input);
@@ -170,6 +252,108 @@ export function createAdvisorCostCenterDimensionService(deps: {
         match: found.center,
       });
     },
+
+    async compare(input) {
+      const [base, target] = await Promise.all([
+        loadAggregation(deps, {
+          tenantId: input.tenantId,
+          monthKey: input.comparisonMonthKey,
+          direction: input.direction,
+          now: input.now,
+        }),
+        loadAggregation(deps, {
+          tenantId: input.tenantId,
+          monthKey: input.monthKey,
+          direction: input.direction,
+          now: input.now,
+        }),
+      ]);
+      if (base.status !== 'OK' || target.status !== 'OK') {
+        return {
+          status: 'UNAVAILABLE',
+          monthKey: input.monthKey,
+          comparisonMonthKey: input.comparisonMonthKey,
+          direction: input.direction,
+        };
+      }
+      const resolved = resolveAdvisorCostCenterQuery(target.catalog, input.costCenterQuery);
+      if (resolved.status === 'NOT_FOUND') {
+        return serializeAdvisorCostCenterComparison({
+          status: 'NOT_FOUND',
+          direction: input.direction,
+          monthKey: input.monthKey,
+          comparisonMonthKey: input.comparisonMonthKey,
+          costCenter: null,
+          base: null,
+          target: null,
+          absoluteDelta: null,
+          percentageDelta: null,
+          trend: null,
+          coverageDiffers: false,
+        });
+      }
+      if (resolved.status === 'AMBIGUOUS') {
+        return serializeAdvisorCostCenterComparison({
+          status: 'AMBIGUOUS',
+          direction: input.direction,
+          monthKey: input.monthKey,
+          comparisonMonthKey: input.comparisonMonthKey,
+          costCenter: null,
+          base: null,
+          target: null,
+          absoluteDelta: null,
+          percentageDelta: null,
+          trend: null,
+          coverageDiffers: false,
+          candidates: resolved.candidates,
+        });
+      }
+      return serializeAdvisorCostCenterComparison(
+        compareAdvisorCostCenterDimension({
+          base: base.aggregation,
+          target: target.aggregation,
+          catalogItem: {
+            id: resolved.center.costCenterId,
+            name: resolved.center.name,
+            code: resolved.center.code,
+          },
+        }),
+      );
+    },
+
+    async movementLines(input) {
+      const loaded = await loadAggregation(deps, input);
+      if (loaded.status !== 'OK') {
+        return loaded.payload;
+      }
+      const resolved = resolveAdvisorCostCenterQuery(loaded.catalog, input.costCenterQuery);
+      if (resolved.status === 'NOT_FOUND') {
+        return serializeAdvisorCostCenterMovementLines(
+          emptyMovementWindow(loaded.aggregation, input.limit, 'NOT_FOUND'),
+        );
+      }
+      if (resolved.status === 'AMBIGUOUS') {
+        return serializeAdvisorCostCenterMovementLines({
+          ...emptyMovementWindow(loaded.aggregation, input.limit, 'AMBIGUOUS'),
+          candidates: resolved.candidates,
+        });
+      }
+      const catalogItem: AdvisorCostCenterCatalogItem = {
+        id: resolved.center.costCenterId,
+        name: resolved.center.name,
+        code: resolved.center.code,
+      };
+      const sourceLines = await hydrateMovementLines(deps, input.tenantId, loaded);
+      return serializeAdvisorCostCenterMovementLines(
+        listAdvisorCostCenterMovementLines({
+          aggregation: loaded.aggregation,
+          shares: loaded.shares,
+          catalogItem,
+          sourceLines,
+          limit: input.limit,
+        }),
+      );
+    },
   };
 }
 
@@ -194,6 +378,77 @@ export function assertCashCostCenterRankingArgs(raw: Record<string, unknown>): {
   return {
     monthKey: requireMonth(raw.monthKey, 'monthKey'),
     direction: raw.direction,
+    ...(raw.limit === undefined ? {} : { limit: requireLimit(raw.limit) }),
+  };
+}
+
+export function assertCompareCashCostCenterArgs(raw: Record<string, unknown>): {
+  readonly monthKey: string;
+  readonly comparisonMonthKey: string;
+  readonly direction: AdvisorCashDirection;
+  readonly costCenterQuery: string;
+} {
+  assertCostCenterArgs(raw, ['monthKey', 'comparisonMonthKey', 'direction', 'costCenterQuery']);
+  if (
+    typeof raw.monthKey !== 'string' ||
+    typeof raw.comparisonMonthKey !== 'string' ||
+    typeof raw.direction !== 'string' ||
+    typeof raw.costCenterQuery !== 'string'
+  ) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'monthKey, comparisonMonthKey, direction e costCenterQuery são obrigatórios.',
+    );
+  }
+  if (!isAdvisorCashDirection(raw.direction)) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'direction deve ser INFLOW ou OUTFLOW.',
+    );
+  }
+  const monthKey = requireMonth(raw.monthKey, 'monthKey');
+  const comparisonMonthKey = requireMonth(raw.comparisonMonthKey, 'comparisonMonthKey');
+  if (monthKey === comparisonMonthKey) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'compare_cash_cost_center exige dois monthKey distintos.',
+    );
+  }
+  return {
+    monthKey,
+    comparisonMonthKey,
+    direction: raw.direction,
+    costCenterQuery: requireQuery(raw.costCenterQuery),
+  };
+}
+
+export function assertCashCostCenterMovementLinesArgs(raw: Record<string, unknown>): {
+  readonly monthKey: string;
+  readonly direction: AdvisorCashDirection;
+  readonly costCenterQuery: string;
+  readonly limit?: number;
+} {
+  assertCostCenterArgs(raw, ['monthKey', 'direction', 'costCenterQuery', 'limit']);
+  if (
+    typeof raw.monthKey !== 'string' ||
+    typeof raw.direction !== 'string' ||
+    typeof raw.costCenterQuery !== 'string'
+  ) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'monthKey, direction e costCenterQuery são obrigatórios.',
+    );
+  }
+  if (!isAdvisorCashDirection(raw.direction)) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'direction deve ser INFLOW ou OUTFLOW.',
+    );
+  }
+  return {
+    monthKey: requireMonth(raw.monthKey, 'monthKey'),
+    direction: raw.direction,
+    costCenterQuery: requireQuery(raw.costCenterQuery),
     ...(raw.limit === undefined ? {} : { limit: requireLimit(raw.limit) }),
   };
 }
@@ -228,17 +483,7 @@ export function assertCashCostCenterLookupArgs(raw: Record<string, unknown>): {
 }
 
 async function loadAggregation(
-  deps: {
-    readonly cashFlow: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'>;
-    readonly ledger: LedgerReadRepository;
-    readonly receivables: ReceivableReadRepository;
-    readonly payables: PayableReadRepository;
-    readonly costCenters: Pick<CostCenterReadRepository, 'listByTenant'>;
-    readonly costCenterAllocations: Pick<
-      CostCenterAllocationReadRepository,
-      'findConfirmedAllocationsByInstallmentExternalIds'
-    >;
-  },
+  deps: CostCenterServiceDeps,
   input: {
     readonly tenantId: string;
     readonly monthKey: string;
@@ -249,7 +494,9 @@ async function loadAggregation(
   | {
       readonly status: 'OK';
       readonly aggregation: AdvisorCostCenterAggregation;
-      readonly catalog: readonly { id: string; name: string; code: string | null }[];
+      readonly catalog: readonly AdvisorCostCenterCatalogItem[];
+      readonly shares: readonly AdvisorCostCenterAttributedShare[];
+      readonly installments: ReadonlyMap<string, FinancialInstallmentReadRecord>;
     }
   | { readonly status: 'UNAVAILABLE'; readonly payload: Record<string, unknown> }
 > {
@@ -353,19 +600,89 @@ async function loadAggregation(
       confirmed: true,
     })),
   ];
-
+  const projectionInput = {
+    monthKey,
+    direction: input.direction,
+    today,
+    populationAmount: population,
+    settlements: attributed.rows.map((row) => row.settlement),
+    allocations,
+    catalog,
+  };
+  const shares = collectAdvisorCostCenterAttributedShares(projectionInput);
   return {
     status: 'OK',
     catalog,
-    aggregation: aggregateAdvisorCostCenterDimension({
-      monthKey,
-      direction: input.direction,
-      today,
-      populationAmount: population,
-      settlements: attributed.rows.map((row) => row.settlement),
-      allocations,
-      catalog,
-    }),
+    shares,
+    installments: realizedInstallments,
+    aggregation: buildAdvisorCostCenterAggregation(projectionInput, shares),
+  };
+}
+
+async function hydrateMovementLines(
+  deps: CostCenterServiceDeps,
+  tenantId: string,
+  loaded: {
+    readonly shares: readonly AdvisorCostCenterAttributedShare[];
+    readonly installments: ReadonlyMap<string, FinancialInstallmentReadRecord>;
+  },
+) {
+  const partyIds = [
+    ...new Set(
+      loaded.shares
+        .map((share) => loaded.installments.get(`${share.installmentKind}:${share.installmentExternalId}`)?.partyId)
+        .filter((id): id is string => typeof id === 'string' && id.trim() !== ''),
+    ),
+  ];
+  const [partyNames, categories] = await Promise.all([
+    deps.parties === undefined || partyIds.length === 0
+      ? Promise.resolve(new Map<string, string>())
+      : deps.parties.findNamesByIds({ tenantId }, partyIds),
+    deps.categories === undefined
+      ? Promise.resolve([] as readonly FinancialCategoryReadRecord[])
+      : deps.categories.listByTenant(tenantId),
+  ]);
+  const categoryById = new Map(categories.map((row) => [row.externalId, row.name]));
+  return loaded.shares.map((share) => {
+    const installment = loaded.installments.get(
+      `${share.installmentKind}:${share.installmentExternalId}`,
+    );
+    return {
+      share,
+      description: installment?.description ?? null,
+      partyName:
+        installment?.partyId === null || installment?.partyId === undefined
+          ? null
+          : (partyNames.get(installment.partyId) ?? null),
+      categoryNames: (installment?.categoryExternalIds ?? [])
+        .map((id) => categoryById.get(id))
+        .filter((name): name is string => name !== undefined && name.trim() !== ''),
+    };
+  });
+}
+
+function emptyMovementWindow(
+  aggregation: AdvisorCostCenterAggregation,
+  limit: number | undefined,
+  status: 'NOT_FOUND' | 'AMBIGUOUS',
+) {
+  const zero = new Prisma.Decimal(0);
+  return {
+    status,
+    monthKey: aggregation.monthKey,
+    direction: aggregation.direction,
+    costCenter: null,
+    costCenterAmount: zero,
+    populationAmount: aggregation.populationAmount,
+    identifiedAmount: aggregation.identifiedAmount,
+    unidentifiedAmount: aggregation.unidentifiedAmount,
+    coveragePercentage: aggregation.coveragePercentage,
+    movementPopulationAmount: zero,
+    requestedLimit: limit ?? ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+    effectiveLimit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+    returnedCount: 0,
+    hasMore: false,
+    lines: [],
   };
 }
 

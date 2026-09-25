@@ -41,13 +41,17 @@ import {
 } from './advisor-nominal-dimension.js';
 import {
   assertCashCostCenterLookupArgs,
+  assertCashCostCenterMovementLinesArgs,
   assertCashCostCenterRankingArgs,
+  assertCompareCashCostCenterArgs,
   listAdvisorCostCenterTools,
   type AdvisorCostCenterDimensionService,
 } from './advisor-cost-center-tools.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
+  COMPARE_CASH_COST_CENTER_TOOL_NAME,
 } from './advisor-cost-center-dimension.js';
 
 export const ADVISOR_MAX_TOOL_ROUNDS = 3;
@@ -431,7 +435,9 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
         }
         if (
           call.name === CASH_COST_CENTER_RANKING_TOOL_NAME ||
-          call.name === CASH_COST_CENTER_LOOKUP_TOOL_NAME
+          call.name === CASH_COST_CENTER_LOOKUP_TOOL_NAME ||
+          call.name === COMPARE_CASH_COST_CENTER_TOOL_NAME ||
+          call.name === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME
         ) {
           if (deps.cashCostCenter === undefined) {
             throw new AdvisorDomainError(
@@ -795,6 +801,36 @@ async function executeCostCenter(
     );
     return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, args.limit);
   }
+  if (call.name === COMPARE_CASH_COST_CENTER_TOOL_NAME) {
+    const args = assertCompareCashCostCenterArgs(call.arguments);
+    const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+    const serialized = await withToolTimeout(
+      cashCostCenter.compare({
+        tenantId,
+        monthKey,
+        comparisonMonthKey: args.comparisonMonthKey,
+        direction: args.direction,
+        costCenterQuery: args.costCenterQuery,
+        now,
+      }),
+    );
+    return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, null);
+  }
+  if (call.name === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME) {
+    const args = assertCashCostCenterMovementLinesArgs(call.arguments);
+    const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+    const serialized = await withToolTimeout(
+      cashCostCenter.movementLines({
+        tenantId,
+        monthKey,
+        direction: args.direction,
+        costCenterQuery: args.costCenterQuery,
+        limit: args.limit,
+        now,
+      }),
+    );
+    return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, args.limit);
+  }
   const args = assertCashCostCenterLookupArgs(call.arguments);
   const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
   const serialized = await withToolTimeout(
@@ -1032,7 +1068,9 @@ function normalizeToolFailure(
   }
   if (
     toolName === CASH_COST_CENTER_RANKING_TOOL_NAME ||
-    toolName === CASH_COST_CENTER_LOOKUP_TOOL_NAME
+    toolName === CASH_COST_CENTER_LOOKUP_TOOL_NAME ||
+    toolName === COMPARE_CASH_COST_CENTER_TOOL_NAME ||
+    toolName === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME
   ) {
     return {
       code: 'ANALYTICAL_TOOL_FAILED',

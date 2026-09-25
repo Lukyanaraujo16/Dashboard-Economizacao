@@ -185,6 +185,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     }),
     categories,
   });
+  const parties = createPartyReadRepository(prisma);
   const cashCostCenter = createAdvisorCostCenterDimensionService({
     cashFlow,
     ledger,
@@ -192,6 +193,8 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     payables,
     costCenters,
     costCenterAllocations,
+    parties,
+    categories,
   });
   const analyticalTools = createAdvisorAnalyticalToolExecutor({
     cashComparison,

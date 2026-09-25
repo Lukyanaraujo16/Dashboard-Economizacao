@@ -11,9 +11,10 @@ import {
   type AdvisorFactualClassification,
   type AdvisorFactualIntentKind,
 } from './classify-advisor-factual-response.js';
+import type { AdvisorCostCenterAnaphoraStatus } from './resolve-advisor-conversational-cost-center.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
 
-export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.2-1';
+export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3-1';
 
 export type AdvisorFactualAnswerMeta = {
   readonly classification: 'FACTUAL_CLOSED';
@@ -28,7 +29,7 @@ export type AdvisorFactualAnswerMeta = {
 
 export type ComposeAdvisorFactualAnswerInput = {
   readonly content: string;
-  readonly anaphora: AdvisorNominalAnaphoraStatus;
+  readonly anaphora: AdvisorNominalAnaphoraStatus | AdvisorCostCenterAnaphoraStatus;
   readonly toolName: string | null;
   readonly toolOk: boolean;
   readonly toolContent: string | null;
@@ -80,9 +81,13 @@ export function composeAdvisorFactualAnswer(
                 ? composeIdentityAmbiguity(facts, input.content)
                 : classification.intentKind.startsWith('SNAPSHOT_')
                   ? composeCurrentSnapshot(facts, classification.intentKind)
-                  : classification.intentKind.startsWith('COST_CENTER_')
-                    ? composeCostCenter(facts, classification.intentKind)
-                    : composeLimitation(facts, input.anaphora);
+                  : classification.intentKind === 'COST_CENTER_COMPARE'
+                  ? composeCostCenterCompare(facts)
+                  : classification.intentKind === 'COST_CENTER_MOVEMENT_LINES'
+                    ? composeCostCenterMovements(facts)
+                    : classification.intentKind.startsWith('COST_CENTER_')
+                      ? composeCostCenter(facts, classification.intentKind)
+                      : composeLimitation(facts, input.anaphora);
 
   if (answer === null) {
     return {
@@ -439,17 +444,107 @@ function composeCostCenter(
   return `Em ${month}, o centro ${name} teve ${amount} em ${direction}, equivalente a ${share} do total de ${direction}.${coverageSentence}`;
 }
 
+function composeCostCenterCompare(facts: Record<string, unknown>): string | null {
+  const center = asRecord(facts.costCenter);
+  const base = asRecord(facts.base);
+  const target = asRecord(facts.target);
+  const name = asString(center?.name);
+  const monthA = formatAdvisorFactualMonth(asString(facts.comparisonMonthKey) ?? '');
+  const monthB = formatAdvisorFactualMonth(asString(facts.monthKey) ?? '');
+  const amountA = formatAdvisorFactualBrl(asString(base?.amount) ?? '');
+  const amountB = formatAdvisorFactualBrl(asString(target?.amount) ?? '');
+  const delta = formatAdvisorFactualBrl(asString(facts.absoluteDelta) ?? '');
+  const direction = asString(facts.direction) === 'INFLOW' ? 'entradas realizadas' : 'saídas realizadas';
+  if (
+    name === null ||
+    monthA === null ||
+    monthB === null ||
+    amountA === null ||
+    amountB === null ||
+    delta === null
+  ) {
+    return null;
+  }
+  const percent = formatAdvisorFactualPercent(asString(facts.percentageDelta) ?? '');
+  const core =
+    percent === null
+      ? `${name} teve ${amountA} em ${direction} em ${monthA} e ${amountB} em ${monthB}, uma variação de ${delta}. A variação percentual não é aplicável porque a base era zero.`
+      : `${name} teve ${amountA} em ${direction} em ${monthA} e ${amountB} em ${monthB}, uma variação de ${delta} (${percent}).`;
+  if (facts.coverageDiffers !== true) {
+    return core;
+  }
+  const coverageA = formatAdvisorFactualPercent(asString(base?.coveragePercentage) ?? '');
+  const coverageB = formatAdvisorFactualPercent(asString(target?.coveragePercentage) ?? '');
+  if (coverageA === null || coverageB === null) {
+    return `${core} A cobertura identificada de centros de custo diferiu entre os meses. A variação considera os valores identificados deste centro.`;
+  }
+  return `${core} A cobertura identificada de centros de custo foi de ${coverageA} em ${monthA} e ${coverageB} em ${monthB}. A variação considera os valores identificados deste centro.`;
+}
+
+function composeCostCenterMovements(facts: Record<string, unknown>): string | null {
+  const center = asRecord(facts.costCenter);
+  const name = asString(center?.name);
+  const month = formatAdvisorFactualMonth(asString(facts.monthKey) ?? '');
+  const total = formatAdvisorFactualBrl(asString(facts.costCenterAmount) ?? '');
+  const direction = asString(facts.direction) === 'INFLOW' ? 'entradas realizadas' : 'saídas realizadas';
+  const singular = asString(facts.direction) === 'INFLOW' ? 'entrada realizada' : 'saída realizada';
+  if (month === null || name === null || total === null) {
+    return null;
+  }
+  const lines = Array.isArray(facts.lines) ? facts.lines : [];
+  if (lines.length === 0) {
+    return `Em ${month}, o centro ${name} teve ${total} em ${direction}. Não há lançamentos atribuídos a esse centro neste recorte.`;
+  }
+  const listed = lines.map((row, index) => {
+    const item = asRecord(row);
+    const amount = formatAdvisorFactualBrl(asString(item?.attributedAmount) ?? '');
+    const date = asString(item?.occurredOn);
+    const description = asString(item?.description);
+    const party = asString(item?.partyName);
+    if (amount === null) {
+      return null;
+    }
+    const label = [description, party].filter((part) => part !== null).join(' — ');
+    const when = date === null ? '' : ` (${date})`;
+    return `${index + 1}. ${label === '' ? singular : label}${when}: ${amount}`;
+  });
+  if (listed.some((item) => item === null)) {
+    return null;
+  }
+  const count = listed.length;
+  const hasMore = facts.hasMore === true;
+  const header = `Em ${month}, o centro ${name} teve ${total} em ${direction}.`;
+  const intro = hasMore
+    ? `Os ${count} maiores lançamentos que compõem esse total foram:`
+    : `Os lançamentos que compõem esse total foram:`;
+  const closer = hasMore
+    ? ' Esses são os maiores lançamentos que compõem o total; existem outros lançamentos no período.'
+    : '';
+  return `${header} ${intro}\n${listed.join('\n')}.${closer}`;
+}
+
 function composeLimitation(
   facts: Record<string, unknown>,
-  anaphora: AdvisorNominalAnaphoraStatus,
+  anaphora: AdvisorNominalAnaphoraStatus | AdvisorCostCenterAnaphoraStatus,
 ): string | null {
   const status = asString(facts.status);
   const reason = asString(facts.reason);
   const factKind = asString(facts.factKind);
   if (
     factKind === 'REALIZED_CASH_COST_CENTER_DIMENSION_LOOKUP' ||
-    factKind === 'REALIZED_CASH_COST_CENTER_DIMENSION_RANKING'
+    factKind === 'REALIZED_CASH_COST_CENTER_DIMENSION_RANKING' ||
+    factKind === 'REALIZED_CASH_COST_CENTER_DIMENSION_COMPARE' ||
+    factKind === 'REALIZED_CASH_COST_CENTER_MOVEMENT_LINES'
   ) {
+    if (reason === 'COST_CENTER_ORDINAL_UNSUPPORTED' || anaphora === 'ORDINAL_UNSUPPORTED') {
+      return 'Não consigo identificar o centro de custo pela posição no ranking. Especifique o nome ou o código.';
+    }
+    if (
+      reason === 'NO_UNEQUIVOCAL_COST_CENTER_ANTECEDENT' ||
+      anaphora === 'UNRESOLVED'
+    ) {
+      return 'Não há um centro de custo inequívoco nesta conversa para consultar o valor.';
+    }
     if (status === 'AMBIGUOUS') {
       return 'Há mais de um centro de custo correspondente. Especifique o nome ou o código.';
     }

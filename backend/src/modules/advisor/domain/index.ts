@@ -206,10 +206,16 @@ export {
 export { resolveAdvisorOfficialCategory } from './advisor-nominal-category-resolver.js';
 export {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
+  COMPARE_CASH_COST_CENTER_TOOL_NAME,
   aggregateAdvisorCostCenterDimension,
+  buildAdvisorCostCenterAggregation,
+  collectAdvisorCostCenterAttributedShares,
+  identifiedCenterOrZero,
   lookupAdvisorCostCenter,
   rankAdvisorCostCenterDimension,
+  readAdvisorCostCenterRankingWinner,
   resolveAdvisorCostCenterQuery,
   serializeAdvisorCostCenterLookup,
   serializeAdvisorCostCenterRanking,
@@ -217,13 +223,26 @@ export {
 export type {
   AdvisorCostCenterAggregation,
   AdvisorCostCenterAllocationInput,
+  AdvisorCostCenterAttributedShare,
   AdvisorCostCenterCatalogItem,
   AdvisorCostCenterIdentified,
 } from './advisor-cost-center-dimension.js';
 export {
+  compareAdvisorCostCenterDimension,
+  serializeAdvisorCostCenterComparison,
+} from './advisor-cost-center-comparison.js';
+export {
+  listAdvisorCostCenterMovementLines,
+  serializeAdvisorCostCenterMovementLines,
+} from './advisor-cost-center-movement-lines.js';
+export {
+  ADVISOR_COST_CENTER_COMPARE_FACT_KIND,
   ADVISOR_COST_CENTER_LOOKUP_FACT_KIND,
+  ADVISOR_COST_CENTER_MOVEMENT_FACT_KIND,
   ADVISOR_COST_CENTER_RANKING_FACT_KIND,
+  advisorCostCenterCompareFactContract,
   advisorCostCenterLookupFactContract,
+  advisorCostCenterMovementFactContract,
   advisorCostCenterRankingFactContract,
 } from './advisor-cost-center-fact-contract.js';
 export {
@@ -237,8 +256,21 @@ export type {
   AdvisorCostCenterIntentKind,
 } from './resolve-advisor-cost-center-intent.js';
 export {
+  extractAdvisorCostCenterMention,
+  isAdvisorCostCenterPeriodFollowUp,
+  isCostCenterOrdinalQuestion,
+  resolveAdvisorConversationalCostCenter,
+} from './resolve-advisor-conversational-cost-center.js';
+export type {
+  AdvisorConversationalCostCenter,
+  AdvisorCostCenterAnaphoraStatus,
+  AdvisorCostCenterFollowUpIntent,
+} from './resolve-advisor-conversational-cost-center.js';
+export {
   assertCashCostCenterLookupArgs,
+  assertCashCostCenterMovementLinesArgs,
   assertCashCostCenterRankingArgs,
+  assertCompareCashCostCenterArgs,
   createAdvisorCostCenterDimensionService,
   listAdvisorCostCenterTools,
 } from './advisor-cost-center-tools.js';

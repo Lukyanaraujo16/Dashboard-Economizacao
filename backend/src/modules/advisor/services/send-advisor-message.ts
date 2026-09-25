@@ -30,9 +30,13 @@ import {
 } from '../domain/compose-advisor-factual-answer.js';
 import { resolveAdvisorCurrentSnapshotIntent } from '../domain/resolve-advisor-current-snapshot-intent.js';
 import { resolveAdvisorCostCenterIntent } from '../domain/resolve-advisor-cost-center-intent.js';
+import { resolveAdvisorConversationalCostCenter } from '../domain/resolve-advisor-conversational-cost-center.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
+  COMPARE_CASH_COST_CENTER_TOOL_NAME,
+  readAdvisorCostCenterRankingWinner,
 } from '../domain/advisor-cost-center-dimension.js';
 import {
   COMPARE_CASH_NOMINAL_TOOL_NAME,
@@ -197,10 +201,73 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         }),
       );
 
+      const conversationalCostCenter = resolveAdvisorConversationalCostCenter({
+        content: question,
+        period,
+        priorUserContents,
+        referenceMonthKey: input.monthKey,
+        now: input.now,
+      });
+      let costCenterFollowUp = conversationalCostCenter.intent;
+      let costCenterAnaphora = conversationalCostCenter.anaphora;
+      if (
+        conversationalCostCenter.needsRankingWinner &&
+        (conversationalCostCenter.rankingQuestion === null || deps.analyticalTools === undefined)
+      ) {
+        costCenterAnaphora = 'UNRESOLVED';
+        costCenterFollowUp = null;
+      } else if (
+        conversationalCostCenter.needsRankingWinner &&
+        conversationalCostCenter.rankingQuestion !== null &&
+        deps.analyticalTools !== undefined
+      ) {
+        const rankingPeriod = resolveAdvisorConversationalPeriod({
+          content: conversationalCostCenter.rankingQuestion,
+          referenceMonthKey: input.monthKey,
+          now: input.now,
+          priorUserContents,
+        });
+        const ranked = await deps.analyticalTools.execute({
+          tenantId,
+          resolvedMonthKey: rankingPeriod.monthKey,
+          now: input.now,
+          call: {
+            id: 'preload-cost-center-winner',
+            name: CASH_COST_CENTER_RANKING_TOOL_NAME,
+            arguments: {
+              monthKey: rankingPeriod.monthKey,
+              direction: costCenterFollowUp?.direction ?? 'OUTFLOW',
+            },
+          },
+        });
+        const winner = ranked.ok ? readCostCenterWinnerFromToolContent(ranked.content) : null;
+        if (winner !== null && costCenterFollowUp !== null) {
+          costCenterFollowUp = {
+            ...costCenterFollowUp,
+            costCenterQuery: winner.name,
+          };
+          costCenterAnaphora = 'RESOLVED';
+        } else {
+          costCenterAnaphora = 'UNRESOLVED';
+          costCenterFollowUp = null;
+        }
+      }
+      const costCenterMonthKey =
+        conversationalCostCenter.inheritComparisonTarget &&
+        conversationalCostCenter.inheritedMonthKey !== null
+          ? conversationalCostCenter.inheritedMonthKey
+          : period.monthKey;
+      const hasCostCenterFollowUp =
+        costCenterFollowUp !== null ||
+        costCenterAnaphora === 'ORDINAL_UNSUPPORTED' ||
+        costCenterAnaphora === 'AMBIGUOUS' ||
+        costCenterAnaphora === 'UNRESOLVED';
+
       const comparison =
         period.comparison &&
         period.comparisonMonthKey !== undefined &&
-        deps.cashComparison !== undefined
+        deps.cashComparison !== undefined &&
+        !hasCostCenterFollowUp
           ? await deps.cashComparison.compare({
               tenantId,
               monthKey: period.monthKey,
@@ -209,11 +276,18 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             })
           : undefined;
 
-      const conversationalNominal = resolveAdvisorConversationalNominal({
-        content: question,
-        priorUserContents,
-        comparison: period.comparison,
-      });
+      const conversationalNominal = hasCostCenterFollowUp
+        ? {
+            intent: null,
+            anaphora: 'NONE' as const,
+            needsRankingWinner: false,
+            rankingQuestion: null,
+          }
+        : resolveAdvisorConversationalNominal({
+            content: question,
+            priorUserContents,
+            comparison: period.comparison,
+          });
       let nominalIntent = conversationalNominal.intent;
       let anaphoraStatus = conversationalNominal.anaphora;
       if (
@@ -259,12 +333,14 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         }
       }
       const costCenterIntent =
+        !hasCostCenterFollowUp &&
         period.comparison === false &&
         nominalIntent === null &&
         anaphoraStatus === 'NONE'
           ? resolveAdvisorCostCenterIntent({ content: question, period })
           : null;
       const drilldownIntent =
+        !hasCostCenterFollowUp &&
         costCenterIntent === null &&
         nominalIntent === null &&
         anaphoraStatus === 'NONE' &&
@@ -274,6 +350,16 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       const preloadedTool =
         deps.analyticalTools === undefined
           ? null
+          : hasCostCenterFollowUp
+            ? await preloadCostCenterFollowUp({
+                analyticalTools: deps.analyticalTools,
+                tenantId,
+                period,
+                costCenterMonthKey,
+                followUp: costCenterFollowUp,
+                anaphora: costCenterAnaphora,
+                now: input.now,
+              })
           : costCenterIntent !== null
             ? await deps.analyticalTools.execute({
                 tenantId,
@@ -360,6 +446,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
                 : null;
       const drilldown = preloadedTool;
       const snapshotIntent =
+        !hasCostCenterFollowUp &&
         period.comparison === false &&
         nominalIntent === null &&
         anaphoraStatus === 'NONE' &&
@@ -390,7 +477,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
 
       const composed = composeAdvisorFactualAnswer({
         content: question,
-        anaphora: anaphoraStatus,
+        anaphora: hasCostCenterFollowUp ? costCenterAnaphora : anaphoraStatus,
         toolName:
           snapshotIntent !== null
             ? ADVISOR_CURRENT_SNAPSHOT_FACT_NAME
@@ -664,6 +751,126 @@ function readWinnerFromToolContent(
   } catch {
     return null;
   }
+}
+
+function readCostCenterWinnerFromToolContent(
+  content: string,
+): { readonly costCenterId: string; readonly name: string } | null {
+  try {
+    return readAdvisorCostCenterRankingWinner(JSON.parse(content) as Record<string, unknown>);
+  } catch {
+    return null;
+  }
+}
+
+async function preloadCostCenterFollowUp(input: {
+  readonly analyticalTools: AdvisorAnalyticalToolExecutor;
+  readonly tenantId: string;
+  readonly period: ReturnType<typeof resolveAdvisorConversationalPeriod>;
+  readonly costCenterMonthKey: string;
+  readonly followUp: {
+    readonly toolName: string;
+    readonly direction: 'INFLOW' | 'OUTFLOW';
+    readonly limit: number;
+    readonly costCenterQuery?: string;
+    readonly monthKey?: string;
+    readonly comparisonMonthKey?: string;
+  } | null;
+  readonly anaphora: string;
+  readonly now?: Date;
+}) {
+  if (
+    input.followUp === null ||
+    input.followUp.costCenterQuery === undefined ||
+    input.anaphora === 'ORDINAL_UNSUPPORTED' ||
+    input.anaphora === 'AMBIGUOUS' ||
+    input.anaphora === 'UNRESOLVED'
+  ) {
+    const reason =
+      input.anaphora === 'ORDINAL_UNSUPPORTED'
+        ? 'COST_CENTER_ORDINAL_UNSUPPORTED'
+        : input.anaphora === 'AMBIGUOUS'
+          ? 'MULTIPLE_COST_CENTER_ANTECEDENTS'
+          : 'NO_UNEQUIVOCAL_COST_CENTER_ANTECEDENT';
+    return {
+      id: 'preload-cost-center-anaphora',
+      name: CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+      ok: true,
+      content: JSON.stringify({
+        status: input.anaphora === 'AMBIGUOUS' ? 'AMBIGUOUS' : 'UNRESOLVED',
+        reason,
+        monthKey: input.costCenterMonthKey,
+        scope: 'PERIOD',
+        factKind: 'REALIZED_CASH_COST_CENTER_DIMENSION_LOOKUP',
+        costCenter: null,
+      }),
+      monthKey: input.costCenterMonthKey,
+    };
+  }
+  if (input.followUp.toolName === COMPARE_CASH_COST_CENTER_TOOL_NAME) {
+    const monthKey = input.followUp.monthKey ?? input.period.monthKey;
+    const comparisonMonthKey =
+      input.followUp.comparisonMonthKey ?? input.period.comparisonMonthKey;
+    if (comparisonMonthKey === undefined) {
+      return {
+        id: 'preload-cost-center-compare',
+        name: COMPARE_CASH_COST_CENTER_TOOL_NAME,
+        ok: true,
+        content: JSON.stringify({
+          status: 'UNRESOLVED',
+          reason: 'NO_UNEQUIVOCAL_COST_CENTER_ANTECEDENT',
+          factKind: 'REALIZED_CASH_COST_CENTER_DIMENSION_COMPARE',
+        }),
+        monthKey,
+      };
+    }
+    return input.analyticalTools.execute({
+      tenantId: input.tenantId,
+      resolvedMonthKey: monthKey,
+      now: input.now,
+      call: {
+        id: 'preload-cost-center-compare',
+        name: COMPARE_CASH_COST_CENTER_TOOL_NAME,
+        arguments: {
+          monthKey,
+          comparisonMonthKey,
+          direction: input.followUp.direction,
+          costCenterQuery: input.followUp.costCenterQuery,
+        },
+      },
+    });
+  }
+  if (input.followUp.toolName === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME) {
+    return input.analyticalTools.execute({
+      tenantId: input.tenantId,
+      resolvedMonthKey: input.costCenterMonthKey,
+      now: input.now,
+      call: {
+        id: 'preload-cost-center-movements',
+        name: CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
+        arguments: {
+          monthKey: input.costCenterMonthKey,
+          direction: input.followUp.direction,
+          costCenterQuery: input.followUp.costCenterQuery,
+          limit: input.followUp.limit,
+        },
+      },
+    });
+  }
+  return input.analyticalTools.execute({
+    tenantId: input.tenantId,
+    resolvedMonthKey: input.costCenterMonthKey,
+    now: input.now,
+    call: {
+      id: 'preload-cost-center-lookup',
+      name: CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+      arguments: {
+        monthKey: input.costCenterMonthKey,
+        direction: input.followUp.direction,
+        costCenterQuery: input.followUp.costCenterQuery,
+      },
+    },
+  });
 }
 
 function isRunErrorCode(code: string): code is AiRunErrorCode {
