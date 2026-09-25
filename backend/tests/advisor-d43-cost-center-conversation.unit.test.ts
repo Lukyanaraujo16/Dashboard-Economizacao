@@ -699,6 +699,81 @@ describe('F13.8.1D4.3 anáfora e precedência', () => {
       }),
     ).toBe('SNAPSHOT_OPEN_PAYABLES');
   });
+
+  it('não herda âncora CC em pergunta genérica autossuficiente', () => {
+    const priors = [
+      'Qual centro teve maior saída em agosto de 2026?',
+      'E quanto esse centro teve em julho?',
+      'Quanto cresceu de julho para agosto?',
+      'Quais foram as 5 maiores saídas dele em agosto?',
+    ];
+    const genericQuestions = [
+      'Compare julho e agosto de 2026.',
+      'Quais foram as 5 maiores saídas de agosto de 2026?',
+      'Quanto recebi em agosto de 2026?',
+      'Quanto gastei em agosto de 2026?',
+      'Qual foi meu faturamento em agosto de 2026?',
+      'Como foi agosto?',
+    ];
+    for (const content of genericQuestions) {
+      expect(
+        resolveAdvisorConversationalCostCenter({
+          content,
+          period: periodOf(content, priors),
+          priorUserContents: priors,
+        }),
+        content,
+      ).toMatchObject({
+        intent: null,
+        anaphora: 'NONE',
+        needsRankingWinner: false,
+      });
+    }
+    expect(
+      resolveAdvisorConversationalCostCenter({
+        content: 'Compare esse centro entre julho e agosto.',
+        period: periodOf('Compare esse centro entre julho e agosto.', priors),
+        priorUserContents: priors,
+      }).intent?.kind,
+    ).toBe('COST_CENTER_COMPARE');
+    expect(
+      resolveAdvisorConversationalCostCenter({
+        content: 'Quanto esse centro teve em julho?',
+        period: periodOf('Quanto esse centro teve em julho?', priors),
+        priorUserContents: priors,
+      }).intent?.kind,
+    ).toBe('COST_CENTER_LOOKUP');
+    expect(
+      resolveAdvisorConversationalCostCenter({
+        content: 'Quais foram as maiores saídas dele em agosto?',
+        period: periodOf('Quais foram as maiores saídas dele em agosto?', priors),
+        priorUserContents: priors,
+      }).intent?.kind,
+    ).toBe('COST_CENTER_MOVEMENT_LINES');
+    expect(
+      resolveAdvisorConversationalCostCenter({
+        content: 'E em junho?',
+        period: periodOf('E em junho?', ['Quanto Laranjeiras cresceu de julho para agosto?']),
+        priorUserContents: ['Quanto Laranjeiras cresceu de julho para agosto?'],
+      }),
+    ).toMatchObject({
+      intent: { kind: 'COST_CENTER_LOOKUP', costCenterQuery: 'laranjeiras' },
+    });
+    expect(
+      resolveAdvisorConversationalCostCenter({
+        content: 'Quanto Laranjeiras cresceu de julho para agosto?',
+        period: periodOf('Quanto Laranjeiras cresceu de julho para agosto?', priors),
+        priorUserContents: priors,
+      }).intent?.kind,
+    ).toBe('COST_CENTER_COMPARE');
+    expect(
+      resolveAdvisorConversationalCostCenter({
+        content: 'Compare as saídas de Laranjeiras entre julho e agosto.',
+        period: periodOf('Compare as saídas de Laranjeiras entre julho e agosto.', priors),
+        priorUserContents: priors,
+      }).intent?.kind,
+    ).toBe('COST_CENTER_COMPARE');
+  });
 });
 
 describe('F13.8.1D4.3 compositor, interpretativo e send', () => {
@@ -857,6 +932,37 @@ describe('F13.8.1D4.3 compositor, interpretativo e send', () => {
     });
     expect(interpretive.classification.kind).toBe('INTERPRETIVE');
     expect(interpretive.answer).toBeNull();
+    info.mockRestore();
+  });
+
+  it('não transforma compare mensal genérico em compare de centro após âncora CC', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { send, toolCalls } = createHarness();
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual centro teve maior saída em agosto de 2026?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E quanto esse centro teve em julho?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    const generic = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Compare julho e agosto de 2026.',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    expect(generic.factualAnswer).toBeNull();
+    expect(toolCalls.at(-1)).toBe('compare_cash_months');
+    expect(toolCalls.filter((name) => name === COMPARE_CASH_COST_CENTER_TOOL_NAME)).toHaveLength(0);
+    expect(generic.consultantMessage.content).not.toContain('Administrativo');
     info.mockRestore();
   });
 

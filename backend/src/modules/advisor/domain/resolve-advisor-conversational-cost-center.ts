@@ -95,7 +95,13 @@ export function resolveAdvisorConversationalCostCenter(input: {
   const movement = isCostCenterMovementQuestion(folded);
   const comparison = input.period.comparison || isAdvisorComparisonQuestion(input.content);
   const direction = resolveFollowUpDirection(folded, priors);
-  const anchor = resolveCostCenterAnchor(priors);
+  const invitesHistoricalAnchor = currentQuestionAllowsHistoricalCostCenter({
+    anaphoric,
+    periodFollowUp,
+  });
+  const anchor = invitesHistoricalAnchor
+    ? resolveCostCenterAnchor(priors)
+    : { kind: 'none' as const };
   const inherit = shouldInheritComparisonTarget({
     content: input.content,
     period: input.period,
@@ -105,7 +111,7 @@ export function resolveAdvisorConversationalCostCenter(input: {
     mention,
   });
 
-  if (mention === 'AMBIGUOUS' || anchor.kind === 'ambiguous') {
+  if (mention === 'AMBIGUOUS' || (invitesHistoricalAnchor && anchor.kind === 'ambiguous')) {
     return {
       intent: null,
       anaphora: 'AMBIGUOUS',
@@ -116,10 +122,15 @@ export function resolveAdvisorConversationalCostCenter(input: {
     };
   }
 
-  const query = mention === null ? (anchor.kind === 'entity' ? anchor.entityQuery : undefined) : mention;
-  const needsWinner = query === undefined && anchor.kind === 'ranking';
+  const query =
+    mention !== null
+      ? mention
+      : invitesHistoricalAnchor && anchor.kind === 'entity'
+        ? anchor.entityQuery
+        : undefined;
+  const needsWinner = invitesHistoricalAnchor && query === undefined && anchor.kind === 'ranking';
 
-  if (comparison && (query !== undefined || anaphoric || needsWinner || mention !== null)) {
+  if (comparison && (mention !== null || anaphoric)) {
     if (direction === null) {
       return emptyConversational();
     }
@@ -262,6 +273,13 @@ export function isCostCenterOrdinalQuestion(folded: string): boolean {
     (/\b(?:o |a )?(?:segundo|terceiro|quarto|quinto)\b/.test(folded) &&
       /\bcentros?\b/.test(folded))
   );
+}
+
+function currentQuestionAllowsHistoricalCostCenter(input: {
+  readonly anaphoric: boolean;
+  readonly periodFollowUp: boolean;
+}): boolean {
+  return input.anaphoric || input.periodFollowUp;
 }
 
 function isCostCenterAnaphoraFollowUp(folded: string): boolean {
