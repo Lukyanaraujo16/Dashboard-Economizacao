@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveAdvisorPeriod } from '../src/modules/advisor/domain/resolve-advisor-period.js';
+import {
+  countAdvisorNamedPeriods,
+  resolveAdvisorPeriod,
+} from '../src/modules/advisor/domain/resolve-advisor-period.js';
 
 const SEPTEMBER_2026 = new Date('2026-09-24T18:00:00.000Z');
 
@@ -121,5 +124,8 @@ describe('resolveAdvisorPeriod (F13.6.1)', () => {
         now: SEPTEMBER_2026,
       }),
     ).toEqual({ monthKey: '2026-07', source: 'SELECTED' });
+    expect(countAdvisorNamedPeriods('compare agosto de 2026 e setembro de 2026')).toBe(2);
+    expect(countAdvisorNamedPeriods('Como está meu faturamento em agosto de 2026?')).toBe(1);
+    expect(countAdvisorNamedPeriods('E quanto faltou para a meta?')).toBe(0);
   });
 });

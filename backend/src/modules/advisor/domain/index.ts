@@ -31,12 +31,28 @@ export type {
   AdvisorContextTrustLevel,
 } from './context-blocks.js';
 export { ADVISOR_FINANCIAL_ABSENT, formatAdvisorFinancialAmount } from './financial-facts-text.js';
-export { ADVISOR_PERIOD_SOURCES, resolveAdvisorPeriod } from './resolve-advisor-period.js';
+export {
+  ADVISOR_PERIOD_SOURCES,
+  countAdvisorNamedPeriods,
+  resolveAdvisorPeriod,
+} from './resolve-advisor-period.js';
 export type {
   AdvisorPeriodSource,
   AdvisorResolvedPeriod,
   ResolveAdvisorPeriodInput,
 } from './resolve-advisor-period.js';
+export {
+  ADVISOR_CONVERSATION_CONTEXT_USER_LIMIT,
+  ADVISOR_CONVERSATIONAL_PERIOD_SOURCES,
+  isAdvisorComparisonQuestion,
+  isInheritableAdvisorPeriodSource,
+  resolveAdvisorConversationalPeriod,
+} from './resolve-advisor-conversational-period.js';
+export type {
+  AdvisorConversationalPeriod,
+  AdvisorConversationalPeriodSource,
+  ResolveAdvisorConversationalPeriodInput,
+} from './resolve-advisor-conversational-period.js';
 export {
   CONSULTANT_NAME_MAX_LENGTH,
   assertConsultantName,

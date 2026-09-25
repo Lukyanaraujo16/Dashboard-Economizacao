@@ -44,10 +44,14 @@ function settings(overrides: Partial<AiTenantSettingsRecord> = {}): AiTenantSett
   };
 }
 
-function conversation(tenantId = 'tenant-a', userId = 'user-a'): AiConversationRecord {
+function conversation(
+  tenantId = 'tenant-a',
+  userId = 'user-a',
+  id = 'conv-a',
+): AiConversationRecord {
   const now = new Date('2026-09-24T12:00:00.000Z');
   return {
-    id: 'conv-a',
+    id,
     tenantId,
     userId,
     status: 'OPEN',
@@ -63,11 +67,13 @@ function message(
   id: string,
   senderType: AiMessageRecord['senderType'],
   content: string,
+  tenantId = 'tenant-a',
+  conversationId = 'conv-a',
 ): AiMessageRecord {
   return {
     id,
-    conversationId: 'conv-a',
-    tenantId: 'tenant-a',
+    conversationId,
+    tenantId,
     senderType,
     content,
     messageType: 'TEXT',
@@ -96,6 +102,8 @@ function builtContext(): AdvisorBuiltContext {
 
 function createHarness(options?: {
   readonly settingsRow?: AiTenantSettingsRecord | null;
+  readonly extraSettings?: readonly AiTenantSettingsRecord[];
+  readonly extraConversations?: readonly AiConversationRecord[];
   readonly openai?: ReturnType<typeof createFakeIaProvider>;
   readonly anthropic?: ReturnType<typeof createFakeIaProvider>;
   readonly rateLimiter?: ConsultantRateLimiter;
@@ -107,10 +115,16 @@ function createHarness(options?: {
   const runs: AiRunRecord[] = [];
   let messageSeq = 0;
   let runSeq = 0;
+  const conversationRows = [conversation(), ...(options?.extraConversations ?? [])];
 
   const send = createSendAdvisorMessage({
     settings: {
       async findSettingsByTenant(tenantId) {
+        const extras = options?.extraSettings ?? [];
+        const extra = extras.find((row) => row.tenantId === tenantId);
+        if (extra !== undefined) {
+          return extra;
+        }
         const row = options?.settingsRow === undefined ? settings() : options.settingsRow;
         if (row === null || row.tenantId !== tenantId) {
           return null;
@@ -120,26 +134,28 @@ function createHarness(options?: {
     },
     conversations: {
       async findConversation(tenantId, userId, conversationId) {
-        const row = conversation();
-        if (row.tenantId !== tenantId || row.userId !== userId || row.id !== conversationId) {
-          return null;
-        }
-        return row;
+        return (
+          conversationRows.find(
+            (row) => row.tenantId === tenantId && row.userId === userId && row.id === conversationId,
+          ) ?? null
+        );
       },
-      async createMessage(_tenantId, _conversationId, input) {
-        const created = message(`msg-${++messageSeq}`, input.senderType, input.content);
+      async createMessage(tenantId, conversationId, input) {
+        const created = message(`msg-${++messageSeq}`, input.senderType, input.content, tenantId, conversationId);
         messages.push(created);
         return created;
       },
       async updateConversationTitle(tenantId, conversationId, title) {
-        const row = conversation();
-        if (row.tenantId !== tenantId || row.id !== conversationId) {
+        const row = conversationRows.find((item) => item.tenantId === tenantId && item.id === conversationId);
+        if (row === undefined) {
           return null;
         }
         return { ...row, title };
       },
-      async listMessages() {
-        return messages;
+      async listMessages(tenantId, conversationId) {
+        return messages.filter(
+          (item) => item.tenantId === tenantId && item.conversationId === conversationId,
+        );
       },
     },
     runs: {
@@ -447,5 +463,211 @@ describe('send-advisor-message (F13.3)', () => {
     expect(facts?.content).toContain('monthKey: 2026-08');
     expect(facts?.content).toContain('billing: 224790.3');
     expect(facts?.content).not.toContain('monthKey: 2026-09');
+  });
+
+  it('follow-up sem mês herda agosto da conversa e não o Dashboard', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const { send } = createHarness({ context: { build: contextBuild } });
+    const now = new Date('2026-09-24T18:00:00.000Z');
+
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Como está meu faturamento em agosto de 2026?',
+      monthKey: '2026-09',
+      now,
+    });
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E quanto faltou para atingir nossa meta?',
+      monthKey: '2026-09',
+      now,
+    });
+
+    expect(contextBuild).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        monthKey: '2026-08',
+        question: 'E quanto faltou para atingir nossa meta?',
+      }),
+    );
+  });
+
+  it('CONSULTANT mencionando setembro não vira autoridade temporal', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const { send, messages } = createHarness({
+      context: { build: contextBuild },
+      openai: createFakeIaProvider({
+        id: 'OPENAI',
+        text: 'Em setembro de 2026 o faturamento oficial foi 10.',
+      }),
+    });
+    const now = new Date('2026-09-24T18:00:00.000Z');
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Como está meu faturamento?',
+      monthKey: '2026-09',
+      now,
+    });
+    expect(messages.some((item) => item.senderType === 'CONSULTANT')).toBe(true);
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E as despesas?',
+      monthKey: '2026-09',
+      now,
+    });
+    expect(contextBuild).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        monthKey: '2026-09',
+        question: 'E as despesas?',
+      }),
+    );
+  });
+
+  it('conversa de outro tenant/user não influencia o período', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const now = new Date('2026-09-24T18:00:00.000Z');
+    const { send } = createHarness({
+      context: { build: contextBuild },
+      extraSettings: [settings({ id: 'set-b', tenantId: 'tenant-b' })],
+      extraConversations: [conversation('tenant-b', 'user-b', 'conv-b')],
+    });
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Como está meu faturamento em agosto de 2026?',
+      monthKey: '2026-09',
+      now,
+    });
+    await expect(
+      send.execute({
+        tenantId: 'tenant-b',
+        userId: 'user-a',
+        conversationId: 'conv-a',
+        question: 'E quanto faltou para a meta?',
+        monthKey: '2026-09',
+        now,
+      }),
+    ).rejects.toMatchObject({ code: 'CONVERSATION_NOT_FOUND' });
+    await send.execute({
+      tenantId: 'tenant-b',
+      userId: 'user-b',
+      conversationId: 'conv-b',
+      question: 'E quanto faltou para a meta?',
+      monthKey: '2026-09',
+      now,
+    });
+    expect(contextBuild).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        tenantId: 'tenant-b',
+        monthKey: '2026-09',
+        question: 'E quanto faltou para a meta?',
+      }),
+    );
+  });
+
+  it('nova conversa sem USER anterior usa o mês do Dashboard', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const { send } = createHarness({ context: { build: contextBuild } });
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Como está meu faturamento?',
+      monthKey: '2026-09',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    expect(contextBuild).toHaveBeenCalledWith(
+      expect.objectContaining({
+        monthKey: '2026-09',
+        question: 'Como está meu faturamento?',
+      }),
+    );
+  });
+
+  it('reload reconstrói agosto a partir das mensagens USER persistidas', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const { send, messages } = createHarness({ context: { build: contextBuild } });
+    messages.push(
+      message('prior-user', 'USER', 'Como está meu faturamento em agosto de 2026?'),
+    );
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E quanto faltou para atingir nossa meta?',
+      monthKey: '2026-09',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    expect(contextBuild).toHaveBeenCalledWith(
+      expect.objectContaining({
+        monthKey: '2026-08',
+        question: 'E quanto faltou para atingir nossa meta?',
+      }),
+    );
+  });
+
+  it('E em julho troca o período e o follow-up seguinte herda julho', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const { send } = createHarness({ context: { build: contextBuild } });
+    const now = new Date('2026-09-24T18:00:00.000Z');
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Como foi agosto de 2026?',
+      monthKey: '2026-09',
+      now,
+    });
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em julho?',
+      monthKey: '2026-09',
+      now,
+    });
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E as despesas?',
+      monthKey: '2026-09',
+      now,
+    });
+    expect(contextBuild).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ monthKey: '2026-07', question: 'E em julho?' }),
+    );
+    expect(contextBuild).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ monthKey: '2026-07', question: 'E as despesas?' }),
+    );
   });
 });

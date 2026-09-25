@@ -6,7 +6,7 @@ import {
 } from '../../../shared/errors/application-error.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { deriveConsultantConversationTitle } from '../domain/conversation-title.js';
-import { resolveAdvisorPeriod } from '../domain/resolve-advisor-period.js';
+import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-conversational-period.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
 import {
   CONSULTANT_PLATFORM_LIMIT_MESSAGE,
@@ -60,7 +60,7 @@ export type SendAdvisorMessageDependencies = {
   readonly settings: Pick<AdvisorSettingsRepository, 'findSettingsByTenant'>;
   readonly conversations: Pick<
     AdvisorConversationRepository,
-    'findConversation' | 'createMessage' | 'updateConversationTitle'
+    'findConversation' | 'createMessage' | 'updateConversationTitle' | 'listMessages'
   >;
   readonly runs: Pick<AdvisorRunRepository, 'createRun' | 'updateRun'>;
   readonly context: AdvisorContextBuilder;
@@ -133,11 +133,33 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         );
       }
 
-      const period = resolveAdvisorPeriod({
+      const history = await deps.conversations.listMessages(tenantId, conversation.id);
+      const priorUserContents = history
+        .filter(
+          (item) =>
+            item.tenantId === tenantId &&
+            item.conversationId === conversation.id &&
+            item.senderType === 'USER' &&
+            item.id !== userMessage.id,
+        )
+        .map((item) => item.content);
+      const period = resolveAdvisorConversationalPeriod({
         content: question,
         referenceMonthKey: input.monthKey,
         now: input.now,
+        priorUserContents,
       });
+      console.info(
+        JSON.stringify({
+          event: 'advisor_period_resolved',
+          tenantId,
+          conversationId: conversation.id,
+          monthKey: period.monthKey,
+          source: period.source,
+          comparison: period.comparison,
+          comparisonMonthKey: period.comparisonMonthKey ?? null,
+        }),
+      );
 
       const built = await deps.context.build({
         tenantId,

@@ -54,6 +54,19 @@ const MONTH_NAME_PATTERN = MONTH_ENTRIES.flatMap((entry) => entry.names)
 const THIS_MONTH_PATTERN = /\b(?:este|neste|nesse)\s+mes\b|\bmes\s+atual\b/;
 const LAST_MONTH_PATTERN = /\bmes\s+(?:passado|anterior)\b/;
 
+/**
+ * Quantos períodos distintos a pergunta nomeia.
+ * 0 = nenhum; 1 = único explícito; >= 2 = ambíguo (F13.6.1 não inventa).
+ */
+export function countAdvisorNamedPeriods(content: string): number {
+  const folded = foldPt(content);
+  const uniqueExplicit = uniqueMonthKeys(collectExplicitWithYear(folded));
+  if (uniqueExplicit.length > 0) {
+    return uniqueExplicit.length;
+  }
+  return uniqueValues(collectBareMonthNumbers(folded)).length;
+}
+
 export function resolveAdvisorPeriod(input: ResolveAdvisorPeriodInput): AdvisorResolvedPeriod {
   const now = input.now ?? new Date();
   const currentMonthKey = civilMonthKey(civilTodayInSaoPaulo(now));
