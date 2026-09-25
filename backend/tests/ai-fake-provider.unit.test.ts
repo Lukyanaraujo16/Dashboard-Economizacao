@@ -64,4 +64,47 @@ describe('fake IaProvider (F13.3)', () => {
       usage: { inputTokens: 3, outputTokens: 7 },
     });
   });
+
+  it('executa script de tool calling sem rede', async () => {
+    const provider = createFakeIaProvider({
+      script: [
+        {
+          toolCalls: [
+            {
+              id: '1',
+              name: 'compare_cash_months',
+              arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07' },
+            },
+          ],
+        },
+        { text: 'Diferença oficial pré-calculada.' },
+      ],
+    });
+    const first = await provider.generate({
+      ...input,
+      tools: [{ name: 'compare_cash_months', description: 'cmp', inputSchema: {} }],
+    });
+    expect(first.toolCalls?.[0]?.name).toBe('compare_cash_months');
+    const second = await provider.generate({
+      ...input,
+      toolRounds: [
+        {
+          calls: first.toolCalls ?? [],
+          results: [
+            {
+              id: '1',
+              name: 'compare_cash_months',
+              ok: true,
+              content: '{"difference":{"billing":"88130.31"}}',
+            },
+          ],
+        },
+      ],
+    });
+    expect(second).toEqual({
+      text: 'Diferença oficial pré-calculada.',
+      usage: { inputTokens: null, outputTokens: null },
+    });
+    expect(provider.generateCalls).toHaveLength(2);
+  });
 });

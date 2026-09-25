@@ -1,6 +1,10 @@
 export { createAnthropicProvider } from './anthropic-provider.js';
 export { createFakeIaProvider } from './fake-ia-provider.js';
-export type { FakeIaProvider, FakeIaProviderOptions } from './fake-ia-provider.js';
+export type {
+  FakeIaProvider,
+  FakeIaProviderOptions,
+  FakeIaProviderStep,
+} from './fake-ia-provider.js';
 export { createIaProviderRegistry } from './ia-provider-registry.js';
 export type { IaProviderRegistry } from './ia-provider-registry.js';
 export { createOpenAiProvider } from './openai-provider.js';
@@ -15,4 +19,8 @@ export type {
   IaFetch,
   IaHttpClientConfig,
   IaProvider,
+  IaToolCall,
+  IaToolDefinition,
+  IaToolResult,
+  IaToolRound,
 } from './types.js';

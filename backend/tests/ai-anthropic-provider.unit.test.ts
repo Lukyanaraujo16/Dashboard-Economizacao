@@ -172,4 +172,48 @@ describe('adapter Anthropic Messages (F13.3)', () => {
       createAnthropicProvider({ apiKey: 'sk-ant-test', fetchImpl }).generate(sampleInput()),
     ).rejects.toMatchObject({ code: 'CONTENT_REJECTED' });
   });
+
+  it('envia tools e normaliza tool_use no contrato interno', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu-1',
+            name: 'compare_cash_months',
+            input: { monthKey: '2026-08', comparisonMonthKey: '2026-07' },
+          },
+        ],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 11, output_tokens: 5 },
+      }),
+    );
+    const provider = createAnthropicProvider({ apiKey: 'sk-ant-test', fetchImpl });
+    await expect(
+      provider.generate(
+        sampleInput({
+          tools: [
+            {
+              name: 'compare_cash_months',
+              description: 'Compara dois meses',
+              inputSchema: { type: 'object', properties: { monthKey: { type: 'string' } } },
+            },
+          ],
+        }),
+      ),
+    ).resolves.toEqual({
+      text: '',
+      usage: { inputTokens: 11, outputTokens: 5 },
+      toolCalls: [
+        {
+          id: 'toolu-1',
+          name: 'compare_cash_months',
+          arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07' },
+        },
+      ],
+    });
+    const body = requestBody(fetchImpl);
+    expect(JSON.stringify(body.tools)).toContain('compare_cash_months');
+    expect(JSON.stringify(body.tools)).not.toContain('tenantId');
+  });
 });

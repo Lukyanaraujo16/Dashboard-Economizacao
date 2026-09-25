@@ -151,4 +151,93 @@ describe('adapter OpenAI (F13.3)', () => {
       createOpenAiProvider({ apiKey: 'sk-test', fetchImpl: down }).generate(sampleInput()),
     ).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
   });
+
+  it('envia tools oficiais e normaliza tool_calls sem tenant no schema', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        choices: [
+          {
+            finish_reason: 'tool_calls',
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: 'call-1',
+                  type: 'function',
+                  function: {
+                    name: 'compare_cash_months',
+                    arguments: '{"monthKey":"2026-08","comparisonMonthKey":"2026-07"}',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        usage: { prompt_tokens: 9, completion_tokens: 3 },
+      }),
+    );
+    const provider = createOpenAiProvider({ apiKey: 'sk-test', fetchImpl });
+    await expect(
+      provider.generate(
+        sampleInput({
+          tools: [
+            {
+              name: 'compare_cash_months',
+              description: 'Compara dois meses',
+              inputSchema: { type: 'object', properties: { monthKey: { type: 'string' } } },
+            },
+          ],
+        }),
+      ),
+    ).resolves.toEqual({
+      text: '',
+      usage: { inputTokens: 9, outputTokens: 3 },
+      toolCalls: [
+        {
+          id: 'call-1',
+          name: 'compare_cash_months',
+          arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07' },
+        },
+      ],
+    });
+    const body = requestBody(fetchImpl);
+    expect(body.tool_choice).toBe('auto');
+    expect(JSON.stringify(body.tools)).toContain('compare_cash_months');
+    expect(JSON.stringify(body.tools)).not.toContain('tenantId');
+  });
+
+  it('reenvia tool result na rodada seguinte', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(openaiSuccess('delta oficial'));
+    const provider = createOpenAiProvider({ apiKey: 'sk-test', fetchImpl });
+    await provider.generate(
+      sampleInput({
+        tools: [{ name: 'compare_cash_months', description: 'cmp', inputSchema: {} }],
+        toolRounds: [
+          {
+            calls: [
+              {
+                id: 'call-1',
+                name: 'compare_cash_months',
+                arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07' },
+              },
+            ],
+            results: [
+              {
+                id: 'call-1',
+                name: 'compare_cash_months',
+                ok: true,
+                content: '{"difference":{"billing":"88130.31"}}',
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const messages = requestBody(fetchImpl).messages as Array<Record<string, unknown>>;
+    expect(messages.at(-2)).toMatchObject({ role: 'assistant' });
+    expect(messages.at(-1)).toMatchObject({
+      role: 'tool',
+      tool_call_id: 'call-1',
+    });
+  });
 });

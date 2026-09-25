@@ -1,5 +1,5 @@
 import {
-  countAdvisorNamedPeriods,
+  listAdvisorNamedPeriodKeys,
   resolveAdvisorPeriod,
   type AdvisorPeriodSource,
   type AdvisorResolvedPeriod,
@@ -18,13 +18,14 @@ import {
  * Mensagens CONSULTANT nunca entram em `priorUserContents`.
  * RELATIVE em mensagens anteriores não é herdado: depende do Dashboard
  * da época e seria reescrito se o seletor mudasse.
- * Dois períodos explícitos na pergunta atual: não herda contexto —
+ * Dois períodos explícitos SEM intenção comparativa: não herda contexto —
  * preserva o fallback seguro da F13.6.1 (SELECTED/CURRENT).
  *
- * Comparação ("E comparado com julho?"): monthKey oficial permanece o
- * contexto da conversa; comparisonMonthKey é o outro mês citado.
- * O Context Builder atual carrega um único monthKey — fatos oficiais
- * do segundo período ficam ABSENT até subfase própria.
+ * Comparação:
+ * - "E comparado com julho?": monthKey = contexto; comparisonMonthKey = mês citado.
+ * - dois meses nomeados + intenção comparativa: o par explícito, sem cair no Dashboard.
+ * - "comparando esses dois meses" sem mês novo: últimos dois EXPLICIT distintos das USER,
+ *   ordenados cronologicamente (mais antigo = comparisonMonthKey).
  */
 export const ADVISOR_CONVERSATION_CONTEXT_USER_LIMIT = 40;
 
@@ -54,7 +55,7 @@ export type AdvisorConversationalPeriod = {
 };
 
 const COMPARISON_PATTERN =
-  /\bcomparad[oa]s?\b|\bcomparacao\b|\bversus\b|\bvs\.?\b|\bem relacao\s+(?:a|ao|com)\b/;
+  /\bcompare\b|\bcomparad[oa]s?\b|\bcomparando\b|\bcomparacao\b|\bversus\b|\bvs\.?\b|\bem relacao\s+(?:a|ao|com)\b|\bdiferenca\b|\bvariacao\b|\bcresceu\b/;
 
 export function isAdvisorComparisonQuestion(content: string): boolean {
   return COMPARISON_PATTERN.test(foldPt(content));
@@ -72,22 +73,30 @@ export function resolveAdvisorConversationalPeriod(
     referenceMonthKey: input.referenceMonthKey,
     now: input.now,
   });
-  const context = findConversationContext(input);
+  const namedKeys = listAdvisorNamedPeriodKeys({
+    content: input.content,
+    referenceMonthKey: input.referenceMonthKey,
+    now: input.now,
+  });
+  const inheritable = findInheritableMonthKeys(input);
   const comparison = isAdvisorComparisonQuestion(input.content);
 
-  if (countAdvisorNamedPeriods(input.content) >= 2) {
-    return toConversational(current, comparison);
+  if (namedKeys.length >= 2) {
+    if (comparison) {
+      return pairToConversational(namedKeys, 'EXPLICIT');
+    }
+    return toConversational(current, false);
   }
 
   if (isCurrentQuestionAuthoritative(current.source)) {
     if (
       comparison &&
       current.source === 'EXPLICIT' &&
-      context !== undefined &&
-      context.monthKey !== current.monthKey
+      inheritable[0] !== undefined &&
+      inheritable[0] !== current.monthKey
     ) {
       return {
-        monthKey: context.monthKey,
+        monthKey: inheritable[0],
         source: 'CONVERSATION_CONTEXT',
         comparison: true,
         comparisonMonthKey: current.monthKey,
@@ -96,9 +105,13 @@ export function resolveAdvisorConversationalPeriod(
     return toConversational(current, false);
   }
 
-  if (context !== undefined) {
+  if (comparison && inheritable.length >= 2) {
+    return pairToConversational(inheritable, 'CONVERSATION_CONTEXT');
+  }
+
+  if (inheritable[0] !== undefined) {
     return {
-      monthKey: context.monthKey,
+      monthKey: inheritable[0],
       source: 'CONVERSATION_CONTEXT',
       comparison: false,
     };
@@ -111,11 +124,13 @@ function isCurrentQuestionAuthoritative(source: AdvisorPeriodSource): boolean {
   return source === 'EXPLICIT' || source === 'RELATIVE';
 }
 
-function findConversationContext(
+function findInheritableMonthKeys(
   input: ResolveAdvisorConversationalPeriodInput,
-): AdvisorResolvedPeriod | undefined {
+): string[] {
   const priors = input.priorUserContents ?? [];
   const window = priors.slice(-ADVISOR_CONVERSATION_CONTEXT_USER_LIMIT);
+  const keys: string[] = [];
+  const seen = new Set<string>();
   for (let index = window.length - 1; index >= 0; index -= 1) {
     const content = window[index];
     if (content === undefined || content.trim().length === 0) {
@@ -126,11 +141,36 @@ function findConversationContext(
       referenceMonthKey: input.referenceMonthKey,
       now: input.now,
     });
-    if (isInheritableAdvisorPeriodSource(resolved.source)) {
-      return resolved;
+    if (!isInheritableAdvisorPeriodSource(resolved.source) || seen.has(resolved.monthKey)) {
+      continue;
     }
+    seen.add(resolved.monthKey);
+    keys.push(resolved.monthKey);
   }
-  return undefined;
+  return keys;
+}
+
+function pairToConversational(
+  keys: readonly string[],
+  source: AdvisorConversationalPeriodSource,
+): AdvisorConversationalPeriod {
+  const unique = [...new Set(keys)].filter((key) => key.length > 0);
+  const sorted = [...unique].sort();
+  const earlier = sorted[0]!;
+  const later = sorted[sorted.length - 1]!;
+  if (earlier === later) {
+    return {
+      monthKey: later,
+      source,
+      comparison: false,
+    };
+  }
+  return {
+    monthKey: later,
+    source,
+    comparison: true,
+    comparisonMonthKey: earlier,
+  };
 }
 
 function toConversational(

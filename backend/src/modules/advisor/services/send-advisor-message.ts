@@ -1,9 +1,20 @@
 import type { IaProviderRegistry } from '../../../infrastructure/ai/ia-provider-registry.js';
-import { IaProviderError } from '../../../infrastructure/ai/types.js';
+import {
+  IaProviderError,
+  type GenerationInput,
+  type GenerationOutput,
+  type GenerationUsage,
+  type IaToolRound,
+} from '../../../infrastructure/ai/types.js';
 import {
   IntegrationUnavailableError,
   RateLimitedError,
 } from '../../../shared/errors/application-error.js';
+import {
+  ADVISOR_MAX_TOOL_ROUNDS,
+  type AdvisorAnalyticalToolExecutor,
+  type AdvisorCashComparisonService,
+} from '../domain/advisor-analytical-tools.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import { deriveConsultantConversationTitle } from '../domain/conversation-title.js';
 import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-conversational-period.js';
@@ -66,11 +77,13 @@ export type SendAdvisorMessageDependencies = {
   readonly context: AdvisorContextBuilder;
   readonly providers: IaProviderRegistry;
   readonly rateLimiter: ConsultantRateLimiter;
+  readonly analyticalTools?: AdvisorAnalyticalToolExecutor;
+  readonly cashComparison?: AdvisorCashComparisonService;
 };
 
 /**
- * Caso de uso reativo. 1 request do usuário → no máximo 1 generate.
- * Rate limit da plataforma ocorre antes do contexto e do provider.
+ * Caso de uso reativo. Rate limit da plataforma ocorre antes do contexto e do provider.
+ * Comparação já resolvida é pré-carregada. Tools têm teto de rodadas.
  */
 export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
   return {
@@ -161,12 +174,26 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         }),
       );
 
+      const comparison =
+        period.comparison &&
+        period.comparisonMonthKey !== undefined &&
+        deps.cashComparison !== undefined
+          ? await deps.cashComparison.compare({
+              tenantId,
+              monthKey: period.monthKey,
+              comparisonMonthKey: period.comparisonMonthKey,
+              now: input.now,
+            })
+          : undefined;
+
       const built = await deps.context.build({
         tenantId,
         userId,
         conversationId: conversation.id,
         question,
         monthKey: period.monthKey,
+        comparisonMonthKey: period.comparison ? period.comparisonMonthKey : undefined,
+        comparison: comparison ?? null,
         now: input.now,
       });
 
@@ -186,11 +213,14 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           throw new IaProviderError('PROVIDER_ERROR', 'Registry devolveu provider diferente do configurado.');
         }
 
-        const generated = await provider.generate({
+        const generated = await runAdvisorGeneration({
           tenantId,
-          provider: ready.provider,
+          providerId: ready.provider,
           model,
           blocks: built.blocks,
+          generate: (payload) => provider.generate(payload),
+          analyticalTools: deps.analyticalTools,
+          now: input.now,
         });
         const text = sanitizeConsultantText(generated.text);
         const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
@@ -326,6 +356,64 @@ async function persistBlockedRun(
     errorCode: input.errorCode,
     finishedAt: new Date(),
   });
+}
+
+async function runAdvisorGeneration(input: {
+  readonly tenantId: string;
+  readonly providerId: GenerationInput['provider'];
+  readonly model: string;
+  readonly blocks: GenerationInput['blocks'];
+  readonly generate: (payload: GenerationInput) => Promise<GenerationOutput>;
+  readonly analyticalTools?: AdvisorAnalyticalToolExecutor;
+  readonly now?: Date;
+}): Promise<GenerationOutput> {
+  const tools = input.analyticalTools?.tools ?? [];
+  const toolRounds: IaToolRound[] = [];
+  let usage: GenerationUsage = { inputTokens: null, outputTokens: null };
+
+  for (let round = 0; round <= ADVISOR_MAX_TOOL_ROUNDS; round += 1) {
+    const allowTools = tools.length > 0 && round < ADVISOR_MAX_TOOL_ROUNDS;
+    const generated = await input.generate({
+      tenantId: input.tenantId,
+      provider: input.providerId,
+      model: input.model,
+      blocks: input.blocks,
+      ...(allowTools ? { tools } : {}),
+      ...(toolRounds.length > 0 ? { toolRounds } : {}),
+    });
+    usage = addUsage(usage, generated.usage);
+    const toolCalls = generated.toolCalls ?? [];
+    if (toolCalls.length === 0 || input.analyticalTools === undefined || !allowTools) {
+      return { text: generated.text, usage };
+    }
+    const results = [];
+    for (const call of toolCalls) {
+      results.push(
+        await input.analyticalTools.execute({
+          tenantId: input.tenantId,
+          call,
+          now: input.now,
+        }),
+      );
+    }
+    toolRounds.push({ calls: toolCalls, results });
+  }
+
+  throw new IaProviderError('PROVIDER_ERROR', 'O provedor excedeu o limite de tool rounds.');
+}
+
+function addUsage(left: GenerationUsage, right: GenerationUsage): GenerationUsage {
+  return {
+    inputTokens: sumNullable(left.inputTokens, right.inputTokens),
+    outputTokens: sumNullable(left.outputTokens, right.outputTokens),
+  };
+}
+
+function sumNullable(left: number | null, right: number | null): number | null {
+  if (left === null && right === null) {
+    return null;
+  }
+  return (left ?? 0) + (right ?? 0);
 }
 
 function isRunErrorCode(code: string): code is AiRunErrorCode {

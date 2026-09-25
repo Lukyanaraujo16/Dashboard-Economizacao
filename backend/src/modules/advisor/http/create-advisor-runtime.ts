@@ -24,6 +24,10 @@ import { createAdvisorRunRepository } from '../repositories/advisor-run.reposito
 import { createAdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
 import type { AdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
 import type { ConsultantRateLimiter } from '../domain/consultant-rate-limit.js';
+import {
+  createAdvisorAnalyticalToolExecutor,
+  createAdvisorCashComparisonService,
+} from '../domain/advisor-analytical-tools.js';
 import { createBuildAdvisorContext } from '../services/build-advisor-context.js';
 import {
   createAllowAllConsultantRateLimiter,
@@ -147,12 +151,15 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     categories,
     costCenterAllocations,
   });
+  const cashComparison = createAdvisorCashComparisonService({ cashFlow });
+  const analyticalTools = createAdvisorAnalyticalToolExecutor({ cashComparison });
   const context = createBuildAdvisorContext({
     settings,
     knowledge,
     conversations,
     cashFlow,
     analytics,
+    cashComparison,
   });
   const providers = createAdvisorIaProviderRegistry(environment, resolveProviderApiKey);
   const rateLimiter =
@@ -174,6 +181,8 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
       context,
       providers,
       rateLimiter,
+      analyticalTools,
+      cashComparison,
     });
 
   return {

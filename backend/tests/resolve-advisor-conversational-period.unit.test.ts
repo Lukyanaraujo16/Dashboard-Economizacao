@@ -151,10 +151,10 @@ describe('resolveAdvisorConversationalPeriod (F13.8.1C)', () => {
     });
   });
 
-  it('dois meses explícitos na pergunta atual preservam o fallback seguro', () => {
+  it('dois meses explícitos sem intenção comparativa preservam o fallback seguro', () => {
     expect(
       resolveAdvisorConversationalPeriod({
-        content: 'compare agosto de 2026 e setembro de 2026',
+        content: 'como foi agosto de 2026 e setembro de 2026',
         referenceMonthKey: '2026-07',
         now: SEPTEMBER_2026,
         priorUserContents: ['Como foi junho de 2026?'],
@@ -163,6 +163,41 @@ describe('resolveAdvisorConversationalPeriod (F13.8.1C)', () => {
       monthKey: '2026-07',
       source: 'SELECTED',
       comparison: false,
+    });
+  });
+
+  it('dois meses explícitos com compare usam o par oficial, não o Dashboard', () => {
+    expect(
+      resolveAdvisorConversationalPeriod({
+        content: 'compare agosto de 2026 e setembro de 2026',
+        referenceMonthKey: '2026-07',
+        now: SEPTEMBER_2026,
+        priorUserContents: ['Como foi junho de 2026?'],
+      }),
+    ).toEqual({
+      monthKey: '2026-09',
+      source: 'EXPLICIT',
+      comparison: true,
+      comparisonMonthKey: '2026-08',
+    });
+  });
+
+  it('comparando esses dois meses reconstrói julho e agosto, não setembro', () => {
+    expect(
+      resolveAdvisorConversationalPeriod({
+        content: 'qual foi a diferença de faturamento comparando esses dois meses?',
+        referenceMonthKey: '2026-09',
+        now: SEPTEMBER_2026,
+        priorUserContents: [
+          'Como está meu faturamento em agosto de 2026?',
+          'E em julho?',
+        ],
+      }),
+    ).toEqual({
+      monthKey: '2026-08',
+      source: 'CONVERSATION_CONTEXT',
+      comparison: true,
+      comparisonMonthKey: '2026-07',
     });
   });
 

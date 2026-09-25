@@ -59,12 +59,24 @@ const LAST_MONTH_PATTERN = /\bmes\s+(?:passado|anterior)\b/;
  * 0 = nenhum; 1 = único explícito; >= 2 = ambíguo (F13.6.1 não inventa).
  */
 export function countAdvisorNamedPeriods(content: string): number {
-  const folded = foldPt(content);
+  return listAdvisorNamedPeriodKeys({ content }).length;
+}
+
+/**
+ * Períodos nomeados na pergunta, na ordem de aparição.
+ * Com ano: YYYY-MM explícito. Sem ano: mês nu no ano da referência ou civil SP.
+ */
+export function listAdvisorNamedPeriodKeys(input: ResolveAdvisorPeriodInput): string[] {
+  const now = input.now ?? new Date();
+  const currentMonthKey = civilMonthKey(civilTodayInSaoPaulo(now));
+  const referenceMonthKey = sanitizeReference(input.referenceMonthKey);
+  const folded = foldPt(input.content);
   const uniqueExplicit = uniqueMonthKeys(collectExplicitWithYear(folded));
   if (uniqueExplicit.length > 0) {
-    return uniqueExplicit.length;
+    return uniqueExplicit;
   }
-  return uniqueValues(collectBareMonthNumbers(folded)).length;
+  const year = (referenceMonthKey ?? currentMonthKey).slice(0, 4);
+  return uniqueValues(collectBareMonthNumbers(folded)).map((month) => `${year}-${month}`);
 }
 
 export function resolveAdvisorPeriod(input: ResolveAdvisorPeriodInput): AdvisorResolvedPeriod {

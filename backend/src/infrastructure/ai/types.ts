@@ -1,3 +1,8 @@
+import type {
+  AdvisorAnalyticalToolCall,
+  AdvisorAnalyticalToolDefinition,
+  AdvisorAnalyticalToolResult,
+} from '../../modules/advisor/domain/advisor-analytical-tools.js';
 import type { AdvisorContextBlock } from '../../modules/advisor/domain/context-blocks.js';
 import type { AiProviderId, AiRunErrorCode } from '../../modules/advisor/domain/types.js';
 
@@ -6,16 +11,28 @@ export type GenerationUsage = {
   readonly outputTokens: number | null;
 };
 
+export type IaToolDefinition = AdvisorAnalyticalToolDefinition;
+export type IaToolCall = AdvisorAnalyticalToolCall;
+export type IaToolResult = AdvisorAnalyticalToolResult;
+
+export type IaToolRound = {
+  readonly calls: readonly IaToolCall[];
+  readonly results: readonly IaToolResult[];
+};
+
 export type GenerationInput = {
   readonly tenantId: string;
   readonly provider: AiProviderId;
   readonly model: string;
   readonly blocks: readonly AdvisorContextBlock[];
+  readonly tools?: readonly IaToolDefinition[];
+  readonly toolRounds?: readonly IaToolRound[];
 };
 
 export type GenerationOutput = {
   readonly text: string;
   readonly usage: GenerationUsage;
+  readonly toolCalls?: readonly IaToolCall[];
 };
 
 export type IaProvider = {

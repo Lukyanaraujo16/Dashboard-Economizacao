@@ -12,6 +12,7 @@ import {
   createBuildAdvisorContext,
   createSendAdvisorMessage,
   type BuildAdvisorContextInput,
+  type SendAdvisorMessageDependencies,
 } from '../src/modules/advisor/index.js';
 import type { ConsultantRateLimiter } from '../src/modules/advisor/domain/consultant-rate-limit.js';
 import type { AdvisorBuiltContext } from '../src/modules/advisor/domain/context-blocks.js';
@@ -108,6 +109,8 @@ function createHarness(options?: {
   readonly anthropic?: ReturnType<typeof createFakeIaProvider>;
   readonly rateLimiter?: ConsultantRateLimiter;
   readonly context?: { build: (input: BuildAdvisorContextInput) => Promise<AdvisorBuiltContext> };
+  readonly analyticalTools?: SendAdvisorMessageDependencies['analyticalTools'];
+  readonly cashComparison?: SendAdvisorMessageDependencies['cashComparison'];
 }) {
   const openai = options?.openai ?? createFakeIaProvider({ id: 'OPENAI', text: 'Faturamento oficial: 0' });
   const anthropic = options?.anthropic ?? createFakeIaProvider({ id: 'ANTHROPIC' });
@@ -206,6 +209,8 @@ function createHarness(options?: {
     },
     providers: createIaProviderRegistry({ openai, anthropic }),
     rateLimiter: options?.rateLimiter ?? createAllowAllConsultantRateLimiter(),
+    analyticalTools: options?.analyticalTools,
+    cashComparison: options?.cashComparison,
   });
 
   return { send, openai, anthropic, messages, runs };
@@ -669,5 +674,154 @@ describe('send-advisor-message (F13.3)', () => {
       3,
       expect.objectContaining({ monthKey: '2026-07', question: 'E as despesas?' }),
     );
+  });
+
+  it('comparando jul/ago pré-carrega os dois períodos e não cai em setembro', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+      comparisonMonthKey: input.comparisonMonthKey,
+    }));
+    const compare = vi.fn(async (input: { tenantId: string; monthKey: string; comparisonMonthKey: string }) => {
+      expect(input.tenantId).toBe('tenant-a');
+      return {
+        tenantId: 'tenant-a',
+        monthKey: input.monthKey,
+        comparisonMonthKey: input.comparisonMonthKey,
+        periodA: {
+          monthKey: input.comparisonMonthKey,
+          billing: new Prisma.Decimal('136659.99'),
+          realizedInflows: new Prisma.Decimal('136659.99'),
+          realizedOutflows: new Prisma.Decimal('0'),
+          realizedResult: new Prisma.Decimal('136659.99'),
+          expectedReceivables: new Prisma.Decimal('0'),
+          expectedPayables: new Prisma.Decimal('0'),
+        },
+        periodB: {
+          monthKey: input.monthKey,
+          billing: new Prisma.Decimal('224790.3'),
+          realizedInflows: new Prisma.Decimal('224790.3'),
+          realizedOutflows: new Prisma.Decimal('0'),
+          realizedResult: new Prisma.Decimal('224790.3'),
+          expectedReceivables: new Prisma.Decimal('0'),
+          expectedPayables: new Prisma.Decimal('0'),
+        },
+        difference: {
+          billing: new Prisma.Decimal('88130.31'),
+          billingPercent: new Prisma.Decimal('64.49'),
+          realizedInflows: new Prisma.Decimal('88130.31'),
+          realizedOutflows: new Prisma.Decimal('0'),
+          realizedResult: new Prisma.Decimal('88130.31'),
+        },
+        billingCoverage: 'FULL_BILLING' as const,
+        inflowCategories: { available: false, items: [], increases: [], decreases: [] },
+        outflowCategories: { available: false, items: [], increases: [], decreases: [] },
+      };
+    });
+    const openai = createFakeIaProvider({
+      id: 'OPENAI',
+      script: [
+        {
+          toolCalls: [
+            {
+              id: 'tool-1',
+              name: 'compare_cash_months',
+              arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07', tenantId: 'XYZ' },
+            },
+          ],
+        },
+        { text: 'A diferença oficial é 88130.31.' },
+      ],
+    });
+    const executeTool = vi.fn(async (input: { tenantId: string; call: { id: string; name: string; arguments: Record<string, unknown> } }) => {
+      expect(input.tenantId).toBe('tenant-a');
+      expect(input.call.arguments.tenantId).toBe('XYZ');
+      return {
+        id: input.call.id,
+        name: input.call.name,
+        ok: false,
+        content: JSON.stringify({ status: 'UNAVAILABLE', code: 'ANALYTICAL_TOOL_INVALID_INPUT' }),
+      };
+    });
+    const { send, messages } = createHarness({
+      openai,
+      context: { build: contextBuild },
+      cashComparison: { compare },
+      analyticalTools: {
+        tools: [{ name: 'compare_cash_months', description: 'cmp', inputSchema: {} }],
+        execute: executeTool,
+      },
+    });
+    const now = new Date('2026-09-24T18:00:00.000Z');
+    messages.push(
+      message('seed-ago', 'USER', 'Como está meu faturamento em agosto de 2026?'),
+      message('seed-jul', 'USER', 'E em julho?'),
+    );
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'qual foi a diferença de faturamento comparando esses dois meses?',
+      monthKey: '2026-09',
+      now,
+    });
+    expect(contextBuild).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        monthKey: '2026-08',
+        comparisonMonthKey: '2026-07',
+        question: 'qual foi a diferença de faturamento comparando esses dois meses?',
+      }),
+    );
+    expect(compare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 'tenant-a',
+        monthKey: '2026-08',
+        comparisonMonthKey: '2026-07',
+      }),
+    );
+    expect(result.consultantMessage.content).toBe('A diferença oficial é 88130.31.');
+    expect(result.run.status).toBe('SUCCEEDED');
+    expect(openai.generateCalls).toHaveLength(2);
+    expect(executeTool).toHaveBeenCalled();
+    expect(openai.generateCalls[1]?.toolRounds?.[0]?.results[0]?.content).toContain('UNAVAILABLE');
+  });
+
+  it('excede o máximo de tool rounds sem fabricar zero', async () => {
+    const openai = createFakeIaProvider({
+      id: 'OPENAI',
+      script: [
+        { toolCalls: [{ id: '1', name: 'compare_cash_months', arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07' } }] },
+        { toolCalls: [{ id: '2', name: 'compare_cash_months', arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07' } }] },
+        { toolCalls: [{ id: '3', name: 'compare_cash_months', arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07' } }] },
+        { text: '', toolCalls: [{ id: '4', name: 'compare_cash_months', arguments: { monthKey: '2026-08', comparisonMonthKey: '2026-07' } }] },
+      ],
+    });
+    let executions = 0;
+    const { send } = createHarness({
+      openai,
+      analyticalTools: {
+        tools: [{ name: 'compare_cash_months', description: 'cmp', inputSchema: {} }],
+        async execute(input) {
+          executions += 1;
+          return {
+            id: input.call.id,
+            name: input.call.name,
+            ok: true,
+            content: JSON.stringify({ difference: { billing: '88130.31' } }),
+          };
+        },
+      },
+    });
+    await expect(
+      send.execute({
+        tenantId: 'tenant-a',
+        userId: 'user-a',
+        conversationId: 'conv-a',
+        question: 'Compare julho e agosto',
+      }),
+    ).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
+    expect(executions).toBe(3);
+    expect(openai.generateCalls).toHaveLength(4);
+    expect(openai.generateCalls[3]?.tools).toBeUndefined();
   });
 });

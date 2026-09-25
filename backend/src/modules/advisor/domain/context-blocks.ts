@@ -9,6 +9,7 @@ export const ADVISOR_CONTEXT_BLOCK_TYPES = [
   'ADMIN_CONTEXT',
   'TENANT_KNOWLEDGE',
   'FINANCIAL_FACTS',
+  'ANALYTICAL_FACTS',
   'CONVERSATION_HISTORY',
   'USER_QUESTION',
 ] as const;
@@ -27,6 +28,7 @@ export type AdvisorContextTrustLevel = (typeof ADVISOR_CONTEXT_TRUST_LEVELS)[num
 export type AdvisorContextBlockSource = {
   readonly kind: string;
   readonly monthKey?: string;
+  readonly comparisonMonthKey?: string;
   readonly service?: string;
 };
 
@@ -40,6 +42,7 @@ export type AdvisorContextBlock = {
 export type AdvisorBuiltContext = {
   readonly tenantId: string;
   readonly monthKey: string;
+  readonly comparisonMonthKey?: string;
   readonly blocks: readonly AdvisorContextBlock[];
 };
 
@@ -53,6 +56,7 @@ export const ADVISOR_CONTEXT_PRESERVATION_ORDER = [
   'PLATFORM_INSTRUCTIONS',
   'USER_QUESTION',
   'FINANCIAL_FACTS',
+  'ANALYTICAL_FACTS',
   'TENANT_PROFILE',
   'ADMIN_CONTEXT',
   'CONVERSATION_HISTORY',

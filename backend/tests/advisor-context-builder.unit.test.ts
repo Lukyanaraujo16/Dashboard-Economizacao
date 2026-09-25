@@ -600,6 +600,97 @@ describe('Context Builder do Consultor (F13.2)', () => {
     }
   });
 
+  it('inclui realizedByCategory do principal e ANALYTICAL_FACTS do segundo mês', async () => {
+    const jul = flowA({
+      monthKey: '2026-07',
+      realized: { inflows: dec('136659.99'), outflows: dec('0'), result: dec('136659.99') },
+      expected: { receivables: dec('0'), payables: dec('0'), result: dec('0') },
+      realizedByCategory: {
+        inflows: {
+          total: dec('136659.99'),
+          classified: dec('136659.99'),
+          uncategorized: dec('0'),
+          imprecise: dec('0'),
+          coverageRate: dec('100'),
+          items: [
+            {
+              kind: 'category',
+              key: 'cat-convenio',
+              name: 'Atendimentos Convênio',
+              amount: dec('113984.49'),
+              percentage: dec('83.4'),
+            },
+          ],
+        },
+        outflows: null,
+      },
+    });
+    const ago = flowA({
+      monthKey: '2026-08',
+      realized: { inflows: dec('224790.3'), outflows: dec('0'), result: dec('224790.3') },
+      expected: { receivables: dec('0'), payables: dec('0'), result: dec('0') },
+      realizedByCategory: {
+        inflows: {
+          total: dec('224790.3'),
+          classified: dec('224790.3'),
+          uncategorized: dec('0'),
+          imprecise: dec('0'),
+          coverageRate: dec('100'),
+          items: [
+            {
+              kind: 'category',
+              key: 'cat-convenio',
+              name: 'Atendimentos Convênio',
+              amount: dec('207185.50'),
+              percentage: dec('92.17'),
+            },
+          ],
+        },
+        outflows: null,
+      },
+    });
+    const deps = createDeps({ flow: ago });
+    deps.cashFlow.getMonthlyCashFlow = async (input) => {
+      deps.calls.cashFlow.push(input);
+      return input.monthKey === '2026-07' ? jul : ago;
+    };
+    const builder = createBuildAdvisorContext(deps);
+    const result = await builder.build({
+      tenantId: TENANT_A,
+      question: 'qual foi a diferença?',
+      monthKey: '2026-08',
+      comparisonMonthKey: '2026-07',
+    });
+    expect(result.comparisonMonthKey).toBe('2026-07');
+    expect(deps.calls.cashFlow.map((item) => item.monthKey).sort()).toEqual(['2026-07', '2026-08']);
+    const facts = block(result, 'FINANCIAL_FACTS').content;
+    expect(facts).toContain('monthKey: 2026-08');
+    expect(facts).toContain('billingCoverage: FULL_BILLING');
+    expect(facts).toContain('realizedByCategory.inflows.1.name: Atendimentos Convênio');
+    expect(facts).toContain('CATEGORIA agregada');
+    const analytical = block(result, 'ANALYTICAL_FACTS').content;
+    expect(analytical).toContain('comparison: PRESENT');
+    expect(analytical).toContain('comparisonMonthKey: 2026-07');
+    expect(analytical).toContain('difference.billing: 88130.31');
+    expect(analytical).not.toContain('monthKey: 2026-09');
+    expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('hipóteses não comprovadas');
+    expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('pergunta for objetiva');
+    expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('Atendimentos Convênio');
+  });
+
+  it('pergunta de um mês mantém ANALYTICAL_FACTS ausente e REALIZED_ONLY quando expected>0', async () => {
+    const builder = createBuildAdvisorContext(createDeps());
+    const result = await builder.build({
+      tenantId: TENANT_A,
+      question: 'Como está meu faturamento?',
+      monthKey: '2026-09',
+    });
+    expect(result.comparisonMonthKey).toBeUndefined();
+    expect(block(result, 'ANALYTICAL_FACTS').content).toContain('comparison: ABSENT');
+    expect(block(result, 'FINANCIAL_FACTS').content).toContain('billingCoverage: REALIZED_ONLY');
+    expect(result.monthKey).toBe('2026-09');
+  });
+
   it('não importa conta-azul nem recálculo de caixa no módulo de contexto', () => {
     const advisorRoot = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),

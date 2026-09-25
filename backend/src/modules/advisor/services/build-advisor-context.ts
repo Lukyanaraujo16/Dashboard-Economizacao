@@ -3,7 +3,13 @@ import { civilMonthKey, isValidMonthKey } from '../../analytics/domain/civil-cal
 import type { FinancialStockSnapshot, MonthlyCashFlow } from '../../analytics/domain/types.js';
 import type { AnalyticsService } from '../../analytics/services/analytics.service.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
+import { buildAnalyticalFactsContent } from '../domain/analytical-facts-text.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
+import type { AdvisorCashComparisonService } from '../domain/advisor-analytical-tools.js';
+import {
+  compareAdvisorCashMonths,
+  type AdvisorCashMonthComparison,
+} from '../domain/compare-advisor-cash-months.js';
 import { ADVISOR_HISTORY_MESSAGE_LIMIT, type AdvisorBuiltContext } from '../domain/context-blocks.js';
 import {
   applyAdvisorContextCharBudget,
@@ -29,6 +35,8 @@ export type BuildAdvisorContextInput = {
   readonly conversationId?: string;
   readonly question: string;
   readonly monthKey?: string;
+  readonly comparisonMonthKey?: string;
+  readonly comparison?: AdvisorCashMonthComparison | null;
   readonly now?: Date;
 };
 
@@ -49,6 +57,7 @@ export type BuildAdvisorContextDependencies = {
   };
   readonly cashFlow: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'>;
   readonly analytics: Pick<AnalyticsService, 'getFinancialStockSnapshot'>;
+  readonly cashComparison?: AdvisorCashComparisonService;
 };
 
 export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies) {
@@ -57,6 +66,10 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
       const tenantId = requireTenantId(input.tenantId);
       const now = input.now ?? new Date();
       const monthKey = resolveMonthKey(input.monthKey, now);
+      const comparisonMonthKey =
+        input.comparisonMonthKey === undefined || input.comparisonMonthKey.trim() === ''
+          ? undefined
+          : resolveMonthKey(input.comparisonMonthKey, now);
       const conversationId = optionalId(input.conversationId);
       const userId = optionalId(input.userId);
 
@@ -86,15 +99,32 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
         }
       }
 
-      const [settingsRow, knowledgeRows, flow, snapshot, messages] = await Promise.all([
-        deps.settings.findSettingsByTenant(tenantId),
-        deps.knowledge.listKnowledge(tenantId),
-        deps.cashFlow.getMonthlyCashFlow({ tenantId, monthKey, now }),
-        deps.analytics.getFinancialStockSnapshot({ tenantId, now }),
-        conversationId === undefined
-          ? Promise.resolve<readonly AiMessageRecord[]>([])
-          : deps.conversations.listMessages(tenantId, conversationId),
-      ]);
+      const shouldLoadComparison =
+        comparisonMonthKey !== undefined &&
+        comparisonMonthKey !== monthKey &&
+        input.comparison === undefined;
+      const [settingsRow, knowledgeRows, flow, comparisonFlow, snapshot, messages] =
+        await Promise.all([
+          deps.settings.findSettingsByTenant(tenantId),
+          deps.knowledge.listKnowledge(tenantId),
+          deps.cashFlow.getMonthlyCashFlow({ tenantId, monthKey, now }),
+          shouldLoadComparison && deps.cashComparison === undefined
+            ? deps.cashFlow.getMonthlyCashFlow({ tenantId, monthKey: comparisonMonthKey, now })
+            : Promise.resolve<MonthlyCashFlow | null>(null),
+          deps.analytics.getFinancialStockSnapshot({ tenantId, now }),
+          conversationId === undefined
+            ? Promise.resolve<readonly AiMessageRecord[]>([])
+            : deps.conversations.listMessages(tenantId, conversationId),
+        ]);
+      const loadedComparison =
+        shouldLoadComparison && deps.cashComparison
+          ? await deps.cashComparison.compare({
+              tenantId,
+              monthKey,
+              comparisonMonthKey,
+              now,
+            })
+          : null;
 
       const settings = settingsRow?.tenantId === tenantId ? settingsRow : null;
       const knowledge = knowledgeRows.filter(
@@ -109,7 +139,18 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
         .slice(-ADVISOR_HISTORY_MESSAGE_LIMIT);
 
       const safeFlow = isSameTenantFlow(flow, tenantId) ? flow : null;
+      const safeComparisonFlow =
+        comparisonFlow !== null && isSameTenantFlow(comparisonFlow, tenantId)
+          ? comparisonFlow
+          : null;
       const safeSnapshot = isSameTenantSnapshot(snapshot, tenantId) ? snapshot : null;
+      const comparison = resolveComparison({
+        tenantId,
+        provided: input.comparison,
+        loaded: loadedComparison,
+        periodA: safeComparisonFlow,
+        periodB: safeFlow,
+      });
 
       const admin = wrapUntrusted('ADMIN_CONTEXT', presentOrAbsent(settings?.adminPrompt));
       const knowledgeBlock = wrapUntrusted('TENANT_KNOWLEDGE', formatKnowledge(knowledge));
@@ -154,6 +195,21 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
           },
         },
         {
+          type: 'ANALYTICAL_FACTS',
+          content: buildAnalyticalFactsContent({
+            monthKey,
+            comparisonMonthKey,
+            comparison,
+          }),
+          trustLevel: 'ANALYTICAL_FACT',
+          source: {
+            kind: 'analytical',
+            monthKey,
+            service: 'compareAdvisorCashMonths',
+            ...(comparisonMonthKey === undefined ? {} : { comparisonMonthKey }),
+          },
+        },
+        {
           type: 'CONVERSATION_HISTORY',
           content: historyBlock.content,
           trustLevel: 'UNTRUSTED',
@@ -170,6 +226,7 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
       return {
         tenantId,
         monthKey,
+        ...(comparisonMonthKey === undefined ? {} : { comparisonMonthKey }),
         blocks: applyAdvisorContextCharBudget(drafts),
       };
     },
@@ -252,4 +309,29 @@ function isSameTenantFlow(flow: MonthlyCashFlow, tenantId: string): boolean {
 
 function isSameTenantSnapshot(snapshot: FinancialStockSnapshot, tenantId: string): boolean {
   return snapshot.tenantId === tenantId;
+}
+
+function resolveComparison(input: {
+  readonly tenantId: string;
+  readonly provided?: AdvisorCashMonthComparison | null;
+  readonly loaded: AdvisorCashMonthComparison | null;
+  readonly periodA: MonthlyCashFlow | null;
+  readonly periodB: MonthlyCashFlow | null;
+}): AdvisorCashMonthComparison | null {
+  if (input.provided !== undefined) {
+    return input.provided !== null && input.provided.tenantId === input.tenantId
+      ? input.provided
+      : null;
+  }
+  if (input.loaded !== null && input.loaded.tenantId === input.tenantId) {
+    return input.loaded;
+  }
+  if (input.periodA !== null && input.periodB !== null) {
+    return compareAdvisorCashMonths({
+      tenantId: input.tenantId,
+      periodA: input.periodA,
+      periodB: input.periodB,
+    });
+  }
+  return null;
 }

@@ -1,6 +1,14 @@
 import type { Prisma } from '../../../generated/prisma/client.js';
 import { monthlyBilling } from '../../analytics/domain/monthly-cash-flow.js';
-import type { FinancialStockSnapshot, MonthlyCashFlow } from '../../analytics/domain/types.js';
+import type {
+  FinancialStockSnapshot,
+  MonthlyCashFlow,
+  MonthlyCashFlowRealizedCategoryComposition,
+} from '../../analytics/domain/types.js';
+import {
+  ADVISOR_CASH_CATEGORY_TOP_N,
+  resolveAdvisorBillingCoverage,
+} from './compare-advisor-cash-months.js';
 
 export const ADVISOR_FINANCIAL_ABSENT = 'ABSENT';
 
@@ -8,6 +16,7 @@ export type AdvisorFinancialFactsSource = {
   readonly realized: MonthlyCashFlow['realized'];
   readonly expected: MonthlyCashFlow['expected'];
   readonly overdue: MonthlyCashFlow['overdue'];
+  readonly realizedByCategory?: MonthlyCashFlow['realizedByCategory'];
 };
 
 export type AdvisorFinancialSnapshotSource = Pick<
@@ -38,9 +47,15 @@ export function buildFinancialFactsContent(input: {
   const payables = input.snapshot?.payables;
   const delinquency = input.snapshot?.receivableDelinquency;
 
+  const billingCoverage =
+    input.flow === null
+      ? ADVISOR_FINANCIAL_ABSENT
+      : resolveAdvisorBillingCoverage(expected?.receivables ?? null);
+
   return [
     `monthKey: ${input.monthKey}`,
     `billing: ${formatAdvisorFinancialAmount(billing)}`,
+    `billingCoverage: ${billingCoverage}`,
     `cash.realized.inflows: ${formatAdvisorFinancialAmount(realized?.inflows ?? null)}`,
     `cash.realized.outflows: ${formatAdvisorFinancialAmount(realized?.outflows ?? null)}`,
     `cash.realized.result: ${formatAdvisorFinancialAmount(realized?.result ?? null)}`,
@@ -58,5 +73,39 @@ export function buildFinancialFactsContent(input: {
     `receivableDelinquency.overdueUnpaid: ${formatAdvisorFinancialAmount(delinquency?.overdueUnpaid ?? null)}`,
     `receivableDelinquency.openUnpaid: ${formatAdvisorFinancialAmount(delinquency?.openUnpaid ?? null)}`,
     `receivableDelinquency.rate: ${formatAdvisorFinancialAmount(delinquency?.rate ?? null)}`,
+    ...formatRealizedCategoryFacts('inflows', input.flow?.realizedByCategory?.inflows ?? null),
+    ...formatRealizedCategoryFacts('outflows', input.flow?.realizedByCategory?.outflows ?? null),
+    'note: realizedByCategory é composição do REALIZADO. billingCoverage=FULL_BILLING somente quando expected.receivables=0.',
+    'note: Atendimentos Convênio, quando presente, é CATEGORIA agregada — não é convênio individual.',
   ].join('\n');
+}
+
+function formatRealizedCategoryFacts(
+  side: 'inflows' | 'outflows',
+  composition: MonthlyCashFlowRealizedCategoryComposition | null,
+): string[] {
+  const prefix = `realizedByCategory.${side}`;
+  if (composition === null) {
+    return [`${prefix}: ${ADVISOR_FINANCIAL_ABSENT}`];
+  }
+  const items = [...composition.items]
+    .sort((left, right) => {
+      const byAmount = right.amount.comparedTo(left.amount);
+      if (byAmount !== 0) {
+        return byAmount;
+      }
+      return left.name.localeCompare(right.name, 'pt-BR');
+    })
+    .slice(0, ADVISOR_CASH_CATEGORY_TOP_N);
+  return [
+    `${prefix}.total: ${formatAdvisorFinancialAmount(composition.total)}`,
+    `${prefix}.count: ${items.length}`,
+    ...items.flatMap((item, index) => [
+      `${prefix}.${index + 1}.key: ${item.key}`,
+      `${prefix}.${index + 1}.name: ${item.name}`,
+      `${prefix}.${index + 1}.kind: ${item.kind}`,
+      `${prefix}.${index + 1}.amount: ${formatAdvisorFinancialAmount(item.amount)}`,
+      `${prefix}.${index + 1}.share: ${formatAdvisorFinancialAmount(item.percentage)}`,
+    ]),
+  ];
 }

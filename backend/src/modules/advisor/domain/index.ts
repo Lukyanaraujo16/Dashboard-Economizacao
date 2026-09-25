@@ -30,10 +30,51 @@ export type {
   AdvisorContextBlockType,
   AdvisorContextTrustLevel,
 } from './context-blocks.js';
+export {
+  ADVISOR_ANALYTICAL_TOOL_TIMEOUT_MS,
+  ADVISOR_MAX_TOOL_ROUNDS,
+  COMPARE_CASH_MONTHS_TOOL,
+  COMPARE_CASH_MONTHS_TOOL_NAME,
+  assertCompareCashMonthsArgs,
+  createAdvisorAnalyticalToolExecutor,
+  createAdvisorCashComparisonService,
+  listAdvisorAnalyticalTools,
+} from './advisor-analytical-tools.js';
+export type {
+  AdvisorAnalyticalToolCall,
+  AdvisorAnalyticalToolDefinition,
+  AdvisorAnalyticalToolExecutor,
+  AdvisorAnalyticalToolResult,
+  AdvisorCashComparisonRequest,
+  AdvisorCashComparisonService,
+} from './advisor-analytical-tools.js';
+export { buildAnalyticalFactsContent } from './analytical-facts-text.js';
+export {
+  ADVISOR_BILLING_COVERAGES,
+  ADVISOR_CASH_CATEGORY_TOP_N,
+  ADVISOR_CASH_TRENDS,
+  compareAdvisorCashMonths,
+  formatAdvisorPercent,
+  percentDelta,
+  resolveAdvisorBillingCoverage,
+  resolveAdvisorComparisonBillingCoverage,
+  serializeAdvisorCashMonthComparison,
+} from './compare-advisor-cash-months.js';
+export type {
+  AdvisorBillingCoverage,
+  AdvisorCashCategoryComparison,
+  AdvisorCashCategoryDelta,
+  AdvisorCashDelta,
+  AdvisorCashMonthComparison,
+  AdvisorCashPeriodSnapshot,
+  AdvisorCashTrend,
+  CompareAdvisorCashMonthsInput,
+} from './compare-advisor-cash-months.js';
 export { ADVISOR_FINANCIAL_ABSENT, formatAdvisorFinancialAmount } from './financial-facts-text.js';
 export {
   ADVISOR_PERIOD_SOURCES,
   countAdvisorNamedPeriods,
+  listAdvisorNamedPeriodKeys,
   resolveAdvisorPeriod,
 } from './resolve-advisor-period.js';
 export type {

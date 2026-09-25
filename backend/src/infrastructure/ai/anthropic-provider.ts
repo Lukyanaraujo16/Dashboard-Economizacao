@@ -1,4 +1,3 @@
-import type { AdvisorContextBlock } from '../../modules/advisor/domain/context-blocks.js';
 import { assertMatchingProvider, readFiniteNumber, resolveConfiguredApiKey } from './adapter-guards.js';
 import {
   composeSystemText,
@@ -8,31 +7,81 @@ import {
 } from './context-block-mapping.js';
 import { postIaJson } from './ia-http.js';
 import { iaProviderError, isContentRejectedPayload } from './map-http-error.js';
-import type { GenerationInput, GenerationOutput, IaHttpClientConfig, IaProvider } from './types.js';
+import type {
+  GenerationInput,
+  GenerationOutput,
+  IaHttpClientConfig,
+  IaProvider,
+  IaToolCall,
+  IaToolDefinition,
+  IaToolRound,
+} from './types.js';
 import { DEFAULT_IA_HTTP_TIMEOUT_MS } from './types.js';
 
 const ANTHROPIC_MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 const ANTHROPIC_MAX_TOKENS = 1024;
 
+type AnthropicContent =
+  | string
+  | Array<
+      | { type: 'text'; text: string }
+      | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+      | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+    >;
+
 type AnthropicChatMessage = {
   role: 'user' | 'assistant';
-  content: string;
+  content: AnthropicContent;
 };
 
 function pushOrMerge(messages: AnthropicChatMessage[], next: AnthropicChatMessage): void {
   const last = messages[messages.length - 1];
-  if (last && last.role === next.role) {
+  if (last && last.role === next.role && typeof last.content === 'string' && typeof next.content === 'string') {
     last.content = `${last.content}\n\n${next.content}`;
     return;
   }
   messages.push(next);
 }
 
-function toAnthropicMessages(blocks: readonly AdvisorContextBlock[]): AnthropicChatMessage[] {
+function toAnthropicTools(tools: readonly IaToolDefinition[]): unknown[] {
+  return tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    input_schema: tool.inputSchema,
+  }));
+}
+
+function appendAnthropicToolRounds(
+  messages: AnthropicChatMessage[],
+  rounds: readonly IaToolRound[],
+): void {
+  for (const round of rounds) {
+    messages.push({
+      role: 'assistant',
+      content: round.calls.map((call) => ({
+        type: 'tool_use',
+        id: call.id,
+        name: call.name,
+        input: call.arguments,
+      })),
+    });
+    messages.push({
+      role: 'user',
+      content: round.results.map((result) => ({
+        type: 'tool_result',
+        tool_use_id: result.id,
+        content: result.content,
+        is_error: !result.ok,
+      })),
+    });
+  }
+}
+
+function toAnthropicMessages(input: GenerationInput): AnthropicChatMessage[] {
   const messages: AnthropicChatMessage[] = [];
 
-  for (const block of blocks) {
+  for (const block of input.blocks) {
     if (isSystemContextBlock(block)) {
       continue;
     }
@@ -47,6 +96,8 @@ function toAnthropicMessages(blocks: readonly AdvisorContextBlock[]): AnthropicC
     }
     pushOrMerge(messages, { role: 'user', content: formatDelimitedBlock(block) });
   }
+
+  appendAnthropicToolRounds(messages, input.toolRounds ?? []);
 
   if (messages.length === 0) {
     return [{ role: 'user', content: formatDelimitedBlock({
@@ -71,6 +122,23 @@ function toAnthropicMessages(blocks: readonly AdvisorContextBlock[]): AnthropicC
   return messages;
 }
 
+function readAnthropicToolCalls(
+  content: Array<{ type?: unknown; id?: unknown; name?: unknown; input?: unknown }>,
+): IaToolCall[] {
+  const calls: IaToolCall[] = [];
+  for (const item of content) {
+    if (item.type !== 'tool_use' || typeof item.id !== 'string' || typeof item.name !== 'string') {
+      continue;
+    }
+    const args =
+      item.input !== null && typeof item.input === 'object' && !Array.isArray(item.input)
+        ? (item.input as Record<string, unknown>)
+        : {};
+    calls.push({ id: item.id, name: item.name, arguments: args });
+  }
+  return calls;
+}
+
 function readAnthropicOutput(json: unknown): GenerationOutput {
   if (isContentRejectedPayload(json)) {
     throw iaProviderError('CONTENT_REJECTED');
@@ -79,7 +147,7 @@ function readAnthropicOutput(json: unknown): GenerationOutput {
     throw iaProviderError('PROVIDER_ERROR', 'O provedor de IA retornou uma resposta inválida.');
   }
   const payload = json as {
-    content?: Array<{ type?: unknown; text?: unknown }>;
+    content?: Array<{ type?: unknown; text?: unknown; id?: unknown; name?: unknown; input?: unknown }>;
     stop_reason?: unknown;
     usage?: {
       input_tokens?: unknown;
@@ -89,9 +157,13 @@ function readAnthropicOutput(json: unknown): GenerationOutput {
   if (payload.stop_reason === 'refusal') {
     throw iaProviderError('CONTENT_REJECTED');
   }
-  const first = payload.content?.[0];
-  const text = first?.text;
-  if (typeof text !== 'string') {
+  const content = payload.content ?? [];
+  const toolCalls = readAnthropicToolCalls(content);
+  const texts = content
+    .filter((item) => item.type === 'text' && typeof item.text === 'string')
+    .map((item) => String(item.text));
+  const text = texts.join('\n');
+  if (toolCalls.length === 0 && typeof content[0]?.text !== 'string') {
     throw iaProviderError('PROVIDER_ERROR', 'O provedor de IA retornou uma resposta inválida.');
   }
   return {
@@ -100,6 +172,7 @@ function readAnthropicOutput(json: unknown): GenerationOutput {
       inputTokens: readFiniteNumber(payload.usage?.input_tokens),
       outputTokens: readFiniteNumber(payload.usage?.output_tokens),
     },
+    ...(toolCalls.length > 0 ? { toolCalls } : {}),
   };
 }
 
@@ -113,6 +186,7 @@ export function createAnthropicProvider(config: IaHttpClientConfig): IaProvider 
       assertMatchingProvider('ANTHROPIC', input);
       const apiKey = await resolveConfiguredApiKey(config);
       const system = composeSystemText(input.blocks);
+      const tools = input.tools ?? [];
       const json = await postIaJson({
         fetchImpl,
         timeoutMs,
@@ -126,7 +200,8 @@ export function createAnthropicProvider(config: IaHttpClientConfig): IaProvider 
           model: input.model,
           max_tokens: ANTHROPIC_MAX_TOKENS,
           ...(system ? { system } : {}),
-          messages: toAnthropicMessages(input.blocks),
+          messages: toAnthropicMessages(input),
+          ...(tools.length > 0 ? { tools: toAnthropicTools(tools) } : {}),
         },
       });
       return readAnthropicOutput(json);
