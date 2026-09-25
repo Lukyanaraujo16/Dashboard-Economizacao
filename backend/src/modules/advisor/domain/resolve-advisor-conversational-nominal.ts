@@ -4,6 +4,10 @@ import {
   CASH_NOMINAL_LOOKUP_TOOL_NAME,
   CASH_NOMINAL_RANKING_TOOL_NAME,
 } from './advisor-nominal-dimension.js';
+import {
+  isAdvisorInterpretiveQuestion,
+  isAdvisorNominalIdentityFollowUp,
+} from './classify-advisor-factual-response.js';
 import { resolveAdvisorDrilldownIntent } from './resolve-advisor-drilldown-intent.js';
 import {
   extractAdvisorNominalEntityQuery,
@@ -16,7 +20,8 @@ export type AdvisorNominalAnaphoraStatus =
   | 'RESOLVED'
   | 'AMBIGUOUS'
   | 'UNRESOLVED'
-  | 'NEEDS_RANKING_WINNER';
+  | 'NEEDS_RANKING_WINNER'
+  | 'IDENTITY_FOLLOW_UP';
 
 export type AdvisorConversationalNominal = {
   readonly intent: AdvisorNominalIntent | null;
@@ -52,6 +57,67 @@ export function resolveAdvisorConversationalNominal(input: {
       needsRankingWinner: false,
       rankingQuestion: null,
     };
+  }
+  if (isAdvisorNominalIdentityFollowUp(input.content)) {
+    const identityAnchor = resolveNominalAnchor(input.priorUserContents ?? []);
+    if (identityAnchor.kind === 'ranking') {
+      return {
+        intent: {
+          toolName: CASH_NOMINAL_RANKING_TOOL_NAME,
+          categoryReference: 'convenio',
+          limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+        },
+        anaphora: 'IDENTITY_FOLLOW_UP',
+        needsRankingWinner: false,
+        rankingQuestion: identityAnchor.question,
+      };
+    }
+    if (identityAnchor.kind === 'entity') {
+      return {
+        intent: {
+          toolName: CASH_NOMINAL_RANKING_TOOL_NAME,
+          categoryReference: 'convenio',
+          limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+        },
+        anaphora: 'IDENTITY_FOLLOW_UP',
+        needsRankingWinner: false,
+        rankingQuestion: null,
+      };
+    }
+    return {
+      intent: null,
+      anaphora: 'UNRESOLVED',
+      needsRankingWinner: false,
+      rankingQuestion: null,
+    };
+  }
+  if (isAdvisorInterpretiveQuestion(input.content)) {
+    const interpretiveAnchor = resolveNominalAnchor(input.priorUserContents ?? []);
+    if (interpretiveAnchor.kind === 'ranking') {
+      return {
+        intent: {
+          toolName: CASH_NOMINAL_RANKING_TOOL_NAME,
+          categoryReference: 'convenio',
+          limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+        },
+        anaphora: 'NONE',
+        needsRankingWinner: false,
+        rankingQuestion: interpretiveAnchor.question,
+      };
+    }
+    if (interpretiveAnchor.kind === 'entity') {
+      return {
+        intent: {
+          toolName: CASH_NOMINAL_LOOKUP_TOOL_NAME,
+          entityQuery: interpretiveAnchor.entityQuery,
+          categoryReference: 'convenio',
+          limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+        },
+        anaphora: 'RESOLVED',
+        needsRankingWinner: false,
+        rankingQuestion: null,
+      };
+    }
   }
   if (resolveAdvisorDrilldownIntent(input.content) !== null) {
     return {

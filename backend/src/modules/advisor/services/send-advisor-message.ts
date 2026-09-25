@@ -21,6 +21,11 @@ import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-co
 import { resolveAdvisorDrilldownIntent } from '../domain/resolve-advisor-drilldown-intent.js';
 import { resolveAdvisorConversationalNominal } from '../domain/resolve-advisor-conversational-nominal.js';
 import {
+  ADVISOR_FACTUAL_COMPOSER_VERSION,
+  composeAdvisorFactualAnswer,
+  type AdvisorFactualAnswerMeta,
+} from '../domain/compose-advisor-factual-answer.js';
+import {
   COMPARE_CASH_NOMINAL_TOOL_NAME,
   CASH_NOMINAL_LOOKUP_TOOL_NAME,
   CASH_NOMINAL_RANKING_TOOL_NAME,
@@ -60,7 +65,8 @@ export type SendAdvisorMessageResult = {
   readonly conversationId: string;
   readonly userMessage: AiMessageRecord;
   readonly consultantMessage: AiMessageRecord;
-  readonly run: AiRunRecord;
+  readonly run: AiRunRecord | null;
+  readonly factualAnswer: AdvisorFactualAnswerMeta | null;
 };
 
 export class AdvisorExecutionError extends AdvisorDomainError {
@@ -337,6 +343,42 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         now: input.now,
       });
 
+      const composed = composeAdvisorFactualAnswer({
+        content: question,
+        anaphora: anaphoraStatus,
+        toolName: drilldown?.name ?? null,
+        toolOk: drilldown?.ok ?? false,
+        toolContent: drilldown?.content ?? null,
+      });
+      if (composed.answer !== null && composed.meta !== null) {
+        const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+          senderType: 'CONSULTANT',
+          content: composed.answer,
+        });
+        console.info(
+          JSON.stringify({
+            event: 'advisor_factual_answer_composed',
+            tenantId,
+            conversationId: conversation.id,
+            intentKind: composed.meta.intentKind,
+            factKind: composed.meta.factKind,
+            monthKey: period.monthKey,
+            comparisonMonthKey: period.comparisonMonthKey ?? null,
+            identityStatus: composed.meta.identityStatus,
+            returnedCount: composed.meta.returnedCount,
+            coveragePercent: composed.meta.coveragePercent,
+            composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+          }),
+        );
+        return {
+          conversationId: conversation.id,
+          userMessage,
+          consultantMessage,
+          run: null,
+          factualAnswer: composed.meta,
+        };
+      }
+
       let run = await deps.runs.createRun(tenantId, {
         userId,
         conversationId: conversation.id,
@@ -383,6 +425,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           userMessage,
           consultantMessage,
           run,
+          factualAnswer: null,
         };
       } catch (error) {
         const { status, errorCode, message } = normalizeExecutionFailure(error);

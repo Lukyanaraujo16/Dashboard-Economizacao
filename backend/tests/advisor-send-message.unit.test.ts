@@ -229,10 +229,11 @@ describe('send-advisor-message (F13.3)', () => {
     expect(result.userMessage.senderType).toBe('USER');
     expect(result.consultantMessage.senderType).toBe('CONSULTANT');
     expect(result.consultantMessage.content).toBe('Faturamento oficial: 0');
-    expect(result.run.status).toBe('SUCCEEDED');
-    expect(result.run.provider).toBe('OPENAI');
-    expect(result.run.model).toBe(AI_PROVIDER_MODEL_CATALOG.OPENAI.defaultModel);
-    expect(result.run.errorCode).toBeNull();
+    expect(result.run).not.toBeNull();
+    expect(result.run!.status).toBe('SUCCEEDED');
+    expect(result.run!.provider).toBe('OPENAI');
+    expect(result.run!.model).toBe(AI_PROVIDER_MODEL_CATALOG.OPENAI.defaultModel);
+    expect(result.run!.errorCode).toBeNull();
     expect(messages.map((item) => item.senderType)).toEqual(['USER', 'CONSULTANT']);
     expect(runs[0]?.status).toBe('SUCCEEDED');
     expect(openai.lastInput?.tenantId).toBe('tenant-a');
@@ -378,7 +379,8 @@ describe('send-advisor-message (F13.3)', () => {
         question: 'Qual foi meu faturamento em agosto de 2026?',
       }),
     );
-    expect(result.run.status).toBe('SUCCEEDED');
+    expect(result.run).not.toBeNull();
+    expect(result.run!.status).toBe('SUCCEEDED');
   });
 
   it('regression smoke: FINANCIAL_FACTS de agosto chegam ao Fake com selected setembro', async () => {
@@ -780,7 +782,8 @@ describe('send-advisor-message (F13.3)', () => {
       }),
     );
     expect(result.consultantMessage.content).toBe('A diferença oficial é 88130.31.');
-    expect(result.run.status).toBe('SUCCEEDED');
+    expect(result.run).not.toBeNull();
+    expect(result.run!.status).toBe('SUCCEEDED');
     expect(openai.generateCalls).toHaveLength(2);
     expect(executeTool).toHaveBeenCalled();
     expect(openai.generateCalls[1]?.toolRounds?.[0]?.results[0]?.content).toContain('UNAVAILABLE');

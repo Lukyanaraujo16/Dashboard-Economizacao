@@ -120,6 +120,36 @@ export type {
   AdvisorNominalAnaphoraStatus,
 } from './resolve-advisor-conversational-nominal.js';
 export {
+  amountsMatch,
+  extractAdvisorMentionedAmounts,
+  formatAdvisorFactualBrl,
+  formatAdvisorFactualMonth,
+  formatAdvisorFactualPercent,
+} from './advisor-factual-display.js';
+export {
+  ADVISOR_FACTUAL_INTENT_KINDS,
+  ADVISOR_FACTUAL_RESPONSE_KINDS,
+  classifyAdvisorFactualResponse,
+  isAdvisorInterpretiveQuestion,
+  isAdvisorNominalIdentityFollowUp,
+  isAdvisorNominalShareQuestion,
+  isAdvisorNominalWinnerQuestion,
+} from './classify-advisor-factual-response.js';
+export type {
+  AdvisorFactualClassification,
+  AdvisorFactualIntentKind,
+  AdvisorFactualResponseKind,
+} from './classify-advisor-factual-response.js';
+export {
+  ADVISOR_FACTUAL_COMPOSER_VERSION,
+  composeAdvisorFactualAnswer,
+} from './compose-advisor-factual-answer.js';
+export type {
+  AdvisorFactualAnswerMeta,
+  ComposeAdvisorFactualAnswerInput,
+  ComposeAdvisorFactualAnswerResult,
+} from './compose-advisor-factual-answer.js';
+export {
   ADVISOR_NOMINAL_AMBIGUITY_DEFINITIONS,
   ADVISOR_NOMINAL_CARDINALITY_DEFINITIONS,
   ADVISOR_NOMINAL_COMPARE_FACT_KIND,
