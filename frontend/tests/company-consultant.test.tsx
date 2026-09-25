@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
 import { CompanyConsultantPage } from '../src/components/companies/company-consultant-page';
-import { appendInstructionChip } from '../src/components/companies/consultant-setup-copy';
+import {
+  appendInstructionChip,
+  consultantSuccessCopy,
+  isWizardDraftDirty,
+  wizardProgressPercent,
+  wizardStepCopy,
+} from '../src/components/companies/consultant-setup-copy';
 import type { Company } from '../src/services/admin/companies.types';
 import type {
   ConsultantKnowledgeEntry,
@@ -278,6 +284,9 @@ describe('UI admin Consultor (F13.8.1)', () => {
 
     expect(await screen.findByTestId('consultant-empty-state')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Crie o Consultor Financeiro desta empresa' })).toBeTruthy();
+    expect(screen.getByText('Configuração rápida e guiada')).toBeTruthy();
+    expect(screen.getByText('Você poderá revisar tudo antes de ativar')).toBeTruthy();
+    expect(screen.getByText('Nada será ativado automaticamente')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Criar Consultor' })).toBeTruthy();
     expect(screen.queryByTestId('consultant-wizard')).toBeNull();
     expect(screen.queryByTestId('consultant-overview')).toBeNull();
@@ -289,33 +298,65 @@ describe('UI admin Consultor (F13.8.1)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
 
     expect(await screen.findByTestId('consultant-wizard')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Vamos criar seu Consultor' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Vamos dar uma identidade ao seu Consultor' })).toBeTruthy();
+    expect(screen.getByText('Etapa 1 de 5')).toBeTruthy();
+    expect(screen.getByText('20%')).toBeTruthy();
+    expect(screen.getByTestId('consultant-wizard-progress').getAttribute('aria-valuenow')).toBe('20');
     expect(screen.getByLabelText('Nome do Consultor')).toBeTruthy();
     expect(screen.getByLabelText('Segmento da empresa')).toBeTruthy();
     expect(screen.getByText(/clínica de estética/)).toBeTruthy();
+    expect(screen.queryByLabelText('Motor de IA')).toBeNull();
+    expect(screen.queryByTestId('consultant-advanced-settings')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('consultant-advanced-toggle'));
+    expect(screen.getByTestId('consultant-advanced-settings')).toBeTruthy();
     expect(screen.getByLabelText('Motor de IA')).toBeTruthy();
     expect((screen.getByLabelText('Modelo') as HTMLSelectElement).value).toBe('gpt-4o-mini');
 
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
-    expect(await screen.findByRole('heading', { name: 'Conte um pouco sobre a empresa' })).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: 'Ajude o Consultor a conhecer sua empresa' }),
+    ).toBeTruthy();
+    expect(screen.getByText('40%')).toBeTruthy();
     expect(screen.getByLabelText('Sobre a empresa')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
     expect(await screen.findByRole('heading', { name: 'Como o Consultor deve se comunicar?' })).toBeTruthy();
+    expect(screen.getByText('60%')).toBeTruthy();
     expect(screen.getByRole('radio', { name: /Consultivo/ })).toBeTruthy();
     expect(screen.getByRole('radio', { name: /Usar com moderação/ })).toBeTruthy();
+    expect(screen.getByText('Respostas totalmente sem emojis.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
-    expect(await screen.findByRole('heading', { name: 'Como o Consultor deve agir?' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Defina como o Consultor deve agir' })).toBeTruthy();
+    expect(screen.getByText('80%')).toBeTruthy();
     expect(screen.getByLabelText('Instruções do Consultor')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Priorizar fluxo de caixa' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
-    expect(await screen.findByRole('heading', { name: 'Ensine o Consultor sobre sua empresa' })).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: 'Ensine ao Consultor o que só sua empresa sabe' }),
+    ).toBeTruthy();
+    expect(screen.getByText('100%')).toBeTruthy();
     expect(screen.getByText('Queremos faturar R$ 250 mil por mês.')).toBeTruthy();
     expect(screen.getByLabelText('Informação')).toBeTruthy();
     expect(screen.queryByText(/Arquivos \(PDF/)).toBeNull();
     expect(screen.queryByText(/treinar modelo/i)).toBeNull();
+  });
+
+  it('usa o nome do Consultor na copy das etapas seguintes', async () => {
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.change(screen.getByLabelText('Nome do Consultor'), { target: { value: 'Lia' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByRole('heading', { name: 'Ajude Lia a conhecer sua empresa' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.getByRole('heading', { name: 'Como Lia deve se comunicar?' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.getByRole('heading', { name: 'Defina como Lia deve agir' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.getByRole('heading', { name: 'Ensine a Lia o que só sua empresa sabe' })).toBeTruthy();
   });
 
   it('preserva dados ao voltar e chips não duplicam instrução', async () => {
@@ -337,7 +378,7 @@ describe('UI admin Consultor (F13.8.1)', () => {
     expect((screen.getByLabelText('Nome do Consultor') as HTMLInputElement).value).toBe('Lia');
   });
 
-  it('conclui o wizard salvando desativado e mostra overview', async () => {
+  it('mostra review em 100% e sucesso ao salvar desativado', async () => {
     const fetchMock = mockAdminFetch({
       settings: unconfigured,
       knowledge: [],
@@ -357,17 +398,145 @@ describe('UI admin Consultor (F13.8.1)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Revisar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar configuração' }));
 
-    expect(await screen.findByText('Seu Consultor está pronto')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Revise seu Consultor' })).toBeTruthy();
+    expect(screen.getByText('100%')).toBeTruthy();
+    expect(screen.getByTestId('consultant-wizard-progress').getAttribute('aria-valuenow')).toBe('100');
+    expect(screen.getByTestId('consultant-wizard-review')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Salvar desativado' }));
 
+    expect(await screen.findByTestId('consultant-wizard-success')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Configuração concluída' })).toBeTruthy();
+    expect(screen.getByText('Lia foi configurada com sucesso.')).toBeTruthy();
+    expect(screen.getByText(/permanece desativado/)).toBeTruthy();
+    expect(screen.queryByText(/está configurada e disponível/)).toBeNull();
+    expect(screen.queryByTestId('consultant-overview')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ir para o Consultor' }));
     expect(await screen.findByTestId('consultant-overview')).toBeTruthy();
     expect(screen.getByText('Desativado')).toBeTruthy();
     const putCall = fetchMock.mock.calls.find(
       ([, init]) => (init as RequestInit | undefined)?.method === 'PUT',
     );
     expect(JSON.parse(String((putCall?.[1] as RequestInit).body)).status).toBe('DISABLED');
+  });
+
+  it('mostra sucesso ACTIVE após salvar e ativar', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockAdminFetch({
+        settings: unconfigured,
+        knowledge: [],
+        onPut: (body) => ({
+          ...configured,
+          ...(body as ConsultantSettings),
+          configured: true,
+          status: 'ACTIVE',
+          consultantName: 'Lia',
+        }),
+      }),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.change(screen.getByLabelText('Nome do Consultor'), { target: { value: 'Lia' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar configuração' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar e ativar' }));
+
+    expect(await screen.findByTestId('consultant-wizard-success')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Tudo pronto!' })).toBeTruthy();
+    expect(screen.getByText('Lia está configurada e disponível.')).toBeTruthy();
+    expect(screen.getByText(/principais informações da Alpha Co/)).toBeTruthy();
+  });
+
+  it('mostra copy de edição ao salvar um Consultor existente', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockAdminFetch({
+        settings: configured,
+        knowledge: [],
+        onPut: (body) => ({
+          ...configured,
+          ...(body as ConsultantSettings),
+          configured: true,
+          status: 'ACTIVE',
+        }),
+      }),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar configuração' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar configuração' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+
+    expect(await screen.findByTestId('consultant-wizard-success')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Alterações salvas' })).toBeTruthy();
+    expect(screen.getByText('Clara foi atualizada com sucesso.')).toBeTruthy();
+    expect(screen.getByText('Clara continua ativa e disponível.')).toBeTruthy();
+  });
+
+  it('pede confirmação ao sair com alterações e não pede se nada mudou', async () => {
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(screen.queryByTestId('consultant-discard-dialog')).toBeNull();
+    expect(await screen.findByTestId('consultant-empty-state')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.change(screen.getByLabelText('Nome do Consultor'), { target: { value: 'Lia' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(screen.getByTestId('consultant-discard-dialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar editando' }));
+    expect(screen.queryByTestId('consultant-discard-dialog')).toBeNull();
+    expect((screen.getByLabelText('Nome do Consultor') as HTMLInputElement).value).toBe('Lia');
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Descartar alterações' }));
+    expect(await screen.findByTestId('consultant-empty-state')).toBeTruthy();
+  });
+
+  it('marca o card de tom e emoji selecionados', async () => {
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    const consultivo = screen.getByRole('radio', { name: /Consultivo/ });
+    fireEvent.click(consultivo);
+    expect(consultivo.getAttribute('aria-checked')).toBe('true');
+    expect(consultivo.getAttribute('data-selected')).toBe('true');
+    const moderate = screen.getByRole('radio', { name: /Usar com moderação/ });
+    expect(moderate.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('radio', { name: /Usar livremente/ }));
+    expect(screen.getByRole('radio', { name: /Usar livremente/ }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+  });
+
+  it('continua funcional com prefers-reduced-motion', async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    expect(screen.getByTestId('consultant-wizard-progress').getAttribute('aria-valuenow')).toBe('20');
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.getByTestId('consultant-wizard-progress').getAttribute('aria-valuenow')).toBe('40');
   });
 
   it('settings existente abre overview direto e preserva a Clínica Life', async () => {
@@ -413,7 +582,7 @@ describe('UI admin Consultor (F13.8.1)', () => {
       target: { value: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar conhecimento' }));
-    expect(await screen.findByText('Conhecimento criado para esta empresa.')).toBeTruthy();
+    expect(await screen.findByText('Conhecimento adicionado')).toBeTruthy();
     expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('');
 
     fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
@@ -426,12 +595,17 @@ describe('UI admin Consultor (F13.8.1)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar exclusão' }));
     expect(await screen.findByText('Conhecimento excluído.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar ao resumo' }));
+    expect(screen.queryByTestId('consultant-discard-dialog')).toBeNull();
+    expect(await screen.findByTestId('consultant-overview')).toBeTruthy();
   });
 
   it('trocar provider no wizard atualiza o modelo', async () => {
     vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.click(screen.getByTestId('consultant-advanced-toggle'));
     fireEvent.change(screen.getByLabelText('Motor de IA'), { target: { value: 'ANTHROPIC' } });
     const modelSelect = screen.getByLabelText('Modelo') as HTMLSelectElement;
     expect(modelSelect.value).toBe('claude-sonnet-5');
@@ -492,5 +666,62 @@ describe('appendInstructionChip', () => {
     expect(
       appendInstructionChip('Priorize fluxo de caixa nas análises.', 'Priorize fluxo de caixa nas análises.'),
     ).toBe('Priorize fluxo de caixa nas análises.');
+  });
+});
+
+describe('copy e progresso do wizard', () => {
+  it('calcula 20/40/60/80/100 e review em 100', () => {
+    expect(wizardProgressPercent(1, false)).toBe(20);
+    expect(wizardProgressPercent(2, false)).toBe(40);
+    expect(wizardProgressPercent(3, false)).toBe(60);
+    expect(wizardProgressPercent(4, false)).toBe(80);
+    expect(wizardProgressPercent(5, false)).toBe(100);
+    expect(wizardProgressPercent(5, true)).toBe(100);
+  });
+
+  it('usa fallback Consultor e nome dinâmico', () => {
+    expect(wizardStepCopy(2, '').title).toBe('Ajude o Consultor a conhecer sua empresa');
+    expect(wizardStepCopy(3, 'Lia').title).toBe('Como Lia deve se comunicar?');
+    expect(wizardStepCopy(5, 'Lia').title).toBe('Ensine a Lia o que só sua empresa sabe');
+  });
+
+  it('detecta dirty state apenas em settings', () => {
+    const baseline = {
+      provider: 'OPENAI' as const,
+      model: 'gpt-4o-mini',
+      consultantName: '',
+      businessSegment: '',
+      businessDescription: '',
+      adminPrompt: '',
+      tonePreset: 'PROFISSIONAL_OBJETIVO' as const,
+      tone: '',
+      emojiPreference: 'MODERATE' as const,
+    };
+    expect(isWizardDraftDirty(baseline, baseline)).toBe(false);
+    expect(isWizardDraftDirty({ ...baseline, consultantName: 'Lia' }, baseline)).toBe(true);
+  });
+
+  it('monta copy de sucesso ACTIVE, DISABLED e edição', () => {
+    expect(
+      consultantSuccessCopy({
+        kind: 'created-active',
+        consultantName: 'Lia',
+        companyName: 'Clínica Life',
+      }).title,
+    ).toBe('Tudo pronto!');
+    expect(
+      consultantSuccessCopy({
+        kind: 'created-disabled',
+        consultantName: 'Lia',
+        companyName: 'Clínica Life',
+      }).complement,
+    ).toMatch(/permanece desativado/);
+    expect(
+      consultantSuccessCopy({
+        kind: 'edited-active',
+        consultantName: 'Lia',
+        companyName: 'Clínica Life',
+      }).message,
+    ).toBe('Lia foi atualizada com sucesso.');
   });
 });

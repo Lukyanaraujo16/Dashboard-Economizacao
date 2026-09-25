@@ -63,19 +63,43 @@
   color: var(--color-text-muted);
 }
 
-.emptyState {
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.experience {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.experienceCard {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-4);
-  max-width: 36rem;
+  gap: var(--space-5);
+  width: min(100%, 52rem);
   padding: var(--space-6);
   border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
+  box-shadow: var(--elevation-sm);
 }
 
-.emptyIcon {
+.emptyState {
+  align-items: flex-start;
+}
+
+.emptyIcon,
+.stepIcon,
+.successIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -86,57 +110,126 @@
   color: var(--color-primary);
 }
 
-.wizard {
+.emptyBenefits {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  max-width: 46rem;
-}
-
-.progress {
-  display: flex;
-  flex-wrap: wrap;
   gap: var(--space-2);
   margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.progressItem {
-  display: flex;
-}
-
-.progressButton {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 2.25rem;
-  padding: 0 var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  padding-left: 1.15rem;
   color: var(--color-text-secondary);
-  font: inherit;
-  font-size: 0.8125rem;
-  cursor: pointer;
 }
 
-.progressButton[data-current='true'] {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
-  color: var(--color-primary);
-  font-weight: 600;
+.emptyBenefits li {
+  line-height: 1.45;
 }
 
-.progressButton:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
+.wizard {
+  gap: var(--space-5);
+}
+
+.wizardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.wizardHeaderTop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.wizardMeta {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.wizardMetaPrimary,
+.wizardPercent {
+  margin: 0;
+}
+
+.wizardPercent {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.wizardStepName {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.progressTrack {
+  width: 100%;
+  height: 0.35rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border) 70%, var(--color-surface));
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary);
+  transition: width 320ms ease;
+}
+
+.wizardIntro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.wizardIntro h2,
+.wizardIntro p {
+  margin: 0;
 }
 
 .stepBody {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.stepEnter {
+  animation: wizardStepIn 220ms ease;
+}
+
+.advancedToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.advancedToggle:hover {
+  color: var(--color-text-primary);
+}
+
+.advancedToggle:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.advancedPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-background) 55%, var(--color-surface));
 }
 
 .choiceGrid {
@@ -146,6 +239,7 @@
 }
 
 .choiceCard {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -153,12 +247,21 @@
   width: 100%;
   min-height: 5.5rem;
   padding: var(--space-3);
+  padding-right: 2.25rem;
   border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.choiceCard:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-surface));
 }
 
 .choiceCard[data-selected='true'] {
@@ -171,48 +274,216 @@
   outline-offset: 2px;
 }
 
+.choiceCheck {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: inline-flex;
+  color: var(--color-primary);
+}
+
 .chipRow {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2rem;
+  padding: 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-background) 60%, var(--color-surface));
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.chip:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  color: var(--color-text-primary);
+}
+
+.chip:active {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
 .exampleGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+  gap: var(--space-2);
 }
 
 .exampleCard {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 0.2rem;
   padding: var(--space-3);
-  border: 1px dashed color-mix(in srgb, var(--color-border) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-border) 75%, transparent);
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-background) 65%, var(--color-surface));
+}
+
+.exampleCardHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.exampleCard p {
+  margin: 0;
 }
 
 .wizardActions {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.wizardActionsStart {
+  justify-self: start;
+}
+
+.wizardActionsCenter {
+  justify-self: center;
+}
+
+.wizardActionsEnd {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  justify-content: flex-end;
+  gap: var(--space-2);
+  justify-self: end;
+}
+
+.reviewLead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .reviewList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: 8.5rem 1fr;
+  gap: var(--space-2) var(--space-4);
   margin: 0;
 }
 
 .reviewList dt {
+  margin: 0;
+  color: var(--color-text-muted);
   font-weight: 600;
 }
 
 .reviewList dd {
-  margin: 0 0 var(--space-2);
+  margin: 0;
   color: var(--color-text-secondary);
+}
+
+.successCard {
+  align-items: flex-start;
+}
+
+.successEnter {
+  animation: successIn 640ms ease;
+}
+
+.successIcon {
+  animation: successIconIn 520ms ease;
+}
+
+.knowledgeComposer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-background) 40%, var(--color-surface));
+}
+
+.knowledgeFeedback {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  animation: fadeIn 200ms ease;
+}
+
+.knowledgeList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.knowledgeItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.knowledgeHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.knowledgeExcerpt {
+  margin: 0;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.discardBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
+}
+
+.discardDialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(100%, 26rem);
+  padding: var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--elevation-sm);
+}
+
+.discardActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 
 .overviewHero {
@@ -255,31 +526,54 @@
   margin: 0;
 }
 
-.knowledgeList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+@keyframes wizardStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.knowledgeHeader {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+@keyframes successIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.knowledgeExcerpt {
-  margin: 0;
-  color: var(--color-text-secondary);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+@keyframes successIconIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @media (max-width: 40rem) {
-  .emptyState,
-  .wizard,
-  .overviewHero {
+  .experienceCard {
     padding: var(--space-4);
   }
 
@@ -289,21 +583,52 @@
     grid-template-columns: 1fr;
   }
 
-  .wizardActions,
-  .overviewActions {
+  .wizardActions {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .wizardActionsStart,
+  .wizardActionsCenter,
+  .wizardActionsEnd {
+    justify-self: stretch;
     width: 100%;
   }
 
-  .wizardActions > * ,
+  .wizardActionsEnd {
+    flex-direction: column;
+  }
+
+  .wizardActionsEnd > *,
   .overviewActions > * {
-    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .reviewList {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+
+  .overviewHero {
+    padding: var(--space-4);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .control,
-  .progressButton,
-  .choiceCard {
+  .choiceCard,
+  .chip,
+  .progressFill,
+  .stepEnter,
+  .successEnter,
+  .successIcon,
+  .knowledgeFeedback {
+    animation: none;
     transition: none;
+  }
+
+  .chip:active {
+    background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
   }
 }

@@ -1,9 +1,11 @@
-import type { FormEvent, TextareaHTMLAttributes } from 'react';
+import { useEffect, type FormEvent, type TextareaHTMLAttributes } from 'react';
+import { Check } from 'lucide-react';
 
 import { CONSULTANT_FIELD_LIMITS, type ConsultantKnowledgeEntry } from '../../services/admin/consultant.types';
 import { Badge, Button, FormField, Input, Typography } from '../ui';
+import { UI_ICON_STROKE } from '../ui/icons';
 import { cx } from '../ui/utils/cx';
-import { formatCompanyDate } from './company-utils';
+import { excerptKnowledge } from './consultant-setup-copy';
 import styles from './companies.module.css';
 import localStyles from './company-consultant.module.css';
 
@@ -30,6 +32,7 @@ type ConsultantKnowledgePanelProps = {
   readonly onToggle: (entry: ConsultantKnowledgeEntry) => void;
   readonly onAskDelete: (entryId: string | null) => void;
   readonly onConfirmDelete: (entryId: string) => void;
+  readonly onDismissSuccess?: () => void;
 };
 
 function NativeTextarea({
@@ -62,7 +65,18 @@ export function ConsultantKnowledgePanel({
   onToggle,
   onAskDelete,
   onConfirmDelete,
+  onDismissSuccess,
 }: ConsultantKnowledgePanelProps) {
+  useEffect(() => {
+    if (!success || !onDismissSuccess) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      onDismissSuccess();
+    }, 2800);
+    return () => window.clearTimeout(timer);
+  }, [onDismissSuccess, success]);
+
   return (
     <section className={styles.appearanceSection} data-testid="consultant-knowledge">
       {loadError ? (
@@ -72,13 +86,13 @@ export function ConsultantKnowledgePanel({
       ) : null}
 
       <form
-        className={styles.formCard}
+        className={localStyles.knowledgeComposer}
         data-testid="consultant-knowledge-form"
         onSubmit={onSubmit}
         noValidate
       >
         <Typography as="h4" variant="label">
-          {editingEntryId ? 'Editar conhecimento' : 'Novo conhecimento'}
+          {editingEntryId ? 'Editar conhecimento' : 'Adicionar conhecimento'}
         </Typography>
         <FormField
           label="Título"
@@ -127,9 +141,10 @@ export function ConsultantKnowledgePanel({
       ) : null}
 
       {success ? (
-        <Typography as="p" variant="body" className={styles.formSuccess} role="status">
-          {success}
-        </Typography>
+        <p className={localStyles.knowledgeFeedback} role="status" aria-live="polite">
+          <Check size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
+          <span>{success}</span>
+        </p>
       ) : null}
 
       {entries.length === 0 ? (
@@ -139,22 +154,17 @@ export function ConsultantKnowledgePanel({
       ) : (
         <div className={localStyles.knowledgeList}>
           {entries.map((entry) => (
-            <article key={entry.id} className={styles.companyCard} data-testid={`knowledge-${entry.id}`}>
+            <article key={entry.id} className={localStyles.knowledgeItem} data-testid={`knowledge-${entry.id}`}>
               <div className={localStyles.knowledgeHeader}>
-                <div>
-                  <Typography as="p" variant="label">
-                    {entry.title}
-                  </Typography>
-                  <Typography as="p" variant="caption" className={styles.pageDescription}>
-                    Atualizado em {formatCompanyDate(entry.updatedAt)}
-                  </Typography>
-                </div>
+                <Typography as="p" variant="label">
+                  {entry.title}
+                </Typography>
                 <Badge variant={entry.status === 'ACTIVE' ? 'success' : 'neutral'}>
                   {entry.status === 'ACTIVE' ? 'Ativo' : 'Desativado'}
                 </Badge>
               </div>
               <Typography as="p" variant="body" className={localStyles.knowledgeExcerpt}>
-                {entry.content}
+                {excerptKnowledge(entry.content)}
               </Typography>
               {pendingDeleteId === entry.id ? (
                 <div className={styles.confirmPanel} role="group" aria-label="Confirmar exclusão">

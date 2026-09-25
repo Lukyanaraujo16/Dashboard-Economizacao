@@ -28,23 +28,29 @@ import {
   type ConsultantStatus,
 } from '../../services/admin/consultant.types';
 import { StateWrapper } from '../financial/state-wrapper';
-import { Typography } from '../ui';
+import { Button, Typography } from '../ui';
 import { CompanySectionNav } from './company-section-nav';
 import { ConsultantManagementOverview } from './consultant-management-overview';
 import { EMPTY_KNOWLEDGE_DRAFT, type KnowledgeDraft } from './consultant-knowledge-panel';
 import { ConsultantSetupEmpty } from './consultant-setup-empty';
+import { ConsultantSetupSuccess } from './consultant-setup-success';
 import {
   ConsultantSetupWizard,
   type ConsultantWizardDraft,
 } from './consultant-setup-wizard';
-import type { ConsultantWizardStepId } from './consultant-setup-copy';
+import {
+  isWizardDraftDirty,
+  type ConsultantSuccessKind,
+  type ConsultantWizardStepId,
+} from './consultant-setup-copy';
 import styles from './companies.module.css';
+import localStyles from './company-consultant.module.css';
 
 type CompanyConsultantPageProps = {
   readonly companyId: string;
 };
 
-type PageView = 'empty' | 'wizard' | 'overview';
+type PageView = 'empty' | 'wizard' | 'overview' | 'success';
 
 function emptyToNull(value: string): string | null {
   const trimmed = value.trim();
@@ -116,6 +122,10 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
   const [step, setStep] = useState<ConsultantWizardStepId>(1);
   const [reviewing, setReviewing] = useState(false);
   const [draft, setDraft] = useState<ConsultantWizardDraft | null>(null);
+  const [baselineDraft, setBaselineDraft] = useState<ConsultantWizardDraft | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [successKind, setSuccessKind] = useState<ConsultantSuccessKind | null>(null);
+  const [successName, setSuccessName] = useState('');
 
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -131,6 +141,9 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
   const applyLoaded = useCallback((next: ConsultantSettings, catalog: ConsultantOptions) => {
     setSettings(next);
     setDraft(draftFromSettings(next, catalog));
+    setBaselineDraft(null);
+    setDiscardOpen(false);
+    setSuccessKind(null);
     setView(next.configured ? 'overview' : 'empty');
     setWizardMode('create');
     setStep(1);
@@ -204,8 +217,12 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     if (!options) {
       return;
     }
+    const nextDraft = emptyDraft(options);
     setWizardMode('create');
-    setDraft(emptyDraft(options));
+    setDraft(nextDraft);
+    setBaselineDraft(nextDraft);
+    setDiscardOpen(false);
+    setSuccessKind(null);
     setStep(1);
     setReviewing(false);
     setFormError(null);
@@ -217,8 +234,12 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     if (!options || !settings) {
       return;
     }
+    const nextDraft = draftFromSettings(settings, options);
     setWizardMode('edit');
-    setDraft(draftFromSettings(settings, options));
+    setDraft(nextDraft);
+    setBaselineDraft(nextDraft);
+    setDiscardOpen(false);
+    setSuccessKind(null);
     setStep(nextStep);
     setReviewing(false);
     setFormError(null);
@@ -233,7 +254,23 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     applyLoaded(settings, options);
   }
 
-  async function persistSettings(status: ConsultantStatus) {
+  function requestCloseWizard() {
+    if (draft && baselineDraft && isWizardDraftDirty(draft, baselineDraft)) {
+      setDiscardOpen(true);
+      return;
+    }
+    closeWizard();
+  }
+
+  function confirmDiscard() {
+    setDiscardOpen(false);
+    closeWizard();
+  }
+
+  async function persistSettings(
+    status: ConsultantStatus,
+    destination: 'success' | 'overview' = 'success',
+  ) {
     if (saving || !options || !draft) {
       return;
     }
@@ -266,12 +303,31 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
         emojiPreference: draft.emojiPreference,
       });
       setSettings(saved);
-      setDraft(draftFromSettings(saved, options));
-      setView('overview');
+      const nextDraft = draftFromSettings(saved, options);
+      setDraft(nextDraft);
+      setBaselineDraft(nextDraft);
       setReviewing(false);
-      setSuccessMessage(
-        status === 'ACTIVE' ? 'Consultor ativado.' : 'Configuração do consultor salva.',
-      );
+      setDiscardOpen(false);
+      if (destination === 'success') {
+        const kind: ConsultantSuccessKind =
+          wizardMode === 'create'
+            ? status === 'ACTIVE'
+              ? 'created-active'
+              : 'created-disabled'
+            : status === 'ACTIVE'
+              ? 'edited-active'
+              : 'edited-disabled';
+        setSuccessKind(kind);
+        setSuccessName(saved.consultantName ?? draft.consultantName);
+        setSuccessMessage(null);
+        setView('success');
+      } else {
+        setSuccessKind(null);
+        setView('overview');
+        setSuccessMessage(
+          status === 'ACTIVE' ? 'Consultor ativado.' : 'Configuração do consultor salva.',
+        );
+      }
     } catch (error) {
       setFormError(
         error instanceof ConsultantRequestError
@@ -290,7 +346,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     if (!draft) {
       return;
     }
-    await persistSettings(settings.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE');
+    await persistSettings(settings.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE', 'overview');
   }
 
   function startCreateKnowledge() {
@@ -335,7 +391,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
       } else {
         const created = await createTenantConsultantKnowledge(companyId, { title, content });
         setKnowledge((current) => [created, ...current]);
-        setKnowledgeSuccess('Conhecimento criado para esta empresa.');
+        setKnowledgeSuccess('Conhecimento adicionado');
       }
       setEditingEntryId(null);
       setKnowledgeDraft(EMPTY_KNOWLEDGE_DRAFT);
@@ -425,11 +481,13 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
         />
       ) : (
         <div>
-          <div className={styles.formIntro}>
-            <Typography as="h2" variant="heading">
-              Consultor Financeiro
-            </Typography>
-          </div>
+          {view === 'overview' ? (
+            <div className={styles.formIntro}>
+              <Typography as="h2" variant="heading">
+                Consultor Financeiro
+              </Typography>
+            </div>
+          ) : null}
 
           {view === 'empty' ? <ConsultantSetupEmpty onCreate={openCreateWizard} /> : null}
 
@@ -444,6 +502,23 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
               successMessage={successMessage}
               onEdit={openEditWizard}
               onToggleStatus={() => void handleToggleStatus()}
+            />
+          ) : null}
+
+          {view === 'success' && successKind ? (
+            <ConsultantSetupSuccess
+              kind={successKind}
+              consultantName={successName}
+              companyName={companyName ?? 'esta empresa'}
+              onGoToConsultant={() => {
+                setSuccessKind(null);
+                setView('overview');
+              }}
+              onReview={
+                successKind === 'created-active' || successKind === 'edited-active'
+                  ? () => openEditWizard()
+                  : undefined
+              }
             />
           ) : null}
 
@@ -467,7 +542,6 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
               pendingDeleteId={pendingDeleteId}
               saving={saving}
               formError={formError}
-              successMessage={successMessage}
               onStepChange={(next) => {
                 setStep(next);
                 setReviewing(false);
@@ -475,7 +549,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
               onDraftChange={handleDraftChange}
               onReview={() => setReviewing(true)}
               onBackFromReview={() => setReviewing(false)}
-              onCancel={closeWizard}
+              onCancel={requestCloseWizard}
               onSave={(status) => void persistSettings(status)}
               onKnowledgeDraftChange={setKnowledgeDraft}
               onKnowledgeSubmit={(event) => void handleSaveKnowledge(event)}
@@ -484,7 +558,37 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
               onKnowledgeToggle={(entry) => void handleToggleKnowledge(entry)}
               onKnowledgeAskDelete={setPendingDeleteId}
               onKnowledgeConfirmDelete={(entryId) => void handleDeleteKnowledge(entryId)}
+              onKnowledgeDismissSuccess={() => setKnowledgeSuccess(null)}
             />
+          ) : null}
+
+          {discardOpen ? (
+            <div className={localStyles.discardBackdrop}>
+              <div
+                className={localStyles.discardDialog}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="consultant-discard-title"
+                data-testid="consultant-discard-dialog"
+              >
+                <div>
+                  <Typography as="h2" variant="heading" id="consultant-discard-title">
+                    Descartar alterações?
+                  </Typography>
+                  <Typography as="p" variant="body" className={styles.pageDescription}>
+                    Você fez alterações que ainda não foram salvas.
+                  </Typography>
+                </div>
+                <div className={localStyles.discardActions}>
+                  <Button type="button" variant="ghost" onClick={() => setDiscardOpen(false)}>
+                    Continuar editando
+                  </Button>
+                  <Button type="button" variant="primary" onClick={confirmDiscard}>
+                    Descartar alterações
+                  </Button>
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       )}
