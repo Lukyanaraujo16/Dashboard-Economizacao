@@ -15,8 +15,10 @@ import {
   composeAdvisorFactualAnswer,
   createAllowAllConsultantRateLimiter,
   createSendAdvisorMessage,
+  CASH_COST_CENTER_LOOKUP_TOOL_NAME,
   extractAdvisorCostCenterMention,
   isAdvisorInterpretiveQuestion,
+  isCostCenterOrdinalQuestion,
   listAdvisorCostCenterMovementLines,
   lookupAdvisorCostCenter,
   rankAdvisorCostCenterDimension,
@@ -698,6 +700,33 @@ describe('F13.8.1D4.3 anáfora e precedência', () => {
         priorUserContents: ['Quais foram os 5 maiores centros em agosto?'],
       }).anaphora,
     ).toBe('ORDINAL_UNSUPPORTED');
+    const rankingFive =
+      'Quais foram os 5 centros de custo com maior saída em agosto de 2026?';
+    for (const ordinal of [
+      'Quanto o primeiro teve em julho?',
+      'Quanto o segundo teve em julho?',
+      'e o terceiro?',
+    ]) {
+      expect(
+        resolveAdvisorConversationalCostCenter({
+          content: ordinal,
+          period: periodOf(ordinal, [rankingFive]),
+          priorUserContents: [rankingFive],
+        }),
+        ordinal,
+      ).toMatchObject({
+        intent: null,
+        anaphora: 'ORDINAL_UNSUPPORTED',
+      });
+    }
+    expect(
+      isCostCenterOrdinalQuestion(
+        'quanto o segundo teve em julho?',
+        [rankingFive],
+      ),
+    ).toBe(true);
+    expect(isCostCenterOrdinalQuestion('quanto o segundo teve em julho?')).toBe(false);
+    expect(extractAdvisorCostCenterMention('Clínica Life Jacaraípe.')).toBeNull();
     expect(
       resolveAdvisorConversationalCostCenter({
         content: 'E quanto esse centro teve em julho?',
@@ -886,6 +915,7 @@ describe('F13.8.1D4.3 compositor, interpretativo e send', () => {
     });
     expect(ordinal.run).toBeNull();
     expect(ordinal.consultantMessage.content).toContain('posição no ranking');
+    expect(ordinal.consultantMessage.content).toContain('nome do centro');
     expect(isolatedOpenai.generateCalls).toHaveLength(0);
     expect(isolatedRuns).toHaveLength(0);
     expect(runs).toHaveLength(0);
@@ -1052,5 +1082,138 @@ describe('F13.8.1D4.3 compositor, interpretativo e send', () => {
         orderBy: 'amount',
       }),
     ).toThrow();
+  });
+});
+
+describe('F13.8.1D4.3.3 ordinal não suportado', () => {
+  it('esclarece referência ordinal sem inventar dados ou entidade', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const composed = composeAdvisorFactualAnswer({
+      content: 'Quanto o segundo teve em julho?',
+      anaphora: 'ORDINAL_UNSUPPORTED',
+      toolName: CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+      toolOk: true,
+      toolContent: JSON.stringify({
+        status: 'UNRESOLVED',
+        reason: 'COST_CENTER_ORDINAL_UNSUPPORTED',
+        monthKey: '2026-07',
+        scope: 'PERIOD',
+        factKind: 'REALIZED_CASH_COST_CENTER_DIMENSION_LOOKUP',
+        costCenter: null,
+      }),
+    });
+    expect(composed.classification.kind).toBe('FACTUAL_CLOSED');
+    expect(composed.classification.intentKind).toBe('FACTUAL_LIMITATION');
+    expect(composed.answer).toContain('identificar com segurança');
+    expect(composed.answer).toContain('nome do centro');
+    expect(composed.answer).not.toMatch(/não tenho os dados/i);
+    expect(composed.answer).not.toMatch(/indispon/i);
+    expect(composed.answer).not.toMatch(/julho/i);
+    expect(composed.meta?.providerCalled).toBe(false);
+
+    const { send, openai, runs } = createHarness();
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quais foram os 5 centros de custo com maior saída em agosto de 2026?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    for (const question of [
+      'Quanto o primeiro teve em julho?',
+      'Quanto o segundo teve em julho?',
+      'e o terceiro?',
+    ]) {
+      const ordinal = await send.execute({
+        tenantId: 'tenant-a',
+        userId: 'user-a',
+        conversationId: 'conv-a',
+        question,
+        now: new Date('2026-09-25T18:00:00.000Z'),
+      });
+      expect(ordinal.run, question).toBeNull();
+      expect(ordinal.factualAnswer?.intentKind, question).toBe('FACTUAL_LIMITATION');
+      expect(ordinal.consultantMessage.content, question).toContain('nome do centro');
+      expect(ordinal.consultantMessage.content, question).not.toMatch(/não tenho os dados/i);
+      expect(ordinal.consultantMessage.content, question).not.toMatch(/R\$/);
+      expect(ordinal.consultantMessage.content, question).not.toContain('Administrativo');
+      expect(ordinal.consultantMessage.content, question).not.toContain('Operações');
+    }
+    expect(openai.generateCalls).toHaveLength(0);
+    expect(runs).toHaveLength(0);
+
+    const named = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quanto gastei no centro Administrativo em julho?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    expect(named.run).toBeNull();
+    expect(named.consultantMessage.content).toContain('Administrativo');
+    expect(named.consultantMessage.content).toContain('julho');
+    expect(named.consultantMessage.content).toMatch(/R\$/);
+    expect(openai.generateCalls).toHaveLength(0);
+    info.mockRestore();
+  });
+
+  it('preserva anáfora, período elíptico, D1 e D2', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const { send, openai } = createHarness();
+    await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual centro teve maior saída em agosto de 2026?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    const esse = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quanto esse centro teve em julho?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    expect(esse.consultantMessage.content).toContain('Administrativo');
+    const ele = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quanto ele teve em julho?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    expect(ele.consultantMessage.content).toContain('Administrativo');
+    const junho = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em junho?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    expect(junho.factualAnswer?.intentKind).not.toBe('FACTUAL_LIMITATION');
+    expect(junho.consultantMessage.content).not.toContain('posição no ranking');
+
+    const { send: isolated } = createHarness();
+    const d1 = await isolated.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Compare julho e agosto de 2026.',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    expect(d1.factualAnswer?.intentKind).not.toBe('COST_CENTER_LOOKUP');
+    expect(d1.consultantMessage.content).not.toContain('Administrativo');
+    const d2 = await isolated.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quais foram as 5 maiores saídas de agosto de 2026?',
+      now: new Date('2026-09-25T18:00:00.000Z'),
+    });
+    expect(resolveAdvisorDrilldownIntent(d2.userMessage.content)?.toolName).toBe(
+      'cash_movement_lines',
+    );
+    expect(openai.generateCalls).toHaveLength(0);
+    info.mockRestore();
   });
 });

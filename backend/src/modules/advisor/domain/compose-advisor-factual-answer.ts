@@ -14,7 +14,7 @@ import {
 import type { AdvisorCostCenterAnaphoraStatus } from './resolve-advisor-conversational-cost-center.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
 
-export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3.2-1';
+export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3.3-1';
 
 export type AdvisorFactualAnswerMeta = {
   readonly classification: 'FACTUAL_CLOSED';
@@ -625,7 +625,7 @@ function composeLimitation(
     factKind === 'REALIZED_CASH_COST_CENTER_MOVEMENT_LINES'
   ) {
     if (reason === 'COST_CENTER_ORDINAL_UNSUPPORTED' || anaphora === 'ORDINAL_UNSUPPORTED') {
-      return 'Não consigo identificar o centro de custo pela posição no ranking. Especifique o nome ou o código.';
+      return 'Não consigo identificar com segurança qual centro de custo você quer dizer por essa posição no ranking. Informe o nome do centro de custo que deseja consultar.';
     }
     if (
       reason === 'NO_UNEQUIVOCAL_COST_CENTER_ANTECEDENT' ||

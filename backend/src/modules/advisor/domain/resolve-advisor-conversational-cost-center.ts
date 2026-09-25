@@ -78,7 +78,7 @@ export function resolveAdvisorConversationalCostCenter(input: {
 }): AdvisorConversationalCostCenter {
   const priors = input.priorUserContents ?? [];
   const folded = foldPt(input.content);
-  if (isCostCenterOrdinalQuestion(folded)) {
+  if (isCostCenterOrdinalQuestion(folded, priors)) {
     return {
       intent: null,
       anaphora: 'ORDINAL_UNSUPPORTED',
@@ -265,14 +265,26 @@ export function isAdvisorCostCenterPeriodFollowUp(content: string): boolean {
   return /^(?:e em |agora em |e no mes|e nesse mes|e neste mes)/.test(folded);
 }
 
-export function isCostCenterOrdinalQuestion(folded: string): boolean {
-  return (
+export function isCostCenterOrdinalQuestion(
+  folded: string,
+  priorUserContents: readonly string[] = [],
+): boolean {
+  if (
     /\b(?:o |a )?(?:primeiro|segunda?|terceir[oa]|quarto|quinto|\d+\s*o)\s+(?:maior\s+)?centros?\b/.test(
       folded,
     ) ||
     (/\b(?:o |a )?(?:segundo|terceiro|quarto|quinto)\b/.test(folded) &&
       /\bcentros?\b/.test(folded))
-  );
+  ) {
+    return true;
+  }
+  const positionalReference =
+    /\b(?:e )?(?:o |a )(?:primeiro|segund[oa]|terceir[oa]|quarto|quinto)\b/.test(folded) ||
+    /\b(?:o |a )\d+\s*o\b/.test(folded);
+  if (!positionalReference) {
+    return false;
+  }
+  return priorUserContents.some((content) => hasAdvisorCostCenterCue(content));
 }
 
 function currentQuestionAllowsHistoricalCostCenter(input: {
