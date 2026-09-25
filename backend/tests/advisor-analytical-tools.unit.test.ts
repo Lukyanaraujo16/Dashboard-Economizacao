@@ -49,6 +49,8 @@ describe('Analytical Tools do Consultor (F13.8.1D1)', () => {
   it('allowlist contém compare_cash_months e rejeita tool desconhecida', async () => {
     expect(listAdvisorAnalyticalTools().map((tool) => tool.name)).toEqual([
       COMPARE_CASH_MONTHS_TOOL_NAME,
+      'cash_realized_breakdown',
+      'cash_movement_lines',
     ]);
     expect(ADVISOR_MAX_TOOL_ROUNDS).toBe(3);
     const executor = createAdvisorAnalyticalToolExecutor({

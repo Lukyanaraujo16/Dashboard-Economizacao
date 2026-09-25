@@ -33,11 +33,17 @@ export type {
 export {
   ADVISOR_ANALYTICAL_TOOL_TIMEOUT_MS,
   ADVISOR_MAX_TOOL_ROUNDS,
+  CASH_MOVEMENT_LINES_TOOL,
+  CASH_REALIZED_BREAKDOWN_TOOL,
   COMPARE_CASH_MONTHS_TOOL,
   COMPARE_CASH_MONTHS_TOOL_NAME,
+  assertCashMovementLinesArgs,
+  assertCashRealizedBreakdownArgs,
   assertCompareCashMonthsArgs,
   createAdvisorAnalyticalToolExecutor,
+  createAdvisorCashBreakdownService,
   createAdvisorCashComparisonService,
+  createAdvisorCashMovementLinesService,
   listAdvisorAnalyticalTools,
 } from './advisor-analytical-tools.js';
 export type {
@@ -45,9 +51,45 @@ export type {
   AdvisorAnalyticalToolDefinition,
   AdvisorAnalyticalToolExecutor,
   AdvisorAnalyticalToolResult,
+  AdvisorCashBreakdownRequest,
+  AdvisorCashBreakdownService,
   AdvisorCashComparisonRequest,
   AdvisorCashComparisonService,
+  AdvisorCashMovementLinesRequest,
+  AdvisorCashMovementLinesService,
 } from './advisor-analytical-tools.js';
+export {
+  ADVISOR_CASH_DIRECTIONS,
+  ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+  ADVISOR_DRILLDOWN_MAX_LIMIT,
+  CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+  clampAdvisorDrilldownLimit,
+  isAdvisorCashDirection,
+  rankAdvisorCashRealizedBreakdown,
+  serializeAdvisorCashRealizedBreakdown,
+} from './advisor-cash-realized-breakdown.js';
+export type {
+  AdvisorBreakdownStatus,
+  AdvisorCashCategoryRank,
+  AdvisorCashDirection,
+  AdvisorCashRealizedBreakdown,
+} from './advisor-cash-realized-breakdown.js';
+export {
+  ADVISOR_MOVEMENT_SORTS,
+  ADVISOR_MOVEMENT_TEXT_MAX,
+  CASH_MOVEMENT_LINES_TOOL_NAME,
+  clipAdvisorToolText,
+  isAdvisorCashMovementSort,
+  rankAdvisorCashMovementLines,
+  serializeAdvisorCashMovementLines,
+} from './advisor-cash-movement-lines.js';
+export type {
+  AdvisorCashMovementLine,
+  AdvisorCashMovementSort,
+  AdvisorCashMovementSource,
+  AdvisorCashMovementWindow,
+  AdvisorMovementStatus,
+} from './advisor-cash-movement-lines.js';
 export { buildAnalyticalFactsContent } from './analytical-facts-text.js';
 export {
   ADVISOR_BILLING_COVERAGES,

@@ -824,4 +824,128 @@ describe('send-advisor-message (F13.3)', () => {
     expect(openai.generateCalls).toHaveLength(4);
     expect(openai.generateCalls[3]?.tools).toBeUndefined();
   });
+
+  it('executa cash_realized_breakdown e devolve a resposta final', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const openai = createFakeIaProvider({
+      id: 'OPENAI',
+      script: [
+        {
+          toolCalls: [
+            {
+              id: 'bd-1',
+              name: 'cash_realized_breakdown',
+              arguments: { monthKey: '2026-08', direction: 'INFLOW' },
+            },
+          ],
+        },
+        { text: 'As categorias oficiais de agosto foram ranqueadas no backend.' },
+      ],
+    });
+    const executeTool = vi.fn(async (input: { tenantId: string; call: { id: string; name: string } }) => {
+      expect(input.tenantId).toBe('tenant-a');
+      return {
+        id: input.call.id,
+        name: input.call.name,
+        ok: true,
+        content: JSON.stringify({
+          status: 'OK',
+          monthKey: '2026-08',
+          categories: [{ label: 'Atendimentos Convênio', rank: 1 }],
+        }),
+      };
+    });
+    const { send } = createHarness({
+      openai,
+      context: { build: contextBuild },
+      analyticalTools: {
+        tools: [{ name: 'cash_realized_breakdown', description: 'bd', inputSchema: {} }],
+        execute: executeTool,
+      },
+    });
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quais categorias mais faturaram em agosto?',
+      monthKey: '2026-09',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    expect(contextBuild).toHaveBeenLastCalledWith(
+      expect.objectContaining({ monthKey: '2026-08' }),
+    );
+    expect(result.consultantMessage.content).toBe(
+      'As categorias oficiais de agosto foram ranqueadas no backend.',
+    );
+    expect(executeTool).toHaveBeenCalledOnce();
+    expect(openai.generateCalls).toHaveLength(2);
+  });
+
+  it('executa cash_movement_lines com julho herdado da conversa', async () => {
+    const contextBuild = vi.fn(async (input: BuildAdvisorContextInput) => ({
+      ...builtContext(),
+      monthKey: input.monthKey ?? 'missing',
+    }));
+    const openai = createFakeIaProvider({
+      id: 'OPENAI',
+      script: [
+        {
+          toolCalls: [
+            {
+              id: 'mv-1',
+              name: 'cash_movement_lines',
+              arguments: { monthKey: '2026-07', direction: 'INFLOW', limit: 5 },
+            },
+          ],
+        },
+        { text: 'Estou mostrando os 5 maiores recebimentos individuais de julho.' },
+      ],
+    });
+    const executeTool = vi.fn(async (input: { tenantId: string; call: { id: string; arguments: Record<string, unknown> } }) => {
+      expect(input.tenantId).toBe('tenant-a');
+      expect(input.call.arguments.monthKey).toBe('2026-07');
+      return {
+        id: input.call.id,
+        name: 'cash_movement_lines',
+        ok: true,
+        content: JSON.stringify({
+          status: 'OK',
+          monthKey: '2026-07',
+          returnedCount: 5,
+          hasMore: true,
+          notAConvenioRanking: true,
+        }),
+      };
+    });
+    const { send, messages } = createHarness({
+      openai,
+      context: { build: contextBuild },
+      analyticalTools: {
+        tools: [{ name: 'cash_movement_lines', description: 'mv', inputSchema: {} }],
+        execute: executeTool,
+      },
+    });
+    messages.push(
+      message('seed-ago', 'USER', 'Como está agosto?'),
+      message('seed-jul', 'USER', 'E julho?'),
+    );
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quais foram os maiores recebimentos desse mês?',
+      monthKey: '2026-09',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    expect(contextBuild).toHaveBeenLastCalledWith(
+      expect.objectContaining({ monthKey: '2026-07' }),
+    );
+    expect(result.consultantMessage.content).toBe(
+      'Estou mostrando os 5 maiores recebimentos individuais de julho.',
+    );
+    expect(executeTool).toHaveBeenCalledOnce();
+  });
 });

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAnthropicProvider, IaProviderError } from '../src/infrastructure/ai/index.js';
 import type { GenerationInput } from '../src/infrastructure/ai/index.js';
 import type { AdvisorContextBlock } from '../src/modules/advisor/domain/context-blocks.js';
+import { listAdvisorAnalyticalTools } from '../src/modules/advisor/index.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -192,13 +193,7 @@ describe('adapter Anthropic Messages (F13.3)', () => {
     await expect(
       provider.generate(
         sampleInput({
-          tools: [
-            {
-              name: 'compare_cash_months',
-              description: 'Compara dois meses',
-              inputSchema: { type: 'object', properties: { monthKey: { type: 'string' } } },
-            },
-          ],
+          tools: [...listAdvisorAnalyticalTools()],
         }),
       ),
     ).resolves.toEqual({
@@ -214,6 +209,8 @@ describe('adapter Anthropic Messages (F13.3)', () => {
     });
     const body = requestBody(fetchImpl);
     expect(JSON.stringify(body.tools)).toContain('compare_cash_months');
+    expect(JSON.stringify(body.tools)).toContain('cash_realized_breakdown');
+    expect(JSON.stringify(body.tools)).toContain('cash_movement_lines');
     expect(JSON.stringify(body.tools)).not.toContain('tenantId');
   });
 });

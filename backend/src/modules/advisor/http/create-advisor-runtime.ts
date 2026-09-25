@@ -13,10 +13,13 @@ import { createAdvisorPlatformCredentialRepository } from '../repositories/advis
 import { createAnalyticsService } from '../../analytics/services/analytics.service.js';
 import { createMonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import { createCostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
+import { createCostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import { createFinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import { createLedgerReadRepository } from '../../finance/repositories/ledger-read.repository.js';
 import { createPayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
+import { createPartyReadRepository } from '../../finance/repositories/party-read.repository.js';
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
+import { createReportCashDetailsService } from '../../reports/services/report-cash-details.service.js';
 import { createAdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowledge.repository.js';
@@ -26,7 +29,9 @@ import type { AdvisorSettingsRepository } from '../repositories/advisor-settings
 import type { ConsultantRateLimiter } from '../domain/consultant-rate-limit.js';
 import {
   createAdvisorAnalyticalToolExecutor,
+  createAdvisorCashBreakdownService,
   createAdvisorCashComparisonService,
+  createAdvisorCashMovementLinesService,
 } from '../domain/advisor-analytical-tools.js';
 import { createBuildAdvisorContext } from '../services/build-advisor-context.js';
 import {
@@ -144,15 +149,32 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     categories,
     costCenterAllocations,
   });
+  const ledger = createLedgerReadRepository(prisma);
   const cashFlow = createMonthlyCashFlowService({
-    ledger: createLedgerReadRepository(prisma),
+    ledger,
     receivables,
     payables,
     categories,
     costCenterAllocations,
   });
   const cashComparison = createAdvisorCashComparisonService({ cashFlow });
-  const analyticalTools = createAdvisorAnalyticalToolExecutor({ cashComparison });
+  const cashBreakdown = createAdvisorCashBreakdownService({ cashFlow });
+  const cashMovements = createAdvisorCashMovementLinesService({
+    reportCashDetails: createReportCashDetailsService({
+      ledger,
+      receivables,
+      payables,
+      categories,
+      parties: createPartyReadRepository(prisma),
+      costCenters: createCostCenterReadRepository(prisma),
+      costCenterAllocations,
+    }),
+  });
+  const analyticalTools = createAdvisorAnalyticalToolExecutor({
+    cashComparison,
+    cashBreakdown,
+    cashMovements,
+  });
   const context = createBuildAdvisorContext({
     settings,
     knowledge,
