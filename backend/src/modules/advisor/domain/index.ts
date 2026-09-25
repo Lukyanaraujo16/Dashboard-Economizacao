@@ -59,6 +59,16 @@ export type {
   AdvisorCashMovementLinesService,
 } from './advisor-analytical-tools.js';
 export {
+  ADVISOR_BREAKDOWN_DOES_NOT_PROVE,
+  ADVISOR_BREAKDOWN_FACT_KIND,
+  ADVISOR_BREAKDOWN_PROVES,
+  ADVISOR_MOVEMENT_DOES_NOT_PROVE,
+  ADVISOR_MOVEMENT_FACT_KIND,
+  ADVISOR_MOVEMENT_PROVES,
+  advisorBreakdownFactContract,
+  advisorMovementFactContract,
+} from './advisor-drilldown-fact-contract.js';
+export {
   ADVISOR_CASH_DIRECTIONS,
   ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
   ADVISOR_DRILLDOWN_MAX_LIMIT,

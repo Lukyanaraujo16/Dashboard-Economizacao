@@ -43,7 +43,8 @@ export function buildAnalyticalFactsContent(input: {
     `monthKey: ${drilldown.monthKey}`,
     `ok: ${drilldown.ok ? 'true' : 'false'}`,
     'note: fatos oficiais já obtidos pelo backend para a pergunta atual. Não afirme que não conseguiu obter se ok=true.',
-    'note: description/partyName de uma linha é metadado do movimento individual, não ranking de cliente/convênio.',
+    'note: obedeça result.factKind, result.proves e result.doesNotProve. Não invente subcategorias nem benchmark.',
+    'note: description/partyName de uma linha é metadado do movimento individual, não ranking de cliente/convênio. Não sabemos é resposta válida.',
     `result: ${drilldown.content}`,
   ].join('\n');
 }

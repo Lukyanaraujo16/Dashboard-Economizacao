@@ -8,6 +8,7 @@ import {
   resolveAdvisorBillingCoverage,
   type AdvisorBillingCoverage,
 } from './compare-advisor-cash-months.js';
+import { advisorBreakdownFactContract } from './advisor-drilldown-fact-contract.js';
 import {
   ADVISOR_CASH_INFLOW_MEANING,
   ADVISOR_CASH_OUTFLOW_MEANING,
@@ -139,6 +140,7 @@ export function serializeAdvisorCashRealizedBreakdown(
       value.direction === 'INFLOW' ? ADVISOR_CASH_INFLOW_MEANING : ADVISOR_CASH_OUTFLOW_MEANING,
     rankingAuthority: 'OFFICIAL_REALIZED_BY_CATEGORY',
     notIndividualConvenioRanking: true,
+    ...advisorBreakdownFactContract(),
     totalRealized: formatAdvisorFinancialAmount(value.totalRealized),
     requestedLimit: value.requestedLimit,
     effectiveLimit: value.effectiveLimit,

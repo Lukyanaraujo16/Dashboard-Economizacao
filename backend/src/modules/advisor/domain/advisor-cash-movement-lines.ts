@@ -1,4 +1,5 @@
 import { Prisma } from '../../../generated/prisma/client.js';
+import { advisorMovementFactContract } from './advisor-drilldown-fact-contract.js';
 import { formatAdvisorCivilDate } from './financial-facts-text.js';
 import {
   ADVISOR_CASH_INFLOW_MEANING,
@@ -115,9 +116,7 @@ export function serializeAdvisorCashMovementLines(
     realizedMeaning:
       value.direction === 'INFLOW' ? ADVISOR_CASH_INFLOW_MEANING : ADVISOR_CASH_OUTFLOW_MEANING,
     windowKind: 'TOP_N_INDIVIDUAL_MOVEMENTS',
-    populationComplete: false,
-    notAPartyRanking: true,
-    notAConvenioRanking: true,
+    ...advisorMovementFactContract(),
     requestedLimit: value.requestedLimit,
     effectiveLimit: value.effectiveLimit,
     returnedCount: value.returnedCount,
