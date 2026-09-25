@@ -149,9 +149,12 @@ export function serializeAdvisorCashMonthComparison(
   value: AdvisorCashMonthComparison,
 ): Record<string, unknown> {
   return {
+    temporalScope: 'PERIOD_COMPARISON',
     monthKey: value.monthKey,
     comparisonMonthKey: value.comparisonMonthKey,
     billingCoverage: value.billingCoverage,
+    realizedResultMeaning: 'RESULTADO_DE_CAIXA',
+    realizedOutflowsMeaning: 'SAIDAS_REALIZADAS_DE_CAIXA',
     periodA: serializePeriod(value.periodA),
     periodB: serializePeriod(value.periodB),
     difference: {

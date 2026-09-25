@@ -70,7 +70,17 @@ export type {
   AdvisorCashTrend,
   CompareAdvisorCashMonthsInput,
 } from './compare-advisor-cash-months.js';
-export { ADVISOR_FINANCIAL_ABSENT, formatAdvisorFinancialAmount } from './financial-facts-text.js';
+export {
+  ADVISOR_CASH_INFLOW_MEANING,
+  ADVISOR_CASH_OUTFLOW_MEANING,
+  ADVISOR_CASH_RESULT_MEANING,
+  ADVISOR_FACT_SCOPES,
+  ADVISOR_FINANCIAL_ABSENT,
+  buildFinancialFactsContent,
+  formatAdvisorCivilDate,
+  formatAdvisorFinancialAmount,
+} from './financial-facts-text.js';
+export type { AdvisorFactScope } from './financial-facts-text.js';
 export {
   ADVISOR_PERIOD_SOURCES,
   countAdvisorNamedPeriods,

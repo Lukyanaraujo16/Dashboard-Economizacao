@@ -2,8 +2,10 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { disconnectPrisma, getPrismaClient } from '../src/infrastructure/database/prisma.js';
 import { monthlyBilling } from '../src/modules/analytics/domain/monthly-cash-flow.js';
+import { createAnalyticsService } from '../src/modules/analytics/services/analytics.service.js';
 import { createMonthlyCashFlowService } from '../src/modules/analytics/services/monthly-cash-flow.service.js';
 import { compareAdvisorCashMonths } from '../src/modules/advisor/domain/compare-advisor-cash-months.js';
+import { createBuildAdvisorContext } from '../src/modules/advisor/index.js';
 import { createCostCenterAllocationReadRepository } from '../src/modules/finance/repositories/cost-center-allocation-read.repository.js';
 import { createFinancialCategoryReadRepository } from '../src/modules/finance/repositories/financial-category-read.repository.js';
 import { createLedgerReadRepository } from '../src/modules/finance/repositories/ledger-read.repository.js';
@@ -73,6 +75,85 @@ describe('F13.8.1D1 smoke read-only Clínica Life', () => {
     expect(particulares?.amountB?.toString()).toBe('17469.35');
     expect(convenio?.trend).toBe('INCREASE');
     expect(particulares?.trend).toBe('DECREASE');
+  });
+
+  it('Context Builder de julho rotula PERIOD e CURRENT_SNAPSHOT sem misturar', async () => {
+    const prisma = getPrismaClient();
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: CLINICA_LIFE_TENANT },
+      select: { id: true },
+    });
+    if (tenant === null) {
+      console.warn(
+        JSON.stringify({
+          event: 'clinica_life_context_smoke_skipped',
+          reason: 'tenant ausente no banco local',
+        }),
+      );
+      return;
+    }
+
+    const receivables = createReceivableReadRepository(prisma);
+    const payables = createPayableReadRepository(prisma);
+    const categories = createFinancialCategoryReadRepository(prisma);
+    const costCenterAllocations = createCostCenterAllocationReadRepository(prisma);
+    const builder = createBuildAdvisorContext({
+      settings: {
+        async findSettingsByTenant() {
+          return null;
+        },
+      },
+      knowledge: {
+        async listKnowledge() {
+          return [];
+        },
+      },
+      conversations: {
+        async findConversation() {
+          return null;
+        },
+        async listMessages() {
+          return [];
+        },
+      },
+      cashFlow: createMonthlyCashFlowService({
+        ledger: createLedgerReadRepository(prisma),
+        receivables,
+        payables,
+        categories,
+        costCenterAllocations,
+      }),
+      analytics: createAnalyticsService({
+        receivables,
+        payables,
+        categories,
+        costCenterAllocations,
+      }),
+    });
+    const result = await builder.build({
+      tenantId: CLINICA_LIFE_TENANT,
+      question: 'E em julho?',
+      monthKey: '2026-07',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    const facts = result.blocks.find((item) => item.type === 'FINANCIAL_FACTS')?.content ?? '';
+    const currentIndex = facts.indexOf('scope: CURRENT_SNAPSHOT');
+    expect(result.monthKey).toBe('2026-07');
+    expect(facts).toContain('scope: PERIOD');
+    expect(facts).toContain('scope: CURRENT_SNAPSHOT');
+    expect(currentIndex).toBeGreaterThan(0);
+    expect(facts.slice(0, currentIndex)).toContain('monthKey: 2026-07');
+    expect(facts.slice(currentIndex)).toMatch(/asOf: \d{4}-\d{2}-\d{2}/);
+    expect(facts.slice(currentIndex)).toContain('NÃO pertence ao monthKey PERIOD');
+    console.info(
+      JSON.stringify({
+        event: 'clinica_life_context_smoke',
+        monthKey: result.monthKey,
+        hasPeriod: facts.includes('scope: PERIOD'),
+        hasCurrentSnapshot: facts.includes('scope: CURRENT_SNAPSHOT'),
+        asOf: /asOf: (\d{4}-\d{2}-\d{2}|ABSENT)/.exec(facts)?.[1] ?? 'MISSING',
+      }),
+    );
   });
 });
 

@@ -14,6 +14,7 @@ export function buildAnalyticalFactsContent(input: {
 }): string {
   if (input.comparison === null || input.comparisonMonthKey === undefined) {
     return [
+      'scope: PERIOD_COMPARISON',
       'comparison: ABSENT',
       'comparisonMonthKey: ABSENT',
       'note: comparação oficial só é pré-carregada quando o resolvedor detecta dois períodos.',
@@ -22,17 +23,20 @@ export function buildAnalyticalFactsContent(input: {
 
   const comparison = input.comparison;
   return [
+    'scope: PERIOD_COMPARISON',
+    'temporalScope: periodA e periodB são PERIOD; difference é comparação entre esses dois monthKeys',
     `comparison: PRESENT`,
     `monthKey: ${comparison.monthKey}`,
     `comparisonMonthKey: ${comparison.comparisonMonthKey}`,
     `billingCoverage: ${comparison.billingCoverage}`,
     'note: realizedByCategory explica o faturamento integral somente quando billingCoverage=FULL_BILLING.',
+    `note: realized.result é RESULTADO_DE_CAIXA. Não é lucro líquido nem margem.`,
     '',
     formatPeriodBlock('periodA', comparison.periodA),
     '',
     formatPeriodBlock('periodB', comparison.periodB),
     '',
-    'difference:',
+    'difference.scope: COMPARISON',
     `difference.billing: ${formatAdvisorFinancialAmount(comparison.difference.billing)}`,
     `difference.billingPercent: ${formatAdvisorPercent(comparison.difference.billingPercent)}`,
     `difference.realizedInflows: ${formatAdvisorFinancialAmount(comparison.difference.realizedInflows)}`,
@@ -53,12 +57,15 @@ export function buildAnalyticalFactsContent(input: {
 
 function formatPeriodBlock(label: string, period: AdvisorCashPeriodSnapshot): string {
   return [
+    `${label}.scope: PERIOD`,
     `${label}.monthKey: ${period.monthKey}`,
     `${label}.billing: ${formatAdvisorFinancialAmount(period.billing)}`,
     `${label}.billingCoverage: ${resolveAdvisorBillingCoverage(period.expectedReceivables)}`,
     `${label}.realized.inflows: ${formatAdvisorFinancialAmount(period.realizedInflows)}`,
     `${label}.realized.outflows: ${formatAdvisorFinancialAmount(period.realizedOutflows)}`,
+    `${label}.realized.outflows.meaning: SAIDAS_REALIZADAS_DE_CAIXA`,
     `${label}.realized.result: ${formatAdvisorFinancialAmount(period.realizedResult)}`,
+    `${label}.realized.result.meaning: RESULTADO_DE_CAIXA`,
     `${label}.expected.receivables: ${formatAdvisorFinancialAmount(period.expectedReceivables)}`,
     `${label}.expected.payables: ${formatAdvisorFinancialAmount(period.expectedPayables)}`,
   ].join('\n');

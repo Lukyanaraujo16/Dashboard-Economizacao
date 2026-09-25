@@ -678,6 +678,42 @@ describe('Context Builder do Consultor (F13.2)', () => {
     expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('Atendimentos Convênio');
   });
 
+  it('julho histórico mantém PERIOD separado do CURRENT_SNAPSHOT', async () => {
+    const deps = createDeps({
+      flow: flowA({
+        monthKey: '2026-07',
+        realized: { inflows: dec('136659.99'), outflows: dec('135897.54'), result: dec('762.45') },
+        expected: { receivables: dec('0'), payables: dec('0'), result: dec('0') },
+      }),
+      snapshot: snapshotA({
+        receivables: { open: dec('20'), overdue: dec('10511.20'), upcoming: dec('17') },
+      }),
+    });
+    const builder = createBuildAdvisorContext(deps);
+    const result = await builder.build({
+      tenantId: TENANT_A,
+      question: 'E em julho?',
+      monthKey: '2026-07',
+    });
+    const facts = block(result, 'FINANCIAL_FACTS').content;
+    const period = facts.slice(0, facts.indexOf('scope: CURRENT_SNAPSHOT'));
+    const current = facts.slice(facts.indexOf('scope: CURRENT_SNAPSHOT'));
+    expect(result.monthKey).toBe('2026-07');
+    expect(period).toContain('scope: PERIOD');
+    expect(period).toContain('monthKey: 2026-07');
+    expect(period).toContain('billing: 136659.99');
+    expect(period).toContain('cash.realized.result: 762.45');
+    expect(period).toContain('RESULTADO_DE_CAIXA');
+    expect(period).not.toContain('stock.receivables.overdue');
+    expect(current).toContain('asOf: 2026-09-24');
+    expect(current).toContain('stock.receivables.overdue: 10511.2');
+    expect(current).toContain('NÃO pertence ao monthKey PERIOD');
+    expect(block(result, 'PLATFORM_INSTRUCTIONS').content).toContain(
+      'NÃO mencione CURRENT_SNAPSHOT espontaneamente',
+    );
+    expect(block(result, 'TENANT_PROFILE').content).toContain('emojiPreference:');
+  });
+
   it('pergunta de um mês mantém ANALYTICAL_FACTS ausente e REALIZED_ONLY quando expected>0', async () => {
     const builder = createBuildAdvisorContext(createDeps());
     const result = await builder.build({
