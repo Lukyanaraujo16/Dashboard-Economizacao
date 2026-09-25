@@ -450,6 +450,18 @@ export function serializeAdvisorNominalRanking(input: {
       hasMore: ranking.hasMore,
     },
     winner,
+    cardinality: {
+      requestedLimit: ranking.requestedLimit ?? ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+      returnedCount: ranking.ranking.length,
+      identifiedEntityCount: identifiedGroups.length,
+      hasMore: ranking.hasMore,
+      requestedLimitIsNotEntityCount: true,
+    },
+    identityCoverage: {
+      identifiedAmount: formatAdvisorFinancialAmount(aggregation.coverage.identifiedAmount),
+      unknownAmount: formatAdvisorFinancialAmount(aggregation.coverage.unknownAmount),
+      ambiguousAmount: formatAdvisorFinancialAmount(aggregation.coverage.ambiguousAmount),
+    },
     requestedLimit: ranking.requestedLimit ?? ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
     effectiveLimit: ranking.effectiveLimit,
     returnedCount: ranking.ranking.length,
@@ -479,6 +491,8 @@ export function serializeAdvisorNominalLookup(input: {
     realizedMeaning: ADVISOR_CASH_INFLOW_MEANING,
     ...advisorNominalLookupFactContract(),
     entityQuery: input.entityQuery,
+    populationAmount: formatAdvisorFinancialAmount(population),
+    identifiedAmount: formatAdvisorFinancialAmount(identified),
     entity:
       input.match === null
         ? null
@@ -492,6 +506,11 @@ export function serializeAdvisorNominalLookup(input: {
             shareOfPopulation: formatAdvisorPercent(share(input.match.amount, population)),
           },
     coverage: serializeCoverage(input.aggregation),
+    identityCoverage: {
+      identifiedAmount: formatAdvisorFinancialAmount(identified),
+      unknownAmount: formatAdvisorFinancialAmount(input.aggregation.coverage.unknownAmount),
+      ambiguousAmount: formatAdvisorFinancialAmount(input.aggregation.coverage.ambiguousAmount),
+    },
     conclusionSafety: input.aggregation.conclusionSafety,
   };
 }

@@ -45,7 +45,7 @@ export function buildAnalyticalFactsContent(input: {
     'note: fatos oficiais já obtidos pelo backend para a pergunta atual. Não afirme que não conseguiu obter se ok=true.',
     'note: obedeça result.factKind, result.proves e result.doesNotProve. Não invente subcategorias nem benchmark.',
     isNominalTool(drilldown.toolName)
-      ? 'note: agregação nominal completa do backend. Coverage e conclusionSafety limitam o que se pode afirmar. Não some movimentos. Top N da D2 não substitui este fato.'
+      ? 'note: agregação nominal completa do backend. Obedeça denominators: shareOfPopulation ≠ shareOfIdentified ≠ coverage. requestedLimit não é cardinalidade; use returnedCount/identifiedEntityCount. AMBIGUOUS não se soma e não vira motivo operacional inventado. Não some movimentos. Top N da D2 não substitui este fato.'
       : 'note: description/partyName de uma linha é metadado do movimento individual, não ranking de cliente/convênio. Não sabemos é resposta válida.',
     `result: ${drilldown.content}`,
   ].join('\n');

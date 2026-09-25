@@ -50,13 +50,13 @@ const LIMIT_SCHEMA = {
   type: 'integer',
   minimum: 1,
   maximum: ADVISOR_DRILLDOWN_MAX_LIMIT,
-  description: `Quantidade máxima de entidades. Default ${ADVISOR_DRILLDOWN_DEFAULT_LIMIT}, teto ${ADVISOR_DRILLDOWN_MAX_LIMIT}.`,
+  description: `Quantidade máxima pedida (requestedLimit), não cardinalidade factual. Default ${ADVISOR_DRILLDOWN_DEFAULT_LIMIT}, teto ${ADVISOR_DRILLDOWN_MAX_LIMIT}.`,
 };
 
 export const CASH_NOMINAL_RANKING_TOOL: AdvisorAnalyticalToolDefinition = {
   name: CASH_NOMINAL_RANKING_TOOL_NAME,
   description:
-    'Ranking oficial da dimensão nominal (ex.: convênio) nas entradas realizadas de caixa de uma categoria. População completa + cobertura. Não recebe tenant. INFLOW apenas.',
+    'Ranking oficial da dimensão nominal (ex.: convênio) nas entradas realizadas de caixa de uma categoria. População completa + cobertura. shareOfPopulation ≠ shareOfIdentified ≠ coverage. requestedLimit não é cardinalidade. Não recebe tenant. INFLOW apenas.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -72,7 +72,7 @@ export const CASH_NOMINAL_RANKING_TOOL: AdvisorAnalyticalToolDefinition = {
 export const CASH_NOMINAL_LOOKUP_TOOL: AdvisorAnalyticalToolDefinition = {
   name: CASH_NOMINAL_LOOKUP_TOOL_NAME,
   description:
-    'Agrega a população completa de uma entidade nominal nas entradas realizadas de caixa. Não soma no LLM. Não recebe tenant.',
+    'Agrega a população completa de uma entidade nominal nas entradas realizadas de caixa. shareOfPopulation é o total da categoria; shareOfIdentified é só entre IDENTIFIED. Não soma no LLM. Não recebe tenant.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
