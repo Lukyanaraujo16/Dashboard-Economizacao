@@ -29,6 +29,11 @@ import {
   type AdvisorFactualAnswerMeta,
 } from '../domain/compose-advisor-factual-answer.js';
 import { resolveAdvisorCurrentSnapshotIntent } from '../domain/resolve-advisor-current-snapshot-intent.js';
+import { resolveAdvisorCostCenterIntent } from '../domain/resolve-advisor-cost-center-intent.js';
+import {
+  CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_RANKING_TOOL_NAME,
+} from '../domain/advisor-cost-center-dimension.js';
 import {
   COMPARE_CASH_NOMINAL_TOOL_NAME,
   CASH_NOMINAL_LOOKUP_TOOL_NAME,
@@ -253,7 +258,14 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           anaphoraStatus = 'UNRESOLVED';
         }
       }
+      const costCenterIntent =
+        period.comparison === false &&
+        nominalIntent === null &&
+        anaphoraStatus === 'NONE'
+          ? resolveAdvisorCostCenterIntent({ content: question, period })
+          : null;
       const drilldownIntent =
+        costCenterIntent === null &&
         nominalIntent === null &&
         anaphoraStatus === 'NONE' &&
         period.comparison === false
@@ -262,6 +274,27 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       const preloadedTool =
         deps.analyticalTools === undefined
           ? null
+          : costCenterIntent !== null
+            ? await deps.analyticalTools.execute({
+                tenantId,
+                resolvedMonthKey: period.monthKey,
+                now: input.now,
+                call: {
+                  id: 'preload-cost-center',
+                  name: costCenterIntent.toolName,
+                  arguments: {
+                    monthKey: period.monthKey,
+                    direction: costCenterIntent.direction,
+                    ...(costCenterIntent.toolName === CASH_COST_CENTER_RANKING_TOOL_NAME
+                      ? { limit: costCenterIntent.limit }
+                      : {}),
+                    ...(costCenterIntent.toolName === CASH_COST_CENTER_LOOKUP_TOOL_NAME &&
+                    costCenterIntent.costCenterQuery !== undefined
+                      ? { costCenterQuery: costCenterIntent.costCenterQuery }
+                      : {}),
+                  },
+                },
+              })
           : nominalIntent !== null
             ? await deps.analyticalTools.execute({
                 tenantId,
@@ -330,6 +363,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         period.comparison === false &&
         nominalIntent === null &&
         anaphoraStatus === 'NONE' &&
+        costCenterIntent === null &&
         drilldownIntent === null
           ? resolveAdvisorCurrentSnapshotIntent({ content: question, period })
           : null;

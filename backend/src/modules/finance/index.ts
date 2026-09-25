@@ -30,4 +30,5 @@ export { createCostCenterAllocationReadRepository } from './repositories/cost-ce
 export type {
   CostCenterAllocationInstallment,
   CostCenterAllocationReadRepository,
+  CostCenterConfirmedAllocation,
 } from './repositories/cost-center-allocation-read.repository.js';

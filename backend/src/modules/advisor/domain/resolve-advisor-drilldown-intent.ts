@@ -22,6 +22,9 @@ export type AdvisorDrilldownIntent = {
 
 export function resolveAdvisorDrilldownIntent(content: string): AdvisorDrilldownIntent | null {
   const folded = foldPt(content);
+  if (/\bcentros?(?:\s+de\s+custo)?\b/.test(folded)) {
+    return null;
+  }
   const hasCategory = /\bcategorias?\b/.test(folded);
   const hasReceipt = /\b(recebimentos?|entradas?)\b/.test(folded);
   const hasOutflow = /\b(saidas?|pagamentos?|desembolsos?)\b/.test(folded);

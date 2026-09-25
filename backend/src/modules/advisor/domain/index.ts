@@ -205,6 +205,44 @@ export {
 } from './advisor-nominal-text.js';
 export { resolveAdvisorOfficialCategory } from './advisor-nominal-category-resolver.js';
 export {
+  CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_RANKING_TOOL_NAME,
+  aggregateAdvisorCostCenterDimension,
+  lookupAdvisorCostCenter,
+  rankAdvisorCostCenterDimension,
+  resolveAdvisorCostCenterQuery,
+  serializeAdvisorCostCenterLookup,
+  serializeAdvisorCostCenterRanking,
+} from './advisor-cost-center-dimension.js';
+export type {
+  AdvisorCostCenterAggregation,
+  AdvisorCostCenterAllocationInput,
+  AdvisorCostCenterCatalogItem,
+  AdvisorCostCenterIdentified,
+} from './advisor-cost-center-dimension.js';
+export {
+  ADVISOR_COST_CENTER_LOOKUP_FACT_KIND,
+  ADVISOR_COST_CENTER_RANKING_FACT_KIND,
+  advisorCostCenterLookupFactContract,
+  advisorCostCenterRankingFactContract,
+} from './advisor-cost-center-fact-contract.js';
+export {
+  extractAdvisorCostCenterQuery,
+  hasAdvisorCostCenterCue,
+  isAdvisorCostCenterIntentKind,
+  resolveAdvisorCostCenterIntent,
+} from './resolve-advisor-cost-center-intent.js';
+export type {
+  AdvisorCostCenterIntent,
+  AdvisorCostCenterIntentKind,
+} from './resolve-advisor-cost-center-intent.js';
+export {
+  assertCashCostCenterLookupArgs,
+  assertCashCostCenterRankingArgs,
+  createAdvisorCostCenterDimensionService,
+  listAdvisorCostCenterTools,
+} from './advisor-cost-center-tools.js';
+export {
   assertCashNominalLookupArgs,
   assertCashNominalRankingArgs,
   assertCompareCashNominalArgs,

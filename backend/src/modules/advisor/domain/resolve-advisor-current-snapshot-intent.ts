@@ -31,6 +31,9 @@ export function resolveAdvisorCurrentSnapshotIntent(input: {
     return null;
   }
   const folded = foldPt(input.content);
+  if (/\bcentros?(?:\s+de\s+custo)?\b/.test(folded)) {
+    return null;
+  }
   if (isHistoricalFinancialGuard(folded, input.period.source)) {
     return null;
   }

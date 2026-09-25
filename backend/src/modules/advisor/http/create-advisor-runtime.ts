@@ -35,6 +35,7 @@ import {
   createAdvisorCashMovementLinesService,
 } from '../domain/advisor-analytical-tools.js';
 import { createAdvisorNominalDimensionService } from '../domain/advisor-nominal-tools.js';
+import { createAdvisorCostCenterDimensionService } from '../domain/advisor-cost-center-tools.js';
 import { createBuildAdvisorContext } from '../services/build-advisor-context.js';
 import {
   createAllowAllConsultantRateLimiter,
@@ -145,6 +146,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
   const payables = createPayableReadRepository(prisma);
   const categories = createFinancialCategoryReadRepository(prisma);
   const costCenterAllocations = createCostCenterAllocationReadRepository(prisma);
+  const costCenters = createCostCenterReadRepository(prisma);
   const analytics = createAnalyticsService({
     receivables,
     payables,
@@ -183,11 +185,20 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     }),
     categories,
   });
+  const cashCostCenter = createAdvisorCostCenterDimensionService({
+    cashFlow,
+    ledger,
+    receivables,
+    payables,
+    costCenters,
+    costCenterAllocations,
+  });
   const analyticalTools = createAdvisorAnalyticalToolExecutor({
     cashComparison,
     cashBreakdown,
     cashMovements,
     cashNominal,
+    cashCostCenter,
   });
   const context = createBuildAdvisorContext({
     settings,

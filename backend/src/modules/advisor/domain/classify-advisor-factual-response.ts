@@ -8,6 +8,10 @@ import {
   isAdvisorCurrentSnapshotIntentKind,
   type AdvisorCurrentSnapshotIntentKind,
 } from './resolve-advisor-current-snapshot-intent.js';
+import {
+  CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_RANKING_TOOL_NAME,
+} from './advisor-cost-center-dimension.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
 
 export const ADVISOR_FACTUAL_RESPONSE_KINDS = [
@@ -38,6 +42,10 @@ export const ADVISOR_FACTUAL_INTENT_KINDS = [
   'SNAPSHOT_UPCOMING_RECEIVABLES',
   'SNAPSHOT_UPCOMING_PAYABLES',
   'SNAPSHOT_UPCOMING_BOTH',
+  'COST_CENTER_RANKING_WINNER',
+  'COST_CENTER_RANKING_TOPN',
+  'COST_CENTER_LOOKUP',
+  'COST_CENTER_SHARE',
   'FACTUAL_LIMITATION',
   'INTERPRETIVE',
   'NONE',
@@ -142,6 +150,44 @@ export function classifyAdvisorFactualResponse(
     return { kind: 'UNRESOLVED', intentKind: 'LOOKUP', factKind };
   }
 
+  if (input.toolName === CASH_COST_CENTER_RANKING_TOOL_NAME) {
+    if (status === 'EMPTY_RESULT') {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    if (status === 'OK' && hasCostCenterRankingFacts(facts)) {
+      if (isAdvisorCostCenterShareQuestion(input.content)) {
+        return { kind: 'FACTUAL_CLOSED', intentKind: 'COST_CENTER_SHARE', factKind };
+      }
+      if (/\b\d+\s+centros?\b/.test(foldPt(input.content))) {
+        return { kind: 'FACTUAL_CLOSED', intentKind: 'COST_CENTER_RANKING_TOPN', factKind };
+      }
+      if (isAdvisorCostCenterWinnerQuestion(input.content)) {
+        return { kind: 'FACTUAL_CLOSED', intentKind: 'COST_CENTER_RANKING_WINNER', factKind };
+      }
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'COST_CENTER_RANKING_TOPN', factKind };
+    }
+    if (isKnownAbsentStatus(status)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    return { kind: 'UNRESOLVED', intentKind: 'COST_CENTER_RANKING_WINNER', factKind };
+  }
+
+  if (input.toolName === CASH_COST_CENTER_LOOKUP_TOOL_NAME) {
+    if (status === 'OK' && hasCostCenterLookupFacts(facts)) {
+      return {
+        kind: 'FACTUAL_CLOSED',
+        intentKind: isAdvisorCostCenterShareQuestion(input.content)
+          ? 'COST_CENTER_SHARE'
+          : 'COST_CENTER_LOOKUP',
+        factKind,
+      };
+    }
+    if (isKnownAbsentStatus(status)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    return { kind: 'UNRESOLVED', intentKind: 'COST_CENTER_LOOKUP', factKind };
+  }
+
   if (input.toolName === COMPARE_CASH_NOMINAL_TOOL_NAME) {
     if (status === 'OK' && hasComparisonClosedFacts(facts)) {
       return { kind: 'FACTUAL_CLOSED', intentKind: 'COMPARISON', factKind };
@@ -165,7 +211,8 @@ export function isAdvisorInterpretiveQuestion(content: string): boolean {
     /\bo que (?:posso |devo )?fazer\b/.test(folded) ||
     /\bpriorizar\b/.test(folded) ||
     /\b(?:isso |esse crescimento |essa concentracao )?e (?:bom|ruim)\b/.test(folded) ||
-    /\bpor que .{0,80}(?:cresceu|aumentou|caiu|diminuiu|mudou)\b/.test(folded)
+    /\bpor que .{0,80}(?:cresceu|aumentou|caiu|diminuiu|mudou)\b/.test(folded) ||
+    /\bpreocupante\b/.test(folded)
   );
 }
 
@@ -189,6 +236,18 @@ export function isAdvisorNominalShareQuestion(content: string): boolean {
     /\brepresentam do total\b/.test(folded) ||
     /\bquanto os \d+ maiores\b/.test(folded) ||
     /\bos \d+ maiores .{0,40}represent/.test(folded)
+  );
+}
+
+export function isAdvisorCostCenterShareQuestion(content: string): boolean {
+  return /\brepresent/.test(foldPt(content));
+}
+
+export function isAdvisorCostCenterWinnerQuestion(content: string): boolean {
+  const folded = foldPt(content);
+  return (
+    /\bqual centros? (?:de custo )?(?:teve |com )?(?:a )?maior\b/.test(folded) ||
+    /\bcentro(?:s)?(?:\s+de\s+custo)? (?:teve |com )?(?:a )?maior\b/.test(folded)
   );
 }
 
@@ -241,6 +300,32 @@ function hasComparisonClosedFacts(facts: Record<string, unknown>): boolean {
     isAmount(first.amountA) &&
     isAmount(first.amountB) &&
     isAmount(first.deltaAmount)
+  );
+}
+
+function hasCostCenterRankingFacts(facts: Record<string, unknown>): boolean {
+  const winner = asRecord(facts.winner);
+  const ranking = Array.isArray(facts.ranking) ? facts.ranking : null;
+  return (
+    isAmount(facts.populationAmount) &&
+    isAmount(facts.identifiedAmount) &&
+    isAmount(facts.unidentifiedAmount) &&
+    ranking !== null &&
+    winner !== null &&
+    typeof winner.name === 'string' &&
+    isAmount(winner.amount) &&
+    isAmount(winner.shareOfPopulation)
+  );
+}
+
+function hasCostCenterLookupFacts(facts: Record<string, unknown>): boolean {
+  const center = asRecord(facts.costCenter);
+  return (
+    center !== null &&
+    typeof center.name === 'string' &&
+    center.name.trim() !== '' &&
+    isAmount(center.amount) &&
+    isAmount(facts.populationAmount)
   );
 }
 

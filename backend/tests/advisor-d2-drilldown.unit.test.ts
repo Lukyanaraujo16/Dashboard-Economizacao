@@ -91,6 +91,8 @@ describe('F13.8.1D2 drill-down analítico', () => {
       'cash_nominal_dimension_ranking',
       'cash_nominal_dimension_lookup',
       'compare_cash_nominal_dimension',
+      'cash_cost_center_ranking',
+      'cash_cost_center_lookup',
     ]);
     expect(JSON.stringify(listAdvisorAnalyticalTools())).not.toContain('tenantId');
   });

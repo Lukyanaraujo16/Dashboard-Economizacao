@@ -38,15 +38,21 @@ export function buildAnalyticalFactsContent(input: {
   return [
     ...comparisonBlock,
     '',
-    isNominalTool(drilldown.toolName) ? 'scope: PERIOD_NOMINAL' : 'scope: PERIOD_DRILLDOWN',
+    isCostCenterTool(drilldown.toolName)
+      ? 'scope: PERIOD_COST_CENTER'
+      : isNominalTool(drilldown.toolName)
+        ? 'scope: PERIOD_NOMINAL'
+        : 'scope: PERIOD_DRILLDOWN',
     `tool: ${drilldown.toolName}`,
     `monthKey: ${drilldown.monthKey}`,
     `ok: ${drilldown.ok ? 'true' : 'false'}`,
     'note: fatos oficiais já obtidos pelo backend para a pergunta atual. Não afirme que não conseguiu obter se ok=true.',
     'note: obedeça result.factKind, result.proves e result.doesNotProve. Não invente subcategorias nem benchmark.',
-    isNominalTool(drilldown.toolName)
-      ? 'note: agregação nominal completa do backend. Obedeça denominators: shareOfPopulation ≠ shareOfIdentified ≠ coverage. requestedLimit não é cardinalidade; use returnedCount/identifiedEntityCount. AMBIGUOUS não se soma e não vira motivo operacional inventado. Não some movimentos. Top N da D2 não substitui este fato.'
-      : 'note: description/partyName de uma linha é metadado do movimento individual, não ranking de cliente/convênio. Não sabemos é resposta válida.',
+    isCostCenterTool(drilldown.toolName)
+      ? 'note: agregação oficial de centro de custo no caixa realizado. shareOfPopulation usa o total do mês. unidentifiedAmount não é centro identificado. Não compare meses nem invente lançamentos do centro.'
+      : isNominalTool(drilldown.toolName)
+        ? 'note: agregação nominal completa do backend. Obedeça denominators: shareOfPopulation ≠ shareOfIdentified ≠ coverage. requestedLimit não é cardinalidade; use returnedCount/identifiedEntityCount. AMBIGUOUS não se soma e não vira motivo operacional inventado. Não some movimentos. Top N da D2 não substitui este fato.'
+        : 'note: description/partyName de uma linha é metadado do movimento individual, não ranking de cliente/convênio. Não sabemos é resposta válida.',
     `result: ${drilldown.content}`,
   ].join('\n');
 }
@@ -57,6 +63,10 @@ function isNominalTool(toolName: string): boolean {
     toolName === 'cash_nominal_dimension_lookup' ||
     toolName === 'compare_cash_nominal_dimension'
   );
+}
+
+function isCostCenterTool(toolName: string): boolean {
+  return toolName === 'cash_cost_center_ranking' || toolName === 'cash_cost_center_lookup';
 }
 
 function buildComparisonFacts(comparison: AdvisorCashMonthComparison): string[] {

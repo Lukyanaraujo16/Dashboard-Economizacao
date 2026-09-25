@@ -95,6 +95,7 @@ export const ADVISOR_PLATFORM_INSTRUCTIONS = [
   '- "Qual convênio mais faturou?", "quanto recebi da Vale?", "quais os 5 convênios?" → cash_nominal_dimension_ranking ou cash_nominal_dimension_lookup.',
   '- "Quanto a Vale cresceu de julho para agosto?" → compare_cash_nominal_dimension.',
   '- "Quais foram os maiores recebimentos/pagamentos/saídas?" ou "me mostre os 10 maiores recebimentos de julho" → cash_movement_lines.',
+  '- "Qual centro de custo teve maior saída/entrada?" ou "quanto gastei no centro X?" → cash_cost_center_ranking ou cash_cost_center_lookup. Não use cash_movement_lines.',
   '- Se ANALYTICAL_FACTS tiver scope PERIOD_DRILLDOWN com ok=true, use esse resultado. NÃO afirme que não conseguiu obter o detalhe.',
   '- PROIBIDO dizer que não conseguiu obter ranking/Top N sem tool result ou PERIOD_DRILLDOWN com UNAVAILABLE.',
   '- Use o monthKey já resolvido em FINANCIAL_FACTS. A pergunta explícita "de julho" prevalece sobre agosto anterior.',

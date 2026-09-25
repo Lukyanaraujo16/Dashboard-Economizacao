@@ -16,6 +16,7 @@ import {
   assertTenantId,
   buildActiveInstallmentWhereForConfirmedCostCenterAllocation,
   buildMonthlyCompetenceWhereForConfirmedCostCenterAllocation,
+  withAnalyticallyConfirmedCostCenterDetail,
 } from './read-query.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
 
@@ -72,6 +73,22 @@ export type CostCenterAllocationReadRepository = {
       readonly externalIds: readonly string[];
     },
   ): Promise<ReadonlyMap<string, readonly string[]>>;
+  /**
+   * Rateios FETCHED de parcelas realizadas (CASH). Sem filtro de um único centro.
+   * UNRESOLVED/ERROR/UNKNOWN não retornam — não viram centro identificado.
+   */
+  findConfirmedAllocationsByInstallmentExternalIds(
+    query: FinanceReadScope & {
+      readonly kind: 'RECEIVABLE' | 'PAYABLE';
+      readonly externalIds: readonly string[];
+    },
+  ): Promise<readonly CostCenterConfirmedAllocation[]>;
+};
+
+export type CostCenterConfirmedAllocation = {
+  readonly costCenterId: string;
+  readonly amount: Prisma.Decimal;
+  readonly installment: FinancialInstallmentReadRecord;
 };
 
 export function createCostCenterAllocationReadRepository(
@@ -314,6 +331,51 @@ export function createCostCenterAllocationReadRepository(
           [...names].sort((left, right) => left.localeCompare(right, 'pt-BR')),
         ]),
       );
+    },
+
+    async findConfirmedAllocationsByInstallmentExternalIds(query) {
+      assertTenantId(query.tenantId);
+      const unique = [...new Set(query.externalIds.filter((id) => id.trim() !== ''))];
+      if (unique.length === 0) {
+        return [];
+      }
+      const installmentWhere = withAnalyticallyConfirmedCostCenterDetail({
+        tenantId: query.tenantId,
+        externalId: { in: unique },
+        ...(query.integrationId !== undefined && query.integrationId.trim() !== ''
+          ? { integrationId: query.integrationId }
+          : {}),
+      });
+      if (query.kind === 'RECEIVABLE') {
+        const rows = (await client.installmentCostCenterAllocation.findMany({
+          where: {
+            tenantId: query.tenantId,
+            receivableId: { not: null },
+            receivable: installmentWhere,
+          },
+          include: { receivable: true },
+          orderBy: [{ id: 'asc' }],
+        })) as AllocationWithReceivableRow[];
+        return rows.map((row) => ({
+          costCenterId: row.costCenterId,
+          amount: row.amount,
+          installment: mapReceivableReadRecord(asReceivable(row.receivable)),
+        }));
+      }
+      const rows = (await client.installmentCostCenterAllocation.findMany({
+        where: {
+          tenantId: query.tenantId,
+          payableId: { not: null },
+          payable: installmentWhere,
+        },
+        include: { payable: true },
+        orderBy: [{ id: 'asc' }],
+      })) as AllocationWithPayableRow[];
+      return rows.map((row) => ({
+        costCenterId: row.costCenterId,
+        amount: row.amount,
+        installment: mapPayableReadRecord(asPayable(row.payable)),
+      }));
     },
   };
 }

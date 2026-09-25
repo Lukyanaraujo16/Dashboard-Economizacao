@@ -13,7 +13,7 @@ import {
 } from './classify-advisor-factual-response.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
 
-export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.1-1';
+export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.2-1';
 
 export type AdvisorFactualAnswerMeta = {
   readonly classification: 'FACTUAL_CLOSED';
@@ -80,7 +80,9 @@ export function composeAdvisorFactualAnswer(
                 ? composeIdentityAmbiguity(facts, input.content)
                 : classification.intentKind.startsWith('SNAPSHOT_')
                   ? composeCurrentSnapshot(facts, classification.intentKind)
-                  : composeLimitation(facts, input.anaphora);
+                  : classification.intentKind.startsWith('COST_CENTER_')
+                    ? composeCostCenter(facts, classification.intentKind)
+                    : composeLimitation(facts, input.anaphora);
 
   if (answer === null) {
     return {
@@ -374,12 +376,88 @@ function composeCurrentSnapshot(
   return null;
 }
 
+function composeCostCenter(
+  facts: Record<string, unknown>,
+  intentKind: AdvisorFactualIntentKind,
+): string | null {
+  const direction = asString(facts.direction) === 'INFLOW' ? 'entradas realizadas' : 'saídas realizadas';
+  const singular = asString(facts.direction) === 'INFLOW' ? 'entrada realizada' : 'saída realizada';
+  const month = formatAdvisorFactualMonth(asString(facts.monthKey) ?? '');
+  const coverage = formatAdvisorFactualPercent(asString(facts.coveragePercentage) ?? '');
+  const coverageSentence =
+    coverage !== null && asString(facts.coveragePercentage) !== '100'
+      ? ` Foi possível atribuir ${coverage} das ${direction} a centros de custo.`
+      : '';
+  if (intentKind === 'COST_CENTER_RANKING_WINNER') {
+    const winner = asRecord(facts.winner);
+    const name = asString(winner?.name);
+    const amount = formatAdvisorFactualBrl(asString(winner?.amount) ?? '');
+    const share = formatAdvisorFactualPercent(asString(winner?.shareOfPopulation) ?? '');
+    if (month === null || name === null || amount === null || share === null) {
+      return null;
+    }
+    return `Em ${month}, o centro de custo ${name} teve a maior ${singular}: ${amount}, equivalente a ${share} do total de ${direction} do mês.${coverageSentence}`;
+  }
+  if (intentKind === 'COST_CENTER_RANKING_TOPN') {
+    const ranking = Array.isArray(facts.ranking) ? facts.ranking : [];
+    const cardinality = asRecord(facts.cardinality);
+    const identifiedCount = asNumber(cardinality?.identifiedEntityCount);
+    if (month === null || identifiedCount === null || ranking.length === 0) {
+      return null;
+    }
+    const listed = ranking.map((row) => {
+      const item = asRecord(row);
+      const name = asString(item?.name);
+      const amount = formatAdvisorFactualBrl(asString(item?.amount) ?? '');
+      if (name === null || amount === null) {
+        return null;
+      }
+      return `${name}: ${amount}`;
+    });
+    if (listed.some((item) => item === null)) {
+      return null;
+    }
+    const header =
+      identifiedCount === 1
+        ? `Foi identificado 1 centro de custo nas ${direction} de ${month}`
+        : `Foram identificados ${identifiedCount} centros de custo nas ${direction} de ${month}`;
+    return `${header}: ${listed.join('; ')}.${coverageSentence}`;
+  }
+  const center = asRecord(facts.costCenter);
+  const name = asString(center?.name);
+  const amount = formatAdvisorFactualBrl(asString(center?.amount) ?? '');
+  const share = formatAdvisorFactualPercent(asString(center?.shareOfPopulation) ?? '');
+  if (month === null || name === null || amount === null) {
+    return null;
+  }
+  if (share === null) {
+    return `Em ${month}, o centro ${name} teve ${amount} em ${direction}. A participação percentual não se aplica porque o total do mês é zero.`;
+  }
+  if (intentKind === 'COST_CENTER_SHARE') {
+    return `O centro ${name} teve ${amount} em ${direction}, equivalente a ${share} do total de ${direction} do mês.${coverageSentence}`;
+  }
+  return `Em ${month}, o centro ${name} teve ${amount} em ${direction}, equivalente a ${share} do total de ${direction}.${coverageSentence}`;
+}
+
 function composeLimitation(
   facts: Record<string, unknown>,
   anaphora: AdvisorNominalAnaphoraStatus,
 ): string | null {
   const status = asString(facts.status);
   const reason = asString(facts.reason);
+  const factKind = asString(facts.factKind);
+  if (
+    factKind === 'REALIZED_CASH_COST_CENTER_DIMENSION_LOOKUP' ||
+    factKind === 'REALIZED_CASH_COST_CENTER_DIMENSION_RANKING'
+  ) {
+    if (status === 'AMBIGUOUS') {
+      return 'Há mais de um centro de custo correspondente. Especifique o nome ou o código.';
+    }
+    if (status === 'NOT_FOUND') {
+      return 'Não encontrei esse centro de custo.';
+    }
+    return 'Não há atribuição oficial suficiente de centros de custo nas movimentações realizadas deste mês.';
+  }
   if (anaphora === 'AMBIGUOUS' || status === 'AMBIGUOUS' || reason === 'MULTIPLE_NOMINAL_ANTECEDENTS') {
     return 'Há mais de um antecedente nominal nesta conversa. Especifique a entidade para eu consultar o valor oficial.';
   }
@@ -433,7 +511,11 @@ function rankingRows(facts: Record<string, unknown>): readonly Record<string, un
 
 function coverageRaw(facts: Record<string, unknown>): string | null {
   const coverage = asRecord(facts.coverage);
-  return asString(coverage?.identifiedPercent) ?? asString(coverage?.amountPercent);
+  return (
+    asString(coverage?.identifiedPercent) ??
+    asString(coverage?.amountPercent) ??
+    asString(facts.coveragePercentage)
+  );
 }
 
 function readIdentityStatus(

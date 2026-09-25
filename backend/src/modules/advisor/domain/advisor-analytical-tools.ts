@@ -39,6 +39,16 @@ import {
   CASH_NOMINAL_LOOKUP_TOOL_NAME,
   CASH_NOMINAL_RANKING_TOOL_NAME,
 } from './advisor-nominal-dimension.js';
+import {
+  assertCashCostCenterLookupArgs,
+  assertCashCostCenterRankingArgs,
+  listAdvisorCostCenterTools,
+  type AdvisorCostCenterDimensionService,
+} from './advisor-cost-center-tools.js';
+import {
+  CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_COST_CENTER_RANKING_TOOL_NAME,
+} from './advisor-cost-center-dimension.js';
 
 export const ADVISOR_MAX_TOOL_ROUNDS = 3;
 export const ADVISOR_ANALYTICAL_TOOL_TIMEOUT_MS = 10_000;
@@ -128,6 +138,8 @@ const FORBIDDEN_ARG_KEYS = new Set([
   'party',
   'partyid',
   'search',
+  'companyid',
+  'costcenterid',
 ]);
 
 const MONTH_KEY_SCHEMA = {
@@ -216,6 +228,7 @@ export function listAdvisorAnalyticalTools(): readonly AdvisorAnalyticalToolDefi
     CASH_REALIZED_BREAKDOWN_TOOL,
     CASH_MOVEMENT_LINES_TOOL,
     ...listAdvisorNominalTools(),
+    ...listAdvisorCostCenterTools(),
   ];
 }
 
@@ -344,6 +357,7 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
   readonly cashBreakdown?: AdvisorCashBreakdownService;
   readonly cashMovements?: AdvisorCashMovementLinesService;
   readonly cashNominal?: AdvisorNominalDimensionService;
+  readonly cashCostCenter?: AdvisorCostCenterDimensionService;
 }): AdvisorAnalyticalToolExecutor {
   const allowlist = new Set(listAdvisorAnalyticalTools().map((tool) => tool.name));
 
@@ -408,6 +422,25 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
           }
           return await executeNominal(
             deps.cashNominal,
+            tenantId,
+            call,
+            input.resolvedMonthKey,
+            input.now,
+            startedAt,
+          );
+        }
+        if (
+          call.name === CASH_COST_CENTER_RANKING_TOOL_NAME ||
+          call.name === CASH_COST_CENTER_LOOKUP_TOOL_NAME
+        ) {
+          if (deps.cashCostCenter === undefined) {
+            throw new AdvisorDomainError(
+              'ANALYTICAL_TOOL_FAILED',
+              'Não consegui obter a dimensão de centro de custo agora.',
+            );
+          }
+          return await executeCostCenter(
+            deps.cashCostCenter,
             tenantId,
             call,
             input.resolvedMonthKey,
@@ -740,6 +773,80 @@ async function executeNominal(
   );
 }
 
+async function executeCostCenter(
+  cashCostCenter: AdvisorCostCenterDimensionService,
+  tenantId: string,
+  call: AdvisorAnalyticalToolCall,
+  resolvedMonthKey: string | undefined,
+  now: Date | undefined,
+  startedAt: number,
+): Promise<AdvisorAnalyticalToolResult> {
+  if (call.name === CASH_COST_CENTER_RANKING_TOOL_NAME) {
+    const args = assertCashCostCenterRankingArgs(call.arguments);
+    const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+    const serialized = await withToolTimeout(
+      cashCostCenter.rank({
+        tenantId,
+        monthKey,
+        direction: args.direction,
+        limit: args.limit,
+        now,
+      }),
+    );
+    return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, args.limit);
+  }
+  const args = assertCashCostCenterLookupArgs(call.arguments);
+  const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+  const serialized = await withToolTimeout(
+    cashCostCenter.lookup({
+      tenantId,
+      monthKey,
+      direction: args.direction,
+      costCenterQuery: args.costCenterQuery,
+      now,
+    }),
+  );
+  return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, null);
+}
+
+function finishCostCenter(
+  call: AdvisorAnalyticalToolCall,
+  startedAt: number,
+  serialized: Record<string, unknown>,
+  monthKey: string,
+  direction: AdvisorCashDirection,
+  limit: number | null | undefined,
+): AdvisorAnalyticalToolResult {
+  const limits = clampAdvisorDrilldownLimit(limit ?? undefined);
+  logToolExecution({
+    toolName: call.name,
+    durationMs: Date.now() - startedAt,
+    ok: serialized.status !== 'UNAVAILABLE',
+    resultCardinality: Array.isArray(serialized.ranking)
+      ? serialized.ranking.length
+      : serialized.costCenter === null
+        ? 0
+        : 1,
+    monthKey,
+    comparisonMonthKey: null,
+    direction,
+    requestedLimit: limits.requestedLimit,
+    effectiveLimit: limits.effectiveLimit,
+  });
+  return {
+    id: call.id,
+    name: call.name,
+    ok: serialized.status !== 'UNAVAILABLE',
+    content: JSON.stringify(serialized),
+    resultCardinality: Array.isArray(serialized.ranking)
+      ? serialized.ranking.length
+      : serialized.costCenter === null
+        ? 0
+        : 1,
+    monthKey,
+  };
+}
+
 function finishNominal(
   call: AdvisorAnalyticalToolCall,
   startedAt: number,
@@ -921,6 +1028,15 @@ function normalizeToolFailure(
     return {
       code: 'ANALYTICAL_TOOL_FAILED',
       message: 'Não consegui obter a dimensão nominal agora.',
+    };
+  }
+  if (
+    toolName === CASH_COST_CENTER_RANKING_TOOL_NAME ||
+    toolName === CASH_COST_CENTER_LOOKUP_TOOL_NAME
+  ) {
+    return {
+      code: 'ANALYTICAL_TOOL_FAILED',
+      message: 'Não consegui obter a dimensão de centro de custo agora.',
     };
   }
   return {
