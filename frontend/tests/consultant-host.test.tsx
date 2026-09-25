@@ -6,6 +6,7 @@ import {
   resolveConsultantReferenceMonth,
   shouldShowConsultantHost,
 } from '../src/components/consultant';
+import { getConsultantStatus } from '../src/services/consultant';
 import { useAuth } from '../src/auth';
 import {
   createAuthenticatedGetCurrentUser,
@@ -15,6 +16,16 @@ import {
 
 const replaceMock = vi.fn();
 let pathname = '/';
+
+vi.mock('../src/services/consultant', async () => {
+  const actual = await vi.importActual<typeof import('../src/services/consultant')>(
+    '../src/services/consultant',
+  );
+  return {
+    ...actual,
+    getConsultantStatus: vi.fn(),
+  };
+});
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -69,6 +80,10 @@ afterEach(() => {
 
 beforeEach(() => {
   pathname = '/';
+  vi.mocked(getConsultantStatus).mockResolvedValue({
+    status: 'ACTIVE',
+    consultantName: 'Consultor',
+  });
 });
 
 describe('resolveConsultantReferenceMonth', () => {
@@ -108,11 +123,25 @@ describe('shouldShowConsultantHost', () => {
 });
 
 describe('ConsultantHost', () => {
-  it('mostra o FAB em `/` com USER tenant', async () => {
+  it('mostra o FAB em `/` com USER tenant quando ACTIVE', async () => {
     renderHost();
 
     expect((await screen.findByTestId('auth-status')).textContent).toBe('authenticated:USER');
-    expect(screen.getByRole('button', { name: /Abrir o Consultor/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Abrir o Consultor/ })).toBeTruthy();
+  });
+
+  it('não mostra o FAB quando o Consultor não está configurado', async () => {
+    vi.mocked(getConsultantStatus).mockResolvedValue({
+      status: 'NOT_CONFIGURED',
+      consultantName: 'Consultor',
+    });
+    renderHost();
+
+    expect((await screen.findByTestId('auth-status')).textContent).toBe('authenticated:USER');
+    await waitFor(() => {
+      expect(getConsultantStatus).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('button', { name: /Abrir o Consultor/ })).toBeNull();
   });
 
   it('não mostra o FAB em `/empresas`', async () => {

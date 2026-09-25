@@ -124,11 +124,12 @@ Estado atual
 ✔ F12-C — Exportação PDF/XLSX da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 ✔ F12-D — Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE (25/08/2026)
 
-✔ F13 — Consultor Financeiro Reativo (F13.1–F13.6) IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL
-     Motor único; provider/model por tenant; secrets de plataforma;
-     sem BYOK; sem fallback cruzado; sem retry automático de generate;
-     rate limit Redis 20/10min user+tenant e 60/10min tenant.
-     F14 NÃO iniciada. Produção NÃO homologada.
+✔ F13 — Consultor Financeiro Reativo (F13.1–F13.7) IMPLEMENTADA LOCALMENTE
+     F13.7 golden smoke homologado localmente. F13.8.1 wizard + overview +
+     emojiPreference. Motor único; provider/model por tenant; secrets de
+     plataforma; sem BYOK; sem fallback cruzado; sem retry automático de
+     generate; rate limit Redis 20/10min user+tenant e 60/10min tenant.
+     Knowledge Files NÃO implementado. F14 NÃO iniciada. Produção NÃO homologada.
 
 ✔ PRE-IA-4D — PDF profissional de Receita e Despesas IMPLEMENTADA (25/08/2026)
      Camada visual compartilhada. Sem alteração de DTO, filtros, XLSX ou motor.

@@ -15,6 +15,7 @@ import {
   type ConsultantProviderId,
   type ConsultantProviderStatus,
   type ConsultantSettings,
+  type ConsultantEmojiPreference,
   type ConsultantTonePreset,
   type CreateConsultantKnowledgeInput,
   type UpdateConsultantKnowledgeInput,
@@ -53,6 +54,10 @@ function isTonePreset(value: unknown): value is ConsultantTonePreset {
   );
 }
 
+function isEmojiPreference(value: unknown): value is ConsultantEmojiPreference {
+  return value === 'NONE' || value === 'MODERATE' || value === 'FREE';
+}
+
 async function readJsonBody(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) {
@@ -81,6 +86,7 @@ function isConsultantSettings(value: unknown): value is ConsultantSettings {
     isNullableString(value.adminPrompt) &&
     (value.tonePreset === null || isTonePreset(value.tonePreset)) &&
     isNullableString(value.tone) &&
+    (value.emojiPreference === null || isEmojiPreference(value.emojiPreference)) &&
     isNullableString(value.updatedAt)
   );
 }
@@ -103,13 +109,21 @@ function isTonePresetOption(value: unknown): value is ConsultantOptions['tonePre
   return isRecord(value) && isTonePreset(value.id) && typeof value.label === 'string';
 }
 
+function isEmojiPreferenceOption(
+  value: unknown,
+): value is ConsultantOptions['emojiPreferences'][number] {
+  return isRecord(value) && isEmojiPreference(value.id) && typeof value.label === 'string';
+}
+
 function isConsultantOptions(value: unknown): value is ConsultantOptions {
   return (
     isRecord(value) &&
     Array.isArray(value.providers) &&
     value.providers.every(isProviderOption) &&
     Array.isArray(value.tonePresets) &&
-    value.tonePresets.every(isTonePresetOption)
+    value.tonePresets.every(isTonePresetOption) &&
+    Array.isArray(value.emojiPreferences) &&
+    value.emojiPreferences.every(isEmojiPreferenceOption)
   );
 }
 

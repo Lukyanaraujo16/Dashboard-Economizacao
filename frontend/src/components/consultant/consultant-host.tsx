@@ -43,6 +43,7 @@ export function ConsultantHost() {
   const sessionKey = `${user?.id ?? ''}|${operationalTenantId ?? ''}|${supportActive ? '1' : '0'}`;
 
   const [uiState, setUiState] = useState<ConsultantUiState>('CLOSED');
+  const [availabilityReady, setAvailabilityReady] = useState(false);
   const [availability, setAvailability] = useState<ConsultantUserStatus>({
     status: 'NOT_CONFIGURED',
     consultantName: 'Consultor',
@@ -62,6 +63,7 @@ export function ConsultantHost() {
   const resetChatState = useCallback(() => {
     requestGenRef.current += 1;
     setUiState('CLOSED');
+    setAvailabilityReady(false);
     setAvailability({ status: 'NOT_CONFIGURED', consultantName: 'Consultor' });
     setConversations([]);
     setHistoryOpen(false);
@@ -93,12 +95,14 @@ export function ConsultantHost() {
           return;
         }
         setAvailability(status);
+        setAvailabilityReady(true);
       })
       .catch(() => {
         if (requestId !== statusGenRef.current) {
           return;
         }
         setAvailability({ status: 'UNAVAILABLE', consultantName: 'Consultor' });
+        setAvailabilityReady(true);
       });
   }, [visible, sessionKey]);
 
@@ -290,9 +294,13 @@ export function ConsultantHost() {
     return null;
   }
 
+  const showFab =
+    availabilityReady &&
+    (availability.status === 'ACTIVE' || availability.status === 'UNAVAILABLE');
+
   return (
     <>
-      {uiState === 'CLOSED' ? (
+      {uiState === 'CLOSED' && showFab ? (
         <ConsultantFab
           onOpen={() => void openPanel()}
           available={availability.status === 'ACTIVE'}

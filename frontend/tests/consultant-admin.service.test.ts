@@ -47,6 +47,11 @@ const options: ConsultantOptions = {
     { id: 'PROFISSIONAL_OBJETIVO', label: 'Profissional e objetivo' },
     { id: 'PERSONALIZADO', label: 'Personalizado' },
   ],
+  emojiPreferences: [
+    { id: 'NONE', label: 'Não usar emojis' },
+    { id: 'MODERATE', label: 'Usar com moderação' },
+    { id: 'FREE', label: 'Usar livremente' },
+  ],
 };
 
 const settings: ConsultantSettings = {
@@ -60,6 +65,7 @@ const settings: ConsultantSettings = {
   adminPrompt: 'Seja objetivo',
   tonePreset: 'PROFISSIONAL_OBJETIVO',
   tone: 'formal',
+  emojiPreference: 'MODERATE',
   updatedAt: '2026-09-24T12:00:00.000Z',
 };
 
@@ -115,6 +121,7 @@ describe('admin consultant service', () => {
       adminPrompt: null,
       tonePreset: 'PERSONALIZADO',
       tone: 'direto',
+      emojiPreference: 'NONE',
     });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(adminTenantConsultantPath(tenantId));
@@ -131,6 +138,7 @@ describe('admin consultant service', () => {
       adminPrompt: null,
       tonePreset: 'PERSONALIZADO',
       tone: 'direto',
+      emojiPreference: 'NONE',
     });
   });
 
@@ -226,6 +234,7 @@ describe('admin consultant service', () => {
         adminPrompt: null,
         tonePreset: 'PROFISSIONAL_OBJETIVO',
         tone: null,
+        emojiPreference: 'MODERATE',
       }),
     ).rejects.toMatchObject({ kind: 'validation' });
   });

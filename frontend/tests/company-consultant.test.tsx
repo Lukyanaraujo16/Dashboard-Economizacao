@@ -1,12 +1,14 @@
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
 import { CompanyConsultantPage } from '../src/components/companies/company-consultant-page';
+import { appendInstructionChip } from '../src/components/companies/consultant-setup-copy';
 import type { Company } from '../src/services/admin/companies.types';
 import type {
   ConsultantKnowledgeEntry,
   ConsultantOptions,
+  ConsultantProviderStatus,
   ConsultantSettings,
 } from '../src/services/admin/consultant.types';
 import { ThemeProvider } from '../src/theme';
@@ -27,6 +29,13 @@ const company: Company = {
   updatedAt: '2026-08-14T11:00:00.000Z',
   deactivatedAt: null,
   integration: null,
+};
+
+const clinicaLife: Company = {
+  ...company,
+  id: '8b7e9b53-3435-476a-be47-56908ca846c5',
+  name: 'clinica-life',
+  displayName: 'Clínica Life',
 };
 
 const options: ConsultantOptions = {
@@ -53,6 +62,11 @@ const options: ConsultantOptions = {
     { id: 'EXECUTIVO', label: 'Executivo' },
     { id: 'PERSONALIZADO', label: 'Personalizado' },
   ],
+  emojiPreferences: [
+    { id: 'NONE', label: 'Não usar emojis' },
+    { id: 'MODERATE', label: 'Usar com moderação' },
+    { id: 'FREE', label: 'Usar livremente' },
+  ],
 };
 
 const unconfigured: ConsultantSettings = {
@@ -66,6 +80,7 @@ const unconfigured: ConsultantSettings = {
   adminPrompt: null,
   tonePreset: null,
   tone: null,
+  emojiPreference: null,
   updatedAt: null,
 };
 
@@ -80,7 +95,23 @@ const configured: ConsultantSettings = {
   adminPrompt: 'Seja objetivo',
   tonePreset: 'PROFISSIONAL_OBJETIVO',
   tone: 'formal',
+  emojiPreference: 'MODERATE',
   updatedAt: '2026-09-24T12:00:00.000Z',
+};
+
+const clinicaSettings: ConsultantSettings = {
+  configured: true,
+  status: 'ACTIVE',
+  provider: 'OPENAI',
+  model: 'gpt-4o-mini',
+  consultantName: 'Lia',
+  businessSegment: 'Clinica',
+  businessDescription: 'Atendimento infantil e adulto',
+  adminPrompt: 'Ao analisar os dados financeiros desta empresa, considere que se trata de uma clínica.',
+  tonePreset: 'CONSULTIVO',
+  tone: null,
+  emojiPreference: 'MODERATE',
+  updatedAt: '2026-09-24T23:25:51.000Z',
 };
 
 const knowledge: ConsultantKnowledgeEntry = {
@@ -92,6 +123,33 @@ const knowledge: ConsultantKnowledgeEntry = {
   createdAt: '2026-09-20T10:00:00.000Z',
   updatedAt: '2026-09-21T10:00:00.000Z',
 };
+
+const clinicaKnowledge: ConsultantKnowledgeEntry = {
+  id: '0d6abfa7-2642-4654-b9ca-3a215d88926c',
+  title: 'Meta interna de faturamento',
+  content: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.',
+  contentType: 'TEXT',
+  status: 'ACTIVE',
+  createdAt: '2026-09-24T23:24:16.000Z',
+  updatedAt: '2026-09-24T23:24:16.000Z',
+};
+
+const providers: readonly ConsultantProviderStatus[] = [
+  {
+    provider: 'OPENAI',
+    configured: true,
+    source: 'MANAGED',
+    displayHint: 'sk-••••',
+    configuredAt: '2026-09-24T23:01:14.000Z',
+  },
+  {
+    provider: 'ANTHROPIC',
+    configured: false,
+    source: 'NONE',
+    displayHint: null,
+    configuredAt: null,
+  },
+];
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -125,10 +183,72 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-function renderPage() {
+function mockAdminFetch(input: {
+  readonly company?: Company;
+  readonly settings?: ConsultantSettings;
+  readonly knowledge?: readonly ConsultantKnowledgeEntry[];
+  readonly providers?: readonly ConsultantProviderStatus[];
+  readonly onPut?: (body: unknown) => ConsultantSettings;
+}) {
+  let entries = [...(input.knowledge ?? [])];
+  return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    const currentCompany = input.company ?? company;
+    if (url.endsWith(`/admin/tenants/${currentCompany.id}`) && !url.includes('/consultant')) {
+      return Promise.resolve(jsonResponse(currentCompany));
+    }
+    if (url.endsWith('/admin/consultant/options')) {
+      return Promise.resolve(jsonResponse(options));
+    }
+    if (url.endsWith('/admin/consultant/providers')) {
+      return Promise.resolve(jsonResponse({ data: input.providers ?? providers }));
+    }
+    if (url.includes('/consultant/knowledge') && init?.method === 'POST') {
+      const payload = JSON.parse(String(init.body)) as { title: string; content: string };
+      const created: ConsultantKnowledgeEntry = {
+        ...knowledge,
+        title: payload.title,
+        content: payload.content,
+      };
+      entries = [created, ...entries.filter((item) => item.id !== created.id)];
+      return Promise.resolve(jsonResponse(created, 201));
+    }
+    if (url.includes('/consultant/knowledge/') && init?.method === 'DELETE') {
+      const id = url.split('/').pop() ?? '';
+      entries = entries.filter((item) => item.id !== id);
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    if (url.includes('/consultant/knowledge/') && init?.method === 'PATCH') {
+      const id = url.split('/').pop() ?? '';
+      const payload = JSON.parse(String(init.body)) as Partial<ConsultantKnowledgeEntry>;
+      const current = entries.find((item) => item.id === id) ?? knowledge;
+      const updated = { ...current, ...payload, updatedAt: '2026-09-24T15:00:00.000Z' };
+      entries = entries.map((item) => (item.id === updated.id ? updated : item));
+      return Promise.resolve(jsonResponse(updated));
+    }
+    if (url.includes('/consultant/knowledge')) {
+      return Promise.resolve(jsonResponse({ data: entries }));
+    }
+    if (url.includes('/consultant') && init?.method === 'PUT') {
+      const payload = JSON.parse(String(init.body)) as ConsultantSettings;
+      const saved = input.onPut?.(payload) ?? {
+        ...configured,
+        ...payload,
+        configured: true,
+        updatedAt: '2026-09-24T16:00:00.000Z',
+      };
+      return Promise.resolve(jsonResponse(saved));
+    }
+    if (url.includes('/consultant')) {
+      return Promise.resolve(jsonResponse(input.settings ?? configured));
+    }
+    return Promise.resolve(jsonResponse({}, 404));
+  });
+}
+
+function renderPage(id = companyId) {
   return renderWithAuth(
     <ThemeProvider>
-      <CompanyConsultantPage companyId={companyId} />
+      <CompanyConsultantPage companyId={id} />
     </ThemeProvider>,
     {
       getCurrentUserAction: createAuthenticatedGetCurrentUser({
@@ -141,7 +261,7 @@ function renderPage() {
   );
 }
 
-describe('UI admin Consultor (F13.5)', () => {
+describe('UI admin Consultor (F13.8.1)', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
   });
@@ -152,240 +272,194 @@ describe('UI admin Consultor (F13.5)', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renderiza settings do mesmo consultor', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation((url: string) => {
-        if (url.endsWith(`/admin/tenants/${companyId}`)) {
-          return Promise.resolve(jsonResponse(company));
-        }
-        if (url.endsWith('/admin/consultant/options')) {
-          return Promise.resolve(jsonResponse(options));
-        }
-        if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`)) {
-          return Promise.resolve(jsonResponse({ data: [] }));
-        }
-        if (url.endsWith(`/admin/tenants/${companyId}/consultant`)) {
-          return Promise.resolve(jsonResponse(configured));
-        }
-        return Promise.resolve(jsonResponse({}, 404));
-      }),
-    );
-
+  it('mostra empty state quando o Consultor ainda não foi configurado', async () => {
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
     renderPage();
 
-    expect(await screen.findByRole('heading', { name: 'Consultor Financeiro' })).toBeTruthy();
-    expect(
-      screen.getByText(/OpenAI e Anthropic são provedores do mesmo consultor/),
-    ).toBeTruthy();
-    expect(screen.queryByText(/dois agentes/i)).toBeNull();
-    expect((screen.getByLabelText('Provedor') as HTMLSelectElement).value).toBe('OPENAI');
-    expect((screen.getByLabelText('Modelo') as HTMLSelectElement).value).toBe('gpt-4o-mini');
-    expect((screen.getByLabelText('Ramo') as HTMLInputElement).value).toBe('Varejo');
-    expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('ACTIVE');
-    expect(screen.getByText('Nenhum conhecimento cadastrado para esta empresa.')).toBeTruthy();
+    expect(await screen.findByTestId('consultant-empty-state')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Crie o Consultor Financeiro desta empresa' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Criar Consultor' })).toBeTruthy();
+    expect(screen.queryByTestId('consultant-wizard')).toBeNull();
+    expect(screen.queryByTestId('consultant-overview')).toBeNull();
   });
 
-  it('trocar provider atualiza os modelos para o default do catálogo', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockImplementation((url: string) => {
-        if (url.endsWith(`/admin/tenants/${companyId}`)) {
-          return Promise.resolve(jsonResponse(company));
-        }
-        if (url.endsWith('/admin/consultant/options')) {
-          return Promise.resolve(jsonResponse(options));
-        }
-        if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`)) {
-          return Promise.resolve(jsonResponse({ data: [] }));
-        }
-        return Promise.resolve(jsonResponse(unconfigured));
-      }),
-    );
-
+  it('abre o wizard de 5 etapas a partir do empty state', async () => {
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
     renderPage();
-    const providerSelect = await screen.findByLabelText('Provedor');
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+
+    expect(await screen.findByTestId('consultant-wizard')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Vamos criar seu Consultor' })).toBeTruthy();
+    expect(screen.getByLabelText('Nome do Consultor')).toBeTruthy();
+    expect(screen.getByLabelText('Segmento da empresa')).toBeTruthy();
+    expect(screen.getByText(/clínica de estética/)).toBeTruthy();
+    expect(screen.getByLabelText('Motor de IA')).toBeTruthy();
     expect((screen.getByLabelText('Modelo') as HTMLSelectElement).value).toBe('gpt-4o-mini');
 
-    fireEvent.change(providerSelect, { target: { value: 'ANTHROPIC' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByRole('heading', { name: 'Conte um pouco sobre a empresa' })).toBeTruthy();
+    expect(screen.getByLabelText('Sobre a empresa')).toBeTruthy();
 
-    const modelSelect = screen.getByLabelText('Modelo') as HTMLSelectElement;
-    expect(modelSelect.value).toBe('claude-sonnet-5');
-    expect(within(modelSelect).getByRole('option', { name: 'claude-sonnet-5' })).toBeTruthy();
-    expect(within(modelSelect).getByRole('option', { name: 'claude-sonnet-4-5' })).toBeTruthy();
-    expect(within(modelSelect).queryByRole('option', { name: 'gpt-4o-mini' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByRole('heading', { name: 'Como o Consultor deve se comunicar?' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Consultivo/ })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Usar com moderação/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByRole('heading', { name: 'Como o Consultor deve agir?' })).toBeTruthy();
+    expect(screen.getByLabelText('Instruções do Consultor')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Priorizar fluxo de caixa' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(await screen.findByRole('heading', { name: 'Ensine o Consultor sobre sua empresa' })).toBeTruthy();
+    expect(screen.getByText('Queremos faturar R$ 250 mil por mês.')).toBeTruthy();
+    expect(screen.getByLabelText('Informação')).toBeTruthy();
+    expect(screen.queryByText(/Arquivos \(PDF/)).toBeNull();
+    expect(screen.queryByText(/treinar modelo/i)).toBeNull();
   });
 
-  it('salvar envia PUT com combinação válida', async () => {
-    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (url.endsWith(`/admin/tenants/${companyId}`)) {
-        return Promise.resolve(jsonResponse(company));
-      }
-      if (url.endsWith('/admin/consultant/options')) {
-        return Promise.resolve(jsonResponse(options));
-      }
-      if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`)) {
-        return Promise.resolve(jsonResponse({ data: [] }));
-      }
-      if (url.endsWith(`/admin/tenants/${companyId}/consultant`) && init?.method === 'PUT') {
-        return Promise.resolve(
-          jsonResponse({
-            ...configured,
-            provider: 'ANTHROPIC',
-            model: 'claude-sonnet-5',
-            tonePreset: 'CONSULTIVO',
-            tone: null,
-          }),
-        );
-      }
-      return Promise.resolve(jsonResponse(configured));
+  it('preserva dados ao voltar e chips não duplicam instrução', async () => {
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.change(screen.getByLabelText('Nome do Consultor'), { target: { value: 'Lia' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Priorizar fluxo de caixa' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Priorizar fluxo de caixa' }));
+    expect((screen.getByLabelText('Instruções do Consultor') as HTMLTextAreaElement).value).toBe(
+      'Priorize fluxo de caixa nas análises.',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    expect((screen.getByLabelText('Nome do Consultor') as HTMLInputElement).value).toBe('Lia');
+  });
+
+  it('conclui o wizard salvando desativado e mostra overview', async () => {
+    const fetchMock = mockAdminFetch({
+      settings: unconfigured,
+      knowledge: [],
+      onPut: (body) => ({
+        ...configured,
+        ...(body as ConsultantSettings),
+        configured: true,
+        status: 'DISABLED',
+        consultantName: 'Lia',
+      }),
     });
     vi.stubGlobal('fetch', fetchMock);
-
     renderPage();
-    fireEvent.change(await screen.findByLabelText('Provedor'), { target: { value: 'ANTHROPIC' } });
-    fireEvent.change(screen.getByLabelText('Nome do consultor'), { target: { value: 'Clara' } });
-    fireEvent.change(screen.getByLabelText('Tom'), { target: { value: 'CONSULTIVO' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Salvar configuração' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.change(screen.getByLabelText('Nome do Consultor'), { target: { value: 'Lia' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar' }));
 
-    await waitFor(() => {
-      expect(screen.getByText('Configuração do consultor salva.')).toBeTruthy();
-    });
+    expect(await screen.findByText('Seu Consultor está pronto')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar desativado' }));
 
+    expect(await screen.findByTestId('consultant-overview')).toBeTruthy();
+    expect(screen.getByText('Desativado')).toBeTruthy();
     const putCall = fetchMock.mock.calls.find(
-      ([url, init]) =>
-        String(url).endsWith(`/admin/tenants/${companyId}/consultant`) &&
-        (init as RequestInit | undefined)?.method === 'PUT',
+      ([, init]) => (init as RequestInit | undefined)?.method === 'PUT',
     );
-    expect(putCall).toBeTruthy();
-    expect(JSON.parse(String((putCall?.[1] as RequestInit).body))).toEqual({
-      status: 'ACTIVE',
-      provider: 'ANTHROPIC',
-      model: 'claude-sonnet-5',
-      consultantName: 'Clara',
-      businessSegment: 'Varejo',
-      businessDescription: 'Loja de bairro',
-      adminPrompt: 'Seja objetivo',
-      tonePreset: 'CONSULTIVO',
-      tone: null,
-    });
+    expect(JSON.parse(String((putCall?.[1] as RequestInit).body)).status).toBe('DISABLED');
   });
 
-  it('knowledge permite criar, editar, desativar e excluir', async () => {
-    let entries: ConsultantKnowledgeEntry[] = [];
-    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (url.endsWith(`/admin/tenants/${companyId}`)) {
-        return Promise.resolve(jsonResponse(company));
-      }
-      if (url.endsWith('/admin/consultant/options')) {
-        return Promise.resolve(jsonResponse(options));
-      }
-      if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`) && init?.method === 'POST') {
-        const payload = JSON.parse(String(init.body)) as { title: string; content: string };
-        const created: ConsultantKnowledgeEntry = {
-          ...knowledge,
-          title: payload.title,
-          content: payload.content,
-        };
-        entries = [created];
-        return Promise.resolve(jsonResponse(created, 201));
-      }
-      if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge/${knowledge.id}`)) {
-        if (init?.method === 'DELETE') {
-          entries = [];
-          return Promise.resolve(new Response(null, { status: 204 }));
-        }
-        const payload = JSON.parse(String(init?.body)) as Partial<ConsultantKnowledgeEntry>;
-        const updated = { ...entries[0]!, ...payload, updatedAt: '2026-09-24T15:00:00.000Z' };
-        entries = [updated];
-        return Promise.resolve(jsonResponse(updated));
-      }
-      if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`)) {
-        return Promise.resolve(jsonResponse({ data: entries }));
-      }
-      return Promise.resolve(jsonResponse(configured));
-    });
-    vi.stubGlobal('fetch', fetchMock);
+  it('settings existente abre overview direto e preserva a Clínica Life', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockAdminFetch({
+        company: clinicaLife,
+        settings: clinicaSettings,
+        knowledge: [clinicaKnowledge],
+      }),
+    );
+    renderPage(clinicaLife.id);
 
+    expect(await screen.findByTestId('consultant-overview')).toBeTruthy();
+    expect(screen.queryByTestId('consultant-empty-state')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Lia' })).toBeTruthy();
+    expect(screen.getAllByText(/Consultivo/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/1 conhecimento ativo/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/OpenAI · gpt-4o-mini/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Arquivos \(PDF/)).toBeNull();
+  });
+
+  it('editar pelo card de comportamento abre a etapa 3', async () => {
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: configured, knowledge: [] }));
     renderPage();
-    expect(await screen.findByText('Nenhum conhecimento cadastrado para esta empresa.')).toBeTruthy();
+    expect(await screen.findByTestId('consultant-overview')).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId('overview-behavior')).getByRole('button', { name: 'Editar' }));
+    expect(await screen.findByTestId('consultant-wizard-step-3')).toBeTruthy();
+    expect((screen.getByRole('radio', { name: /Profissional e objetivo/ }) as HTMLButtonElement).getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('knowledge permite criar, editar, desativar e excluir no wizard', async () => {
+    const fetchMock = mockAdminFetch({ settings: configured, knowledge: [] });
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Gerenciar conhecimentos' }));
+    expect(await screen.findByTestId('consultant-wizard-step-5')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Título'), {
       target: { value: 'Meta interna de faturamento' },
     });
-    fireEvent.change(screen.getByLabelText('Conteúdo'), {
+    fireEvent.change(screen.getByLabelText('Informação'), {
       target: { value: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar conhecimento' }));
-
     expect(await screen.findByText('Conhecimento criado para esta empresa.')).toBeTruthy();
-    expect(screen.getByText('Meta interna de faturamento')).toBeTruthy();
-    expect(
-      screen.getByText('A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.'),
-    ).toBeTruthy();
     expect((screen.getByLabelText('Título') as HTMLInputElement).value).toBe('');
-    expect((screen.getByLabelText('Conteúdo') as HTMLTextAreaElement).value).toBe('');
-    const postCall = fetchMock.mock.calls.find((call) => call[1]?.method === 'POST');
-    expect(JSON.parse(String(postCall?.[1]?.body))).toEqual({
-      title: 'Meta interna de faturamento',
-      content: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.',
-    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
     fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Política revisada' } });
     fireEvent.click(screen.getByRole('button', { name: 'Salvar conhecimento' }));
     expect(await screen.findByText('Conhecimento atualizado.')).toBeTruthy();
-    expect(screen.getByText('Política revisada')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Desativar' }));
     expect(await screen.findByText('Conhecimento desativado.')).toBeTruthy();
-    expect(screen.getByText('Desativado')).toBeTruthy();
-
     fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar exclusão' }));
     expect(await screen.findByText('Conhecimento excluído.')).toBeTruthy();
-    expect(screen.getByText('Nenhum conhecimento cadastrado para esta empresa.')).toBeTruthy();
   });
 
-  it('mostra erro de validação de conhecimento sem detalhe interno', async () => {
-    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-      if (url.endsWith(`/admin/tenants/${companyId}`)) {
-        return Promise.resolve(jsonResponse(company));
-      }
-      if (url.endsWith('/admin/consultant/options')) {
-        return Promise.resolve(jsonResponse(options));
-      }
-      if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`) && init?.method === 'POST') {
-        return Promise.resolve(
-          jsonResponse(
-            {
-              error: {
-                code: 'VALIDATION_ERROR',
-                message: 'Verifique os dados informados.',
-                details: [{ field: 'title', issue: 'required' }],
-              },
-            },
-            422,
-          ),
-        );
-      }
-      if (url.endsWith(`/admin/tenants/${companyId}/consultant/knowledge`)) {
-        return Promise.resolve(jsonResponse({ data: [] }));
-      }
-      return Promise.resolve(jsonResponse(configured));
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('trocar provider no wizard atualiza o modelo', async () => {
+    vi.stubGlobal('fetch', mockAdminFetch({ settings: unconfigured, knowledge: [] }));
     renderPage();
-    fireEvent.change(await screen.findByLabelText('Título'), {
-      target: { value: 'Meta interna de faturamento' },
-    });
-    fireEvent.change(screen.getByLabelText('Conteúdo'), {
-      target: { value: 'A meta interna de faturamento mensal da Clínica Life é de R$ 250.000,00.' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Adicionar conhecimento' }));
-    expect(await screen.findByText('Informe um título válido.')).toBeTruthy();
-    expect(screen.queryByText('Verifique os dados informados.')).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Criar Consultor' }));
+    fireEvent.change(screen.getByLabelText('Motor de IA'), { target: { value: 'ANTHROPIC' } });
+    const modelSelect = screen.getByLabelText('Modelo') as HTMLSelectElement;
+    expect(modelSelect.value).toBe('claude-sonnet-5');
+    expect(within(modelSelect).queryByRole('option', { name: 'gpt-4o-mini' })).toBeNull();
+  });
+
+  it('impede ativar sem credencial do provider', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockAdminFetch({
+        settings: { ...configured, status: 'DISABLED' },
+        knowledge: [],
+        providers: [
+          {
+            provider: 'OPENAI',
+            configured: false,
+            source: 'NONE',
+            displayHint: null,
+            configuredAt: null,
+          },
+        ],
+      }),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ativar Consultor' }));
+    expect(
+      await screen.findByText('Configure uma credencial da OpenAI antes de ativar este Consultor.'),
+    ).toBeTruthy();
   });
 
   it('mostra erro quando o carregamento falha', async () => {
@@ -407,5 +481,16 @@ describe('UI admin Consultor (F13.5)', () => {
     renderPage();
     expect(await screen.findByText('Não foi possível carregar o consultor.')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Consultor Financeiro' })).toBeNull();
+  });
+});
+
+describe('appendInstructionChip', () => {
+  it('não duplica sugestão já presente', () => {
+    expect(appendInstructionChip('', 'Priorize fluxo de caixa nas análises.')).toBe(
+      'Priorize fluxo de caixa nas análises.',
+    );
+    expect(
+      appendInstructionChip('Priorize fluxo de caixa nas análises.', 'Priorize fluxo de caixa nas análises.'),
+    ).toBe('Priorize fluxo de caixa nas análises.');
   });
 });

@@ -16,6 +16,8 @@ export type ConsultantTonePreset =
   | 'EXECUTIVO'
   | 'PERSONALIZADO';
 
+export type ConsultantEmojiPreference = 'NONE' | 'MODERATE' | 'FREE';
+
 /** Registro público de configuração do Consultor por empresa. */
 export type ConsultantSettings = {
   readonly configured: boolean;
@@ -28,6 +30,7 @@ export type ConsultantSettings = {
   readonly adminPrompt: string | null;
   readonly tonePreset: ConsultantTonePreset | null;
   readonly tone: string | null;
+  readonly emojiPreference: ConsultantEmojiPreference | null;
   readonly updatedAt: string | null;
 };
 
@@ -47,9 +50,15 @@ export type ConsultantTonePresetOption = {
   readonly label: string;
 };
 
+export type ConsultantEmojiPreferenceOption = {
+  readonly id: ConsultantEmojiPreference;
+  readonly label: string;
+};
+
 export type ConsultantOptions = {
   readonly providers: readonly ConsultantProviderOption[];
   readonly tonePresets: readonly ConsultantTonePresetOption[];
+  readonly emojiPreferences: readonly ConsultantEmojiPreferenceOption[];
 };
 
 export type ConsultantProviderCredentialSource = 'MANAGED' | 'ENV' | 'NONE';
@@ -82,6 +91,7 @@ export type UpdateConsultantSettingsInput = {
   readonly adminPrompt: string | null;
   readonly tonePreset: ConsultantTonePreset;
   readonly tone: string | null;
+  readonly emojiPreference: ConsultantEmojiPreference;
 };
 
 export type CreateConsultantKnowledgeInput = {

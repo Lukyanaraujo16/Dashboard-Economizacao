@@ -371,9 +371,23 @@ describe('chat do Consultor', () => {
     });
   });
 
-  it('mostra empty state e não envia quando o Consultor está indisponível', async () => {
+  it('não mostra o FAB quando o Consultor está desativado', async () => {
     vi.mocked(getConsultantStatus).mockResolvedValue({
       status: 'DISABLED',
+      consultantName: 'Consultor',
+    });
+    renderChat();
+
+    await waitFor(() => {
+      expect(getConsultantStatus).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('button', { name: /Abrir o Consultor/ })).toBeNull();
+    expect(listConsultantConversations).not.toHaveBeenCalled();
+  });
+
+  it('mostra o FAB sem disponibilidade quando o provider está indisponível', async () => {
+    vi.mocked(getConsultantStatus).mockResolvedValue({
+      status: 'UNAVAILABLE',
       consultantName: 'Consultor',
     });
     renderChat();
@@ -383,12 +397,6 @@ describe('chat do Consultor', () => {
       await screen.findByText('O Consultor está temporariamente indisponível.'),
     ).toBeTruthy();
     expect(listConsultantConversations).not.toHaveBeenCalled();
-    expect((screen.getByRole('button', { name: 'Enviar' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-    expect((screen.getByLabelText('Mensagem para o Consultor') as HTMLTextAreaElement).disabled).toBe(
-      true,
-    );
   });
 
   it('mostra erro seguro quando a API falha', async () => {

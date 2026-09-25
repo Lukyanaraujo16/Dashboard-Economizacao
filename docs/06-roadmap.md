@@ -913,8 +913,8 @@ Critérios de aceite (V1)
 
 17. Fase 13 — Consultor Financeiro Reativo
 
-Status: IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL (F13.1–F13.6).
-F14 NÃO iniciada. Produção NÃO homologada.
+Status: IMPLEMENTADA LOCALMENTE — F13.7 homologada localmente; F13.8.1 wizard + overview + emojiPreference.
+F14 NÃO iniciada. Knowledge Files NÃO implementado. Produção NÃO homologada.
 
 Objetivo
 
