@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -18,7 +21,14 @@ import {
   createBuildAdvisorContext,
 } from '../src/modules/advisor/index.js';
 import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session-store.js';
+import { buildMultipartPayload } from './helpers/image-fixtures.js';
 import { cleanTestDatabase } from './helpers/test-database.js';
+
+const KNOWLEDGE_DOC_FIXTURES = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'fixtures',
+  'knowledge-documents',
+);
 
 const TEST_AUTH_SECRET = 'test-auth-secret-foundation-1-1a-32chars';
 const TEST_REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
@@ -1078,6 +1088,186 @@ describe('API administrativa /admin/consultant (F13.4)', () => {
       });
       expect(response.statusCode).toBe(403);
       expect(await prisma.aiPlatformCredential.count()).toBe(0);
+    });
+  });
+
+  describe('knowledge-documents CRUD (F13.8.2A)', () => {
+    it('ADMIN faz upload MD até READY, lista, ativa e exclui sem storageKey', async () => {
+      const suffix = randomUUID().slice(0, 8);
+      const tenant = await tenants.create({
+        name: `consultant-kd-md-${suffix}`,
+        displayName: 'Consultant KD MD',
+      });
+      await createPlatformUser({ email: `admin-kd-md-${suffix}@api.test`, role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, `admin-kd-md-${suffix}@api.test`);
+      const body = await readFile(path.join(KNOWLEDGE_DOC_FIXTURES, 'consultant-knowledge.sample.md'));
+      const multipart = buildMultipartPayload({
+        fieldName: 'file',
+        filename: 'Base Consultor.md',
+        mimeType: 'text/markdown',
+        body,
+      });
+
+      const created = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge-documents`,
+        headers: { cookie, 'content-type': multipart.contentType },
+        payload: multipart.payload,
+      });
+      expect(created.statusCode).toBe(201);
+      const doc = created.json();
+      expect(doc.processingStatus).toBe('READY');
+      expect(doc.chunkCount).toBeGreaterThan(5);
+      expect(doc.status).toBe('DISABLED');
+      expect(doc).not.toHaveProperty('storageKey');
+      expect(JSON.stringify(doc)).not.toContain('/knowledge/');
+
+      const listed = await app.inject({
+        method: 'GET',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge-documents`,
+        headers: { cookie },
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().data).toHaveLength(1);
+
+      const activated = await app.inject({
+        method: 'PATCH',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge-documents/${doc.id}`,
+        headers: { cookie },
+        payload: { status: 'ACTIVE' },
+      });
+      expect(activated.statusCode).toBe(200);
+      expect(activated.json().status).toBe('ACTIVE');
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge-documents/${doc.id}`,
+        headers: { cookie },
+      });
+      expect(removed.statusCode).toBe(204);
+      expect(await prisma.aiKnowledgeDocument.count()).toBe(0);
+      expect(await prisma.aiKnowledgeDocumentChunk.count()).toBe(0);
+    });
+
+    it('USER e Support Mode não fazem upload documental', async () => {
+      const suffix = randomUUID().slice(0, 8);
+      const tenant = await tenants.create({
+        name: `consultant-kd-auth-${suffix}`,
+        displayName: 'Consultant KD Auth',
+      });
+      await createPlatformUser({
+        email: `user-kd-${suffix}@api.test`,
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      await createPlatformUser({ email: `admin-kd-auth-${suffix}@api.test`, role: 'ADMIN' });
+      const app = await buildTestApp();
+      const userCookie = await loginAs(app, `user-kd-${suffix}@api.test`);
+      const adminCookie = await loginAs(app, `admin-kd-auth-${suffix}@api.test`);
+      const multipart = buildMultipartPayload({
+        fieldName: 'file',
+        filename: 'guia.md',
+        mimeType: 'text/markdown',
+        body: Buffer.from('# guia\n\nconteúdo', 'utf8'),
+      });
+
+      const forbidden = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge-documents`,
+        headers: { cookie: userCookie, 'content-type': multipart.contentType },
+        payload: multipart.payload,
+      });
+      expect(forbidden.statusCode).toBe(403);
+
+      const enter = await app.inject({
+        method: 'POST',
+        url: '/auth/support/enter',
+        headers: { cookie: adminCookie, 'user-agent': 'admin-kd-auth' },
+        payload: { tenantId: tenant.id },
+      });
+      expect(enter.statusCode).toBe(200);
+      const support = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/consultant/knowledge-documents`,
+        headers: { cookie: adminCookie, 'content-type': multipart.contentType },
+        payload: multipart.payload,
+      });
+      expect(support.statusCode).toBe(403);
+      expect(await prisma.aiKnowledgeDocument.count()).toBe(0);
+    });
+
+    it('isola listagem/patch/delete entre tenants e rejeita extensão falsa', async () => {
+      const suffix = randomUUID().slice(0, 8);
+      const tenantA = await tenants.create({
+        name: `consultant-kd-a-${suffix}`,
+        displayName: 'Consultant KD A',
+      });
+      const tenantB = await tenants.create({
+        name: `consultant-kd-b-${suffix}`,
+        displayName: 'Consultant KD B',
+      });
+      await createPlatformUser({ email: `admin-kd-cross-${suffix}@api.test`, role: 'ADMIN' });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, `admin-kd-cross-${suffix}@api.test`);
+      const multipart = buildMultipartPayload({
+        fieldName: 'file',
+        filename: 'segredo-b.md',
+        mimeType: 'text/markdown',
+        body: Buffer.from('# Segredo B\n\nconteúdo exclusivo de B', 'utf8'),
+      });
+
+      const createdB = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenantB.id}/consultant/knowledge-documents`,
+        headers: { cookie, 'content-type': multipart.contentType },
+        payload: multipart.payload,
+      });
+      expect(createdB.statusCode).toBe(201);
+      const documentId = createdB.json().id as string;
+
+      const listedA = await app.inject({
+        method: 'GET',
+        url: `/admin/tenants/${tenantA.id}/consultant/knowledge-documents`,
+        headers: { cookie },
+      });
+      expect(listedA.json().data).toEqual([]);
+
+      const patched = await app.inject({
+        method: 'PATCH',
+        url: `/admin/tenants/${tenantA.id}/consultant/knowledge-documents/${documentId}`,
+        headers: { cookie },
+        payload: { status: 'ACTIVE' },
+      });
+      expect(patched.statusCode).toBe(404);
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenantA.id}/consultant/knowledge-documents/${documentId}`,
+        headers: { cookie },
+      });
+      expect(removed.statusCode).toBe(404);
+
+      const stillOnB = await app.inject({
+        method: 'GET',
+        url: `/admin/tenants/${tenantB.id}/consultant/knowledge-documents`,
+        headers: { cookie },
+      });
+      expect(stillOnB.json().data).toHaveLength(1);
+
+      const fakeExt = buildMultipartPayload({
+        fieldName: 'file',
+        filename: 'malware.exe',
+        mimeType: 'text/markdown',
+        body: Buffer.from('# fake\n\nok', 'utf8'),
+      });
+      const rejected = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenantA.id}/consultant/knowledge-documents`,
+        headers: { cookie, 'content-type': fakeExt.contentType },
+        payload: fakeExt.payload,
+      });
+      expect(rejected.statusCode).toBe(422);
     });
   });
 });

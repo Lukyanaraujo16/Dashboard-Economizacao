@@ -401,6 +401,7 @@ export {
   AI_CONSULTANT_STATUSES,
   AI_CONVERSATION_STATUSES,
   AI_KNOWLEDGE_CONTENT_TYPES,
+  AI_KNOWLEDGE_DOCUMENT_PROCESSING_STATUSES,
   AI_KNOWLEDGE_STATUSES,
   AI_MESSAGE_SENDER_TYPES,
   AI_MESSAGE_TYPES,
@@ -420,6 +421,9 @@ export type {
   AiTonePreset,
   AiConversationStatus,
   AiKnowledgeContentType,
+  AiKnowledgeDocumentChunkRecord,
+  AiKnowledgeDocumentProcessingStatus,
+  AiKnowledgeDocumentRecord,
   AiKnowledgeEntryRecord,
   AiKnowledgeStatus,
   AiMessageRecord,
@@ -432,10 +436,38 @@ export type {
   AiRunType,
   AiTenantSettingsRecord,
   CreateAiConversationInput,
+  CreateAiKnowledgeDocumentChunkInput,
+  CreateAiKnowledgeDocumentInput,
   CreateAiKnowledgeEntryInput,
   CreateAiMessageInput,
   CreateAiRunInput,
   UpdateAiRunInput,
+  UpdateAiKnowledgeDocumentInput,
   UpdateAiKnowledgeEntryInput,
   UpsertAiTenantSettingsInput,
 } from './types.js';
+export {
+  ADVISOR_KNOWLEDGE_DOCUMENT_ALLOWED_EXTENSIONS,
+  ADVISOR_KNOWLEDGE_DOCUMENT_ALLOWED_MIME_TYPES,
+  ADVISOR_KNOWLEDGE_DOCUMENT_MAX_BYTES,
+  ADVISOR_KNOWLEDGE_DOCUMENT_MAX_CHUNK_CHARS,
+  ADVISOR_KNOWLEDGE_DOCUMENT_MAX_CHUNKS,
+  ADVISOR_KNOWLEDGE_DOCUMENT_MAX_EXTRACTED_CHARS,
+  ADVISOR_KNOWLEDGE_DOCUMENT_MIN_PDF_TEXT_CHARS,
+  ADVISOR_KNOWLEDGE_DOCUMENT_ORIGINAL_NAME_MAX,
+  ADVISOR_KNOWLEDGE_DOCUMENT_TARGET_CHUNK_CHARS,
+  ADVISOR_KNOWLEDGE_DOCUMENT_TITLE_MAX,
+} from './advisor-knowledge-document-limits.js';
+export { chunkAdvisorKnowledgeDocumentText } from './advisor-knowledge-document-chunking.js';
+export type { AdvisorKnowledgeDocumentChunkDraft } from './advisor-knowledge-document-chunking.js';
+export { extractAdvisorKnowledgeDocumentText } from './advisor-knowledge-document-extract.js';
+export { normalizeAdvisorKnowledgeDocumentText } from './advisor-knowledge-document-normalize.js';
+export {
+  createAdvisorKnowledgeDocumentStorageKey,
+  isAdvisorKnowledgeDocumentStorageKey,
+  validateAdvisorKnowledgeDocumentUpload,
+} from './advisor-knowledge-document-validation.js';
+export type {
+  AdvisorKnowledgeDocumentKind,
+  AdvisorKnowledgeDocumentValidation,
+} from './advisor-knowledge-document-validation.js';

@@ -8,6 +8,7 @@ import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 export function mapAdvisorDomainError(error: AdvisorDomainError): never {
   switch (error.code) {
     case 'KNOWLEDGE_NOT_FOUND':
+    case 'KNOWLEDGE_DOCUMENT_NOT_FOUND':
     case 'KNOWLEDGE_AUTHOR_NOT_FOUND':
     case 'CONVERSATION_NOT_FOUND':
     case 'RUN_NOT_FOUND':
@@ -19,8 +20,20 @@ export function mapAdvisorDomainError(error: AdvisorDomainError): never {
     case 'AI_MODEL_NOT_ALLOWED':
     case 'AI_EMOJI_PREFERENCE_INVALID':
     case 'AI_KNOWLEDGE_STATUS_INVALID':
+    case 'AI_KNOWLEDGE_DOCUMENT_PROCESSING_STATUS_INVALID':
     case 'KNOWLEDGE_TITLE_REQUIRED':
     case 'KNOWLEDGE_CONTENT_REQUIRED':
+    case 'KNOWLEDGE_DOCUMENT_EMPTY':
+    case 'KNOWLEDGE_DOCUMENT_TOO_LARGE':
+    case 'KNOWLEDGE_DOCUMENT_EXTENSION_INVALID':
+    case 'KNOWLEDGE_DOCUMENT_CONTENT_INVALID':
+    case 'KNOWLEDGE_DOCUMENT_MIME_INVALID':
+    case 'KNOWLEDGE_DOCUMENT_FILENAME_INVALID':
+    case 'KNOWLEDGE_DOCUMENT_PDF_PARSE_FAILED':
+    case 'KNOWLEDGE_DOCUMENT_PDF_NO_TEXT':
+    case 'KNOWLEDGE_DOCUMENT_EMPTY_TEXT':
+    case 'KNOWLEDGE_DOCUMENT_TEXT_TOO_LARGE':
+    case 'KNOWLEDGE_DOCUMENT_UPDATE_EMPTY':
     case 'TENANT_ID_REQUIRED':
     case 'USER_ID_REQUIRED':
     case 'CONSULTANT_DISABLED':

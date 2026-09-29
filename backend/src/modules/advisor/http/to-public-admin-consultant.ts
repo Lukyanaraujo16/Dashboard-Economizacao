@@ -1,10 +1,16 @@
 import { AI_PROVIDER_MODEL_CATALOG } from '../domain/ai-provider-models.js';
 import { toPublicEmojiPreferenceOptions } from '../domain/emoji-preference.js';
 import { toPublicTonePresetOptions } from '../domain/tone-presets.js';
-import type { AiKnowledgeEntryRecord, AiProviderId, AiTenantSettingsRecord } from '../domain/types.js';
+import type {
+  AiKnowledgeDocumentRecord,
+  AiKnowledgeEntryRecord,
+  AiProviderId,
+  AiTenantSettingsRecord,
+} from '../domain/types.js';
 import type {
   PublicAdminConsultantSettings,
   PublicConsultantOptions,
+  PublicKnowledgeDocument,
   PublicKnowledgeEntry,
 } from './public-dtos.js';
 
@@ -77,5 +83,25 @@ export function toPublicKnowledgeEntry(record: AiKnowledgeEntryRecord): PublicKn
     status: record.status,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
+  };
+}
+
+export function toPublicKnowledgeDocument(
+  record: AiKnowledgeDocumentRecord,
+): PublicKnowledgeDocument {
+  return {
+    id: record.id,
+    title: record.title,
+    originalFileName: record.originalFileName,
+    mimeType: record.mimeType,
+    sizeBytes: record.sizeBytes,
+    status: record.status,
+    processingStatus: record.processingStatus,
+    chunkCount: record.chunkCount,
+    extractedCharCount: record.extractedCharCount,
+    processingErrorCode: record.processingErrorCode,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+    processedAt: record.processedAt === null ? null : record.processedAt.toISOString(),
   };
 }

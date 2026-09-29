@@ -134,6 +134,78 @@ export type UpdateAiKnowledgeEntryInput = {
   readonly status?: AiKnowledgeStatus;
 };
 
+export const AI_KNOWLEDGE_DOCUMENT_PROCESSING_STATUSES = [
+  'UPLOADED',
+  'PROCESSING',
+  'READY',
+  'FAILED',
+] as const;
+
+export type AiKnowledgeDocumentProcessingStatus =
+  (typeof AI_KNOWLEDGE_DOCUMENT_PROCESSING_STATUSES)[number];
+
+export type AiKnowledgeDocumentRecord = {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly title: string;
+  readonly originalFileName: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly checksum: string;
+  readonly storageKey: string;
+  readonly processingStatus: AiKnowledgeDocumentProcessingStatus;
+  readonly status: AiKnowledgeStatus;
+  readonly chunkCount: number;
+  readonly extractedCharCount: number;
+  readonly processingErrorCode: string | null;
+  readonly createdById: string;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly processedAt: Date | null;
+};
+
+export type AiKnowledgeDocumentChunkRecord = {
+  readonly id: string;
+  readonly documentId: string;
+  readonly tenantId: string;
+  readonly ordinal: number;
+  readonly heading: string | null;
+  readonly content: string;
+  readonly charCount: number;
+  readonly createdAt: Date;
+};
+
+export type CreateAiKnowledgeDocumentInput = {
+  readonly title: string;
+  readonly originalFileName: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly checksum: string;
+  readonly storageKey: string;
+  readonly processingStatus: AiKnowledgeDocumentProcessingStatus;
+  readonly status?: AiKnowledgeStatus;
+  readonly createdById: string;
+};
+
+export type UpdateAiKnowledgeDocumentInput = {
+  readonly title?: string;
+  readonly status?: AiKnowledgeStatus;
+  readonly processingStatus?: AiKnowledgeDocumentProcessingStatus;
+  readonly chunkCount?: number;
+  readonly extractedCharCount?: number;
+  readonly processingErrorCode?: string | null;
+  readonly processedAt?: Date | null;
+};
+
+export type CreateAiKnowledgeDocumentChunkInput = {
+  readonly documentId: string;
+  readonly tenantId: string;
+  readonly ordinal: number;
+  readonly heading: string | null;
+  readonly content: string;
+  readonly charCount: number;
+};
+
 export type AiConversationRecord = {
   readonly id: string;
   readonly tenantId: string;

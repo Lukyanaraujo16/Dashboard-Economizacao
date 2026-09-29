@@ -83,6 +83,22 @@ export type PublicKnowledgeEntry = {
   readonly updatedAt: string;
 };
 
+export type PublicKnowledgeDocument = {
+  readonly id: string;
+  readonly title: string;
+  readonly originalFileName: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly status: 'ACTIVE' | 'DISABLED';
+  readonly processingStatus: 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED';
+  readonly chunkCount: number;
+  readonly extractedCharCount: number;
+  readonly processingErrorCode: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly processedAt: string | null;
+};
+
 export type PublicConsultantUserStatus = {
   readonly status: PublicConsultantStatus;
   readonly consultantName: string;

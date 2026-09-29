@@ -62,10 +62,12 @@ model Tenant {
   syncRuns            SyncRun[]
   syncCursors         IntegrationSyncCursor[]
   aiSettings          AiTenantSettings?
-  aiKnowledgeEntries  AiKnowledgeEntry[]
-  aiConversations     AiConversation[]
-  aiMessages          AiMessage[]
-  aiRuns              AiRun[]
+  aiKnowledgeEntries         AiKnowledgeEntry[]
+  aiKnowledgeDocuments       AiKnowledgeDocument[]
+  aiKnowledgeDocumentChunks  AiKnowledgeDocumentChunk[]
+  aiConversations            AiConversation[]
+  aiMessages                 AiMessage[]
+  aiRuns                     AiRun[]
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
@@ -159,9 +161,10 @@ model User {
   tenant                 Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   credential             UserCredential?
   supportSessions        SupportSession[] @relation("SupportSessionOperator")
-  aiKnowledgeCreated     AiKnowledgeEntry[]
-  aiConversations        AiConversation[]
-  aiRuns                 AiRun[]
+  aiKnowledgeCreated           AiKnowledgeEntry[]
+  aiKnowledgeDocumentsCreated  AiKnowledgeDocument[]
+  aiConversations              AiConversation[]
+  aiRuns                       AiRun[]
 
   @@index([tenantId], map: "idx_users_tenant_id")
   @@map("users")
@@ -828,6 +831,15 @@ enum AiKnowledgeStatus {
   @@map("ai_knowledge_status")
 }
 
+enum AiKnowledgeDocumentProcessingStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+
+  @@map("ai_knowledge_document_processing_status")
+}
+
 enum AiConversationStatus {
   OPEN
   CLOSED
@@ -929,6 +941,55 @@ model AiKnowledgeEntry {
 
   @@index([tenantId], map: "idx_ai_knowledge_entries_tenant_id")
   @@map("ai_knowledge_entries")
+}
+
+/// Documento de conhecimento do tenant (MD/PDF). Bytes no FileStorage privado; não usa /files público.
+/// Ainda NÃO entra no Context Builder nesta fase (F13.8.2A).
+model AiKnowledgeDocument {
+  id                   String                               @id @default(uuid()) @db.Uuid
+  tenantId             String                               @map("tenant_id") @db.Uuid
+  title                String
+  originalFileName     String                               @map("original_file_name")
+  mimeType             String                               @map("mime_type")
+  sizeBytes            Int                                  @map("size_bytes")
+  checksum             String
+  storageKey           String                               @unique(map: "uq_ai_knowledge_documents_storage_key") @map("storage_key")
+  processingStatus     AiKnowledgeDocumentProcessingStatus  @map("processing_status")
+  status               AiKnowledgeStatus                    @default(DISABLED)
+  chunkCount           Int                                  @default(0) @map("chunk_count")
+  extractedCharCount   Int                                  @default(0) @map("extracted_char_count")
+  processingErrorCode  String?                              @map("processing_error_code")
+  createdById          String                               @map("created_by") @db.Uuid
+  createdAt            DateTime                             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime                             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  processedAt          DateTime?                            @map("processed_at") @db.Timestamptz(3)
+  tenant               Tenant                               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy            User                                 @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  chunks               AiKnowledgeDocumentChunk[]
+
+  @@index([tenantId], map: "idx_ai_knowledge_documents_tenant_id")
+  @@index([tenantId, status], map: "idx_ai_knowledge_documents_tenant_status")
+  @@index([tenantId, processingStatus], map: "idx_ai_knowledge_documents_tenant_processing")
+  @@map("ai_knowledge_documents")
+}
+
+/// Seção/chunk textual derivado de um documento. Uso interno; não exposto integralmente no admin DTO.
+model AiKnowledgeDocumentChunk {
+  id         String             @id @default(uuid()) @db.Uuid
+  documentId String             @map("document_id") @db.Uuid
+  tenantId   String             @map("tenant_id") @db.Uuid
+  ordinal    Int
+  heading    String?
+  content    String             @db.Text
+  charCount  Int                @map("char_count")
+  createdAt  DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  document   AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, ordinal], map: "uq_ai_knowledge_document_chunks_document_ordinal")
+  @@index([tenantId], map: "idx_ai_knowledge_document_chunks_tenant_id")
+  @@index([documentId], map: "idx_ai_knowledge_document_chunks_document_id")
+  @@map("ai_knowledge_document_chunks")
 }
 
 /// Conversa do Consultor: pertence ao tenant e ao usuário.

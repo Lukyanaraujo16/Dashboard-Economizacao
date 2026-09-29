@@ -21,4 +21,5 @@ export type {
   PublicConsultantTonePresetOption,
   PublicConsultantUserStatus,
   PublicKnowledgeEntry,
+  PublicKnowledgeDocument,
 } from './public-dtos.js';
