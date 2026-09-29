@@ -1,4 +1,4 @@
-import type { ConsultantKnowledgeEntry, ConsultantProviderStatus, ConsultantSettings } from '../../services/admin/consultant.types';
+import type { ConsultantKnowledgeDocument, ConsultantKnowledgeEntry, ConsultantProviderStatus, ConsultantSettings } from '../../services/admin/consultant.types';
 import { Badge, Button, Card, Typography } from '../ui';
 import {
   emojiDisplayName,
@@ -14,6 +14,7 @@ type ConsultantManagementOverviewProps = {
   readonly companyName: string;
   readonly settings: ConsultantSettings;
   readonly knowledge: readonly ConsultantKnowledgeEntry[];
+  readonly documents: readonly ConsultantKnowledgeDocument[];
   readonly providerStatus: ConsultantProviderStatus | null;
   readonly saving: boolean;
   readonly formError: string | null;
@@ -26,6 +27,7 @@ export function ConsultantManagementOverview({
   companyName,
   settings,
   knowledge,
+  documents,
   providerStatus,
   saving,
   formError,
@@ -35,6 +37,8 @@ export function ConsultantManagementOverview({
 }: ConsultantManagementOverviewProps) {
   const consultantName = resolveDisplayedConsultantName(settings.consultantName);
   const activeKnowledge = knowledge.filter((entry) => entry.status === 'ACTIVE').length;
+  const readyDocuments = documents.filter((doc) => doc.processingStatus === 'READY').length;
+  const activeDocuments = documents.filter((doc) => doc.status === 'ACTIVE').length;
   const configured = settings.status !== 'NOT_CONFIGURED';
   const active = settings.status === 'ACTIVE';
   const instructionsConfigured = Boolean(settings.adminPrompt?.trim());
@@ -55,6 +59,8 @@ export function ConsultantManagementOverview({
             {toneDisplayName(settings.tonePreset)} · Emojis {emojiDisplayName(settings.emojiPreference).toLowerCase()}
             {' · '}
             {activeKnowledge} conhecimento{activeKnowledge === 1 ? '' : 's'} ativo{activeKnowledge === 1 ? '' : 's'}
+            {' · '}
+            {readyDocuments} arquivo{readyDocuments === 1 ? '' : 's'} pronto{readyDocuments === 1 ? '' : 's'}
           </Typography>
           <Typography as="p" variant="caption" className={styles.pageDescription}>
             {providerDisplayName(settings.provider)}
@@ -135,7 +141,12 @@ export function ConsultantManagementOverview({
             Conhecimento
           </Typography>
           <Typography as="p" variant="body">
-            {activeKnowledge} conhecimento{activeKnowledge === 1 ? '' : 's'} ativo{activeKnowledge === 1 ? '' : 's'}
+            {activeKnowledge} conhecimento{activeKnowledge === 1 ? '' : 's'} ativo
+            {activeKnowledge === 1 ? '' : 's'}
+          </Typography>
+          <Typography as="p" variant="caption" className={styles.pageDescription}>
+            {documents.length} arquivo{documents.length === 1 ? '' : 's'} · {activeDocuments} ativo
+            {activeDocuments === 1 ? '' : 's'}
           </Typography>
           <Button type="button" variant="ghost" onClick={() => onEdit(5)}>
             Gerenciar

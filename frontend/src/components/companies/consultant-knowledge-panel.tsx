@@ -1,4 +1,4 @@
-import { useEffect, type FormEvent, type TextareaHTMLAttributes } from 'react';
+import { useEffect, type FormEvent, type ReactNode, type TextareaHTMLAttributes } from 'react';
 import { Check } from 'lucide-react';
 
 import { CONSULTANT_FIELD_LIMITS, type ConsultantKnowledgeEntry } from '../../services/admin/consultant.types';
@@ -33,6 +33,8 @@ type ConsultantKnowledgePanelProps = {
   readonly onAskDelete: (entryId: string | null) => void;
   readonly onConfirmDelete: (entryId: string) => void;
   readonly onDismissSuccess?: () => void;
+  /** Seção de arquivos documentais (F13.8.2B). */
+  readonly documentsSlot?: ReactNode;
 };
 
 function NativeTextarea({
@@ -66,6 +68,7 @@ export function ConsultantKnowledgePanel({
   onAskDelete,
   onConfirmDelete,
   onDismissSuccess,
+  documentsSlot,
 }: ConsultantKnowledgePanelProps) {
   useEffect(() => {
     if (!success || !onDismissSuccess) {
@@ -79,129 +82,149 @@ export function ConsultantKnowledgePanel({
 
   return (
     <section className={styles.appearanceSection} data-testid="consultant-knowledge">
+      <div className={localStyles.knowledgeBaseIntro}>
+        <Typography as="h3" variant="label">
+          Base de Conhecimento
+        </Typography>
+        <Typography as="p" variant="caption" className={styles.pageDescription}>
+          Informações manuais e arquivos de referência usados para orientar o Consultor.
+        </Typography>
+      </div>
+
       {loadError ? (
         <Typography as="p" variant="body" className={styles.formError} role="alert">
           {loadError}
         </Typography>
       ) : null}
 
-      <form
-        className={localStyles.knowledgeComposer}
-        data-testid="consultant-knowledge-form"
-        onSubmit={onSubmit}
-        noValidate
-      >
+      <div className={localStyles.knowledgeManualSection} data-testid="consultant-knowledge-manual">
         <Typography as="h4" variant="label">
-          {editingEntryId ? 'Editar conhecimento' : 'Adicionar conhecimento'}
+          Conhecimentos manuais
         </Typography>
-        <FormField
-          label="Título"
-          htmlFor="consultant-knowledge-title"
-          hint="Dê um nome curto para identificar essa informação."
+        <Typography as="p" variant="caption" className={styles.pageDescription}>
+          Conhecimentos cadastrados diretamente pelo administrador.
+        </Typography>
+
+        <form
+          className={localStyles.knowledgeComposer}
+          data-testid="consultant-knowledge-form"
+          onSubmit={onSubmit}
+          noValidate
         >
-          <Input
-            id="consultant-knowledge-title"
-            name="knowledgeTitle"
-            value={draft.title}
-            maxLength={CONSULTANT_FIELD_LIMITS.knowledgeTitle}
-            placeholder="Ex.: Meta mensal de faturamento"
-            onChange={(event) => onDraftChange({ ...draft, title: event.target.value })}
-          />
-        </FormField>
-        <FormField
-          label="Informação"
-          htmlFor="consultant-knowledge-content"
-          hint="Adicione o que o Consultor não encontra nos dados financeiros."
-        >
-          <NativeTextarea
-            id="consultant-knowledge-content"
-            name="knowledgeContent"
-            value={draft.content}
-            maxLength={CONSULTANT_FIELD_LIMITS.knowledgeContent}
-            placeholder="Ex.: Nossa meta mensal de faturamento é de R$ 250.000,00."
-            onChange={(event) => onDraftChange({ ...draft, content: event.target.value })}
-          />
-        </FormField>
-        <div className={styles.formActions}>
-          <Button type="submit" variant="primary" loading={busy}>
-            {editingEntryId ? 'Salvar conhecimento' : 'Adicionar conhecimento'}
-          </Button>
-          {editingEntryId ? (
-            <Button type="button" variant="ghost" disabled={busy} onClick={onStartCreate}>
-              Cancelar
+          <Typography as="h5" variant="label">
+            {editingEntryId ? 'Editar conhecimento' : 'Adicionar conhecimento'}
+          </Typography>
+          <FormField
+            label="Título"
+            htmlFor="consultant-knowledge-title"
+            hint="Dê um nome curto para identificar essa informação."
+          >
+            <Input
+              id="consultant-knowledge-title"
+              name="knowledgeTitle"
+              value={draft.title}
+              maxLength={CONSULTANT_FIELD_LIMITS.knowledgeTitle}
+              placeholder="Ex.: Meta mensal de faturamento"
+              onChange={(event) => onDraftChange({ ...draft, title: event.target.value })}
+            />
+          </FormField>
+          <FormField
+            label="Informação"
+            htmlFor="consultant-knowledge-content"
+            hint="Adicione o que o Consultor não encontra nos dados financeiros."
+          >
+            <NativeTextarea
+              id="consultant-knowledge-content"
+              name="knowledgeContent"
+              value={draft.content}
+              maxLength={CONSULTANT_FIELD_LIMITS.knowledgeContent}
+              placeholder="Ex.: Nossa meta mensal de faturamento é de R$ 250.000,00."
+              onChange={(event) => onDraftChange({ ...draft, content: event.target.value })}
+            />
+          </FormField>
+          <div className={styles.formActions}>
+            <Button type="submit" variant="primary" loading={busy}>
+              {editingEntryId ? 'Salvar conhecimento' : 'Adicionar conhecimento'}
             </Button>
-          ) : null}
-        </div>
-      </form>
+            {editingEntryId ? (
+              <Button type="button" variant="ghost" disabled={busy} onClick={onStartCreate}>
+                Cancelar
+              </Button>
+            ) : null}
+          </div>
+        </form>
 
-      {error ? (
-        <Typography as="p" variant="body" className={styles.formError} role="alert">
-          {error}
-        </Typography>
-      ) : null}
+        {error ? (
+          <Typography as="p" variant="body" className={styles.formError} role="alert">
+            {error}
+          </Typography>
+        ) : null}
 
-      {success ? (
-        <p className={localStyles.knowledgeFeedback} role="status" aria-live="polite">
-          <Check size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
-          <span>{success}</span>
-        </p>
-      ) : null}
+        {success ? (
+          <p className={localStyles.knowledgeFeedback} role="status" aria-live="polite">
+            <Check size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
+            <span>{success}</span>
+          </p>
+        ) : null}
 
-      {entries.length === 0 ? (
-        <Typography as="p" variant="body" className={styles.pageDescription}>
-          Nenhum conhecimento cadastrado para esta empresa.
-        </Typography>
-      ) : (
-        <div className={localStyles.knowledgeList}>
-          {entries.map((entry) => (
-            <article key={entry.id} className={localStyles.knowledgeItem} data-testid={`knowledge-${entry.id}`}>
-              <div className={localStyles.knowledgeHeader}>
-                <Typography as="p" variant="label">
-                  {entry.title}
-                </Typography>
-                <Badge variant={entry.status === 'ACTIVE' ? 'success' : 'neutral'}>
-                  {entry.status === 'ACTIVE' ? 'Ativo' : 'Desativado'}
-                </Badge>
-              </div>
-              <Typography as="p" variant="body" className={localStyles.knowledgeExcerpt}>
-                {excerptKnowledge(entry.content)}
-              </Typography>
-              {pendingDeleteId === entry.id ? (
-                <div className={styles.confirmPanel} role="group" aria-label="Confirmar exclusão">
-                  <Typography as="p" variant="body">
-                    Excluir este conhecimento desta empresa?
+        {entries.length === 0 ? (
+          <Typography as="p" variant="body" className={styles.pageDescription}>
+            Nenhum conhecimento cadastrado para esta empresa.
+          </Typography>
+        ) : (
+          <div className={localStyles.knowledgeList}>
+            {entries.map((entry) => (
+              <article key={entry.id} className={localStyles.knowledgeItem} data-testid={`knowledge-${entry.id}`}>
+                <div className={localStyles.knowledgeHeader}>
+                  <Typography as="p" variant="label">
+                    {entry.title}
                   </Typography>
-                  <div className={styles.confirmActions}>
-                    <Button
-                      type="button"
-                      variant="danger"
-                      loading={busy}
-                      onClick={() => onConfirmDelete(entry.id)}
-                    >
-                      Confirmar exclusão
+                  <Badge variant={entry.status === 'ACTIVE' ? 'success' : 'neutral'}>
+                    {entry.status === 'ACTIVE' ? 'Ativo' : 'Desativado'}
+                  </Badge>
+                </div>
+                <Typography as="p" variant="body" className={localStyles.knowledgeExcerpt}>
+                  {excerptKnowledge(entry.content)}
+                </Typography>
+                {pendingDeleteId === entry.id ? (
+                  <div className={styles.confirmPanel} role="group" aria-label="Confirmar exclusão">
+                    <Typography as="p" variant="body">
+                      Excluir este conhecimento desta empresa?
+                    </Typography>
+                    <div className={styles.confirmActions}>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        loading={busy}
+                        onClick={() => onConfirmDelete(entry.id)}
+                      >
+                        Confirmar exclusão
+                      </Button>
+                      <Button type="button" variant="secondary" disabled={busy} onClick={() => onAskDelete(null)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.actions}>
+                    <Button type="button" variant="secondary" disabled={busy} onClick={() => onStartEdit(entry)}>
+                      Editar
                     </Button>
-                    <Button type="button" variant="secondary" disabled={busy} onClick={() => onAskDelete(null)}>
-                      Cancelar
+                    <Button type="button" variant="secondary" disabled={busy} onClick={() => onToggle(entry)}>
+                      {entry.status === 'ACTIVE' ? 'Desativar' : 'Ativar'}
+                    </Button>
+                    <Button type="button" variant="ghost" disabled={busy} onClick={() => onAskDelete(entry.id)}>
+                      Excluir
                     </Button>
                   </div>
-                </div>
-              ) : (
-                <div className={styles.actions}>
-                  <Button type="button" variant="secondary" disabled={busy} onClick={() => onStartEdit(entry)}>
-                    Editar
-                  </Button>
-                  <Button type="button" variant="secondary" disabled={busy} onClick={() => onToggle(entry)}>
-                    {entry.status === 'ACTIVE' ? 'Desativar' : 'Ativar'}
-                  </Button>
-                  <Button type="button" variant="ghost" disabled={busy} onClick={() => onAskDelete(entry.id)}>
-                    Excluir
-                  </Button>
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-      )}
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {documentsSlot ?? null}
     </section>
   );
 }

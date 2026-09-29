@@ -612,6 +612,17 @@ export function adminTenantConsultantKnowledgeEntryPath(
   return `${adminTenantConsultantKnowledgePath(tenantId)}/${entryId}`;
 }
 
+export function adminTenantConsultantKnowledgeDocumentsPath(tenantId: string): string {
+  return `${adminTenantConsultantPath(tenantId)}/knowledge-documents`;
+}
+
+export function adminTenantConsultantKnowledgeDocumentPath(
+  tenantId: string,
+  documentId: string,
+): string {
+  return `${adminTenantConsultantKnowledgeDocumentsPath(tenantId)}/${documentId}`;
+}
+
 export function consultantStatusPath(): string {
   return `${CONSULTANT_API_PREFIX}/status`;
 }

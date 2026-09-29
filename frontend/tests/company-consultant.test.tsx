@@ -12,6 +12,7 @@ import {
 } from '../src/components/companies/consultant-setup-copy';
 import type { Company } from '../src/services/admin/companies.types';
 import type {
+  ConsultantKnowledgeDocument,
   ConsultantKnowledgeEntry,
   ConsultantOptions,
   ConsultantProviderStatus,
@@ -193,20 +194,75 @@ function mockAdminFetch(input: {
   readonly company?: Company;
   readonly settings?: ConsultantSettings;
   readonly knowledge?: readonly ConsultantKnowledgeEntry[];
+  readonly documents?: readonly ConsultantKnowledgeDocument[];
   readonly providers?: readonly ConsultantProviderStatus[];
   readonly onPut?: (body: unknown) => ConsultantSettings;
 }) {
   let entries = [...(input.knowledge ?? [])];
-  return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+  let documents = [...(input.documents ?? [])];
+  return vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
     const currentCompany = input.company ?? company;
     if (url.endsWith(`/admin/tenants/${currentCompany.id}`) && !url.includes('/consultant')) {
-      return Promise.resolve(jsonResponse(currentCompany));
+      return jsonResponse(currentCompany);
     }
     if (url.endsWith('/admin/consultant/options')) {
-      return Promise.resolve(jsonResponse(options));
+      return jsonResponse(options);
     }
     if (url.endsWith('/admin/consultant/providers')) {
-      return Promise.resolve(jsonResponse({ data: input.providers ?? providers }));
+      return jsonResponse({ data: input.providers ?? providers });
+    }
+    if (url.includes('/consultant/knowledge-documents')) {
+      if (init?.method === 'POST') {
+        const created: ConsultantKnowledgeDocument = {
+          id: 'doc-new',
+          title: 'Documento enviado',
+          originalFileName: 'arquivo.md',
+          mimeType: 'text/markdown',
+          sizeBytes: 120,
+          status: 'DISABLED',
+          processingStatus: 'READY',
+          chunkCount: 1,
+          extractedCharCount: 80,
+          processingErrorCode: null,
+          createdAt: '2026-09-29T10:00:00.000Z',
+          updatedAt: '2026-09-29T10:00:00.000Z',
+          processedAt: '2026-09-29T10:00:00.000Z',
+        };
+        documents = [created, ...documents];
+        return jsonResponse(created, 201);
+      }
+      if (url.match(/knowledge-documents\/[^/]+$/) && init?.method === 'DELETE') {
+        const id = url.split('/').pop() ?? '';
+        documents = documents.filter((item) => item.id !== id);
+        return new Response(null, { status: 204 });
+      }
+      if (url.match(/knowledge-documents\/[^/]+$/) && init?.method === 'PATCH') {
+        const id = url.split('/').pop() ?? '';
+        const payload = JSON.parse(String(init.body)) as Partial<ConsultantKnowledgeDocument>;
+        const current = documents.find((item) => item.id === id);
+        if (!current) {
+          return jsonResponse({ error: { code: 'NOT_FOUND', message: 'missing' } }, 404);
+        }
+        if (payload.status === 'ACTIVE' && current.processingStatus !== 'READY') {
+          return jsonResponse(
+            {
+              error: {
+                code: 'VALIDATION_ERROR',
+                message: 'Somente documentos prontos podem ser ativados.',
+              },
+            },
+            422,
+          );
+        }
+        const updated = {
+          ...current,
+          ...payload,
+          updatedAt: '2026-09-29T11:00:00.000Z',
+        };
+        documents = documents.map((item) => (item.id === updated.id ? updated : item));
+        return jsonResponse(updated);
+      }
+      return jsonResponse({ data: documents });
     }
     if (url.includes('/consultant/knowledge') && init?.method === 'POST') {
       const payload = JSON.parse(String(init.body)) as { title: string; content: string };
@@ -216,12 +272,12 @@ function mockAdminFetch(input: {
         content: payload.content,
       };
       entries = [created, ...entries.filter((item) => item.id !== created.id)];
-      return Promise.resolve(jsonResponse(created, 201));
+      return jsonResponse(created, 201);
     }
     if (url.includes('/consultant/knowledge/') && init?.method === 'DELETE') {
       const id = url.split('/').pop() ?? '';
       entries = entries.filter((item) => item.id !== id);
-      return Promise.resolve(new Response(null, { status: 204 }));
+      return new Response(null, { status: 204 });
     }
     if (url.includes('/consultant/knowledge/') && init?.method === 'PATCH') {
       const id = url.split('/').pop() ?? '';
@@ -229,10 +285,10 @@ function mockAdminFetch(input: {
       const current = entries.find((item) => item.id === id) ?? knowledge;
       const updated = { ...current, ...payload, updatedAt: '2026-09-24T15:00:00.000Z' };
       entries = entries.map((item) => (item.id === updated.id ? updated : item));
-      return Promise.resolve(jsonResponse(updated));
+      return jsonResponse(updated);
     }
     if (url.includes('/consultant/knowledge')) {
-      return Promise.resolve(jsonResponse({ data: entries }));
+      return jsonResponse({ data: entries });
     }
     if (url.includes('/consultant') && init?.method === 'PUT') {
       const payload = JSON.parse(String(init.body)) as ConsultantSettings;
@@ -242,12 +298,12 @@ function mockAdminFetch(input: {
         configured: true,
         updatedAt: '2026-09-24T16:00:00.000Z',
       };
-      return Promise.resolve(jsonResponse(saved));
+      return jsonResponse(saved);
     }
     if (url.includes('/consultant')) {
-      return Promise.resolve(jsonResponse(input.settings ?? configured));
+      return jsonResponse(input.settings ?? configured);
     }
-    return Promise.resolve(jsonResponse({}, 404));
+    return jsonResponse({}, 404);
   });
 }
 

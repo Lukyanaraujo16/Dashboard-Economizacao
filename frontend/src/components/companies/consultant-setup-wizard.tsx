@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { useState, type FormEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import {
   BookOpen,
   Building2,
@@ -92,6 +92,7 @@ type ConsultantSetupWizardProps = {
   readonly onKnowledgeAskDelete: (entryId: string | null) => void;
   readonly onKnowledgeConfirmDelete: (entryId: string) => void;
   readonly onKnowledgeDismissSuccess?: () => void;
+  readonly documentsSlot?: ReactNode;
 };
 
 function NativeSelect({
@@ -224,6 +225,7 @@ export function ConsultantSetupWizard({
   onKnowledgeAskDelete,
   onKnowledgeConfirmDelete,
   onKnowledgeDismissSuccess,
+  documentsSlot,
 }: ConsultantSetupWizardProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const canAdvancePersonality = draft.tonePreset !== 'PERSONALIZADO' || draft.tone.trim().length > 0;
@@ -609,6 +611,7 @@ export function ConsultantSetupWizard({
               onAskDelete={onKnowledgeAskDelete}
               onConfirmDelete={onKnowledgeConfirmDelete}
               onDismissSuccess={onKnowledgeDismissSuccess}
+              documentsSlot={documentsSlot}
             />
           </section>
         ) : null}

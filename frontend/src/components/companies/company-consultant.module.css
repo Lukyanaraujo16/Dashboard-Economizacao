@@ -456,6 +456,63 @@
   overflow-wrap: anywhere;
 }
 
+.knowledgeBaseIntro,
+.knowledgeManualSection,
+.knowledgeDocumentsSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.knowledgeSectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.knowledgeSectionHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.documentsEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed color-mix(in srgb, var(--color-border) 80%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-background) 35%, var(--color-surface));
+}
+
+.documentTitleBlock {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.documentTitle,
+.documentFileName {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.documentBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.fileInput {
+  padding-block: var(--space-2);
+}
+
 .discardBackdrop {
   position: fixed;
   inset: 0;

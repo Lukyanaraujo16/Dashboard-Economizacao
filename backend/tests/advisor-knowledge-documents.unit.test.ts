@@ -399,6 +399,101 @@ describe('F13.8.2A knowledge document service (in-memory)', () => {
     expect(docs.has(row.id)).toBe(false);
   });
 
+  it('só permite ACTIVE quando processingStatus é READY', async () => {
+    const tenantId = randomUUID();
+    const root = path.join(FIXTURES_DIR, `storage-${randomUUID()}`);
+    await mkdir(root, { recursive: true });
+    const storage = createLocalFileStorage(root);
+    const now = new Date();
+
+    function makeRow(
+      processingStatus: AiKnowledgeDocumentRecord['processingStatus'],
+    ): AiKnowledgeDocumentRecord {
+      return {
+        id: randomUUID(),
+        tenantId,
+        title: 'Doc',
+        originalFileName: 'doc.md',
+        mimeType: 'text/markdown',
+        sizeBytes: 10,
+        checksum: 'abc',
+        storageKey: `tenants/${tenantId}/knowledge/${randomUUID()}.md`,
+        processingStatus,
+        status: 'DISABLED',
+        chunkCount: processingStatus === 'READY' ? 1 : 0,
+        extractedCharCount: processingStatus === 'READY' ? 10 : 0,
+        processingErrorCode:
+          processingStatus === 'FAILED' ? 'KNOWLEDGE_DOCUMENT_PDF_NO_TEXT' : null,
+        createdById: randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+        processedAt:
+          processingStatus === 'READY' || processingStatus === 'FAILED' ? now : null,
+      };
+    }
+
+    const docs = new Map<string, AiKnowledgeDocumentRecord>();
+    const repository: AdvisorKnowledgeDocumentRepository = {
+      async listDocuments() {
+        return [...docs.values()];
+      },
+      async findDocumentById(id, documentId) {
+        const row = docs.get(documentId);
+        return row && row.tenantId === id ? row : null;
+      },
+      async createDocument() {
+        throw new Error('unused');
+      },
+      async updateDocument(id, documentId, input) {
+        const existing = docs.get(documentId);
+        if (!existing || existing.tenantId !== id) {
+          throw new AdvisorDomainError('KNOWLEDGE_DOCUMENT_NOT_FOUND', 'missing');
+        }
+        const updated = {
+          ...existing,
+          status: input.status ?? existing.status,
+          title: input.title ?? existing.title,
+          updatedAt: new Date(),
+        };
+        docs.set(documentId, updated);
+        return updated;
+      },
+      async replaceChunks() {
+        // no-op
+      },
+      async deleteDocument() {
+        throw new Error('unused');
+      },
+    };
+
+    const service = createAdminConsultantKnowledgeDocumentService({
+      tenants: {
+        async findById(id) {
+          return id === tenantId ? ({ id: tenantId, name: 't' } as never) : null;
+        },
+      } as never,
+      documents: repository,
+      storage,
+    });
+
+    for (const processingStatus of ['UPLOADED', 'PROCESSING', 'FAILED'] as const) {
+      const row = makeRow(processingStatus);
+      docs.set(row.id, row);
+      await expect(
+        service.updateDocument(tenantId, row.id, { status: 'ACTIVE' }),
+      ).rejects.toMatchObject({
+        message: 'Somente documentos prontos podem ser ativados.',
+      });
+    }
+
+    const ready = makeRow('READY');
+    docs.set(ready.id, ready);
+    const activated = await service.updateDocument(tenantId, ready.id, { status: 'ACTIVE' });
+    expect(activated.status).toBe('ACTIVE');
+    const disabled = await service.updateDocument(tenantId, ready.id, { status: 'DISABLED' });
+    expect(disabled.status).toBe('DISABLED');
+  });
+
   it('Context Builder e compositor ainda não consomem documentos', async () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/modules/advisor');
     const context = await readFile(path.join(root, 'services/build-advisor-context.ts'), 'utf8');

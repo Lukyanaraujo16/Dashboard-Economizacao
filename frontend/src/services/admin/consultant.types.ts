@@ -81,6 +81,29 @@ export type ConsultantKnowledgeEntry = {
   readonly updatedAt: string;
 };
 
+export type ConsultantKnowledgeDocumentProcessingStatus =
+  | 'UPLOADED'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED';
+
+/** Metadados públicos de documento (sem storageKey/conteúdo/chunks). */
+export type ConsultantKnowledgeDocument = {
+  readonly id: string;
+  readonly title: string;
+  readonly originalFileName: string;
+  readonly mimeType: string;
+  readonly sizeBytes: number;
+  readonly status: ConsultantKnowledgeStatus;
+  readonly processingStatus: ConsultantKnowledgeDocumentProcessingStatus;
+  readonly chunkCount: number;
+  readonly extractedCharCount: number;
+  readonly processingErrorCode: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly processedAt: string | null;
+};
+
 export type UpdateConsultantSettingsInput = {
   readonly status: ConsultantStatus;
   readonly provider: ConsultantProviderId;
@@ -106,6 +129,21 @@ export type UpdateConsultantKnowledgeInput = {
   readonly content?: string;
   readonly status?: ConsultantKnowledgeStatus;
 };
+
+export type UploadConsultantKnowledgeDocumentInput = {
+  readonly file: File;
+  readonly title?: string;
+};
+
+export type UpdateConsultantKnowledgeDocumentInput = {
+  readonly title?: string;
+  readonly status?: ConsultantKnowledgeStatus;
+};
+
+/** Limite alinhado ao backend F13.8.2A (5 MB). */
+export const CONSULTANT_KNOWLEDGE_DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
+
+export const CONSULTANT_KNOWLEDGE_DOCUMENT_ACCEPT = '.md,.pdf' as const;
 
 export const CONSULTANT_FIELD_LIMITS = {
   consultantName: 40,

@@ -1,25 +1,34 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 
 import { getCompany } from '../../services/admin/companies';
 import { CompaniesRequestError } from '../../services/admin/companies.types';
 import {
+  consultantKnowledgeDocumentUserMessage,
   consultantKnowledgeUserMessage,
   createTenantConsultantKnowledge,
   defaultModelForProvider,
   deleteTenantConsultantKnowledge,
+  deleteTenantConsultantKnowledgeDocument,
   getConsultantOptions,
   getTenantConsultant,
   isValidProviderModel,
   listConsultantProviders,
   listTenantConsultantKnowledge,
+  listTenantConsultantKnowledgeDocuments,
   modelsForProvider,
+  suggestKnowledgeDocumentTitle,
   updateTenantConsultant,
   updateTenantConsultantKnowledge,
+  updateTenantConsultantKnowledgeDocument,
+  uploadTenantConsultantKnowledgeDocument,
+  knowledgeDocumentProcessingErrorMessage,
 } from '../../services/admin/consultant';
 import {
+  CONSULTANT_KNOWLEDGE_DOCUMENT_MAX_BYTES,
   ConsultantRequestError,
+  type ConsultantKnowledgeDocument,
   type ConsultantKnowledgeEntry,
   type ConsultantOptions,
   type ConsultantProviderId,
@@ -31,6 +40,11 @@ import { StateWrapper } from '../financial/state-wrapper';
 import { Button, Typography } from '../ui';
 import { CompanySectionNav } from './company-section-nav';
 import { ConsultantManagementOverview } from './consultant-management-overview';
+import {
+  ConsultantKnowledgeDocumentsPanel,
+  EMPTY_DOCUMENT_UPLOAD_DRAFT,
+  type KnowledgeDocumentUploadDraft,
+} from './consultant-knowledge-documents-panel';
 import { EMPTY_KNOWLEDGE_DRAFT, type KnowledgeDraft } from './consultant-knowledge-panel';
 import { ConsultantSetupEmpty } from './consultant-setup-empty';
 import { ConsultantSetupSuccess } from './consultant-setup-success';
@@ -45,6 +59,9 @@ import {
 } from './consultant-setup-copy';
 import styles from './companies.module.css';
 import localStyles from './company-consultant.module.css';
+
+const DOCUMENT_POLL_MS = 2_000;
+const DOCUMENT_POLL_MAX = 30;
 
 type CompanyConsultantPageProps = {
   readonly companyId: string;
@@ -113,9 +130,11 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
   const [options, setOptions] = useState<ConsultantOptions | null>(null);
   const [settings, setSettings] = useState<ConsultantSettings | null>(null);
   const [knowledge, setKnowledge] = useState<readonly ConsultantKnowledgeEntry[]>([]);
+  const [documents, setDocuments] = useState<readonly ConsultantKnowledgeDocument[]>([]);
   const [providers, setProviders] = useState<readonly ConsultantProviderStatus[]>([]);
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error' | 'not_found'>('loading');
   const [knowledgeLoadError, setKnowledgeLoadError] = useState<string | null>(null);
+  const [documentsLoadError, setDocumentsLoadError] = useState<string | null>(null);
 
   const [view, setView] = useState<PageView>('empty');
   const [wizardMode, setWizardMode] = useState<'create' | 'edit'>('create');
@@ -138,6 +157,16 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
   const [knowledgeSuccess, setKnowledgeSuccess] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
+  const [documentUploadDraft, setDocumentUploadDraft] =
+    useState<KnowledgeDocumentUploadDraft>(EMPTY_DOCUMENT_UPLOAD_DRAFT);
+  const [documentComposerOpen, setDocumentComposerOpen] = useState(false);
+  const [documentsBusy, setDocumentsBusy] = useState(false);
+  const [documentsUploading, setDocumentsUploading] = useState(false);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [documentsSuccess, setDocumentsSuccess] = useState<string | null>(null);
+  const [pendingDocumentDeleteId, setPendingDocumentDeleteId] = useState<string | null>(null);
+  const documentPollCountRef = useRef(0);
+
   const applyLoaded = useCallback((next: ConsultantSettings, catalog: ConsultantOptions) => {
     setSettings(next);
     setDraft(draftFromSettings(next, catalog));
@@ -153,6 +182,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
   const load = useCallback(async () => {
     setLoadState('loading');
     setKnowledgeLoadError(null);
+    setDocumentsLoadError(null);
     try {
       const [company, catalog, current, providerList] = await Promise.all([
         getCompany(companyId),
@@ -173,6 +203,15 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
         setKnowledgeLoadError('Não foi possível carregar o conhecimento desta empresa.');
       }
 
+      try {
+        const docs = await listTenantConsultantKnowledgeDocuments(companyId);
+        setDocuments(docs);
+        documentPollCountRef.current = 0;
+      } catch {
+        setDocuments([]);
+        setDocumentsLoadError('Não foi possível carregar os arquivos desta empresa.');
+      }
+
       setLoadState('ready');
     } catch (error) {
       if (
@@ -186,9 +225,41 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     }
   }, [applyLoaded, companyId]);
 
+  const refreshDocuments = useCallback(async () => {
+    try {
+      const docs = await listTenantConsultantKnowledgeDocuments(companyId);
+      setDocuments(docs);
+      setDocumentsLoadError(null);
+    } catch {
+      setDocumentsLoadError('Não foi possível atualizar os arquivos desta empresa.');
+    }
+  }, [companyId]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  const hasPendingDocuments = documents.some(
+    (doc) => doc.processingStatus === 'UPLOADED' || doc.processingStatus === 'PROCESSING',
+  );
+
+  useEffect(() => {
+    if (!hasPendingDocuments || view !== 'wizard' || step !== 5) {
+      documentPollCountRef.current = 0;
+      return;
+    }
+    if (documentPollCountRef.current >= DOCUMENT_POLL_MAX) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      documentPollCountRef.current += 1;
+      void refreshDocuments();
+      if (documentPollCountRef.current >= DOCUMENT_POLL_MAX) {
+        window.clearInterval(timer);
+      }
+    }, DOCUMENT_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [hasPendingDocuments, refreshDocuments, step, view]);
 
   const providerModels = useMemo(() => {
     if (!options || !draft) {
@@ -460,6 +531,131 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
     }
   }
 
+  async function handleUploadDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (documentsUploading || documentsBusy) {
+      return;
+    }
+    const file = documentUploadDraft.file;
+    if (!file) {
+      setDocumentsError('Selecione um arquivo .md ou .pdf.');
+      return;
+    }
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith('.md') && !lower.endsWith('.pdf')) {
+      setDocumentsError('Formato não suportado. Envie um arquivo .md ou .pdf.');
+      return;
+    }
+    if (file.size > CONSULTANT_KNOWLEDGE_DOCUMENT_MAX_BYTES) {
+      setDocumentsError('O arquivo excede o tamanho máximo de 5 MB.');
+      return;
+    }
+
+    setDocumentsUploading(true);
+    setDocumentsError(null);
+    setDocumentsSuccess(null);
+    try {
+      const title =
+        documentUploadDraft.title.trim() || suggestKnowledgeDocumentTitle(file.name);
+      const created = await uploadTenantConsultantKnowledgeDocument(companyId, {
+        file,
+        title,
+      });
+      setDocuments((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+      setDocumentUploadDraft(EMPTY_DOCUMENT_UPLOAD_DRAFT);
+      setDocumentComposerOpen(false);
+      documentPollCountRef.current = 0;
+      if (created.processingStatus === 'READY') {
+        setDocumentsSuccess('Arquivo enviado e pronto.');
+      } else if (created.processingStatus === 'FAILED') {
+        setDocumentsError(knowledgeDocumentProcessingErrorMessage(created.processingErrorCode));
+      } else {
+        setDocumentsSuccess('Arquivo enviado. Processando…');
+      }
+    } catch (error) {
+      setDocumentsError(
+        error instanceof ConsultantRequestError
+          ? consultantKnowledgeDocumentUserMessage(error, 'Não foi possível enviar o arquivo.')
+          : 'Não foi possível enviar o arquivo.',
+      );
+    } finally {
+      setDocumentsUploading(false);
+    }
+  }
+
+  async function handleToggleDocument(document: ConsultantKnowledgeDocument) {
+    if (documentsBusy || documentsUploading) {
+      return;
+    }
+    if (document.status === 'DISABLED' && document.processingStatus !== 'READY') {
+      setDocumentsError('Somente documentos prontos podem ser ativados.');
+      return;
+    }
+    setDocumentsBusy(true);
+    setDocumentsError(null);
+    setDocumentsSuccess(null);
+    try {
+      const updated = await updateTenantConsultantKnowledgeDocument(companyId, document.id, {
+        status: document.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE',
+      });
+      setDocuments((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setDocumentsSuccess(updated.status === 'ACTIVE' ? 'Arquivo ativado.' : 'Arquivo desativado.');
+    } catch (error) {
+      setDocumentsError(
+        error instanceof ConsultantRequestError
+          ? consultantKnowledgeDocumentUserMessage(error, 'Não foi possível atualizar o arquivo.')
+          : 'Não foi possível atualizar o arquivo.',
+      );
+    } finally {
+      setDocumentsBusy(false);
+    }
+  }
+
+  async function handleDeleteDocument(documentId: string) {
+    if (documentsBusy || documentsUploading) {
+      return;
+    }
+    setDocumentsBusy(true);
+    setDocumentsError(null);
+    setDocumentsSuccess(null);
+    try {
+      await deleteTenantConsultantKnowledgeDocument(companyId, documentId);
+      setDocuments((current) => current.filter((item) => item.id !== documentId));
+      setPendingDocumentDeleteId(null);
+      setDocumentsSuccess('Arquivo excluído.');
+    } catch (error) {
+      setDocumentsError(
+        error instanceof ConsultantRequestError
+          ? consultantKnowledgeDocumentUserMessage(error, 'Não foi possível excluir o arquivo.')
+          : 'Não foi possível excluir o arquivo.',
+      );
+    } finally {
+      setDocumentsBusy(false);
+    }
+  }
+
+  const documentsSlot = (
+    <ConsultantKnowledgeDocumentsPanel
+      documents={documents}
+      uploadDraft={documentUploadDraft}
+      uploading={documentsUploading}
+      busy={documentsBusy}
+      error={documentsError}
+      success={documentsSuccess}
+      loadError={documentsLoadError}
+      pendingDeleteId={pendingDocumentDeleteId}
+      composerOpen={documentComposerOpen}
+      onComposerOpenChange={setDocumentComposerOpen}
+      onUploadDraftChange={setDocumentUploadDraft}
+      onUpload={(event) => void handleUploadDocument(event)}
+      onToggle={(document) => void handleToggleDocument(document)}
+      onAskDelete={setPendingDocumentDeleteId}
+      onConfirmDelete={(documentId) => void handleDeleteDocument(documentId)}
+      onRefresh={() => void refreshDocuments()}
+      onDismissSuccess={() => setDocumentsSuccess(null)}
+    />
+  );
+
   const wrapperState =
     loadState === 'ready' ? 'ready' : loadState === 'loading' ? 'loading' : 'error';
   const errorMessage =
@@ -496,6 +692,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
               companyName={companyName ?? 'esta empresa'}
               settings={settings}
               knowledge={knowledge}
+              documents={documents}
               providerStatus={selectedProvider}
               saving={saving}
               formError={formError}
@@ -559,6 +756,7 @@ export function CompanyConsultantPage({ companyId }: CompanyConsultantPageProps)
               onKnowledgeAskDelete={setPendingDeleteId}
               onKnowledgeConfirmDelete={(entryId) => void handleDeleteKnowledge(entryId)}
               onKnowledgeDismissSuccess={() => setKnowledgeSuccess(null)}
+              documentsSlot={documentsSlot}
             />
           ) : null}
 

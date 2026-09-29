@@ -37,32 +37,62 @@ import {
 } from './admin-consultant-knowledge-document.schemas.js';
 
 async function readKnowledgeDocumentMultipart(request: {
-  file: () => Promise<
-    | {
-        fieldname: string;
-        filename: string;
-        mimetype: string;
-        toBuffer: () => Promise<Buffer>;
+  parts: () => AsyncIterableIterator<{
+    type: 'file' | 'field';
+    fieldname: string;
+    filename?: string;
+    mimetype?: string;
+    value?: unknown;
+    toBuffer?: () => Promise<Buffer>;
+  }>;
+}): Promise<{
+  body: Buffer;
+  originalFileName: string;
+  declaredMimeType: string;
+  title?: string;
+}> {
+  let body: Buffer | undefined;
+  let originalFileName = 'document';
+  let declaredMimeType = '';
+  let title: string | undefined;
+
+  for await (const part of request.parts()) {
+    if (part.type === 'file') {
+      if (part.fieldname !== 'file') {
+        throw new ValidationError('Campo de upload inválido.', {
+          details: [{ field: part.fieldname, issue: 'unknown_field' }],
+        });
       }
-    | undefined
-  >;
-}): Promise<{ body: Buffer; originalFileName: string; declaredMimeType: string }> {
-  const file = await request.file();
-  if (!file) {
+      if (!part.toBuffer) {
+        throw new ValidationError('Arquivo de conhecimento ausente.', {
+          details: [{ field: 'file', issue: 'required' }],
+        });
+      }
+      body = await part.toBuffer();
+      originalFileName = part.filename || 'document';
+      declaredMimeType = part.mimetype ?? '';
+      continue;
+    }
+
+    if (part.fieldname === 'title' && typeof part.value === 'string') {
+      const trimmed = part.value.trim();
+      if (trimmed.length > 0) {
+        title = trimmed;
+      }
+    }
+  }
+
+  if (!body) {
     throw new ValidationError('Arquivo de conhecimento ausente.', {
       details: [{ field: 'file', issue: 'required' }],
     });
   }
-  if (file.fieldname !== 'file') {
-    throw new ValidationError('Campo de upload inválido.', {
-      details: [{ field: file.fieldname, issue: 'unknown_field' }],
-    });
-  }
-  const body = await file.toBuffer();
+
   return {
     body,
-    originalFileName: file.filename || 'document',
-    declaredMimeType: file.mimetype,
+    originalFileName,
+    declaredMimeType,
+    ...(title !== undefined ? { title } : {}),
   };
 }
 
@@ -232,6 +262,7 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
         body: uploaded.body,
         originalFileName: uploaded.originalFileName,
         declaredMimeType: uploaded.declaredMimeType,
+        title: uploaded.title,
         createdById: auth.userId,
       });
       return reply.status(201).send(created);

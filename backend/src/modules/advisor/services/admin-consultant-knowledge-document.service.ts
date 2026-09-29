@@ -187,6 +187,12 @@ export function createAdminConsultantKnowledgeDocumentService(deps: {
             'Informe ao menos um campo para atualizar.',
           );
         }
+        if (input.status === 'ACTIVE' && existing.processingStatus !== 'READY') {
+          throw new AdvisorDomainError(
+            'KNOWLEDGE_DOCUMENT_NOT_READY',
+            'Somente documentos prontos podem ser ativados.',
+          );
+        }
         const updated = await deps.documents.updateDocument(tenantId, documentId, {
           ...(input.title !== undefined
             ? { title: input.title.trim().slice(0, ADVISOR_KNOWLEDGE_DOCUMENT_TITLE_MAX) }

@@ -2,6 +2,8 @@ import {
   adminConsultantOptionsPath,
   adminConsultantProviderCredentialPath,
   adminConsultantProvidersPath,
+  adminTenantConsultantKnowledgeDocumentPath,
+  adminTenantConsultantKnowledgeDocumentsPath,
   adminTenantConsultantKnowledgeEntryPath,
   adminTenantConsultantKnowledgePath,
   adminTenantConsultantPath,
@@ -9,6 +11,8 @@ import {
 import {
   ConsultantRequestError,
   type ConsultantErrorDetail,
+  type ConsultantKnowledgeDocument,
+  type ConsultantKnowledgeDocumentProcessingStatus,
   type ConsultantKnowledgeEntry,
   type ConsultantOptions,
   type ConsultantProviderCredentialSource,
@@ -18,8 +22,10 @@ import {
   type ConsultantEmojiPreference,
   type ConsultantTonePreset,
   type CreateConsultantKnowledgeInput,
+  type UpdateConsultantKnowledgeDocumentInput,
   type UpdateConsultantKnowledgeInput,
   type UpdateConsultantSettingsInput,
+  type UploadConsultantKnowledgeDocumentInput,
 } from './consultant.types';
 
 type ErrorEnvelope = {
@@ -189,6 +195,56 @@ function parseKnowledgeList(value: unknown): readonly ConsultantKnowledgeEntry[]
     return value;
   }
   if (isRecord(value) && Array.isArray(value.data) && value.data.every(isKnowledgeEntry)) {
+    return value.data;
+  }
+  return null;
+}
+
+function isProcessingStatus(value: unknown): value is ConsultantKnowledgeDocumentProcessingStatus {
+  return (
+    value === 'UPLOADED' ||
+    value === 'PROCESSING' ||
+    value === 'READY' ||
+    value === 'FAILED'
+  );
+}
+
+function isKnowledgeDocument(value: unknown): value is ConsultantKnowledgeDocument {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (
+    'storageKey' in value ||
+    'checksum' in value ||
+    'chunks' in value ||
+    'content' in value
+  ) {
+    return false;
+  }
+  return (
+    typeof value.id === 'string' &&
+    typeof value.title === 'string' &&
+    typeof value.originalFileName === 'string' &&
+    typeof value.mimeType === 'string' &&
+    typeof value.sizeBytes === 'number' &&
+    (value.status === 'ACTIVE' || value.status === 'DISABLED') &&
+    isProcessingStatus(value.processingStatus) &&
+    typeof value.chunkCount === 'number' &&
+    typeof value.extractedCharCount === 'number' &&
+    (value.processingErrorCode === null || typeof value.processingErrorCode === 'string') &&
+    typeof value.createdAt === 'string' &&
+    typeof value.updatedAt === 'string' &&
+    isNullableString(value.processedAt)
+  );
+}
+
+function parseKnowledgeDocumentList(
+  value: unknown,
+): readonly ConsultantKnowledgeDocument[] | null {
+  if (Array.isArray(value) && value.every(isKnowledgeDocument)) {
+    return value;
+  }
+  if (isRecord(value) && Array.isArray(value.data) && value.data.every(isKnowledgeDocument)) {
     return value.data;
   }
   return null;
@@ -532,6 +588,193 @@ export async function deleteTenantConsultantKnowledge(
 
   const body = await readJsonBody(response);
 
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
+}
+
+export function suggestKnowledgeDocumentTitle(fileName: string): string {
+  const base = fileName
+    .replace(/^.*[/\\]/, '')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!base) {
+    return 'Documento';
+  }
+  return base.charAt(0).toUpperCase() + base.slice(1);
+}
+
+export function formatKnowledgeDocumentSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return '—';
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function knowledgeDocumentKindLabel(mimeType: string, fileName: string): 'Markdown' | 'PDF' {
+  const lower = fileName.toLowerCase();
+  if (mimeType === 'application/pdf' || lower.endsWith('.pdf')) {
+    return 'PDF';
+  }
+  return 'Markdown';
+}
+
+export function knowledgeDocumentProcessingLabel(
+  status: ConsultantKnowledgeDocumentProcessingStatus,
+): string {
+  switch (status) {
+    case 'UPLOADED':
+      return 'Enviado';
+    case 'PROCESSING':
+      return 'Processando';
+    case 'READY':
+      return 'Pronto';
+    case 'FAILED':
+      return 'Falhou';
+  }
+}
+
+export function knowledgeDocumentProcessingErrorMessage(code: string | null): string {
+  switch (code) {
+    case 'KNOWLEDGE_DOCUMENT_PDF_NO_TEXT':
+      return 'Não encontramos texto neste PDF. Envie um PDF com texto selecionável.';
+    case 'KNOWLEDGE_DOCUMENT_PDF_PARSE_FAILED':
+      return 'Não foi possível ler este PDF.';
+    case 'KNOWLEDGE_DOCUMENT_EMPTY_TEXT':
+      return 'Não encontramos conteúdo textual útil neste arquivo.';
+    case 'KNOWLEDGE_DOCUMENT_TEXT_TOO_LARGE':
+      return 'O conteúdo extraído é grande demais para este arquivo.';
+    case 'KNOWLEDGE_DOCUMENT_CONTENT_INVALID':
+      return 'O arquivo enviado não é um Markdown textual válido.';
+    case 'KNOWLEDGE_DOCUMENT_TOO_LARGE':
+      return 'O arquivo excede o tamanho máximo de 5 MB.';
+    default:
+      return 'Não foi possível processar este arquivo.';
+  }
+}
+
+export function consultantKnowledgeDocumentUserMessage(
+  error: ConsultantRequestError,
+  fallback: string,
+): string {
+  if (
+    error.kind === 'unauthenticated' ||
+    error.kind === 'forbidden' ||
+    error.kind === 'conflict' ||
+    error.kind === 'not_found'
+  ) {
+    return error.message;
+  }
+
+  if (error.code === 'KNOWLEDGE_DOCUMENT_NOT_READY') {
+    return 'Somente documentos prontos podem ser ativados.';
+  }
+
+  if (error.kind === 'validation' || error.kind === 'bad_request') {
+    if (error.message && error.message !== 'Verifique os dados informados.') {
+      return error.message;
+    }
+    return 'Não foi possível enviar este arquivo. Verifique o formato (.md ou .pdf) e o tamanho (até 5 MB).';
+  }
+
+  return fallback;
+}
+
+export async function listTenantConsultantKnowledgeDocuments(
+  tenantId: string,
+): Promise<readonly ConsultantKnowledgeDocument[]> {
+  const response = await consultantFetch(adminTenantConsultantKnowledgeDocumentsPath(tenantId), {
+    method: 'GET',
+  });
+  const body = await readJsonBody(response);
+
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
+
+  const list = parseKnowledgeDocumentList(body);
+  if (list === null) {
+    throw unavailableBody(response.status);
+  }
+
+  return list;
+}
+
+export async function uploadTenantConsultantKnowledgeDocument(
+  tenantId: string,
+  input: UploadConsultantKnowledgeDocumentInput,
+): Promise<ConsultantKnowledgeDocument> {
+  const formData = new FormData();
+  formData.append('file', input.file, input.file.name);
+  if (input.title !== undefined && input.title.trim().length > 0) {
+    formData.append('title', input.title.trim());
+  }
+
+  const response = await consultantFetch(adminTenantConsultantKnowledgeDocumentsPath(tenantId), {
+    method: 'POST',
+    body: formData,
+  });
+  const body = await readJsonBody(response);
+
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
+
+  if (!isKnowledgeDocument(body)) {
+    throw unavailableBody(response.status);
+  }
+
+  return body;
+}
+
+export async function updateTenantConsultantKnowledgeDocument(
+  tenantId: string,
+  documentId: string,
+  input: UpdateConsultantKnowledgeDocumentInput,
+): Promise<ConsultantKnowledgeDocument> {
+  const response = await consultantFetch(
+    adminTenantConsultantKnowledgeDocumentPath(tenantId, documentId),
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  const body = await readJsonBody(response);
+
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
+
+  if (!isKnowledgeDocument(body)) {
+    throw unavailableBody(response.status);
+  }
+
+  return body;
+}
+
+export async function deleteTenantConsultantKnowledgeDocument(
+  tenantId: string,
+  documentId: string,
+): Promise<void> {
+  const response = await consultantFetch(
+    adminTenantConsultantKnowledgeDocumentPath(tenantId, documentId),
+    { method: 'DELETE' },
+  );
+
+  if (response.status === 204) {
+    return;
+  }
+
+  const body = await readJsonBody(response);
   if (!response.ok) {
     throw toConsultantFailure(response, body);
   }

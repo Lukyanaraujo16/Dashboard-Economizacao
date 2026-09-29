@@ -34,6 +34,7 @@ export function mapAdvisorDomainError(error: AdvisorDomainError): never {
     case 'KNOWLEDGE_DOCUMENT_EMPTY_TEXT':
     case 'KNOWLEDGE_DOCUMENT_TEXT_TOO_LARGE':
     case 'KNOWLEDGE_DOCUMENT_UPDATE_EMPTY':
+    case 'KNOWLEDGE_DOCUMENT_NOT_READY':
     case 'TENANT_ID_REQUIRED':
     case 'USER_ID_REQUIRED':
     case 'CONSULTANT_DISABLED':
