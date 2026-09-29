@@ -355,12 +355,18 @@ export {
 export { ADVISOR_PLATFORM_INSTRUCTIONS } from './platform-instructions.js';
 export {
   ADVISOR_DOCUMENT_KNOWLEDGE_CHAR_BUDGET,
+  ADVISOR_DOCUMENT_KNOWLEDGE_CURRENT_MIN_TOKENS,
+  ADVISOR_DOCUMENT_KNOWLEDGE_CURRENT_SCORE_WEIGHT,
   ADVISOR_DOCUMENT_KNOWLEDGE_HISTORY_USER_LIMIT,
   ADVISOR_DOCUMENT_KNOWLEDGE_MAX_CANDIDATE_CHUNKS,
   ADVISOR_DOCUMENT_KNOWLEDGE_MAX_SELECTED_CHUNKS,
   ADVISOR_DOCUMENT_KNOWLEDGE_MIN_SCORE,
+  ADVISOR_DOCUMENT_KNOWLEDGE_MORPH_PREFIX_MIN,
+  ADVISOR_DOCUMENT_KNOWLEDGE_RETRIEVAL_MODES,
 } from './advisor-document-knowledge-limits.js';
+export type { AdvisorDocumentKnowledgeRetrievalMode } from './advisor-document-knowledge-limits.js';
 export {
+  advisorDocumentKnowledgeTokenMatches,
   buildAdvisorDocumentKnowledgeQueryText,
   normalizeAdvisorDocumentKnowledgeText,
   tokenizeAdvisorDocumentKnowledgeQuery,
@@ -368,6 +374,7 @@ export {
 export { attachAdvisorDocumentKnowledgeBlock } from './attach-advisor-document-knowledge.js';
 export {
   emitAdvisorDocumentKnowledgeRetrievedEvent,
+  isAdvisorDocumentKnowledgeCurrentQuerySufficient,
   retrieveAdvisorDocumentKnowledge,
 } from './retrieve-advisor-document-knowledge.js';
 export type {

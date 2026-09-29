@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ADVISOR_DOCUMENT_KNOWLEDGE_CHAR_BUDGET,
   ADVISOR_PLATFORM_INSTRUCTIONS,
+  advisorDocumentKnowledgeTokenMatches,
   attachAdvisorDocumentKnowledgeBlock,
   normalizeAdvisorDocumentKnowledgeText,
   retrieveAdvisorDocumentKnowledge,
@@ -371,5 +372,166 @@ describe('F13.8.2C document knowledge retrieval', () => {
     expect(result.inner).toContain('despesas fixas × N meses');
     expect(result.inner).not.toMatch(/\bdespesas fixas\s*=\s*0\b/);
     expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('Nunca invente inputs ausentes');
+  });
+});
+
+describe('F13.8.2C.1 CURRENT-FIRST + morfologia', () => {
+  it('match morfológico leve: conversar↔conversa, analisar↔analise, projetar↔projecao', () => {
+    const h1 = normalizeAdvisorDocumentKnowledgeText('Como o consultor conversa');
+    expect(advisorDocumentKnowledgeTokenMatches(h1, 'conversar')).toBe(true);
+    const h2 = normalizeAdvisorDocumentKnowledgeText('método de análise dos números');
+    expect(advisorDocumentKnowledgeTokenMatches(h2, 'analisar')).toBe(true);
+    const h3 = normalizeAdvisorDocumentKnowledgeText('regras de projecao de caixa');
+    expect(advisorDocumentKnowledgeTokenMatches(h3, 'projetar')).toBe(true);
+  });
+
+  it('match morfológico negativo: não colide tokens curtos ou prefixos fracos', () => {
+    const hay = normalizeAdvisorDocumentKnowledgeText('casa azul no centro');
+    expect(advisorDocumentKnowledgeTokenMatches(hay, 'casamento')).toBe(false);
+    expect(advisorDocumentKnowledgeTokenMatches(hay, 'deve')).toBe(false);
+    expect(advisorDocumentKnowledgeTokenMatches(hay, 'centro')).toBe(true);
+  });
+
+  it('CURRENT vs HISTORY: match atual forte vence match só-histórico', () => {
+    const result = retrieveAdvisorDocumentKnowledge({
+      question: 'E como você deve conversar comigo ao analisar meus números?',
+      recentUserMessages: [
+        'Como devo avaliar minha reserva de caixa?',
+        'E como devo projetar meu caixa para os próximos meses?',
+      ],
+      candidates: [
+        candidate({
+          chunkId: 'history-topic',
+          documentId: 'doc-a',
+          ordinal: 0,
+          heading: 'Reserva de caixa',
+          content: 'Avalie a reserva de caixa cobrindo meses de despesas. Projeção de caixa também importa.',
+        }),
+        candidate({
+          chunkId: 'current-topic',
+          documentId: 'doc-a',
+          ordinal: 1,
+          heading: 'Como o consultor conversa',
+          content: 'Ao analisar números use O quê, Por quê, E daí e O que fazer. Linguagem direta.',
+        }),
+        candidate({
+          chunkId: 'history-proj',
+          documentId: 'doc-a',
+          ordinal: 2,
+          heading: 'Como projetar',
+          content: 'Projetar o caixa para os próximos meses com entradas e saídas.',
+        }),
+      ],
+    });
+    expect(result.retrievalMode).toBe('CURRENT_WITH_HISTORY_SUPPORT');
+    expect(result.selected.map((item) => item.chunkId)).toContain('current-topic');
+    const current = result.selected.find((item) => item.chunkId === 'current-topic')!;
+    const historyOnly = result.selected.find((item) => item.chunkId === 'history-topic');
+    expect(current.currentScore).toBeGreaterThanOrEqual(3);
+    if (historyOnly) {
+      expect(current.score).toBeGreaterThan(historyOnly.score);
+      expect(current.currentScore).toBeGreaterThan(historyOnly.currentScore);
+    }
+    expect(result.inner).toContain('Como o consultor conversa');
+  });
+
+  it('regressão T1→T2→T3: conversa entra; reserva/projeção não dominam só por histórico', () => {
+    const candidates = [
+      candidate({
+        chunkId: 'reserva',
+        documentId: 'base',
+        ordinal: 10,
+        heading: 'Reserva de caixa',
+        content: 'Como avaliar a reserva mínima de caixa em meses de despesas fixas.',
+      }),
+      candidate({
+        chunkId: 'projetar',
+        documentId: 'base',
+        ordinal: 20,
+        heading: 'Como projetar',
+        content: 'Metodologia para projetar o caixa nos próximos meses.',
+      }),
+      candidate({
+        chunkId: 'conversa',
+        documentId: 'base',
+        ordinal: 30,
+        heading: 'Como o consultor conversa',
+        content: 'Estrutura O quê / Por quê / E daí / O que fazer ao analisar números.',
+      }),
+      candidate({
+        chunkId: 'alertas',
+        documentId: 'base',
+        ordinal: 40,
+        heading: 'Alertas de caixa',
+        content: 'Sinais de alerta da reserva e do caixa operacional.',
+      }),
+    ];
+
+    const t1 = retrieveAdvisorDocumentKnowledge({
+      question: 'Como devo avaliar minha reserva de caixa?',
+      candidates,
+    });
+    expect(t1.selected[0]?.chunkId === 'reserva' || t1.inner?.includes('Reserva de caixa')).toBe(true);
+    expect(t1.retrievalMode).toBe('CURRENT_ONLY');
+
+    const t2 = retrieveAdvisorDocumentKnowledge({
+      question: 'E como devo projetar meu caixa para os próximos meses?',
+      recentUserMessages: ['Como devo avaliar minha reserva de caixa?'],
+      candidates,
+    });
+    const t2Top = [...t2.selected].sort((a, b) => b.score - a.score)[0];
+    expect(t2Top?.chunkId).toBe('projetar');
+    expect(t2Top!.currentScore).toBeGreaterThanOrEqual(3);
+
+    const t3 = retrieveAdvisorDocumentKnowledge({
+      question: 'E como você deve conversar comigo ao analisar meus números?',
+      recentUserMessages: [
+        'Como devo avaliar minha reserva de caixa?',
+        'E como devo projetar meu caixa para os próximos meses?',
+      ],
+      candidates,
+    });
+    expect(t3.retrievalMode).toBe('CURRENT_WITH_HISTORY_SUPPORT');
+    expect(t3.inner).toContain('Como o consultor conversa');
+    const ranked = [...t3.selected].sort((a, b) => b.score - a.score);
+    expect(ranked[0]?.chunkId).toBe('conversa');
+    expect(ranked.filter((item) => item.chunkId === 'reserva' || item.chunkId === 'projetar').every((item) => item.score < ranked[0]!.score)).toBe(true);
+  });
+
+  it('HISTORY_FALLBACK: follow-up fraco usa histórico USER', () => {
+    const result = retrieveAdvisorDocumentKnowledge({
+      question: 'E na prática?',
+      recentUserMessages: ['Como devo avaliar minha reserva de caixa?'],
+      candidates: [
+        candidate({
+          chunkId: 'reserva',
+          documentId: 'd1',
+          heading: 'Reserva de caixa',
+          content: 'O risco de liquidez aumenta sem reserva mínima adequada.',
+        }),
+        candidate({
+          chunkId: 'outro',
+          documentId: 'd1',
+          ordinal: 1,
+          heading: 'Marketing',
+          content: 'Campanhas e cores da marca.',
+        }),
+      ],
+    });
+    expect(result.retrievalMode).toBe('HISTORY_FALLBACK');
+    expect(result.selected.map((item) => item.chunkId)).toContain('reserva');
+    expect(result.inner).toContain('reserva');
+  });
+
+  it('PLATFORM reforça intenção atual e uso seletivo de FACTS', () => {
+    expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain(
+      'A pergunta atual do usuário (USER_QUESTION) é a autoridade principal',
+    );
+    expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain(
+      'NÃO obriga sua utilização na resposta',
+    );
+    expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain(
+      'Não transforme uma pergunta sobre método',
+    );
   });
 });

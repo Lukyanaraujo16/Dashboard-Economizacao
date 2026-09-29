@@ -291,6 +291,9 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
         selectedChars: result.selectedChars,
         retrievalDurationMs: Date.now() - startedAt,
         queryTokenCount: result.queryTokenCount,
+        currentTermCount: result.currentTermCount,
+        historyTermCount: result.historyTermCount,
+        retrievalMode: result.retrievalMode,
         reason: result.reason,
       });
       return attachAdvisorDocumentKnowledgeBlock(built, result.inner);

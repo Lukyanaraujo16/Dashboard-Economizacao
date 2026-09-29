@@ -1,7 +1,9 @@
 /**
- * Normalização e tokenização determinística para retrieval lexical (F13.8.2C).
+ * Normalização e tokenização determinística para retrieval lexical (F13.8.2C / F13.8.2C.1).
  * Sem LLM. Português básico.
  */
+
+import { ADVISOR_DOCUMENT_KNOWLEDGE_MORPH_PREFIX_MIN } from './advisor-document-knowledge-limits.js';
 
 const STOPWORDS = new Set([
   'a',
@@ -134,6 +136,46 @@ export function tokenizeAdvisorDocumentKnowledgeQuery(raw: string): readonly str
   return tokens;
 }
 
+/**
+ * Match lexical com morfologia leve e conservadora.
+ * Ex.: conversar ↔ conversa, analisar ↔ analise, projetar ↔ projecao
+ * via prefixo compartilhado ≥ MORPH_PREFIX_MIN. Tokens curtos: só match exato.
+ */
+export function advisorDocumentKnowledgeTokenMatches(
+  haystackNormalized: string,
+  token: string,
+): boolean {
+  if (token.length === 0 || haystackNormalized.length === 0) {
+    return false;
+  }
+  if (haystackNormalized.includes(token)) {
+    return true;
+  }
+  if (token.length < ADVISOR_DOCUMENT_KNOWLEDGE_MORPH_PREFIX_MIN) {
+    return false;
+  }
+  for (const word of haystackNormalized.split(' ')) {
+    if (word.length < ADVISOR_DOCUMENT_KNOWLEDGE_MORPH_PREFIX_MIN) {
+      continue;
+    }
+    const shared = sharedPrefixLength(token, word);
+    if (shared >= ADVISOR_DOCUMENT_KNOWLEDGE_MORPH_PREFIX_MIN) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sharedPrefixLength(a: string, b: string): number {
+  const limit = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < limit && a.charCodeAt(i) === b.charCodeAt(i)) {
+    i += 1;
+  }
+  return i;
+}
+
+/** @deprecated Prefer scoring separado CURRENT / HISTORY (F13.8.2C.1). Mantido para compat. */
 export function buildAdvisorDocumentKnowledgeQueryText(input: {
   readonly question: string;
   readonly recentUserMessages?: readonly string[];
