@@ -290,6 +290,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             content: question,
             priorUserContents,
             comparison: period.comparison,
+            now: input.now,
           });
       let nominalIntent = conversationalNominal.intent;
       let anaphoraStatus = conversationalNominal.anaphora;
@@ -393,7 +394,12 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
                   id: 'preload-nominal',
                   name: nominalIntent.toolName,
                   arguments: {
-                    monthKey: period.monthKey,
+                    ...(nominalIntent.civilRange !== undefined
+                      ? {
+                          periodKind: nominalIntent.civilRange.kind,
+                          year: nominalIntent.civilRange.year,
+                        }
+                      : { monthKey: period.monthKey }),
                     ...(nominalIntent.toolName === COMPARE_CASH_NOMINAL_TOOL_NAME &&
                     period.comparisonMonthKey !== undefined
                       ? { comparisonMonthKey: period.comparisonMonthKey }

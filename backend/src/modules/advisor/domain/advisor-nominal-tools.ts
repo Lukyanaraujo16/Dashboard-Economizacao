@@ -22,7 +22,15 @@ import {
   serializeAdvisorNominalLookup,
   serializeAdvisorNominalRanking,
   type AdvisorNominalAggregation,
+  type AdvisorNominalPeriodMeta,
 } from './advisor-nominal-dimension.js';
+import {
+  civilYearBounds,
+  formatAdvisorCivilDateKey,
+  type AdvisorCivilRangeKind,
+} from './resolve-advisor-civil-range.js';
+import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
+
 type AdvisorAnalyticalToolDefinition = {
   readonly name: string;
   readonly description: string;
@@ -31,8 +39,22 @@ type AdvisorAnalyticalToolDefinition = {
 
 const MONTH_KEY_SCHEMA = {
   type: 'string',
-  description: 'Mês civil no formato YYYY-MM, já resolvido pelo contexto.',
+  description: 'Mês civil no formato YYYY-MM, já resolvido pelo contexto. Mutuamente exclusivo com periodKind+year.',
   pattern: '^\\d{4}-(0[1-9]|1[0-2])$',
+};
+
+const PERIOD_KIND_SCHEMA = {
+  type: 'string',
+  enum: ['YTD', 'YEAR'],
+  description:
+    'Período civil anual oficial (F13.8.3). Produzido só pelo backend/resolver. Mutuamente exclusivo com monthKey. Sem from/to livres.',
+};
+
+const YEAR_SCHEMA = {
+  type: 'integer',
+  minimum: 1970,
+  maximum: 2100,
+  description: 'Ano civil do periodKind. Obrigatório com periodKind.',
 };
 
 const CATEGORY_REFERENCE_SCHEMA = {
@@ -56,13 +78,15 @@ const LIMIT_SCHEMA = {
 export const CASH_NOMINAL_RANKING_TOOL: AdvisorAnalyticalToolDefinition = {
   name: CASH_NOMINAL_RANKING_TOOL_NAME,
   description:
-    'Ranking oficial da dimensão nominal (ex.: convênio) nas entradas realizadas de caixa de uma categoria. População completa + cobertura. shareOfPopulation ≠ shareOfIdentified ≠ coverage. requestedLimit não é cardinalidade. Não recebe tenant. INFLOW apenas.',
+    'Ranking oficial da dimensão nominal (ex.: convênio) nas entradas realizadas de caixa de uma categoria. População completa + cobertura. Aceita monthKey OU periodKind+year (YTD/ano). shareOfPopulation ≠ shareOfIdentified ≠ coverage. requestedLimit não é cardinalidade. Não recebe tenant. INFLOW apenas.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
-    required: ['monthKey', 'categoryReference'],
+    required: ['categoryReference'],
     properties: {
       monthKey: MONTH_KEY_SCHEMA,
+      periodKind: PERIOD_KIND_SCHEMA,
+      year: YEAR_SCHEMA,
       categoryReference: CATEGORY_REFERENCE_SCHEMA,
       limit: LIMIT_SCHEMA,
     },
@@ -72,13 +96,15 @@ export const CASH_NOMINAL_RANKING_TOOL: AdvisorAnalyticalToolDefinition = {
 export const CASH_NOMINAL_LOOKUP_TOOL: AdvisorAnalyticalToolDefinition = {
   name: CASH_NOMINAL_LOOKUP_TOOL_NAME,
   description:
-    'Agrega a população completa de uma entidade nominal nas entradas realizadas de caixa. shareOfPopulation é o total da categoria; shareOfIdentified é só entre IDENTIFIED. Não soma no LLM. Não recebe tenant.',
+    'Agrega a população completa de uma entidade nominal nas entradas realizadas de caixa. Aceita monthKey OU periodKind+year. shareOfPopulation é o total da categoria; shareOfIdentified é só entre IDENTIFIED. Não soma no LLM. Não recebe tenant.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
-    required: ['monthKey', 'entityQuery'],
+    required: ['entityQuery'],
     properties: {
       monthKey: MONTH_KEY_SCHEMA,
+      periodKind: PERIOD_KIND_SCHEMA,
+      year: YEAR_SCHEMA,
       categoryReference: CATEGORY_REFERENCE_SCHEMA,
       entityQuery: ENTITY_QUERY_SCHEMA,
     },
@@ -115,17 +141,27 @@ export type AdvisorNominalCategoryCatalog = {
   listByTenant(tenantId: string): Promise<readonly FinancialCategoryReadRecord[]>;
 };
 
+export type AdvisorNominalPeriodArgs = {
+  readonly monthKey?: string;
+  readonly periodKind?: AdvisorCivilRangeKind;
+  readonly year?: number;
+};
+
 export type AdvisorNominalDimensionService = {
   rank(input: {
     readonly tenantId: string;
-    readonly monthKey: string;
+    readonly monthKey?: string;
+    readonly periodKind?: AdvisorCivilRangeKind;
+    readonly year?: number;
     readonly categoryReference: string;
     readonly limit?: number;
     readonly now?: Date;
   }): Promise<Record<string, unknown>>;
   lookup(input: {
     readonly tenantId: string;
-    readonly monthKey: string;
+    readonly monthKey?: string;
+    readonly periodKind?: AdvisorCivilRangeKind;
+    readonly year?: number;
     readonly categoryReference?: string;
     readonly entityQuery: string;
     readonly now?: Date;
@@ -148,13 +184,14 @@ export function createAdvisorNominalDimensionService(deps: {
   return {
     async rank(input) {
       const tenantId = requireTenant(input.tenantId);
+      const period = resolveNominalPeriodInput(input);
       const resolved = await resolveCategory(deps.categories, tenantId, input.categoryReference);
       if (resolved.status !== 'RESOLVED') {
-        return categoryStatusPayload(resolved, input.monthKey);
+        return categoryStatusPayload(resolved, period.monthKey);
       }
       const aggregation = await loadAggregation(deps, {
         tenantId,
-        monthKey: input.monthKey,
+        period,
         category: resolved.category,
         now: input.now,
       });
@@ -166,7 +203,7 @@ export function createAdvisorNominalDimensionService(deps: {
         };
       }
       if (!aggregation.available) {
-        return { status: 'UNAVAILABLE', monthKey: input.monthKey };
+        return { status: 'UNAVAILABLE', monthKey: period.monthKey };
       }
       if (aggregation.coverage.totalPopulationCount === 0) {
         return serializeAdvisorNominalRanking({
@@ -233,13 +270,13 @@ export function createAdvisorNominalDimensionService(deps: {
       const [periodA, periodB] = await Promise.all([
         loadAggregation(deps, {
           tenantId,
-          monthKey: input.comparisonMonthKey,
+          period: resolveNominalPeriodInput({ monthKey: input.comparisonMonthKey }),
           category: resolved.category,
           now: input.now,
         }),
         loadAggregation(deps, {
           tenantId,
-          monthKey: input.monthKey,
+          period: resolveNominalPeriodInput({ monthKey: input.monthKey }),
           category: resolved.category,
           now: input.now,
         }),
@@ -280,38 +317,44 @@ export function createAdvisorNominalDimensionService(deps: {
 }
 
 export function assertCashNominalRankingArgs(raw: Record<string, unknown>): {
-  readonly monthKey: string;
+  readonly monthKey?: string;
+  readonly periodKind?: AdvisorCivilRangeKind;
+  readonly year?: number;
   readonly categoryReference: string;
   readonly limit?: number;
 } {
-  assertNominalArgs(raw, ['monthKey', 'categoryReference', 'limit']);
-  if (typeof raw.monthKey !== 'string' || typeof raw.categoryReference !== 'string') {
+  assertNominalArgs(raw, ['monthKey', 'periodKind', 'year', 'categoryReference', 'limit']);
+  if (typeof raw.categoryReference !== 'string') {
     throw new AdvisorDomainError(
       'ANALYTICAL_TOOL_INVALID_INPUT',
-      'monthKey e categoryReference são obrigatórios.',
+      'categoryReference é obrigatório.',
     );
   }
+  const period = assertPeriodXorMonth(raw);
   return {
-    monthKey: requireMonth(raw.monthKey, 'monthKey'),
+    ...period,
     categoryReference: requireReference(raw.categoryReference),
     ...(raw.limit === undefined ? {} : { limit: requireLimit(raw.limit) }),
   };
 }
 
 export function assertCashNominalLookupArgs(raw: Record<string, unknown>): {
-  readonly monthKey: string;
+  readonly monthKey?: string;
+  readonly periodKind?: AdvisorCivilRangeKind;
+  readonly year?: number;
   readonly categoryReference?: string;
   readonly entityQuery: string;
 } {
-  assertNominalArgs(raw, ['monthKey', 'categoryReference', 'entityQuery']);
-  if (typeof raw.monthKey !== 'string' || typeof raw.entityQuery !== 'string') {
+  assertNominalArgs(raw, ['monthKey', 'periodKind', 'year', 'categoryReference', 'entityQuery']);
+  if (typeof raw.entityQuery !== 'string') {
     throw new AdvisorDomainError(
       'ANALYTICAL_TOOL_INVALID_INPUT',
-      'monthKey e entityQuery são obrigatórios.',
+      'entityQuery é obrigatório.',
     );
   }
+  const period = assertPeriodXorMonth(raw);
   return {
-    monthKey: requireMonth(raw.monthKey, 'monthKey'),
+    ...period,
     ...(typeof raw.categoryReference === 'string'
       ? { categoryReference: requireReference(raw.categoryReference) }
       : {}),
@@ -382,14 +425,16 @@ async function loadAggregation(
   },
   input: {
     readonly tenantId: string;
-    readonly monthKey: string;
+    readonly period: ResolvedNominalPeriod;
     readonly category: { readonly key: string; readonly name: string };
     readonly now?: Date;
   },
 ): Promise<AdvisorNominalAggregation> {
   const details = await deps.details.listAllCashRealizedDetails({
     tenantId: input.tenantId,
-    monthKey: input.monthKey,
+    ...(input.period.civilRange !== undefined
+      ? { civilRange: input.period.civilRange }
+      : { monthKey: input.period.monthKey }),
     direction: 'inflows',
     categoryKey: input.category.key,
     now: input.now,
@@ -400,19 +445,22 @@ async function loadAggregation(
       'Agregação nominal recusou detalhes de outro tenant.',
     );
   }
+  const periodMeta = input.period.meta;
   if (details.itemCount > CASH_REALIZED_DETAILS_ALL_MAX) {
     return aggregateAdvisorNominalDimension({
-      monthKey: input.monthKey,
+      monthKey: input.period.monthKey,
       categoryKey: input.category.key,
       categoryName: input.category.name,
       details: { ...details, items: details.items.slice(0, CASH_REALIZED_DETAILS_ALL_MAX) },
+      period: periodMeta,
     });
   }
   return aggregateAdvisorNominalDimension({
-    monthKey: input.monthKey,
+    monthKey: input.period.monthKey,
     categoryKey: input.category.key,
     categoryName: input.category.name,
     details,
+    period: periodMeta,
   });
 }
 
@@ -432,7 +480,16 @@ async function resolveCategoryFromEntity(
   | { readonly status: 'NOT_FOUND' }
   | { readonly status: 'AMBIGUOUS' }
 > {
-  const loaded = await loadLookupAggregation(deps, input, input.tenantId);
+  const loaded = await loadLookupAggregation(
+    deps,
+    {
+      tenantId: input.tenantId,
+      monthKey: input.monthKey,
+      entityQuery: input.entityQuery,
+      now: input.now,
+    },
+    input.tenantId,
+  );
   if (loaded.aggregation) {
     return {
       status: 'RESOLVED',
@@ -452,7 +509,9 @@ async function loadLookupAggregation(
   },
   input: {
     readonly tenantId: string;
-    readonly monthKey: string;
+    readonly monthKey?: string;
+    readonly periodKind?: AdvisorCivilRangeKind;
+    readonly year?: number;
     readonly categoryReference?: string;
     readonly entityQuery: string;
     readonly now?: Date;
@@ -462,18 +521,19 @@ async function loadLookupAggregation(
   | { readonly aggregation: AdvisorNominalAggregation; readonly status?: undefined }
   | { readonly aggregation?: undefined; readonly status: string; readonly payload: Record<string, unknown> }
 > {
+  const period = resolveNominalPeriodInput(input);
   if (input.categoryReference !== undefined) {
     const resolved = await resolveCategory(deps.categories, tenantId, input.categoryReference);
     if (resolved.status !== 'RESOLVED') {
       return {
         status: resolved.status,
-        payload: categoryStatusPayload(resolved, input.monthKey),
+        payload: categoryStatusPayload(resolved, period.monthKey),
       };
     }
     return {
       aggregation: await loadAggregation(deps, {
         tenantId,
-        monthKey: input.monthKey,
+        period,
         category: resolved.category,
         now: input.now,
       }),
@@ -486,7 +546,7 @@ async function loadLookupAggregation(
   for (const category of revenue) {
     const aggregation = await loadAggregation(deps, {
       tenantId,
-      monthKey: input.monthKey,
+      period,
       category: { key: category.externalId, name: category.name },
       now: input.now,
     });
@@ -503,15 +563,162 @@ async function loadLookupAggregation(
       status: 'AMBIGUOUS',
       payload: {
         status: 'AMBIGUOUS',
-        monthKey: input.monthKey,
+        monthKey: period.monthKey,
         message: 'A entidade aparece em mais de uma categoria oficial.',
       },
     };
   }
   return {
     status: 'NOT_FOUND',
-    payload: { status: 'NOT_FOUND', monthKey: input.monthKey },
+    payload: { status: 'NOT_FOUND', monthKey: period.monthKey },
   };
+}
+
+type ResolvedNominalPeriod = {
+  readonly monthKey: string;
+  readonly civilRange?: {
+    readonly from: Date;
+    readonly to: Date;
+    readonly rangeKey: string;
+  };
+  readonly meta: AdvisorNominalPeriodMeta;
+};
+
+export function resolveNominalPeriodInput(
+  input: AdvisorNominalPeriodArgs & { readonly now?: Date },
+): ResolvedNominalPeriod {
+  const hasMonth = typeof input.monthKey === 'string' && input.monthKey.trim() !== '';
+  const hasRange =
+    input.periodKind !== undefined || input.year !== undefined;
+  if (hasMonth && hasRange) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'monthKey e periodKind/year são mutuamente exclusivos.',
+    );
+  }
+  if (!hasMonth && !hasRange) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'Informe monthKey ou periodKind+year.',
+    );
+  }
+  if (hasMonth) {
+    const monthKey = requireMonth(input.monthKey!, 'monthKey');
+    const { from, to } = (() => {
+      // bounds only for meta labels; details service re-derives from monthKey
+      const y = Number(monthKey.slice(0, 4));
+      const m = Number(monthKey.slice(5, 7)) - 1;
+      return {
+        from: new Date(Date.UTC(y, m, 1)),
+        to: new Date(Date.UTC(y, m + 1, 0)),
+      };
+    })();
+    return {
+      monthKey,
+      meta: {
+        kind: 'MONTH',
+        year: null,
+        from: formatAdvisorCivilDateKey(from),
+        to: formatAdvisorCivilDateKey(to),
+        isPartialYear: false,
+        rangeKey: null,
+      },
+    };
+  }
+  if (input.periodKind !== 'YTD' && input.periodKind !== 'YEAR') {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'periodKind deve ser YTD ou YEAR.',
+    );
+  }
+  if (typeof input.year !== 'number' || !Number.isInteger(input.year)) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'year é obrigatório com periodKind.',
+    );
+  }
+  const asOf = civilTodayInSaoPaulo(input.now ?? new Date());
+  const currentYear = asOf.getUTCFullYear();
+  if (input.year > currentYear) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'Ano futuro não é suportado.',
+    );
+  }
+  // Ano corrente: sempre até asOf (sem datas futuras), independentemente de YTD/YEAR.
+  if (input.year === currentYear) {
+    const from = new Date(Date.UTC(input.year, 0, 1));
+    const to = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), asOf.getUTCDate()));
+    const rangeKey = `${input.year}-YTD`;
+    return {
+      monthKey: rangeKey,
+      civilRange: { from, to, rangeKey },
+      meta: {
+        kind: 'YTD',
+        year: input.year,
+        from: formatAdvisorCivilDateKey(from),
+        to: formatAdvisorCivilDateKey(to),
+        isPartialYear: true,
+        rangeKey,
+      },
+    };
+  }
+  // Ano passado: intervalo civil completo (YTD de ano passado não é suportado — usa YEAR).
+  const full = civilYearBounds(input.year);
+  const rangeKey = String(input.year);
+  return {
+    monthKey: rangeKey,
+    civilRange: { from: full.from, to: full.to, rangeKey },
+    meta: {
+      kind: 'YEAR',
+      year: input.year,
+      from: formatAdvisorCivilDateKey(full.from),
+      to: formatAdvisorCivilDateKey(full.to),
+      isPartialYear: false,
+      rangeKey,
+    },
+  };
+}
+
+function assertPeriodXorMonth(raw: Record<string, unknown>): {
+  readonly monthKey?: string;
+  readonly periodKind?: AdvisorCivilRangeKind;
+  readonly year?: number;
+} {
+  const hasMonth = typeof raw.monthKey === 'string';
+  const hasKind = typeof raw.periodKind === 'string';
+  const hasYear = typeof raw.year === 'number' || typeof raw.year === 'string';
+  if (hasMonth && (hasKind || hasYear)) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'monthKey e periodKind/year são mutuamente exclusivos.',
+    );
+  }
+  if (hasMonth) {
+    return { monthKey: requireMonth(String(raw.monthKey), 'monthKey') };
+  }
+  if (!hasKind || !hasYear) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'Informe monthKey ou periodKind+year.',
+    );
+  }
+  const periodKind = String(raw.periodKind);
+  if (periodKind !== 'YTD' && periodKind !== 'YEAR') {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'periodKind deve ser YTD ou YEAR.',
+    );
+  }
+  const year =
+    typeof raw.year === 'number' ? raw.year : Number(String(raw.year).trim());
+  if (!Number.isInteger(year) || year < 1970 || year > 2100) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'year inválido.',
+    );
+  }
+  return { periodKind, year };
 }
 
 function categoryStatusPayload(

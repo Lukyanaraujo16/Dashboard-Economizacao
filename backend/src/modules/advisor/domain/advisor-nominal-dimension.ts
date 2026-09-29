@@ -56,6 +56,15 @@ export type AdvisorNominalCoverage = {
   readonly ambiguousCount: number;
 };
 
+export type AdvisorNominalPeriodMeta = {
+  readonly kind: 'MONTH' | 'YTD' | 'YEAR';
+  readonly year: number | null;
+  readonly from: string;
+  readonly to: string;
+  readonly isPartialYear: boolean;
+  readonly rangeKey: string | null;
+};
+
 export type AdvisorNominalAggregation = {
   readonly available: boolean;
   readonly truncated: boolean;
@@ -65,6 +74,7 @@ export type AdvisorNominalAggregation = {
   readonly coverage: AdvisorNominalCoverage;
   readonly groups: readonly AdvisorNominalGroup[];
   readonly conclusionSafety: AdvisorConclusionSafety;
+  readonly period: AdvisorNominalPeriodMeta;
 };
 
 export type AdvisorNominalRankedEntity = {
@@ -85,9 +95,11 @@ export function aggregateAdvisorNominalDimension(input: {
   readonly categoryKey: string;
   readonly categoryName: string;
   readonly details: CashRealizedDetails;
+  readonly period?: AdvisorNominalPeriodMeta;
 }): AdvisorNominalAggregation {
+  const period = input.period ?? monthPeriodMeta(input.monthKey, input.details);
   if (!input.details.available) {
-    return emptyAggregation(input, false, false);
+    return emptyAggregation(input, false, false, period);
   }
   const truncated = input.details.itemCount > input.details.items.length;
   const coverageBase = {
@@ -111,6 +123,7 @@ export function aggregateAdvisorNominalDimension(input: {
       coverage: coverageBase,
       groups: [],
       conclusionSafety: 'INSUFFICIENT',
+      period,
     };
   }
 
@@ -236,6 +249,7 @@ export function aggregateAdvisorNominalDimension(input: {
       identifiedCount,
       totalCount: input.details.items.length,
     }),
+    period,
   };
 }
 
@@ -411,14 +425,23 @@ export function serializeAdvisorNominalRanking(input: {
   return {
     status: input.status,
     monthKey: aggregation.monthKey,
-    scope: 'PERIOD',
+    ...advisorNominalRankingFactContract(),
+    scope: aggregation.period.kind === 'MONTH' ? 'PERIOD' : 'CIVIL_RANGE',
+    period: {
+      kind: aggregation.period.kind,
+      year: aggregation.period.year,
+      from: aggregation.period.from,
+      to: aggregation.period.to,
+      isPartialYear: aggregation.period.isPartialYear,
+      rangeKey: aggregation.period.rangeKey,
+    },
     category: {
       key: aggregation.categoryKey,
       name: aggregation.categoryName,
     },
     direction: 'INFLOW',
     realizedMeaning: ADVISOR_CASH_INFLOW_MEANING,
-    ...advisorNominalRankingFactContract(),
+    cashMeaning: ADVISOR_CASH_INFLOW_MEANING,
     population: {
       amount: formatAdvisorFinancialAmount(aggregation.coverage.totalPopulationAmount),
       count: aggregation.coverage.totalPopulationCount,
@@ -482,14 +505,23 @@ export function serializeAdvisorNominalLookup(input: {
   return {
     status: input.status,
     monthKey: input.aggregation.monthKey,
-    scope: 'PERIOD',
+    ...advisorNominalLookupFactContract(),
+    scope: input.aggregation.period.kind === 'MONTH' ? 'PERIOD' : 'CIVIL_RANGE',
+    period: {
+      kind: input.aggregation.period.kind,
+      year: input.aggregation.period.year,
+      from: input.aggregation.period.from,
+      to: input.aggregation.period.to,
+      isPartialYear: input.aggregation.period.isPartialYear,
+      rangeKey: input.aggregation.period.rangeKey,
+    },
     category: {
       key: input.aggregation.categoryKey,
       name: input.aggregation.categoryName,
     },
     direction: 'INFLOW',
     realizedMeaning: ADVISOR_CASH_INFLOW_MEANING,
-    ...advisorNominalLookupFactContract(),
+    cashMeaning: ADVISOR_CASH_INFLOW_MEANING,
     entityQuery: input.entityQuery,
     populationAmount: formatAdvisorFinancialAmount(population),
     identifiedAmount: formatAdvisorFinancialAmount(identified),
@@ -712,6 +744,7 @@ function emptyAggregation(
   input: { readonly monthKey: string; readonly categoryKey: string; readonly categoryName: string },
   available: boolean,
   truncated: boolean,
+  period: AdvisorNominalPeriodMeta,
 ): AdvisorNominalAggregation {
   return {
     available,
@@ -732,5 +765,27 @@ function emptyAggregation(
     },
     groups: [],
     conclusionSafety: 'INSUFFICIENT',
+    period,
   };
+}
+
+function monthPeriodMeta(
+  monthKey: string,
+  details: CashRealizedDetails,
+): AdvisorNominalPeriodMeta {
+  return {
+    kind: 'MONTH',
+    year: null,
+    from: formatCivilDate(details.from),
+    to: formatCivilDate(details.to),
+    isPartialYear: false,
+    rangeKey: null,
+  };
+}
+
+function formatCivilDate(value: Date): string {
+  const year = value.getUTCFullYear();
+  const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(value.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

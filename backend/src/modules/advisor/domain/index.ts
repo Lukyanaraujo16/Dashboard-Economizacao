@@ -110,6 +110,18 @@ export type { AdvisorDrilldownIntent } from './resolve-advisor-drilldown-intent.
 export { resolveAdvisorNominalIntent, extractAdvisorNominalEntityQuery } from './resolve-advisor-nominal-intent.js';
 export type { AdvisorNominalIntent } from './resolve-advisor-nominal-intent.js';
 export {
+  ADVISOR_CIVIL_RANGE_KINDS,
+  civilYearBounds,
+  civilYtdBounds,
+  formatAdvisorCivilDateKey,
+  resolveAdvisorCivilRange,
+} from './resolve-advisor-civil-range.js';
+export type {
+  AdvisorCivilRange,
+  AdvisorCivilRangeKind,
+  ResolveAdvisorCivilRangeInput,
+} from './resolve-advisor-civil-range.js';
+export {
   extractExplicitNominalEntities,
   isAdvisorNominalAnaphora,
   isAdvisorNominalPeriodFollowUp,
@@ -125,6 +137,8 @@ export {
   formatAdvisorFactualBrl,
   formatAdvisorFactualMonth,
   formatAdvisorFactualPercent,
+  formatAdvisorFactualPeriodScope,
+  formatAdvisorNominalCashPeriodPrefix,
 } from './advisor-factual-display.js';
 export {
   ADVISOR_FACTUAL_INTENT_KINDS,
@@ -281,7 +295,9 @@ export {
   assertCompareCashNominalArgs,
   createAdvisorNominalDimensionService,
   listAdvisorNominalTools,
+  resolveNominalPeriodInput,
 } from './advisor-nominal-tools.js';
+export type { AdvisorNominalPeriodArgs } from './advisor-nominal-tools.js';
 export {
   ADVISOR_BILLING_COVERAGES,
   ADVISOR_CASH_CATEGORY_TOP_N,

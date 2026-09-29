@@ -21,12 +21,25 @@ export const CASH_REALIZED_DETAILS_DEFAULT_LIMIT = 100;
 export const CASH_REALIZED_DETAILS_MAX_LIMIT = 200;
 export const CASH_REALIZED_DETAILS_ALL_MAX = 5_000;
 
+/**
+ * Intervalo civil já validado pelo backend (F13.8.3).
+ * Não aceitar from/to livres vindos do LLM — só resolver oficial.
+ */
+export type CashRealizedCivilRangeInput = {
+  readonly from: Date;
+  readonly to: Date;
+  /** Rótulo estável (ex.: 2026-YTD). Preenche monthKey de compatibilidade no resultado. */
+  readonly rangeKey: string;
+};
+
 export type GetCashRealizedDetailsInput = GetMonthlyCashFlowInput & {
   readonly direction: CashRealizedDetailsDirection;
   readonly categoryKey: string;
   readonly categoryKind?: CashRealizedCategoryKind | null;
   readonly limit?: number;
   readonly offset?: number;
+  /** Quando presente, prevalece sobre monthKey (range oficial YTD/ano). */
+  readonly civilRange?: CashRealizedCivilRangeInput;
 };
 
 export type CashRealizedDetailsService = {
@@ -45,7 +58,7 @@ export type CashRealizedDetailsServiceDependencies = {
   readonly costCenterAllocations?: CostCenterAllocationReadRepository;
 };
 
-function resolveMonth(input: GetMonthlyCashFlowInput): {
+function resolveMonth(input: GetCashRealizedDetailsInput): {
   readonly tenantId: string;
   readonly today: Date;
   readonly from: Date;
@@ -56,6 +69,24 @@ function resolveMonth(input: GetMonthlyCashFlowInput): {
 } {
   assertTenantId(input.tenantId);
   const today = civilTodayInSaoPaulo(input.now ?? new Date());
+  const range = input.civilRange;
+  if (range !== undefined) {
+    assertCivilRange(range);
+    return {
+      tenantId: input.tenantId.trim(),
+      today,
+      from: range.from,
+      to: range.to,
+      monthKey: range.rangeKey,
+      scope: {
+        tenantId: input.tenantId.trim(),
+        ...(input.integrationId !== undefined && input.integrationId.trim() !== ''
+          ? { integrationId: input.integrationId }
+          : {}),
+      },
+      costCenterId: input.costCenterId,
+    };
+  }
   const bounds = input.monthKey ? civilMonthBoundsFromKey(input.monthKey) : civilMonthBounds(today);
   return {
     tenantId: input.tenantId.trim(),
@@ -71,6 +102,25 @@ function resolveMonth(input: GetMonthlyCashFlowInput): {
     },
     costCenterId: input.costCenterId,
   };
+}
+
+function assertCivilRange(range: CashRealizedCivilRangeInput): void {
+  const key = range.rangeKey.trim();
+  if (key === '' || key.length > 32) {
+    throw new Error('civilRange.rangeKey inválido.');
+  }
+  if (
+    Number.isNaN(range.from.getTime()) ||
+    Number.isNaN(range.to.getTime()) ||
+    range.from.getTime() > range.to.getTime()
+  ) {
+    throw new Error('civilRange from/to inválido.');
+  }
+  // Teto: no máximo um ano civil + folga de 1 dia (YTD).
+  const maxMs = 366 * 24 * 60 * 60 * 1000;
+  if (range.to.getTime() - range.from.getTime() > maxMs) {
+    throw new Error('civilRange excede o limite seguro de 1 ano.');
+  }
 }
 
 function installmentMap(

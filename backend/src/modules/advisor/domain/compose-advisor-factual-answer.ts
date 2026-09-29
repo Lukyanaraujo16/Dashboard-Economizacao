@@ -4,6 +4,8 @@ import {
   formatAdvisorFactualBrl,
   formatAdvisorFactualMonth,
   formatAdvisorFactualPercent,
+  formatAdvisorFactualPeriodScope,
+  formatAdvisorNominalCashPeriodPrefix,
 } from './advisor-factual-display.js';
 import {
   classifyAdvisorFactualResponse,
@@ -127,7 +129,7 @@ function composeRankingWinner(facts: Record<string, unknown>): string | null {
   const population = asRecord(facts.population);
   const category = asRecord(facts.category);
   const identityCoverage = asRecord(facts.identityCoverage);
-  const month = formatAdvisorFactualMonth(asString(facts.monthKey) ?? '');
+  const periodLabel = resolveNominalPeriodLabel(facts);
   const name = asString(winner?.displayName);
   const amount = formatAdvisorFactualBrl(asString(winner?.amount) ?? '');
   const share = formatAdvisorFactualPercent(asString(first?.shareOfPopulation) ?? '');
@@ -135,7 +137,7 @@ function composeRankingWinner(facts: Record<string, unknown>): string | null {
   const categoryName = asString(category?.name);
   const coverage = formatAdvisorFactualPercent(coverageRaw(facts) ?? '');
   if (
-    month === null ||
+    periodLabel === null ||
     name === null ||
     amount === null ||
     share === null ||
@@ -152,7 +154,14 @@ function composeRankingWinner(facts: Record<string, unknown>): string | null {
     ambiguous !== null
       ? ` A identificação nominal cobre ${coverage} do valor da categoria; ${ambiguous} permanecem ambíguos.`
       : ` A identificação nominal cobre ${coverage} do valor da categoria.`;
-  return `Em ${month}, o maior valor identificado foi de ${name}: ${amount}, equivalente a ${share} do total de ${total} da categoria ${categoryName}.${ambiguousSentence}`;
+  if (isCivilRangePeriod(facts)) {
+    const prefix = formatAdvisorNominalCashPeriodPrefix(nominalCashPrefixFacts(facts));
+    if (prefix === null) {
+      return null;
+    }
+    return `${prefix} da categoria ${categoryName}, o maior valor identificado foi de ${name}: ${amount}, equivalente a ${share} do total de ${total}.${ambiguousSentence}`;
+  }
+  return `Em ${periodLabel}, o maior valor identificado foi de ${name}: ${amount}, equivalente a ${share} do total de ${total} da categoria ${categoryName}.${ambiguousSentence}`;
 }
 
 function composeRankingShare(facts: Record<string, unknown>): string | null {
@@ -167,7 +176,7 @@ function composeRankingShare(facts: Record<string, unknown>): string | null {
   const share = formatAdvisorFactualPercent(asString(topN?.shareOfPopulation) ?? '');
   const total = formatAdvisorFactualBrl(asString(population?.amount) ?? '');
   const categoryName = asString(category?.name);
-  const month = formatAdvisorFactualMonth(asString(facts.monthKey) ?? '');
+  const periodLabel = resolveNominalPeriodLabel(facts);
   if (
     identifiedCount === null ||
     returnedCount === null ||
@@ -175,7 +184,7 @@ function composeRankingShare(facts: Record<string, unknown>): string | null {
     share === null ||
     total === null ||
     categoryName === null ||
-    month === null
+    periodLabel === null
   ) {
     return null;
   }
@@ -190,15 +199,22 @@ function composeRankingShare(facts: Record<string, unknown>): string | null {
     ambiguous !== null
       ? ` ${ambiguous} permanecem ambíguos.`
       : '';
-  return `${entityPhrase}. Em ${month}, juntos somam ${amount}, equivalentes a ${share} do total de ${total} da categoria ${categoryName}.${ambiguousSentence}`;
+  if (isCivilRangePeriod(facts)) {
+    const prefix = formatAdvisorNominalCashPeriodPrefix(nominalCashPrefixFacts(facts));
+    if (prefix === null) {
+      return null;
+    }
+    return `${entityPhrase}. ${prefix} da categoria ${categoryName}, juntos somam ${amount}, equivalentes a ${share} do total de ${total}.${ambiguousSentence}`;
+  }
+  return `${entityPhrase}. Em ${periodLabel}, juntos somam ${amount}, equivalentes a ${share} do total de ${total} da categoria ${categoryName}.${ambiguousSentence}`;
 }
 
 function composeRankingTopN(facts: Record<string, unknown>): string | null {
   const rows = rankingRows(facts);
   const cardinality = asRecord(facts.cardinality);
   const identifiedCount = asNumber(cardinality?.identifiedEntityCount);
-  const month = formatAdvisorFactualMonth(asString(facts.monthKey) ?? '');
-  if (identifiedCount === null || month === null || rows.length === 0) {
+  const periodLabel = resolveNominalPeriodLabel(facts);
+  if (identifiedCount === null || periodLabel === null || rows.length === 0) {
     return null;
   }
   const listed = rows.map((row) => {
@@ -212,17 +228,28 @@ function composeRankingTopN(facts: Record<string, unknown>): string | null {
   if (listed.some((item) => item === null)) {
     return null;
   }
+  if (isCivilRangePeriod(facts)) {
+    const prefix = formatAdvisorNominalCashPeriodPrefix(nominalCashPrefixFacts(facts));
+    if (prefix === null) {
+      return null;
+    }
+    const header =
+      identifiedCount === 1
+        ? `${prefix}, há 1 convênio nominalmente identificado no ranking`
+        : `${prefix}, há ${identifiedCount} convênios nominalmente identificados no ranking`;
+    return `${header}: ${listed.join('; ')}.`;
+  }
   const header =
     identifiedCount === 1
-      ? `Há 1 convênio nominalmente identificado no ranking em ${month}`
-      : `Há ${identifiedCount} convênios nominalmente identificados no ranking em ${month}`;
+      ? `Há 1 convênio nominalmente identificado no ranking em ${periodLabel}`
+      : `Há ${identifiedCount} convênios nominalmente identificados no ranking em ${periodLabel}`;
   return `${header}: ${listed.join('; ')}.`;
 }
 
 function composeLookup(facts: Record<string, unknown>, question: string): string | null {
   const entity = asRecord(facts.entity);
   const category = asRecord(facts.category);
-  const month = formatAdvisorFactualMonth(asString(facts.monthKey) ?? '');
+  const periodLabel = resolveNominalPeriodLabel(facts);
   const name = asString(entity?.displayName);
   const amount = formatAdvisorFactualBrl(asString(entity?.amount) ?? '');
   const populationShare = formatAdvisorFactualPercent(asString(entity?.shareOfPopulation) ?? '');
@@ -230,7 +257,7 @@ function composeLookup(facts: Record<string, unknown>, question: string): string
   const total = formatAdvisorFactualBrl(asString(facts.populationAmount) ?? '');
   const categoryName = asString(category?.name);
   if (
-    month === null ||
+    periodLabel === null ||
     name === null ||
     amount === null ||
     populationShare === null ||
@@ -243,10 +270,20 @@ function composeLookup(facts: Record<string, unknown>, question: string): string
   const wantsIdentifiedShare =
     /\bentre (?:os |os valores )?identificad/.test(folded) ||
     /\bshareofidentified\b/.test(folded);
-  if (wantsIdentifiedShare && identifiedShare !== null) {
-    return `Em ${month}, o valor identificado de ${name} em ${categoryName} foi ${amount}, equivalente a ${identifiedShare} entre os valores identificados — não do total da categoria.`;
+  if (isCivilRangePeriod(facts)) {
+    const prefix = formatAdvisorNominalCashPeriodPrefix(nominalCashPrefixFacts(facts));
+    if (prefix === null) {
+      return null;
+    }
+    if (wantsIdentifiedShare && identifiedShare !== null) {
+      return `${prefix} da categoria ${categoryName}, o valor identificado de ${name} foi ${amount}, equivalente a ${identifiedShare} entre os valores identificados — não do total da categoria.`;
+    }
+    return `${prefix} da categoria ${categoryName}, o valor identificado de ${name} foi ${amount}, equivalente a ${populationShare} do total da categoria (${total}).`;
   }
-  return `Em ${month}, o valor identificado de ${name} em ${categoryName} foi ${amount}, equivalente a ${populationShare} do total da categoria (${total}).`;
+  if (wantsIdentifiedShare && identifiedShare !== null) {
+    return `Em ${periodLabel}, o valor identificado de ${name} em ${categoryName} foi ${amount}, equivalente a ${identifiedShare} entre os valores identificados — não do total da categoria.`;
+  }
+  return `Em ${periodLabel}, o valor identificado de ${name} em ${categoryName} foi ${amount}, equivalente a ${populationShare} do total da categoria (${total}).`;
 }
 
 function composeComparison(facts: Record<string, unknown>): string | null {
@@ -681,6 +718,40 @@ function findMentionedIdentified(
     matches.push({ displayName, amount });
   }
   return matches.length === 1 ? matches[0]! : null;
+}
+
+function resolveNominalPeriodLabel(facts: Record<string, unknown>): string | null {
+  const nested = asRecord(facts.period);
+  return formatAdvisorFactualPeriodScope({
+    monthKey: facts.monthKey,
+    periodKind: facts.periodKind ?? nested?.kind,
+    year: facts.year ?? nested?.year,
+    from: facts.from ?? nested?.from,
+    to: facts.to ?? nested?.to,
+  });
+}
+
+function isCivilRangePeriod(facts: Record<string, unknown>): boolean {
+  const nested = asRecord(facts.period);
+  const periodKind = String(facts.periodKind ?? nested?.kind ?? '')
+    .trim()
+    .toUpperCase();
+  return periodKind === 'YTD' || periodKind === 'YEAR';
+}
+
+function nominalCashPrefixFacts(facts: Record<string, unknown>): {
+  readonly monthKey?: unknown;
+  readonly periodKind?: unknown;
+  readonly year?: unknown;
+  readonly direction?: unknown;
+} {
+  const nested = asRecord(facts.period);
+  return {
+    monthKey: facts.monthKey,
+    periodKind: facts.periodKind ?? nested?.kind,
+    year: facts.year ?? nested?.year,
+    direction: facts.direction,
+  };
 }
 
 function rankingRows(facts: Record<string, unknown>): readonly Record<string, unknown>[] {

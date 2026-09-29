@@ -1,5 +1,6 @@
 import { Prisma } from '../../../generated/prisma/client.js';
 import { isValidMonthKey } from '../../analytics/domain/civil-calendar.js';
+import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import type { ReportCashDetailsService } from '../../reports/services/report-cash-details.service.js';
 import { assertAdvisorTenantId } from '../repositories/assert-tenant-id.js';
@@ -730,31 +731,55 @@ async function executeNominal(
 ): Promise<AdvisorAnalyticalToolResult> {
   if (call.name === CASH_NOMINAL_RANKING_TOOL_NAME) {
     const args = assertCashNominalRankingArgs(call.arguments);
-    const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+    const monthKey =
+      args.monthKey !== undefined
+        ? bindResolvedMonthKey(args.monthKey, resolvedMonthKey)
+        : undefined;
     const serialized = await withToolTimeout(
       cashNominal.rank({
         tenantId,
-        monthKey,
+        ...(monthKey !== undefined ? { monthKey } : {}),
+        ...(args.periodKind !== undefined ? { periodKind: args.periodKind } : {}),
+        ...(args.year !== undefined ? { year: args.year } : {}),
         categoryReference: args.categoryReference,
         limit: args.limit,
         now,
       }),
     );
-    return finishNominal(call, startedAt, serialized, monthKey, args.categoryReference, args.limit);
+    const label =
+      monthKey ??
+      (args.periodKind !== undefined && args.year !== undefined
+        ? args.year === civilTodayInSaoPaulo(now ?? new Date()).getUTCFullYear()
+          ? `${args.year}-YTD`
+          : String(args.year)
+        : resolvedMonthKey ?? 'unknown');
+    return finishNominal(call, startedAt, serialized, label, args.categoryReference, args.limit);
   }
   if (call.name === CASH_NOMINAL_LOOKUP_TOOL_NAME) {
     const args = assertCashNominalLookupArgs(call.arguments);
-    const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+    const monthKey =
+      args.monthKey !== undefined
+        ? bindResolvedMonthKey(args.monthKey, resolvedMonthKey)
+        : undefined;
     const serialized = await withToolTimeout(
       cashNominal.lookup({
         tenantId,
-        monthKey,
+        ...(monthKey !== undefined ? { monthKey } : {}),
+        ...(args.periodKind !== undefined ? { periodKind: args.periodKind } : {}),
+        ...(args.year !== undefined ? { year: args.year } : {}),
         categoryReference: args.categoryReference,
         entityQuery: args.entityQuery,
         now,
       }),
     );
-    return finishNominal(call, startedAt, serialized, monthKey, args.categoryReference, null);
+    const label =
+      monthKey ??
+      (args.periodKind !== undefined && args.year !== undefined
+        ? args.year === civilTodayInSaoPaulo(now ?? new Date()).getUTCFullYear()
+          ? `${args.year}-YTD`
+          : String(args.year)
+        : resolvedMonthKey ?? 'unknown');
+    return finishNominal(call, startedAt, serialized, label, args.categoryReference, null);
   }
   const args = assertCompareCashNominalArgs(call.arguments);
   const serialized = await withToolTimeout(

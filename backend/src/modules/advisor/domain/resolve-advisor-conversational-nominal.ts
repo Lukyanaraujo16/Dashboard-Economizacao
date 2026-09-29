@@ -38,9 +38,11 @@ export function resolveAdvisorConversationalNominal(input: {
   readonly content: string;
   readonly priorUserContents?: readonly string[];
   readonly comparison?: boolean;
+  readonly now?: Date;
 }): AdvisorConversationalNominal {
   const direct = resolveAdvisorNominalIntent(input.content, {
     comparison: input.comparison,
+    now: input.now,
   });
   if (direct !== null && direct.entityQuery !== undefined) {
     return {

@@ -7,6 +7,10 @@ import {
   CASH_NOMINAL_LOOKUP_TOOL_NAME,
   CASH_NOMINAL_RANKING_TOOL_NAME,
 } from './advisor-nominal-dimension.js';
+import {
+  resolveAdvisorCivilRange,
+  type AdvisorCivilRange,
+} from './resolve-advisor-civil-range.js';
 
 export type AdvisorNominalIntent = {
   readonly toolName:
@@ -16,29 +20,40 @@ export type AdvisorNominalIntent = {
   readonly categoryReference?: string;
   readonly entityQuery?: string;
   readonly limit: number;
+  /** Período anual/YTD oficial; ausente = monthKey do resolvedor mensal. */
+  readonly civilRange?: AdvisorCivilRange;
 };
 
 /**
- * Intenção nominal da pergunta atual. Não resolve monthKey.
+ * Intenção nominal da pergunta atual. Não resolve monthKey mensal;
+ * resolve civilRange anual/YTD quando aplicável (F13.8.3).
  */
 export function resolveAdvisorNominalIntent(
   content: string,
-  options: { readonly comparison?: boolean } = {},
+  options: { readonly comparison?: boolean; readonly now?: Date } = {},
 ): AdvisorNominalIntent | null {
   const folded = foldPt(content);
   const convenioCue = /\bconvenios?\b/.test(folded);
   const entityQuery = extractAdvisorNominalEntityQuery(content);
   const wantsRank =
-    /\b(mais fatur|que mais fatur|top\s+\d+|quanto recebi de cada|quais foram os\s+\d+\s+convenios|representam do total)\b/.test(
+    /\b(mais fatur(?:ei|ou|aram|ava)?|que mais fatur(?:ei|ou|aram)?|que eu mais fatur(?:ei|ou)?|top\s+\d+|quanto recebi de cada|quais foram os\s+\d+\s+convenios|representam do total)\b/.test(
       folded,
     ) ||
-    (convenioCue && /\b(ranking|maiores|maior|individual)\b/.test(folded));
-  const wantsLookup = /\bquanto (?:eu )?recebi (?:da|do|de)\b/.test(folded) && entityQuery !== null;
+    (convenioCue &&
+      /\b(ranking|maiores|maior|individual|mais gerou|mais geraram)\b/.test(folded));
+  const wantsLookup =
+    (/\bquanto (?:eu )?recebi (?:da|do|de)\b/.test(folded) ||
+      /\bquanto (?:a|o)\s+.+\s+fatur(?:ou|aram|ei)\b/.test(folded) ||
+      /\bquanto (?:a|o)\s+.+\s+recebeu\b/.test(folded)) &&
+    entityQuery !== null;
   const wantsCompare =
     options.comparison === true &&
     (/\bcresceu\b|\bcompare\b|\bcompar/.test(folded) || (entityQuery !== null && convenioCue));
 
-  if (wantsCompare && (convenioCue || entityQuery !== null)) {
+  const civilRange = resolveAdvisorCivilRange({ content, now: options.now });
+
+  // Comparação anual não entra nesta fase — se há civilRange, não roteia compare.
+  if (wantsCompare && (convenioCue || entityQuery !== null) && civilRange === null) {
     return {
       toolName: COMPARE_CASH_NOMINAL_TOOL_NAME,
       categoryReference: convenioCue ? 'convenio' : undefined,
@@ -53,6 +68,7 @@ export function resolveAdvisorNominalIntent(
       ...(convenioCue ? { categoryReference: 'convenio' } : {}),
       entityQuery: entityQuery ?? undefined,
       limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
+      ...(civilRange !== null ? { civilRange } : {}),
     };
   }
 
@@ -61,6 +77,7 @@ export function resolveAdvisorNominalIntent(
       toolName: CASH_NOMINAL_RANKING_TOOL_NAME,
       categoryReference: 'convenio',
       limit: extractAdvisorDrilldownLimit(folded),
+      ...(civilRange !== null ? { civilRange } : {}),
     };
   }
 
@@ -69,14 +86,18 @@ export function resolveAdvisorNominalIntent(
 
 export function extractAdvisorNominalEntityQuery(content: string): string | null {
   const received = /quanto(?:\s+eu)?\s+recebi\s+(?:da|do|de)\s+(.+)/i.exec(content);
+  const receivedEntity = /quanto\s+(?:a|o)\s+(.+?)\s+(?:recebeu|fatur(?:ou|aram|ei))/i.exec(content);
   const grew = /quanto\s+(?:a|o)\s+(.+?)\s+cresceu/i.exec(content);
   const compare = /compare\s+(.+?)(?:\s+ness|\s+em\s+|\s+de\s+jul|\s+de\s+ago|[?.!]|$)/i.exec(content);
-  const raw = received?.[1] ?? grew?.[1] ?? compare?.[1];
+  const raw = received?.[1] ?? receivedEntity?.[1] ?? grew?.[1] ?? compare?.[1];
   if (raw === undefined) {
     return null;
   }
   const cleaned = raw
     .replace(/\s+em\s+.+?$/i, '')
+    .replace(/\s+neste\s+ano.*$/i, '')
+    .replace(/\s+este\s+ano.*$/i, '')
+    .replace(/\s+no\s+ano.*$/i, '')
     .replace(/\s+de\s+\d{4}.*$/i, '')
     .replace(/[?.!].*$/g, '')
     .trim();

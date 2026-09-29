@@ -64,6 +64,62 @@ export function formatAdvisorFactualMonth(monthKey: string): string | null {
   return `${label} de ${year}`;
 }
 
+/**
+ * Rótulo civil de período oficial do Consultor (mês OU range YTD/YEAR).
+ * Não recalcula domínio financeiro.
+ */
+export function formatAdvisorFactualPeriodScope(facts: {
+  readonly monthKey?: unknown;
+  readonly periodKind?: unknown;
+  readonly year?: unknown;
+  readonly from?: unknown;
+  readonly to?: unknown;
+}): string | null {
+  const periodKind =
+    typeof facts.periodKind === 'string' ? facts.periodKind.trim().toUpperCase() : '';
+  const year =
+    typeof facts.year === 'number' && Number.isInteger(facts.year)
+      ? facts.year
+      : typeof facts.year === 'string' && /^\d{4}$/.test(facts.year.trim())
+        ? Number(facts.year.trim())
+        : null;
+  if (periodKind === 'YTD' && year !== null) {
+    return `${year} até agora`;
+  }
+  if (periodKind === 'YEAR' && year !== null) {
+    return String(year);
+  }
+  if (typeof facts.monthKey === 'string' && facts.monthKey.trim() !== '') {
+    return formatAdvisorFactualMonth(facts.monthKey);
+  }
+  return null;
+}
+
+/**
+ * Prefixo semântico obrigatório: caixa realizado ≠ faturamento/competência.
+ */
+export function formatAdvisorNominalCashPeriodPrefix(facts: {
+  readonly monthKey?: unknown;
+  readonly periodKind?: unknown;
+  readonly year?: unknown;
+  readonly direction?: unknown;
+}): string | null {
+  const scope = formatAdvisorFactualPeriodScope(facts);
+  if (scope === null) {
+    return null;
+  }
+  const direction =
+    typeof facts.direction === 'string' ? facts.direction.trim().toUpperCase() : 'INFLOWS';
+  const cashLabel =
+    direction === 'OUTFLOWS'
+      ? 'saídas realizadas de caixa'
+      : 'recebimentos realizados / entradas de caixa';
+  if (typeof facts.periodKind === 'string' && facts.periodKind.trim() !== '') {
+    return `Considerando ${cashLabel} em ${scope}`;
+  }
+  return `Em ${scope}`;
+}
+
 export function parseAdvisorFactualDecimal(raw: string): Prisma.Decimal | null {
   if (!isNumericFact(raw)) {
     return null;
