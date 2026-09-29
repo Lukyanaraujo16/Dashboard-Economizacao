@@ -71,14 +71,28 @@ export function resolveAdvisorDrilldownIntent(content: string): AdvisorDrilldown
 }
 
 export function extractAdvisorDrilldownLimit(folded: string): number {
-  const match = /(?:os\s+)?(\d{1,4})\s+maior(?:es)?\b|\btop\s+(\d{1,4})\b/.exec(folded);
-  const raw = match?.[1] ?? match?.[2];
+  return extractExplicitAdvisorTopNLimit(folded) ?? ADVISOR_DRILLDOWN_DEFAULT_LIMIT;
+}
+
+/**
+ * Extrai N explícito de cardinalidade (top N / os N …).
+ * Retorna null quando a pergunta não pede N — não confundir com default.
+ */
+export function extractExplicitAdvisorTopNLimit(folded: string): number | null {
+  const match =
+    /\b(?:quais (?:foram )?)?(?:mostre(?:\s+os)?|os)\s+(\d{1,4})\s+(?:maiores?\s+)?(?:convenios?|fornecedores?|clientes?|contrapartes?|entidades?|recebimentos?|saidas?|pagamentos?|desembolsos?|movimentos?|categorias?|centros?(?:\s+de\s+custo)?)\b/.exec(
+      folded,
+    ) ??
+    /(?:os\s+)?(\d{1,4})\s+maior(?:es)?\b/.exec(folded) ??
+    /\btop\s+(\d{1,4})\b/.exec(folded) ??
+    /\bmostre(?:\s+os)?\s+(\d{1,4})\b/.exec(folded);
+  const raw = match?.[1];
   if (raw === undefined) {
-    return ADVISOR_DRILLDOWN_DEFAULT_LIMIT;
+    return null;
   }
   const parsed = Number(raw);
   if (!Number.isFinite(parsed)) {
-    return ADVISOR_DRILLDOWN_DEFAULT_LIMIT;
+    return null;
   }
   return Math.min(Math.max(1, Math.trunc(parsed)), ADVISOR_DRILLDOWN_MAX_LIMIT);
 }

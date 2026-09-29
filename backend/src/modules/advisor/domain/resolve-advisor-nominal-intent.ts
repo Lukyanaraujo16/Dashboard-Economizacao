@@ -1,7 +1,10 @@
 import {
   ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
 } from './advisor-cash-realized-breakdown.js';
-import { extractAdvisorDrilldownLimit } from './resolve-advisor-drilldown-intent.js';
+import {
+  extractAdvisorDrilldownLimit,
+  extractExplicitAdvisorTopNLimit,
+} from './resolve-advisor-drilldown-intent.js';
 import {
   COMPARE_CASH_NOMINAL_TOOL_NAME,
   CASH_NOMINAL_LOOKUP_TOOL_NAME,
@@ -11,6 +14,9 @@ import {
   resolveAdvisorCivilRange,
   type AdvisorCivilRange,
 } from './resolve-advisor-civil-range.js';
+import {
+  isAdvisorNominalWinnerQuestion,
+} from './classify-advisor-factual-response.js';
 
 export type AdvisorNominalIntent = {
   readonly toolName:
@@ -76,12 +82,26 @@ export function resolveAdvisorNominalIntent(
     return {
       toolName: CASH_NOMINAL_RANKING_TOOL_NAME,
       categoryReference: 'convenio',
-      limit: extractAdvisorDrilldownLimit(folded),
+      limit: resolveNominalRankingLimit(content, folded),
       ...(civilRange !== null ? { civilRange } : {}),
     };
   }
 
   return null;
+}
+
+/**
+ * WINNER → requestedLimit=1; TOP N explícito → N; demais → default da tool.
+ */
+function resolveNominalRankingLimit(content: string, folded: string): number {
+  const explicit = extractExplicitAdvisorTopNLimit(folded);
+  if (explicit !== null) {
+    return explicit;
+  }
+  if (isAdvisorNominalWinnerQuestion(content)) {
+    return 1;
+  }
+  return ADVISOR_DRILLDOWN_DEFAULT_LIMIT;
 }
 
 export function extractAdvisorNominalEntityQuery(content: string): string | null {

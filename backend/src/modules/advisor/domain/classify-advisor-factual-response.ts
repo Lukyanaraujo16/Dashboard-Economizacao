@@ -17,6 +17,7 @@ import {
 } from './advisor-cost-center-dimension.js';
 import type { AdvisorCostCenterAnaphoraStatus } from './resolve-advisor-conversational-cost-center.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
+import { extractExplicitAdvisorTopNLimit } from './resolve-advisor-drilldown-intent.js';
 
 export const ADVISOR_FACTUAL_RESPONSE_KINDS = [
   'FACTUAL_CLOSED',
@@ -132,6 +133,9 @@ export function classifyAdvisorFactualResponse(
     if (status === 'OK' && hasRankingClosedFacts(facts)) {
       if (isAdvisorNominalShareQuestion(input.content)) {
         return { kind: 'FACTUAL_CLOSED', intentKind: 'RANKING_SHARE', factKind };
+      }
+      if (isAdvisorNominalTopNQuestion(input.content)) {
+        return { kind: 'FACTUAL_CLOSED', intentKind: 'RANKING_TOPN', factKind };
       }
       if (isAdvisorNominalWinnerQuestion(input.content)) {
         return { kind: 'FACTUAL_CLOSED', intentKind: 'RANKING_WINNER', factKind };
@@ -300,6 +304,17 @@ export function isAdvisorNominalShareQuestion(content: string): boolean {
   );
 }
 
+/**
+ * Cardinalidade explícita TOP N na pergunta nominal (não é winner singular).
+ */
+export function isAdvisorNominalTopNQuestion(content: string): boolean {
+  const folded = foldPt(content);
+  if (isAdvisorNominalShareQuestion(content)) {
+    return false;
+  }
+  return extractExplicitAdvisorTopNLimit(folded) !== null;
+}
+
 export function isAdvisorCostCenterShareQuestion(content: string): boolean {
   return /\brepresent/.test(foldPt(content));
 }
@@ -314,10 +329,17 @@ export function isAdvisorCostCenterWinnerQuestion(content: string): boolean {
 
 export function isAdvisorNominalWinnerQuestion(content: string): boolean {
   const folded = foldPt(content);
+  // Precedência: TOP N explícito nunca é winner.
+  if (isAdvisorNominalTopNQuestion(content) || isAdvisorNominalShareQuestion(content)) {
+    return false;
+  }
   return (
-    /\bmais fatur\b/.test(folded) ||
-    /\bque mais\b/.test(folded) ||
-    /\bqual convenio(?: individual)?\b/.test(folded)
+    /\bmais fatur(?:ei|ou|aram|ava|ado)?\b/.test(folded) ||
+    /\b(?:que|quem)(?:\s+eu)?\s+mais\b/.test(folded) ||
+    /\bqual (?:foi (?:o |a )?)?(?:convenio|fornecedor|cliente|contraparte)(?: individual)?\b/.test(
+      folded,
+    ) ||
+    /\bquem mais\b/.test(folded)
   );
 }
 

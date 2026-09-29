@@ -104,6 +104,7 @@ export { buildAnalyticalFactsContent } from './analytical-facts-text.js';
 export type { AdvisorDrilldownFacts } from './analytical-facts-text.js';
 export {
   extractAdvisorDrilldownLimit,
+  extractExplicitAdvisorTopNLimit,
   resolveAdvisorDrilldownIntent,
 } from './resolve-advisor-drilldown-intent.js';
 export type { AdvisorDrilldownIntent } from './resolve-advisor-drilldown-intent.js';
@@ -148,6 +149,7 @@ export {
   isAdvisorMonthlyBillingWinnerQuestion,
   isAdvisorNominalIdentityFollowUp,
   isAdvisorNominalShareQuestion,
+  isAdvisorNominalTopNQuestion,
   isAdvisorNominalWinnerQuestion,
 } from './classify-advisor-factual-response.js';
 export type {

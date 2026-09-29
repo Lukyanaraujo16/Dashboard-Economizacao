@@ -210,40 +210,48 @@ function composeRankingShare(facts: Record<string, unknown>): string | null {
 }
 
 function composeRankingTopN(facts: Record<string, unknown>): string | null {
-  const rows = rankingRows(facts);
   const cardinality = asRecord(facts.cardinality);
-  const identifiedCount = asNumber(cardinality?.identifiedEntityCount);
+  const identityCoverage = asRecord(facts.identityCoverage);
+  const requestedLimit =
+    asNumber(cardinality?.requestedLimit) ?? asNumber(facts.requestedLimit);
+  const allRows = rankingRows(facts);
+  const rows =
+    requestedLimit !== null && requestedLimit > 0
+      ? allRows.slice(0, requestedLimit)
+      : allRows;
   const periodLabel = resolveNominalPeriodLabel(facts);
-  if (identifiedCount === null || periodLabel === null || rows.length === 0) {
+  if (periodLabel === null || rows.length === 0 || requestedLimit === null) {
     return null;
   }
-  const listed = rows.map((row) => {
+  const listed = rows.map((row, index) => {
     const name = asString(row.displayName);
     const amount = formatAdvisorFactualBrl(asString(row.amount) ?? '');
     if (name === null || amount === null) {
       return null;
     }
-    return `${name}: ${amount}`;
+    return `${index + 1}. ${name} — ${amount}`;
   });
   if (listed.some((item) => item === null)) {
     return null;
   }
+  const coverage = formatAdvisorFactualPercent(coverageRaw(facts) ?? '');
+  const ambiguous = formatAdvisorFactualBrl(asString(identityCoverage?.ambiguousAmount) ?? '0');
+  const coverageSentence =
+    coverage === null
+      ? ''
+      : identityCoverage !== null &&
+          asString(identityCoverage.ambiguousAmount) !== '0' &&
+          ambiguous !== null
+        ? ` A identificação nominal cobre ${coverage} da categoria; ${ambiguous} permanecem ambíguos.`
+        : ` A identificação nominal cobre ${coverage} da categoria.`;
   if (isCivilRangePeriod(facts)) {
     const prefix = formatAdvisorNominalCashPeriodPrefix(nominalCashPrefixFacts(facts));
     if (prefix === null) {
       return null;
     }
-    const header =
-      identifiedCount === 1
-        ? `${prefix}, há 1 convênio nominalmente identificado no ranking`
-        : `${prefix}, há ${identifiedCount} convênios nominalmente identificados no ranking`;
-    return `${header}: ${listed.join('; ')}.`;
+    return `${prefix}, os ${rows.length} maiores valores identificados foram: ${listed.join('; ')}.${coverageSentence}`;
   }
-  const header =
-    identifiedCount === 1
-      ? `Há 1 convênio nominalmente identificado no ranking em ${periodLabel}`
-      : `Há ${identifiedCount} convênios nominalmente identificados no ranking em ${periodLabel}`;
-  return `${header}: ${listed.join('; ')}.`;
+  return `Em ${periodLabel}, os ${rows.length} maiores valores identificados foram: ${listed.join('; ')}.${coverageSentence}`;
 }
 
 function composeLookup(facts: Record<string, unknown>, question: string): string | null {
