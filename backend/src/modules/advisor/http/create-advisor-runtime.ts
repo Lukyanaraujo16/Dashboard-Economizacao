@@ -23,6 +23,7 @@ import { createReportCashDetailsService } from '../../reports/services/report-ca
 import { createCashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
 import { createAdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
+import { createAdvisorKnowledgeDocumentRepository } from '../repositories/advisor-knowledge-document.repository.js';
 import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowledge.repository.js';
 import { createAdvisorRunRepository } from '../repositories/advisor-run.repository.js';
 import { createAdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
@@ -130,6 +131,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
   const prisma = getPrismaClient();
   const settings = createAdvisorSettingsRepository(prisma);
   const knowledge = createAdvisorKnowledgeRepository(prisma);
+  const documentKnowledge = createAdvisorKnowledgeDocumentRepository(prisma);
   const conversations = createAdvisorConversationRepository(prisma);
   const platformCredentials = createAdvisorPlatformCredentialRepository(prisma);
   const resolveProviderApiKey = createResolveProviderApiKey({
@@ -210,6 +212,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     cashFlow,
     analytics,
     cashComparison,
+    documentKnowledge,
   });
   const providers = createAdvisorIaProviderRegistry(environment, resolveProviderApiKey);
   const rateLimiter =

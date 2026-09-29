@@ -290,6 +290,9 @@ describe('F13.8.2A knowledge document service (in-memory)', () => {
         chunks.delete(documentId);
         return existing;
       },
+      async listActiveReadyChunksForRetrieval() {
+        return [];
+      },
     };
 
     const service = createAdminConsultantKnowledgeDocumentService({
@@ -359,6 +362,9 @@ describe('F13.8.2A knowledge document service (in-memory)', () => {
         }
         docs.delete(documentId);
         return existing;
+      },
+      async listActiveReadyChunksForRetrieval() {
+        return [];
       },
     };
 
@@ -464,6 +470,9 @@ describe('F13.8.2A knowledge document service (in-memory)', () => {
       async deleteDocument() {
         throw new Error('unused');
       },
+      async listActiveReadyChunksForRetrieval() {
+        return [];
+      },
     };
 
     const service = createAdminConsultantKnowledgeDocumentService({
@@ -494,18 +503,21 @@ describe('F13.8.2A knowledge document service (in-memory)', () => {
     expect(disabled.status).toBe('DISABLED');
   });
 
-  it('Context Builder e compositor ainda não consomem documentos', async () => {
+  it('F13.8.2C: compositor factual não consome documentos; Context Builder anexa só via withDocumentKnowledge', async () => {
     const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '../src/modules/advisor');
-    const context = await readFile(path.join(root, 'services/build-advisor-context.ts'), 'utf8');
     const composer = await readFile(
       path.join(root, 'domain/compose-advisor-factual-answer.ts'),
       'utf8',
     );
+    expect(composer).not.toContain('DOCUMENT_KNOWLEDGE');
+    expect(composer).not.toContain('retrieveAdvisorDocumentKnowledge');
+    expect(composer).not.toContain('KnowledgeDocument');
+
+    const context = await readFile(path.join(root, 'services/build-advisor-context.ts'), 'utf8');
+    expect(context).toContain('withDocumentKnowledge');
+    expect(context).toContain('retrieveAdvisorDocumentKnowledge');
+
     const send = await readFile(path.join(root, 'services/send-advisor-message.ts'), 'utf8');
-    for (const source of [context, composer, send]) {
-      expect(source).not.toContain('KnowledgeDocument');
-      expect(source).not.toContain('DOCUMENT_KNOWLEDGE');
-      expect(source).not.toContain('knowledge-documents');
-    }
+    expect(send).toContain('withDocumentKnowledge');
   });
 });

@@ -10,6 +10,7 @@ export const ADVISOR_CONTEXT_BLOCK_TYPES = [
   'TENANT_PROFILE',
   'ADMIN_CONTEXT',
   'TENANT_KNOWLEDGE',
+  'DOCUMENT_KNOWLEDGE',
   'FINANCIAL_FACTS',
   'ANALYTICAL_FACTS',
   'CONVERSATION_HISTORY',
@@ -55,6 +56,10 @@ export const ADVISOR_HISTORY_MESSAGE_LIMIT = 10;
 /** Orçamento simples de caracteres (sem tokenizer de vendor). */
 export const ADVISOR_CONTEXT_CHAR_BUDGET = 24_000;
 
+/**
+ * Ordem de preservação (primeiro = mais protegido).
+ * Truncamento aplica a ordem inversa: DOCUMENT_KNOWLEDGE é o mais sacrificável.
+ */
 export const ADVISOR_CONTEXT_PRESERVATION_ORDER = [
   'PLATFORM_INSTRUCTIONS',
   'USER_QUESTION',
@@ -64,4 +69,5 @@ export const ADVISOR_CONTEXT_PRESERVATION_ORDER = [
   'ADMIN_CONTEXT',
   'CONVERSATION_HISTORY',
   'TENANT_KNOWLEDGE',
+  'DOCUMENT_KNOWLEDGE',
 ] as const satisfies readonly AdvisorContextBlockType[];

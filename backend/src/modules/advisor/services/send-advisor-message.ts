@@ -541,6 +541,15 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         };
       }
 
+      // DOCUMENT_KNOWLEDGE somente no caminho do provider (não em FACTUAL_CLOSED).
+      const contextForProvider =
+        typeof deps.context.withDocumentKnowledge === 'function'
+          ? await deps.context.withDocumentKnowledge(built, {
+              question,
+              recentUserMessages: priorUserContents,
+            })
+          : built;
+
       let run = await deps.runs.createRun(tenantId, {
         userId,
         conversationId: conversation.id,
@@ -562,7 +571,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           resolvedMonthKey: period.monthKey,
           providerId: ready.provider,
           model,
-          blocks: built.blocks,
+          blocks: contextForProvider.blocks,
           generate: (payload) => provider.generate(payload),
           analyticalTools: deps.analyticalTools,
           now: input.now,

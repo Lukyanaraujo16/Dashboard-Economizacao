@@ -1,5 +1,7 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
+import { ADVISOR_DOCUMENT_KNOWLEDGE_MAX_CANDIDATE_CHUNKS } from '../domain/advisor-document-knowledge-limits.js';
+import type { AdvisorDocumentKnowledgeCandidate } from '../domain/retrieve-advisor-document-knowledge.js';
 import type {
   AiKnowledgeDocumentProcessingStatus,
   AiKnowledgeDocumentRecord,
@@ -74,6 +76,13 @@ function toDocumentRecord(row: {
 export type AdvisorKnowledgeDocumentRepository = {
   listDocuments(tenantId: string): Promise<readonly AiKnowledgeDocumentRecord[]>;
   findDocumentById(tenantId: string, documentId: string): Promise<AiKnowledgeDocumentRecord | null>;
+  /**
+   * Chunks de documentos ACTIVE+READY do tenant, ordenados de forma estável.
+   * Limite hard em ADVISOR_DOCUMENT_KNOWLEDGE_MAX_CANDIDATE_CHUNKS (scoring em memória).
+   */
+  listActiveReadyChunksForRetrieval(
+    tenantId: string,
+  ): Promise<readonly AdvisorDocumentKnowledgeCandidate[]>;
   createDocument(
     tenantId: string,
     input: CreateAiKnowledgeDocumentInput,
@@ -110,6 +119,44 @@ export function createAdvisorKnowledgeDocumentRepository(
         where: { id: documentId, tenantId },
       });
       return row === null ? null : toDocumentRecord(row);
+    },
+
+    async listActiveReadyChunksForRetrieval(tenantId) {
+      assertAdvisorTenantId(tenantId);
+      const rows = await prisma.aiKnowledgeDocumentChunk.findMany({
+        where: {
+          tenantId,
+          document: {
+            tenantId,
+            status: 'ACTIVE',
+            processingStatus: 'READY',
+          },
+        },
+        select: {
+          id: true,
+          documentId: true,
+          ordinal: true,
+          heading: true,
+          content: true,
+          charCount: true,
+          document: {
+            select: {
+              title: true,
+            },
+          },
+        },
+        orderBy: [{ documentId: 'asc' }, { ordinal: 'asc' }],
+        take: ADVISOR_DOCUMENT_KNOWLEDGE_MAX_CANDIDATE_CHUNKS,
+      });
+      return rows.map((row) => ({
+        chunkId: row.id,
+        documentId: row.documentId,
+        documentTitle: row.document.title,
+        ordinal: row.ordinal,
+        heading: row.heading,
+        content: row.content,
+        charCount: row.charCount,
+      }));
     },
 
     async createDocument(tenantId, input) {

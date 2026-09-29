@@ -334,7 +334,9 @@ describe('Context Builder do Consultor (F13.2)', () => {
     );
     const result = await builder.build({ tenantId: TENANT_A, question: INJECTION });
 
-    expect(result.blocks.map((item) => item.type)).toEqual([...ADVISOR_CONTEXT_BLOCK_TYPES]);
+    expect(result.blocks.map((item) => item.type)).toEqual(
+      ADVISOR_CONTEXT_BLOCK_TYPES.filter((type) => type !== 'DOCUMENT_KNOWLEDGE'),
+    );
     expect(result.blocks[0]).toMatchObject({
       type: 'PLATFORM_INSTRUCTIONS',
       trustLevel: 'PLATFORM',
@@ -345,6 +347,10 @@ describe('Context Builder do Consultor (F13.2)', () => {
     expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('UNTRUSTED');
     expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('outra empresa');
     expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('Conta Azul');
+    expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain('DOCUMENT_KNOWLEDGE');
+    expect(ADVISOR_PLATFORM_INSTRUCTIONS).toContain(
+      'Números financeiros oficiais vêm exclusivamente das fontes analíticas oficiais',
+    );
 
     for (const type of ['ADMIN_CONTEXT', 'TENANT_KNOWLEDGE', 'USER_QUESTION'] as const) {
       const current = block(result, type);
@@ -727,6 +733,47 @@ describe('Context Builder do Consultor (F13.2)', () => {
     expect(block(result, 'ANALYTICAL_FACTS').content).toContain('comparison: ABSENT');
     expect(block(result, 'FINANCIAL_FACTS').content).toContain('billingCoverage: REALIZED_ONLY');
     expect(result.monthKey).toBe('2026-09');
+  });
+
+  it('F13.8.2C: withDocumentKnowledge anexa DOCUMENT_KNOWLEDGE UNTRUSTED sem alterar FACTS', async () => {
+    const builder = createBuildAdvisorContext({
+      ...createDeps(),
+      documentKnowledge: {
+        async listActiveReadyChunksForRetrieval(tenantId) {
+          assertTenant(tenantId, 'documentKnowledge.listActiveReadyChunksForRetrieval');
+          return [
+            {
+              chunkId: 'chunk-1',
+              documentId: 'doc-1',
+              documentTitle: 'Base Clínica',
+              ordinal: 0,
+              heading: 'Reserva de caixa',
+              content: 'Avalie a reserva mínima com despesas fixas × N meses.',
+              charCount: 60,
+            },
+          ];
+        },
+      },
+    });
+    const built = await builder.build({
+      tenantId: TENANT_A,
+      question: 'Como avaliar reserva de caixa?',
+      monthKey: '2026-09',
+    });
+    expect(built.blocks.some((item) => item.type === 'DOCUMENT_KNOWLEDGE')).toBe(false);
+
+    const withDocs = await builder.withDocumentKnowledge(built, {
+      question: 'Como avaliar reserva de caixa?',
+    });
+    const doc = block(withDocs, 'DOCUMENT_KNOWLEDGE');
+    expect(doc.trustLevel).toBe('UNTRUSTED');
+    expect(doc.content).toContain('<<<UNTRUSTED type="DOCUMENT_KNOWLEDGE">>>');
+    expect(doc.content).toContain('[Documento: Base Clínica]');
+    expect(doc.content).toContain('despesas fixas');
+    expect(doc.content).not.toContain('storageKey');
+    expect(block(withDocs, 'FINANCIAL_FACTS').content).toBe(block(built, 'FINANCIAL_FACTS').content);
+    expect(block(withDocs, 'ANALYTICAL_FACTS').content).toBe(block(built, 'ANALYTICAL_FACTS').content);
+    expect(block(withDocs, 'USER_QUESTION').content).toBe(block(built, 'USER_QUESTION').content);
   });
 
   it('não importa conta-azul nem recálculo de caixa no módulo de contexto', () => {

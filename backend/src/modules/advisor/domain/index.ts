@@ -353,6 +353,28 @@ export {
   deriveConsultantConversationTitle,
 } from './conversation-title.js';
 export { ADVISOR_PLATFORM_INSTRUCTIONS } from './platform-instructions.js';
+export {
+  ADVISOR_DOCUMENT_KNOWLEDGE_CHAR_BUDGET,
+  ADVISOR_DOCUMENT_KNOWLEDGE_HISTORY_USER_LIMIT,
+  ADVISOR_DOCUMENT_KNOWLEDGE_MAX_CANDIDATE_CHUNKS,
+  ADVISOR_DOCUMENT_KNOWLEDGE_MAX_SELECTED_CHUNKS,
+  ADVISOR_DOCUMENT_KNOWLEDGE_MIN_SCORE,
+} from './advisor-document-knowledge-limits.js';
+export {
+  buildAdvisorDocumentKnowledgeQueryText,
+  normalizeAdvisorDocumentKnowledgeText,
+  tokenizeAdvisorDocumentKnowledgeQuery,
+} from './advisor-document-knowledge-query.js';
+export { attachAdvisorDocumentKnowledgeBlock } from './attach-advisor-document-knowledge.js';
+export {
+  emitAdvisorDocumentKnowledgeRetrievedEvent,
+  retrieveAdvisorDocumentKnowledge,
+} from './retrieve-advisor-document-knowledge.js';
+export type {
+  AdvisorDocumentKnowledgeCandidate,
+  AdvisorDocumentKnowledgeSelectedChunk,
+  RetrieveAdvisorDocumentKnowledgeResult,
+} from './retrieve-advisor-document-knowledge.js';
 export { deriveManagedCredentialDisplayHint } from './credential-display-hint.js';
 export {
   AI_PROVIDER_CREDENTIAL_SOURCES,

@@ -14,6 +14,8 @@ import {
   type AdvisorCashMonthComparison,
 } from '../domain/compare-advisor-cash-months.js';
 import { serializeAdvisorCurrentSnapshotFacts } from '../domain/advisor-current-snapshot-facts.js';
+import { attachAdvisorDocumentKnowledgeBlock } from '../domain/attach-advisor-document-knowledge.js';
+import { ADVISOR_DOCUMENT_KNOWLEDGE_HISTORY_USER_LIMIT } from '../domain/advisor-document-knowledge-limits.js';
 import { ADVISOR_HISTORY_MESSAGE_LIMIT, type AdvisorBuiltContext } from '../domain/context-blocks.js';
 import {
   applyAdvisorContextCharBudget,
@@ -24,6 +26,11 @@ import { resolveConsultantDisplayName } from '../domain/consultant-name.js';
 import { DEFAULT_EMOJI_PREFERENCE, resolveEmojiInstruction } from '../domain/emoji-preference.js';
 import { buildFinancialFactsContent } from '../domain/financial-facts-text.js';
 import { ADVISOR_PLATFORM_INSTRUCTIONS } from '../domain/platform-instructions.js';
+import {
+  emitAdvisorDocumentKnowledgeRetrievedEvent,
+  retrieveAdvisorDocumentKnowledge,
+  type AdvisorDocumentKnowledgeCandidate,
+} from '../domain/retrieve-advisor-document-knowledge.js';
 import { DEFAULT_TONE_PRESET, resolveToneInstruction } from '../domain/tone-presets.js';
 import type {
   AiConversationRecord,
@@ -63,6 +70,17 @@ export type BuildAdvisorContextDependencies = {
   readonly cashFlow: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'>;
   readonly analytics: Pick<AnalyticsService, 'getFinancialStockSnapshot'>;
   readonly cashComparison?: AdvisorCashComparisonService;
+  /** Recuperação documental lexical (ACTIVE+READY). Opcional: ausência = sem DOCUMENT_KNOWLEDGE. */
+  readonly documentKnowledge?: {
+    listActiveReadyChunksForRetrieval(
+      tenantId: string,
+    ): Promise<readonly AdvisorDocumentKnowledgeCandidate[]>;
+  };
+};
+
+export type AttachAdvisorDocumentKnowledgeInput = {
+  readonly question: string;
+  readonly recentUserMessages?: readonly string[];
 };
 
 export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies) {
@@ -237,6 +255,45 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
         currentSnapshot:
           safeSnapshot === null ? null : serializeAdvisorCurrentSnapshotFacts(safeSnapshot),
       };
+    },
+
+    /**
+     * Anexa DOCUMENT_KNOWLEDGE ao contexto já montado.
+     * Usado apenas no caminho do provider (após FACTUAL_CLOSED falhar).
+     * Não cria ai_run. Retrieval lexical local, sem LLM.
+     */
+    async withDocumentKnowledge(
+      built: AdvisorBuiltContext,
+      input: AttachAdvisorDocumentKnowledgeInput,
+    ): Promise<AdvisorBuiltContext> {
+      if (deps.documentKnowledge === undefined) {
+        return built;
+      }
+      assertAdvisorTenantId(built.tenantId);
+      const recentUserMessages = (input.recentUserMessages ?? []).slice(
+        -ADVISOR_DOCUMENT_KNOWLEDGE_HISTORY_USER_LIMIT,
+      );
+      const startedAt = Date.now();
+      const candidates = await deps.documentKnowledge.listActiveReadyChunksForRetrieval(
+        built.tenantId,
+      );
+      const result = retrieveAdvisorDocumentKnowledge({
+        question: input.question,
+        recentUserMessages,
+        candidates,
+      });
+      emitAdvisorDocumentKnowledgeRetrievedEvent({
+        tenantId: built.tenantId,
+        documentIds: [...new Set(result.selected.map((item) => item.documentId))],
+        chunkIds: result.selected.map((item) => item.chunkId),
+        candidateCount: result.candidateCount,
+        selectedCount: result.selectedCount,
+        selectedChars: result.selectedChars,
+        retrievalDurationMs: Date.now() - startedAt,
+        queryTokenCount: result.queryTokenCount,
+        reason: result.reason,
+      });
+      return attachAdvisorDocumentKnowledgeBlock(built, result.inner);
     },
   };
 }
