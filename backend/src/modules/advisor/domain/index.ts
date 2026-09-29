@@ -108,7 +108,7 @@ export {
   resolveAdvisorDrilldownIntent,
 } from './resolve-advisor-drilldown-intent.js';
 export type { AdvisorDrilldownIntent } from './resolve-advisor-drilldown-intent.js';
-export { resolveAdvisorNominalIntent, extractAdvisorNominalEntityQuery } from './resolve-advisor-nominal-intent.js';
+export { resolveAdvisorNominalIntent, extractAdvisorNominalEntityQuery, extractAdvisorNominalCategoryReference, extractShortNominalEntityProbe } from './resolve-advisor-nominal-intent.js';
 export type { AdvisorNominalIntent } from './resolve-advisor-nominal-intent.js';
 export {
   ADVISOR_CIVIL_RANGE_KINDS,

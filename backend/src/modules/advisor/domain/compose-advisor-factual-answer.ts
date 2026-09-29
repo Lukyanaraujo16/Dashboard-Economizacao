@@ -693,7 +693,14 @@ function composeLimitation(
     return 'Não há um antecedente nominal inequívoco nesta conversa para consultar o valor.';
   }
   if (status === 'NOT_FOUND') {
+    const entityQuery = asString(facts.entityQuery);
+    if (entityQuery !== null) {
+      return `Não encontrei uma identidade correspondente a ${entityQuery} no período/categoria consultados.`;
+    }
     return 'Não encontrei essa entidade nominalmente identificada no período consultado.';
+  }
+  if (status === 'DIMENSION_UNRESOLVED' || reason === 'NO_SAFE_NOMINAL_DIMENSION') {
+    return 'Não consegui determinar com segurança em qual dimensão devo consultar. Informe se você se refere a convênio, cliente, fornecedor ou outra contraparte.';
   }
   if (status === 'INSUFFICIENT' || status === 'UNAVAILABLE' || status === 'ABSENT') {
     return 'Não há fatos nominais suficientes para responder objetivamente a essa pergunta.';
