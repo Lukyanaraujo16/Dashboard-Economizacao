@@ -353,6 +353,7 @@ export {
   deriveConsultantConversationTitle,
 } from './conversation-title.js';
 export { ADVISOR_PLATFORM_INSTRUCTIONS } from './platform-instructions.js';
+export { advisorTextLooksLikeLatexMath } from './advisor-formula-presentation.js';
 export {
   ADVISOR_DOCUMENT_KNOWLEDGE_CHAR_BUDGET,
   ADVISOR_DOCUMENT_KNOWLEDGE_CURRENT_MIN_TOKENS,

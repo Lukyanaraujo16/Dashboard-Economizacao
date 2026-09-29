@@ -47,6 +47,7 @@ import {
   readAdvisorNominalRankingWinner,
 } from '../domain/advisor-nominal-dimension.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
+import { advisorTextLooksLikeLatexMath } from '../domain/advisor-formula-presentation.js';
 import {
   CONSULTANT_PLATFORM_LIMIT_MESSAGE,
   CONSULTANT_UNAVAILABLE_MESSAGE,
@@ -577,6 +578,16 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           now: input.now,
         });
         const text = sanitizeConsultantText(generated.text);
+        if (advisorTextLooksLikeLatexMath(text)) {
+          console.info(
+            JSON.stringify({
+              event: 'advisor_response_latex_math_detected',
+              tenantId,
+              conversationId: conversation.id,
+              chars: text.length,
+            }),
+          );
+        }
         const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
           senderType: 'CONSULTANT',
           content: text,
