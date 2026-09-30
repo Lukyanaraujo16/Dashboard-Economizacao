@@ -49,6 +49,16 @@ export function resolveAdvisorDrilldownIntent(content: string): AdvisorDrilldown
     }
   }
 
+  // "categorias" + "entradas" é ranking de categoria, não janela de movimentos.
+  if (hasCategory && hasReceipt && !hasOutflow) {
+    return {
+      toolName: CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+      direction: 'INFLOW',
+      sort: 'AMOUNT_DESC',
+      limit,
+    };
+  }
+
   if (hasReceipt && !hasOutflow) {
     return {
       toolName: CASH_MOVEMENT_LINES_TOOL_NAME,

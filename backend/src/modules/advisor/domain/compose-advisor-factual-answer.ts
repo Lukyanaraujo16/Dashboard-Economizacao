@@ -15,6 +15,11 @@ import {
 } from './classify-advisor-factual-response.js';
 import type { AdvisorCostCenterAnaphoraStatus } from './resolve-advisor-conversational-cost-center.js';
 import type { AdvisorNominalAnaphoraStatus } from './resolve-advisor-conversational-nominal.js';
+import { composeAnalyticalFactualAnswer } from './analytical/compose-analytical-factual-answer.js';
+import {
+  ADVISOR_BREAKDOWN_FACT_KIND,
+  ADVISOR_MOVEMENT_FACT_KIND,
+} from './advisor-drilldown-fact-contract.js';
 
 export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3.3-1';
 
@@ -93,7 +98,13 @@ export function composeAdvisorFactualAnswer(
                         ? composeMonthlyComparison(facts)
                         : classification.intentKind === 'MONTHLY_BILLING_WINNER'
                           ? composeMonthlyBillingWinner(facts)
-                          : composeLimitation(facts, input.anaphora);
+                          : classification.intentKind === 'CATEGORY_BREAKDOWN' ||
+                              classification.intentKind === 'CASH_MOVEMENT_LINES'
+                            ? composeGenericDrilldown(classification.intentKind, facts)
+                            : classification.intentKind === 'FACTUAL_LIMITATION' &&
+                                isDrilldownLimitationFact(facts)
+                              ? composeGenericDrilldown('FACTUAL_LIMITATION', facts)
+                              : composeLimitation(facts, input.anaphora);
 
   if (answer === null) {
     return {
@@ -121,6 +132,19 @@ export function composeAdvisorFactualAnswer(
       composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
     },
   };
+}
+
+function composeGenericDrilldown(
+  intentKind: 'CATEGORY_BREAKDOWN' | 'CASH_MOVEMENT_LINES' | 'FACTUAL_LIMITATION',
+  facts: Record<string, unknown>,
+): string | null {
+  const composed = composeAnalyticalFactualAnswer({ intentKind, facts });
+  return composed.status === 'COMPOSED' ? composed.text : null;
+}
+
+function isDrilldownLimitationFact(facts: Record<string, unknown>): boolean {
+  const factKind = facts.factKind;
+  return factKind === ADVISOR_BREAKDOWN_FACT_KIND || factKind === ADVISOR_MOVEMENT_FACT_KIND;
 }
 
 function composeRankingWinner(facts: Record<string, unknown>): string | null {

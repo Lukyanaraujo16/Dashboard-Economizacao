@@ -169,3 +169,11 @@ export type {
   AnalyticalExecutor,
   ValidatedAnalyticalQuery,
 } from './analytical-execution-types.js';
+
+export {
+  composeAnalyticalFactualAnswer,
+} from './compose-analytical-factual-answer.js';
+export type {
+  ComposeAnalyticalFactualInput,
+  ComposeAnalyticalFactualResult,
+} from './compose-analytical-factual-answer.js';

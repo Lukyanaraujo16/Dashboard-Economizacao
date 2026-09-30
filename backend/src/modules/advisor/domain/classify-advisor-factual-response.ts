@@ -10,6 +10,16 @@ import {
 } from './resolve-advisor-current-snapshot-intent.js';
 import { COMPARE_CASH_MONTHS_TOOL_NAME } from './advisor-analytical-tools.js';
 import {
+  CASH_MOVEMENT_LINES_TOOL_NAME,
+} from './advisor-cash-movement-lines.js';
+import {
+  CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+} from './advisor-cash-realized-breakdown.js';
+import {
+  ADVISOR_BREAKDOWN_FACT_KIND,
+  ADVISOR_MOVEMENT_FACT_KIND,
+} from './advisor-drilldown-fact-contract.js';
+import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
@@ -53,6 +63,8 @@ export const ADVISOR_FACTUAL_INTENT_KINDS = [
   'COST_CENTER_SHARE',
   'COST_CENTER_COMPARE',
   'COST_CENTER_MOVEMENT_LINES',
+  'CATEGORY_BREAKDOWN',
+  'CASH_MOVEMENT_LINES',
   'MONTHLY_COMPARISON',
   'MONTHLY_BILLING_WINNER',
   'FACTUAL_LIMITATION',
@@ -249,6 +261,26 @@ export function classifyAdvisorFactualResponse(
       return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
     }
     return { kind: 'UNRESOLVED', intentKind: 'MONTHLY_COMPARISON', factKind };
+  }
+
+  if (input.toolName === CASH_REALIZED_BREAKDOWN_TOOL_NAME) {
+    if ((status === 'OK' || status === 'EMPTY_RESULT') && hasCategoryBreakdownFacts(facts)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'CATEGORY_BREAKDOWN', factKind };
+    }
+    if (isKnownAbsentStatus(status)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    return { kind: 'UNRESOLVED', intentKind: 'CATEGORY_BREAKDOWN', factKind };
+  }
+
+  if (input.toolName === CASH_MOVEMENT_LINES_TOOL_NAME) {
+    if ((status === 'OK' || status === 'EMPTY_RESULT') && hasCashMovementFacts(facts)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'CASH_MOVEMENT_LINES', factKind };
+    }
+    if (isKnownAbsentStatus(status)) {
+      return { kind: 'FACTUAL_CLOSED', intentKind: 'FACTUAL_LIMITATION', factKind };
+    }
+    return { kind: 'UNRESOLVED', intentKind: 'CASH_MOVEMENT_LINES', factKind };
   }
 
   return { kind: 'UNRESOLVED', intentKind: 'NONE', factKind };
@@ -525,6 +557,44 @@ function hasSnapshotClosedFacts(
     return isAmount(receivables?.overdue) && isAmount(payables?.overdue);
   }
   return true;
+}
+
+function hasCategoryBreakdownFacts(facts: Record<string, unknown>): boolean {
+  if (facts.factKind !== ADVISOR_BREAKDOWN_FACT_KIND) {
+    return false;
+  }
+  if (typeof facts.monthKey !== 'string' || typeof facts.direction !== 'string') {
+    return false;
+  }
+  if (facts.direction !== 'INFLOW' && facts.direction !== 'OUTFLOW') {
+    return false;
+  }
+  if (!Array.isArray(facts.categories)) {
+    return false;
+  }
+  if (facts.status === 'EMPTY_RESULT') {
+    return true;
+  }
+  return isAmount(facts.totalRealized) && facts.categories.length > 0;
+}
+
+function hasCashMovementFacts(facts: Record<string, unknown>): boolean {
+  if (facts.factKind !== ADVISOR_MOVEMENT_FACT_KIND) {
+    return false;
+  }
+  if (typeof facts.monthKey !== 'string' || typeof facts.direction !== 'string') {
+    return false;
+  }
+  if (facts.direction !== 'INFLOW' && facts.direction !== 'OUTFLOW') {
+    return false;
+  }
+  if (!Array.isArray(facts.lines)) {
+    return false;
+  }
+  if (facts.status === 'EMPTY_RESULT') {
+    return true;
+  }
+  return facts.lines.length > 0 && typeof facts.requestedLimit === 'number';
 }
 
 function isKnownAbsentStatus(status: string | null): boolean {
