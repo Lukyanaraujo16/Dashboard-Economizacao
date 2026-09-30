@@ -8,7 +8,6 @@ import {
   CASH_MOVEMENT_LINES_TOOL_NAME,
   isAdvisorCashMovementSort,
   rankAdvisorCashMovementLines,
-  serializeAdvisorCashMovementLines,
   type AdvisorCashMovementSort,
 } from './advisor-cash-movement-lines.js';
 import {
@@ -18,16 +17,32 @@ import {
   clampAdvisorDrilldownLimit,
   isAdvisorCashDirection,
   rankAdvisorCashRealizedBreakdown,
-  serializeAdvisorCashRealizedBreakdown,
   type AdvisorCashDirection,
 } from './advisor-cash-realized-breakdown.js';
 import { AdvisorDomainError } from './advisor-domain-error.js';
 import {
   ADVISOR_CASH_CATEGORY_TOP_N,
   compareAdvisorCashMonths,
-  serializeAdvisorCashMonthComparison,
   type AdvisorCashMonthComparison,
 } from './compare-advisor-cash-months.js';
+import {
+  buildCashMovementLinesQuery,
+  buildCashRealizedBreakdownQuery,
+  buildCompareCashMonthsQuery,
+  buildCostCenterCompareQuery,
+  buildCostCenterLookupQuery,
+  buildCostCenterMovementsQuery,
+  buildCostCenterRankingQuery,
+  buildNominalCompareQuery,
+  buildNominalLookupQuery,
+  buildNominalRankingQuery,
+} from './analytical/build-analytical-query-from-tool.js';
+import {
+  executeAnalyticalQuery,
+  legacyFactFromAnalyticalOutcome,
+} from './analytical/execute-analytical-query.js';
+import type { AnalyticalExecutionRuntime } from './analytical/analytical-execution-types.js';
+import type { AnalyticalQuery } from './analytical/analytical-query.js';
 import {
   assertCashNominalLookupArgs,
   assertCashNominalRankingArgs,
@@ -594,25 +609,17 @@ async function executeCompare(
   startedAt: number,
 ): Promise<AdvisorAnalyticalToolResult> {
   const args = assertCompareCashMonthsArgs(call.arguments);
-  const comparison = await withToolTimeout(
-    cashComparison.compare({
-      tenantId,
-      monthKey: args.monthKey,
-      comparisonMonthKey: args.comparisonMonthKey,
-      now,
-    }),
-  );
-  const serialized = serializeAdvisorCashMonthComparison(comparison);
-  const resultCardinality =
-    comparison.inflowCategories.increases.length +
-    comparison.inflowCategories.decreases.length +
-    comparison.outflowCategories.increases.length +
-    comparison.outflowCategories.decreases.length;
+  const query = buildCompareCashMonthsQuery(args);
+  const serialized = await runUniversalToolQuery({
+    query,
+    runtime: { tenantId, now, cashComparison },
+  });
+  const comparisonCardinality = countCompareCardinality(serialized);
   logToolExecution({
     toolName: call.name,
     durationMs: Date.now() - startedAt,
     ok: true,
-    resultCardinality,
+    resultCardinality: comparisonCardinality,
     monthKey: args.monthKey,
     comparisonMonthKey: args.comparisonMonthKey,
     direction: null,
@@ -624,7 +631,7 @@ async function executeCompare(
     name: call.name,
     ok: true,
     content: JSON.stringify(serialized),
-    resultCardinality,
+    resultCardinality: comparisonCardinality,
     monthKey: args.monthKey,
     comparisonMonthKey: args.comparisonMonthKey,
   };
@@ -641,21 +648,21 @@ async function executeBreakdown(
   const args = assertCashRealizedBreakdownArgs(call.arguments);
   const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
   const limits = clampAdvisorDrilldownLimit(args.limit);
-  const breakdown = await withToolTimeout(
-    cashBreakdown.breakdown({
-      tenantId,
-      monthKey,
-      direction: args.direction,
-      limit: args.limit,
-      now,
-    }),
-  );
-  const serialized = serializeAdvisorCashRealizedBreakdown(breakdown);
+  const query = buildCashRealizedBreakdownQuery({
+    monthKey,
+    direction: args.direction,
+    limit: args.limit,
+  });
+  const serialized = await runUniversalToolQuery({
+    query,
+    runtime: { tenantId, now, cashBreakdown },
+  });
+  const categories = Array.isArray(serialized.categories) ? serialized.categories : [];
   logToolExecution({
     toolName: call.name,
     durationMs: Date.now() - startedAt,
     ok: true,
-    resultCardinality: breakdown.categories.length,
+    resultCardinality: categories.length,
     monthKey,
     comparisonMonthKey: null,
     direction: args.direction,
@@ -667,7 +674,7 @@ async function executeBreakdown(
     name: call.name,
     ok: true,
     content: JSON.stringify(serialized),
-    resultCardinality: breakdown.categories.length,
+    resultCardinality: categories.length,
     monthKey,
   };
 }
@@ -683,28 +690,27 @@ async function executeMovements(
   const args = assertCashMovementLinesArgs(call.arguments);
   const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
   const limits = clampAdvisorDrilldownLimit(args.limit);
-  const window = await withToolTimeout(
-    cashMovements.list({
-      tenantId,
-      monthKey,
-      direction: args.direction,
-      sort: args.sort,
-      limit: args.limit,
-      now,
-    }),
-  );
-  if (window.status === 'UNAVAILABLE') {
-    throw new AdvisorDomainError(
-      'ANALYTICAL_TOOL_FAILED',
-      'Não consegui obter o detalhamento das movimentações agora.',
-    );
-  }
-  const serialized = serializeAdvisorCashMovementLines(window);
+  const query = buildCashMovementLinesQuery({
+    monthKey,
+    direction: args.direction,
+    limit: args.limit,
+  });
+  const serialized = await runUniversalToolQuery({
+    query,
+    runtime: { tenantId, now, cashMovements },
+    hints: { movementSort: args.sort },
+  });
+  const returnedCount =
+    typeof serialized.returnedCount === 'number'
+      ? serialized.returnedCount
+      : Array.isArray(serialized.lines)
+        ? serialized.lines.length
+        : 0;
   logToolExecution({
     toolName: call.name,
     durationMs: Date.now() - startedAt,
     ok: true,
-    resultCardinality: window.returnedCount,
+    resultCardinality: returnedCount,
     monthKey,
     comparisonMonthKey: null,
     direction: args.direction,
@@ -716,7 +722,7 @@ async function executeMovements(
     name: call.name,
     ok: true,
     content: JSON.stringify(serialized),
-    resultCardinality: window.returnedCount,
+    resultCardinality: returnedCount,
     monthKey,
   };
 }
@@ -735,17 +741,17 @@ async function executeNominal(
       args.monthKey !== undefined
         ? bindResolvedMonthKey(args.monthKey, resolvedMonthKey)
         : undefined;
-    const serialized = await withToolTimeout(
-      cashNominal.rank({
-        tenantId,
-        ...(monthKey !== undefined ? { monthKey } : {}),
-        ...(args.periodKind !== undefined ? { periodKind: args.periodKind } : {}),
-        ...(args.year !== undefined ? { year: args.year } : {}),
-        categoryReference: args.categoryReference,
-        limit: args.limit,
-        now,
-      }),
-    );
+    const query = buildNominalRankingQuery({
+      ...(monthKey !== undefined ? { monthKey } : {}),
+      ...(args.periodKind !== undefined ? { periodKind: args.periodKind } : {}),
+      ...(args.year !== undefined ? { year: args.year } : {}),
+      categoryReference: args.categoryReference,
+      limit: args.limit,
+    });
+    const serialized = await runUniversalToolQuery({
+      query,
+      runtime: { tenantId, now, cashNominal },
+    });
     const label =
       monthKey ??
       (args.periodKind !== undefined && args.year !== undefined
@@ -761,17 +767,17 @@ async function executeNominal(
       args.monthKey !== undefined
         ? bindResolvedMonthKey(args.monthKey, resolvedMonthKey)
         : undefined;
-    const serialized = await withToolTimeout(
-      cashNominal.lookup({
-        tenantId,
-        ...(monthKey !== undefined ? { monthKey } : {}),
-        ...(args.periodKind !== undefined ? { periodKind: args.periodKind } : {}),
-        ...(args.year !== undefined ? { year: args.year } : {}),
-        categoryReference: args.categoryReference,
-        entityQuery: args.entityQuery,
-        now,
-      }),
-    );
+    const query = buildNominalLookupQuery({
+      ...(monthKey !== undefined ? { monthKey } : {}),
+      ...(args.periodKind !== undefined ? { periodKind: args.periodKind } : {}),
+      ...(args.year !== undefined ? { year: args.year } : {}),
+      categoryReference: args.categoryReference,
+      entityQuery: args.entityQuery,
+    });
+    const serialized = await runUniversalToolQuery({
+      query,
+      runtime: { tenantId, now, cashNominal },
+    });
     const label =
       monthKey ??
       (args.periodKind !== undefined && args.year !== undefined
@@ -782,17 +788,17 @@ async function executeNominal(
     return finishNominal(call, startedAt, serialized, label, args.categoryReference, null);
   }
   const args = assertCompareCashNominalArgs(call.arguments);
-  const serialized = await withToolTimeout(
-    cashNominal.compare({
-      tenantId,
-      monthKey: args.monthKey,
-      comparisonMonthKey: args.comparisonMonthKey,
-      categoryReference: args.categoryReference,
-      entityQuery: args.entityQuery,
-      limit: args.limit,
-      now,
-    }),
-  );
+  const query = buildNominalCompareQuery({
+    monthKey: args.monthKey,
+    comparisonMonthKey: args.comparisonMonthKey,
+    categoryReference: args.categoryReference,
+    entityQuery: args.entityQuery,
+    limit: args.limit,
+  });
+  const serialized = await runUniversalToolQuery({
+    query,
+    runtime: { tenantId, now, cashNominal },
+  });
   return finishNominal(
     call,
     startedAt,
@@ -815,59 +821,114 @@ async function executeCostCenter(
   if (call.name === CASH_COST_CENTER_RANKING_TOOL_NAME) {
     const args = assertCashCostCenterRankingArgs(call.arguments);
     const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
-    const serialized = await withToolTimeout(
-      cashCostCenter.rank({
-        tenantId,
-        monthKey,
-        direction: args.direction,
-        limit: args.limit,
-        now,
-      }),
-    );
+    const query = buildCostCenterRankingQuery({
+      monthKey,
+      direction: args.direction,
+      limit: args.limit,
+    });
+    const serialized = await runUniversalToolQuery({
+      query,
+      runtime: { tenantId, now, cashCostCenter },
+    });
     return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, args.limit);
   }
   if (call.name === COMPARE_CASH_COST_CENTER_TOOL_NAME) {
     const args = assertCompareCashCostCenterArgs(call.arguments);
     const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
-    const serialized = await withToolTimeout(
-      cashCostCenter.compare({
-        tenantId,
-        monthKey,
-        comparisonMonthKey: args.comparisonMonthKey,
-        direction: args.direction,
-        costCenterQuery: args.costCenterQuery,
-        now,
-      }),
-    );
+    const query = buildCostCenterCompareQuery({
+      monthKey,
+      comparisonMonthKey: args.comparisonMonthKey,
+      direction: args.direction,
+      costCenterQuery: args.costCenterQuery,
+    });
+    const serialized = await runUniversalToolQuery({
+      query,
+      runtime: { tenantId, now, cashCostCenter },
+    });
     return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, null);
   }
   if (call.name === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME) {
     const args = assertCashCostCenterMovementLinesArgs(call.arguments);
     const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
-    const serialized = await withToolTimeout(
-      cashCostCenter.movementLines({
-        tenantId,
-        monthKey,
-        direction: args.direction,
-        costCenterQuery: args.costCenterQuery,
-        limit: args.limit,
-        now,
-      }),
-    );
+    const query = buildCostCenterMovementsQuery({
+      monthKey,
+      direction: args.direction,
+      costCenterQuery: args.costCenterQuery,
+      limit: args.limit,
+    });
+    const serialized = await runUniversalToolQuery({
+      query,
+      runtime: { tenantId, now, cashCostCenter },
+    });
     return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, args.limit);
   }
   const args = assertCashCostCenterLookupArgs(call.arguments);
   const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
-  const serialized = await withToolTimeout(
-    cashCostCenter.lookup({
-      tenantId,
-      monthKey,
-      direction: args.direction,
-      costCenterQuery: args.costCenterQuery,
-      now,
+  const query = buildCostCenterLookupQuery({
+    monthKey,
+    direction: args.direction,
+    costCenterQuery: args.costCenterQuery,
+  });
+  const serialized = await runUniversalToolQuery({
+    query,
+    runtime: { tenantId, now, cashCostCenter },
+  });
+  return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, null);
+}
+
+async function runUniversalToolQuery(input: {
+  readonly query: AnalyticalQuery;
+  readonly runtime: AnalyticalExecutionRuntime;
+  readonly hints?: { readonly movementSort?: AdvisorCashMovementSort };
+}): Promise<Record<string, unknown>> {
+  const outcome = await withToolTimeout(
+    executeAnalyticalQuery({
+      query: input.query,
+      runtime: input.runtime,
+      hints: input.hints,
     }),
   );
-  return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, null);
+  if (!outcome.ok) {
+    if (
+      outcome.reason === 'EXECUTION_FAILED' &&
+      outcome.message.includes('ANALYTICAL_TOOL_FAILED:movements')
+    ) {
+      throw new AdvisorDomainError(
+        'ANALYTICAL_TOOL_FAILED',
+        'Não consegui obter o detalhamento das movimentações agora.',
+      );
+    }
+    if (outcome.reason === 'CAPABILITY_NOT_FOUND' || outcome.reason === 'INVALID_QUERY') {
+      throw new AdvisorDomainError(
+        'ANALYTICAL_TOOL_INVALID_INPUT',
+        outcome.message,
+      );
+    }
+    if (outcome.reason === 'EXECUTOR_DEPENDENCY_MISSING') {
+      throw new AdvisorDomainError(
+        'ANALYTICAL_TOOL_FAILED',
+        'Dependência analítica ausente no runtime.',
+      );
+    }
+    // Erro genérico: deixa normalizeToolFailure aplicar mensagem amigável por tool.
+    throw new Error(outcome.message);
+  }
+  return legacyFactFromAnalyticalOutcome(outcome);
+}
+
+function countCompareCardinality(serialized: Record<string, unknown>): number {
+  const inflow = serialized.inflowCategories as
+    | { increases?: unknown[]; decreases?: unknown[] }
+    | undefined;
+  const outflow = serialized.outflowCategories as
+    | { increases?: unknown[]; decreases?: unknown[] }
+    | undefined;
+  return (
+    (inflow?.increases?.length ?? 0) +
+    (inflow?.decreases?.length ?? 0) +
+    (outflow?.increases?.length ?? 0) +
+    (outflow?.decreases?.length ?? 0)
+  );
 }
 
 function finishCostCenter(

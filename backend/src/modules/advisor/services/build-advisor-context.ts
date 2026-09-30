@@ -13,7 +13,10 @@ import {
   compareAdvisorCashMonths,
   type AdvisorCashMonthComparison,
 } from '../domain/compare-advisor-cash-months.js';
-import { serializeAdvisorCurrentSnapshotFacts } from '../domain/advisor-current-snapshot-facts.js';
+import {
+  buildFinancialFactsViaUniversal,
+  serializeCurrentSnapshotViaUniversal,
+} from '../domain/analytical/preload-analytical-parity.js';
 import { attachAdvisorDocumentKnowledgeBlock } from '../domain/attach-advisor-document-knowledge.js';
 import { ADVISOR_DOCUMENT_KNOWLEDGE_HISTORY_USER_LIMIT } from '../domain/advisor-document-knowledge-limits.js';
 import { ADVISOR_HISTORY_MESSAGE_LIMIT, type AdvisorBuiltContext } from '../domain/context-blocks.js';
@@ -24,7 +27,6 @@ import {
 } from '../domain/context-char-budget.js';
 import { resolveConsultantDisplayName } from '../domain/consultant-name.js';
 import { DEFAULT_EMOJI_PREFERENCE, resolveEmojiInstruction } from '../domain/emoji-preference.js';
-import { buildFinancialFactsContent } from '../domain/financial-facts-text.js';
 import { ADVISOR_PLATFORM_INSTRUCTIONS } from '../domain/platform-instructions.js';
 import {
   emitAdvisorDocumentKnowledgeRetrievedEvent,
@@ -205,7 +207,7 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
         },
         {
           type: 'FINANCIAL_FACTS',
-          content: buildFinancialFactsContent({
+          content: buildFinancialFactsViaUniversal({
             monthKey,
             flow: safeFlow,
             snapshot: safeSnapshot,
@@ -253,7 +255,7 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
         ...(comparisonMonthKey === undefined ? {} : { comparisonMonthKey }),
         blocks: applyAdvisorContextCharBudget(drafts),
         currentSnapshot:
-          safeSnapshot === null ? null : serializeAdvisorCurrentSnapshotFacts(safeSnapshot),
+          safeSnapshot === null ? null : serializeCurrentSnapshotViaUniversal(safeSnapshot),
       };
     },
 

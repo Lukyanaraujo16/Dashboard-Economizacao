@@ -102,18 +102,22 @@ export type AnalyticalAvailableResult = AnalyticalResultMeta & {
   readonly status: 'AVAILABLE' | 'PARTIAL';
   readonly payload: AnalyticalResultPayload;
   readonly coverage?: AnalyticalCoverage;
+  /** F13.8.5B: fact legado verbatim até convergência do composer (5C). */
+  readonly legacyFact?: Record<string, unknown>;
 };
 
 export type AnalyticalAmbiguousResult = AnalyticalResultMeta & {
   readonly status: 'AMBIGUOUS';
   readonly reasonCode: string;
   readonly candidates: readonly AnalyticalRankingRow[];
+  readonly legacyFact?: Record<string, unknown>;
 };
 
 export type AnalyticalUnavailableResult = AnalyticalResultMeta & {
   readonly status: 'UNAVAILABLE';
   readonly reasonCode: string;
   readonly messageSafe: string;
+  readonly legacyFact?: Record<string, unknown>;
 };
 
 export type AnalyticalDeniedResult = {

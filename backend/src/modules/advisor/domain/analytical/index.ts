@@ -119,3 +119,53 @@ export {
   parseAnalyticalQueryBoundary,
 } from './parse-analytical-query.js';
 export type { ParseAnalyticalQueryResult } from './parse-analytical-query.js';
+
+export {
+  legacyPercentToCanonicalRatio,
+  canonicalRatioToLegacyPercentString,
+  roundtripLegacyCoveragePercent,
+} from './coverage-conversion.js';
+
+export {
+  executeAnalyticalQuery,
+  legacyFactFromAnalyticalOutcome,
+} from './execute-analytical-query.js';
+
+export {
+  getAnalyticalExecutor,
+  listAnalyticalExecutorKeys,
+} from './analytical-executor-registry.js';
+
+export {
+  wrapLegacyAnalyticalResult,
+  toLegacyAnalyticalFact,
+} from './legacy-analytical-fact.js';
+
+export {
+  buildCompareCashMonthsQuery,
+  buildCashRealizedBreakdownQuery,
+  buildCashMovementLinesQuery,
+  buildNominalRankingQuery,
+  buildNominalLookupQuery,
+  buildNominalCompareQuery,
+  buildCostCenterRankingQuery,
+  buildCostCenterLookupQuery,
+  buildCostCenterCompareQuery,
+  buildCostCenterMovementsQuery,
+  buildCurrentSnapshotQuery,
+  buildFinancialFactsMonthQuery,
+} from './build-analytical-query-from-tool.js';
+
+export {
+  serializeCurrentSnapshotViaUniversal,
+  buildFinancialFactsViaUniversal,
+} from './preload-analytical-parity.js';
+
+export type {
+  AnalyticalExecutionRuntime,
+  AnalyticalExecutionOutcome,
+  AnalyticalExecutionSuccess,
+  AnalyticalExecutionFailure,
+  AnalyticalExecutor,
+  ValidatedAnalyticalQuery,
+} from './analytical-execution-types.js';

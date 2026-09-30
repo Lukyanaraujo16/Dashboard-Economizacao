@@ -273,9 +273,10 @@ export const ANALYTICAL_CAPABILITY_REGISTRY: readonly AnalyticalCapability[] = [
     operations: ['COMPARE'],
     allowedFilters: ['categoryReference'],
     requiredFilters: [],
-    identityRequired: true,
-    maxLimit: null,
-    defaultLimit: null,
+    // entityQuery/identity é opcional no tool atual (compare de população ou entidade).
+    identityRequired: false,
+    maxLimit: DRILL_MAX,
+    defaultLimit: DRILL_DEFAULT,
     executorKey: 'realizedCashCounterparty',
     sourceToolOrSurface: 'compare_cash_nominal_dimension',
   },

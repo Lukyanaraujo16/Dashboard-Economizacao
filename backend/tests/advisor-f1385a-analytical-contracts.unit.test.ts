@@ -478,7 +478,7 @@ describe('F13.8.5A capability deny — deny by default', () => {
     }
   });
 
-  it('nega topN acima do teto', () => {
+  it('permite topN acima do teto (clamp legado no executor/serviço)', () => {
     const result = validateAnalyticalCapability({
       semanticFamily: 'FLOW',
       metric: 'REALIZED_CASH',
@@ -489,10 +489,7 @@ describe('F13.8.5A capability deny — deny by default', () => {
       limit: 99,
       filters: { categoryReference: 'Atendimentos Convenio' },
     });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe('INVALID_LIMIT');
-    }
+    expect(result.ok).toBe(true);
   });
 
   it('nega LOOKUP sem identity', () => {

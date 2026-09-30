@@ -1,4 +1,3 @@
-import { ADVISOR_DRILLDOWN_MAX_LIMIT } from '../advisor-cash-realized-breakdown.js';
 import { listAnalyticalCapabilities, type AnalyticalCapability } from './analytical-capability-registry.js';
 import { getAnalyticalDimension } from './analytical-dimension-registry.js';
 import { isAnalyticalFilterKey, type AnalyticalFilterKey } from './analytical-keys.js';
@@ -278,7 +277,8 @@ function matchesLimitAgainstCapability(
   query: AnalyticalQuery,
 ): boolean {
   if (capability.maxLimit === null) {
-    return query.limit === undefined;
+    // limit sem semântica na capability: ignorado pelo matcher (tool pode omitir).
+    return true;
   }
   if (query.operation === 'RANKING_WINNER') {
     const limit = query.limit ?? capability.defaultLimit ?? 1;
@@ -287,11 +287,7 @@ function matchesLimitAgainstCapability(
   if (query.limit === undefined) {
     return true;
   }
-  return (
-    Number.isInteger(query.limit) &&
-    query.limit >= 1 &&
-    query.limit <= capability.maxLimit
-  );
+  return Number.isInteger(query.limit) && query.limit >= 1;
 }
 
 function validateLimit(
@@ -309,16 +305,7 @@ function validateLimit(
       'RANKING_WINNER exige limit=1.',
     );
   }
-  if (
-    (query.operation === 'RANKING_TOPN' ||
-      query.operation === 'BREAKDOWN' ||
-      query.operation === 'MOVEMENTS') &&
-    query.limit > ADVISOR_DRILLDOWN_MAX_LIMIT
-  ) {
-    return deny(
-      'INVALID_LIMIT',
-      `limit acima do teto publicado (${ADVISOR_DRILLDOWN_MAX_LIMIT}).`,
-    );
-  }
+  // maxLimit do registry é teto de clamp do executor/serviço legado — não deny.
+  // Ferramentas atuais aceitam requestedLimit abusivo e clamam (parity F13.8.5B).
   return null;
 }
