@@ -25,35 +25,25 @@ export function resolveAdvisorDrilldownIntent(content: string): AdvisorDrilldown
   if (/\bcentros?(?:\s+de\s+custo)?\b/.test(folded)) {
     return null;
   }
-  const hasCategory = /\bcategorias?\b/.test(folded);
+  const limit = extractAdvisorDrilldownLimit(folded);
+  const hasCategoryDimension = /\bcategorias?\b/.test(folded);
   const hasReceipt = /\b(recebimentos?|entradas?)\b/.test(folded);
   const hasOutflow = /\b(saidas?|pagamentos?|desembolsos?)\b/.test(folded);
-  const limit = extractAdvisorDrilldownLimit(folded);
+  const hasFlowCue =
+    hasReceipt ||
+    hasOutflow ||
+    /\bfatur/.test(folded) ||
+    /\bmaior(?:es)?\b/.test(folded) ||
+    /\bconsumiram caixa\b/.test(folded);
 
-  if (hasCategory && !hasReceipt) {
-    if (hasOutflow) {
-      return {
-        toolName: CASH_REALIZED_BREAKDOWN_TOOL_NAME,
-        direction: 'OUTFLOW',
-        sort: 'AMOUNT_DESC',
-        limit,
-      };
-    }
-    if (/\bfatur|maior(?:es)?\b|consumiram caixa/.test(folded)) {
-      return {
-        toolName: CASH_REALIZED_BREAKDOWN_TOOL_NAME,
-        direction: 'INFLOW',
-        sort: 'AMOUNT_DESC',
-        limit,
-      };
-    }
-  }
-
-  // "categorias" + "entradas" é ranking de categoria, não janela de movimentos.
-  if (hasCategory && hasReceipt && !hasOutflow) {
+  // Dimensão explícita CATEGORY vence wording genérico de lançamento
+  // ("entradas", "recebimentos", "pagamentos").
+  if (hasCategoryDimension && hasFlowCue) {
+    const direction: AdvisorCashDirection =
+      hasOutflow && !hasReceipt ? 'OUTFLOW' : 'INFLOW';
     return {
       toolName: CASH_REALIZED_BREAKDOWN_TOOL_NAME,
-      direction: 'INFLOW',
+      direction,
       sort: 'AMOUNT_DESC',
       limit,
     };

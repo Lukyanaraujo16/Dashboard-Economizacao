@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { composeAdvisorFactualAnswer } from '../src/modules/advisor/domain/compose-advisor-factual-answer.js';
 import { classifyAdvisorFactualResponse } from '../src/modules/advisor/domain/classify-advisor-factual-response.js';
+import { resolveAdvisorConversationalNominal } from '../src/modules/advisor/domain/resolve-advisor-conversational-nominal.js';
+import { resolveAdvisorCostCenterIntent } from '../src/modules/advisor/domain/resolve-advisor-cost-center-intent.js';
 import { resolveAdvisorDrilldownIntent } from '../src/modules/advisor/domain/resolve-advisor-drilldown-intent.js';
 import { CASH_REALIZED_BREAKDOWN_TOOL_NAME } from '../src/modules/advisor/domain/advisor-cash-realized-breakdown.js';
 import { CASH_MOVEMENT_LINES_TOOL_NAME } from '../src/modules/advisor/domain/advisor-cash-movement-lines.js';
@@ -153,6 +155,140 @@ describe('F13.8.5C generic factual composer — movements', () => {
     expect(composed.answer).toContain('saídas realizadas de caixa');
   });
 });
+
+describe('F13.8.5C.1 roteamento categoria × movimentos', () => {
+  it('pipeline: categorias + entradas → breakdown, não movements', () => {
+    expect(selectPreloadTool('Quais categorias tiveram as maiores entradas em agosto de 2026?')).toBe(
+      CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+    );
+  });
+
+  it('pipeline: categorias + saídas → breakdown OUTFLOW', () => {
+    const intent = resolveAdvisorDrilldownIntent(
+      'Quais categorias tiveram as maiores saídas em agosto de 2026?',
+    );
+    expect(selectPreloadTool('Quais categorias tiveram as maiores saídas em agosto de 2026?')).toBe(
+      CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+    );
+    expect(intent?.direction).toBe('OUTFLOW');
+  });
+
+  it('pipeline: maiores recebimentos e pagamentos → movements', () => {
+    expect(selectPreloadTool('Quais foram os 5 maiores recebimentos de agosto de 2026?')).toBe(
+      CASH_MOVEMENT_LINES_TOOL_NAME,
+    );
+    expect(selectPreloadTool('Quais foram os 5 maiores pagamentos de agosto de 2026?')).toBe(
+      CASH_MOVEMENT_LINES_TOOL_NAME,
+    );
+    expect(
+      resolveAdvisorDrilldownIntent('Quais foram os 5 maiores pagamentos de agosto de 2026?')
+        ?.direction,
+    ).toBe('OUTFLOW');
+  });
+
+  it('pipeline: liste entradas e entradas por categoria', () => {
+    expect(selectPreloadTool('Liste as entradas de agosto de 2026')).toBe(
+      CASH_MOVEMENT_LINES_TOOL_NAME,
+    );
+    expect(selectPreloadTool('Entradas por categoria em agosto de 2026')).toBe(
+      CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+    );
+    expect(selectPreloadTool('Saídas por categoria em agosto de 2026')).toBe(
+      CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+    );
+  });
+
+  it('pergunta factual de categoria fecha sem provider; movements também; interpretativa não fecha', () => {
+    const category = composeAdvisorFactualAnswer({
+      content: 'Quais categorias tiveram as maiores entradas em agosto de 2026?',
+      anaphora: 'NONE',
+      toolName: CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+      toolOk: true,
+      toolContent: JSON.stringify(
+        breakdownFacts('INFLOW', [
+          { label: 'Categoria Alfa', amount: '100.00', sharePercent: '100.00', rank: 1 },
+        ]),
+      ),
+    });
+    expect(category.classification.kind).toBe('FACTUAL_CLOSED');
+    expect(category.meta?.providerCalled).toBe(false);
+
+    const movements = composeAdvisorFactualAnswer({
+      content: 'Quais foram os 5 maiores recebimentos de agosto de 2026?',
+      anaphora: 'NONE',
+      toolName: CASH_MOVEMENT_LINES_TOOL_NAME,
+      toolOk: true,
+      toolContent: JSON.stringify({
+        status: 'OK',
+        monthKey: '2026-08',
+        direction: 'INFLOW',
+        factKind: ADVISOR_MOVEMENT_FACT_KIND,
+        requestedLimit: 5,
+        returnedCount: 1,
+        hasMore: false,
+        lines: [{ date: '2026-08-25', amount: '10', description: 'VALE', partyName: null }],
+      }),
+    });
+    expect(movements.classification.kind).toBe('FACTUAL_CLOSED');
+    expect(movements.meta?.providerCalled).toBe(false);
+
+    const interpretive = composeAdvisorFactualAnswer({
+      content: 'O que você acha das categorias de entrada de agosto de 2026?',
+      anaphora: 'NONE',
+      toolName: selectPreloadTool('O que você acha das categorias de entrada de agosto de 2026?'),
+      toolOk: true,
+      toolContent: JSON.stringify(
+        breakdownFacts('INFLOW', [
+          { label: 'Categoria Alfa', amount: '100.00', sharePercent: '100.00', rank: 1 },
+        ]),
+      ),
+    });
+    expect(selectPreloadTool('O que você acha das categorias de entrada de agosto de 2026?')).toBe(
+      CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+    );
+    expect(interpretive.classification.kind).toBe('INTERPRETIVE');
+    expect(interpretive.answer).toBeNull();
+  });
+
+  it('não fecha movements quando a pergunta pede categorias', () => {
+    const wrong = composeAdvisorFactualAnswer({
+      content: 'Quais categorias tiveram as maiores entradas em agosto de 2026?',
+      anaphora: 'NONE',
+      toolName: CASH_MOVEMENT_LINES_TOOL_NAME,
+      toolOk: true,
+      toolContent: JSON.stringify({
+        status: 'OK',
+        monthKey: '2026-08',
+        direction: 'INFLOW',
+        factKind: ADVISOR_MOVEMENT_FACT_KIND,
+        requestedLimit: 5,
+        returnedCount: 1,
+        hasMore: false,
+        lines: [{ date: '2026-08-25', amount: '10.00', description: 'Lancamento Alfa', partyName: 'Parte Alfa' }],
+      }),
+    });
+    expect(wrong.answer).toBeNull();
+    expect(wrong.classification.kind).not.toBe('FACTUAL_CLOSED');
+  });
+});
+
+function selectPreloadTool(content: string): string | null {
+  const nominal = resolveAdvisorConversationalNominal({ content });
+  if (nominal.intent !== null) {
+    return nominal.intent.toolName;
+  }
+  if (nominal.anaphora !== 'NONE') {
+    return null;
+  }
+  const costCenter = resolveAdvisorCostCenterIntent({
+    content,
+    period: { source: 'EXPLICIT', comparison: false },
+  });
+  if (costCenter !== null) {
+    return costCenter.toolName;
+  }
+  return resolveAdvisorDrilldownIntent(content)?.toolName ?? null;
+}
 
 describe('F13.8.5C capabilities unchanged', () => {
   it('continua negando OUTFLOW counterparty year', () => {

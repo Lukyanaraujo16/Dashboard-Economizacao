@@ -274,6 +274,9 @@ export function classifyAdvisorFactualResponse(
   }
 
   if (input.toolName === CASH_MOVEMENT_LINES_TOOL_NAME) {
+    if (questionAsksExplicitCategory(input.content)) {
+      return { kind: 'UNRESOLVED', intentKind: 'CATEGORY_BREAKDOWN', factKind };
+    }
     if ((status === 'OK' || status === 'EMPTY_RESULT') && hasCashMovementFacts(facts)) {
       return { kind: 'FACTUAL_CLOSED', intentKind: 'CASH_MOVEMENT_LINES', factKind };
     }
@@ -557,6 +560,10 @@ function hasSnapshotClosedFacts(
     return isAmount(receivables?.overdue) && isAmount(payables?.overdue);
   }
   return true;
+}
+
+function questionAsksExplicitCategory(content: string): boolean {
+  return /\bcategorias?\b/.test(foldPt(content));
 }
 
 function hasCategoryBreakdownFacts(facts: Record<string, unknown>): boolean {
