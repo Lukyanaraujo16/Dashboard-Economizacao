@@ -72,6 +72,9 @@ export function selectExpectedOpenPayables(
     if (!matchesDashboardCategoryFilter(row.installment, input.categoryFilter, 'EXPENSE')) {
       continue;
     }
+    if (!isExpectedOpenPayable(row.installment, input.today, input.from, input.to)) {
+      continue;
+    }
 
     let amount: Prisma.Decimal;
     if (input.hasCostCenter) {
@@ -90,10 +93,6 @@ export function selectExpectedOpenPayables(
       amount = split.outstanding;
     } else {
       amount = row.installment.unpaid;
-    }
-
-    if (!isExpectedOpenPayable(row.installment, input.today, input.from, input.to)) {
-      continue;
     }
 
     items.push({ installment: row.installment, amount });
@@ -140,6 +139,9 @@ export function accumulatePayableOverdue(
     }
 
     if (input.hasCostCenter) {
+      if (!isDashboardOverdue(row.installment, input.today)) {
+        continue;
+      }
       const split = deriveInstallmentCostCenterCashSplit({
         allocationAmount: row.amount,
         installmentTotal: row.installment.total,

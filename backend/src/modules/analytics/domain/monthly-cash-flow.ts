@@ -396,9 +396,6 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
     categoryFilter,
     hasCostCenter: Boolean(input.costCenter),
   });
-  if (!receivableOverdue.available) {
-    expectedAvailable = false;
-  }
   const overdueReceivables = receivableOverdue.overdue;
   const overdueReceivablesOfMonth = receivableOverdue.overdueOfMonth;
 
@@ -428,9 +425,6 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
     categoryFilter,
     hasCostCenter: Boolean(input.costCenter),
   });
-  if (!payableOverdue.available) {
-    expectedAvailable = false;
-  }
   const overduePayables = payableOverdue.overdue;
   const overduePayablesOfMonth = payableOverdue.overdueOfMonth;
 
@@ -486,7 +480,8 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
     hasCostCenter: Boolean(input.costCenter),
     expectedType: 'EXPENSE',
   });
-  const stockAvailable = expectedAvailable && receivableStock.available && payableStock.available;
+  const overdueAvailable = receivableOverdue.available && payableOverdue.available;
+  const stockAvailable = receivableStock.available && payableStock.available;
 
   const costCenterCashSplit = realizedAvailable && expectedAvailable;
 
@@ -516,11 +511,11 @@ export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): 
       result: expected.result,
     },
     overdue: {
-      receivables: expectedAvailable ? overdueReceivables : null,
-      payables: expectedAvailable ? overduePayables : null,
+      receivables: overdueAvailable ? overdueReceivables : null,
+      payables: overdueAvailable ? overduePayables : null,
       ofMonth: {
-        receivables: expectedAvailable ? overdueReceivablesOfMonth : null,
-        payables: expectedAvailable ? overduePayablesOfMonth : null,
+        receivables: overdueAvailable ? overdueReceivablesOfMonth : null,
+        payables: overdueAvailable ? overduePayablesOfMonth : null,
       },
     },
     stock: {

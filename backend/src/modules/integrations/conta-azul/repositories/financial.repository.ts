@@ -17,6 +17,7 @@ import type {
   MappedInstallment,
   MappedParty,
 } from '../domain/conta-azul-financial-mappers.js';
+import { isFetchedCostCenterDetailIncompatibleWithTotal } from '../domain/conta-azul-cost-center-allocation-normalize.js';
 import {
   createContaAzulBalanceSnapshotRepository,
   type PersistedFinancialAccountForBalance,
@@ -97,6 +98,68 @@ async function partyIdsByExternalId(
     select: { id: true, externalId: true },
   });
   return new Map(rows.map((row) => [row.externalId, row.id]));
+}
+
+async function invalidateFetchedCostCenterDetailsIncompatibleWithTotal(
+  prisma: PrismaClient,
+  kind: 'RECEIVABLE' | 'PAYABLE',
+  scope: FinancialSyncScope,
+  items: readonly MappedInstallment[],
+): Promise<void> {
+  if (items.length === 0) {
+    return;
+  }
+  const totalByExternalId = new Map(items.map((item) => [item.externalId, item.total]));
+  const where = {
+    tenantId: scope.tenantId,
+    integrationId: scope.integrationId,
+    externalId: { in: [...totalByExternalId.keys()] },
+    costCenterDetailStatus: 'FETCHED' as const,
+  };
+  const rows =
+    kind === 'RECEIVABLE'
+      ? await prisma.receivable.findMany({
+          where,
+          select: {
+            id: true,
+            externalId: true,
+            costCenterAllocations: { select: { amount: true } },
+          },
+        })
+      : await prisma.payable.findMany({
+          where,
+          select: {
+            id: true,
+            externalId: true,
+            costCenterAllocations: { select: { amount: true } },
+          },
+        });
+  const staleIds = rows.flatMap((row) => {
+    const installmentTotal = totalByExternalId.get(row.externalId);
+    if (installmentTotal === undefined) {
+      return [];
+    }
+    return isFetchedCostCenterDetailIncompatibleWithTotal({
+      installmentTotal,
+      allocationAmounts: row.costCenterAllocations.map((allocation) => allocation.amount),
+    })
+      ? [row.id]
+      : [];
+  });
+  if (staleIds.length === 0) {
+    return;
+  }
+  const data = { costCenterDetailStatus: 'ERROR' as const };
+  const updateWhere = {
+    id: { in: staleIds },
+    tenantId: scope.tenantId,
+    costCenterDetailStatus: 'FETCHED' as const,
+  };
+  if (kind === 'RECEIVABLE') {
+    await prisma.receivable.updateMany({ where: updateWhere, data });
+    return;
+  }
+  await prisma.payable.updateMany({ where: updateWhere, data });
 }
 
 export function createContaAzulFinancialRepository(
@@ -460,6 +523,12 @@ export function createContaAzulFinancialRepository(
           }),
         ),
       );
+      await invalidateFetchedCostCenterDetailsIncompatibleWithTotal(
+        prisma,
+        'RECEIVABLE',
+        scope,
+        items,
+      );
       if (previouslyDeleted.length > 0) {
         process.stdout.write(
           `${JSON.stringify({
@@ -542,6 +611,12 @@ export function createContaAzulFinancialRepository(
             },
           }),
         ),
+      );
+      await invalidateFetchedCostCenterDetailsIncompatibleWithTotal(
+        prisma,
+        'PAYABLE',
+        scope,
+        items,
       );
       if (previouslyDeleted.length > 0) {
         process.stdout.write(

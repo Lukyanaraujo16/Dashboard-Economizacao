@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Prisma } from '../src/generated/prisma/client.js';
 import {
   COST_CENTER_ALLOCATION_MONEY_EPSILON,
+  isFetchedCostCenterDetailIncompatibleWithTotal,
   normalizeInstallmentCostCenterAllocations,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-cost-center-allocation-normalize.js';
 import {
@@ -146,5 +147,43 @@ describe('normalizeInstallmentCostCenterAllocations', () => {
         allocated: normalized.allocations[0]!.amount,
       }),
     ).toBe('MATCH');
+  });
+});
+
+describe('isFetchedCostCenterDetailIncompatibleWithTotal', () => {
+  it('FETCHED compatível com o total permanece confiável', () => {
+    expect(
+      isFetchedCostCenterDetailIncompatibleWithTotal({
+        installmentTotal: new Prisma.Decimal('180'),
+        allocationAmounts: [new Prisma.Decimal('180')],
+      }),
+    ).toBe(false);
+  });
+
+  it('uma linha acima do total atual torna o FETCHED incompatível', () => {
+    expect(
+      isFetchedCostCenterDetailIncompatibleWithTotal({
+        installmentTotal: new Prisma.Decimal('180'),
+        allocationAmounts: [new Prisma.Decimal('840')],
+      }),
+    ).toBe(true);
+  });
+
+  it('vários centros com soma acima do total não são clampados para caber', () => {
+    expect(
+      isFetchedCostCenterDetailIncompatibleWithTotal({
+        installmentTotal: new Prisma.Decimal('180'),
+        allocationAmounts: [new Prisma.Decimal('100'), new Prisma.Decimal('100')],
+      }),
+    ).toBe(true);
+  });
+
+  it('rateio parcial abaixo do total continua compatível', () => {
+    expect(
+      isFetchedCostCenterDetailIncompatibleWithTotal({
+        installmentTotal: new Prisma.Decimal('1000'),
+        allocationAmounts: [new Prisma.Decimal('600'), new Prisma.Decimal('200')],
+      }),
+    ).toBe(false);
   });
 });

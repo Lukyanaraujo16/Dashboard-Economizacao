@@ -100,3 +100,26 @@ export function normalizeInstallmentCostCenterAllocations(input: {
     upstreamSum,
   };
 }
+
+/**
+ * FETCHED deixa de ser confirmação analítica quando a soma, ou alguma linha,
+ * passa o total atual da parcela. Não altera amounts: o detalhe precisa ser
+ * reprocessado pelo GET oficial.
+ */
+export function isFetchedCostCenterDetailIncompatibleWithTotal(input: {
+  readonly installmentTotal: Prisma.Decimal;
+  readonly allocationAmounts: readonly Prisma.Decimal[];
+}): boolean {
+  if (input.allocationAmounts.length === 0) {
+    return false;
+  }
+  const ceiling = input.installmentTotal.plus(COST_CENTER_ALLOCATION_MONEY_EPSILON);
+  let sum = new Prisma.Decimal(0);
+  for (const amount of input.allocationAmounts) {
+    if (amount.greaterThan(ceiling)) {
+      return true;
+    }
+    sum = sum.plus(amount);
+  }
+  return sum.greaterThan(ceiling);
+}

@@ -71,6 +71,9 @@ export function selectExpectedOpenReceivables(
     if (!matchesDashboardCategoryFilter(row.installment, input.categoryFilter, 'REVENUE')) {
       continue;
     }
+    if (!isExpectedOpenReceivable(row.installment, input.today, input.from, input.to)) {
+      continue;
+    }
 
     let amount: Prisma.Decimal;
     if (input.hasCostCenter) {
@@ -89,10 +92,6 @@ export function selectExpectedOpenReceivables(
       amount = split.outstanding;
     } else {
       amount = row.installment.unpaid;
-    }
-
-    if (!isExpectedOpenReceivable(row.installment, input.today, input.from, input.to)) {
-      continue;
     }
 
     items.push({ installment: row.installment, amount });
@@ -144,6 +143,9 @@ export function accumulateReceivableOverdue(
     }
 
     if (input.hasCostCenter) {
+      if (!isDashboardOverdue(row.installment, input.today)) {
+        continue;
+      }
       const split = deriveInstallmentCostCenterCashSplit({
         allocationAmount: row.amount,
         installmentTotal: row.installment.total,
