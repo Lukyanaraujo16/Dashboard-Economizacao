@@ -22,6 +22,12 @@ import { deriveConsultantConversationTitle } from '../domain/conversation-title.
 import { resolveAdvisorConversationalPeriod } from '../domain/resolve-advisor-conversational-period.js';
 import { resolveAdvisorDrilldownIntent } from '../domain/resolve-advisor-drilldown-intent.js';
 import { resolveAdvisorConversationalNominal } from '../domain/resolve-advisor-conversational-nominal.js';
+import { resolveAdvisorNominalIntent } from '../domain/resolve-advisor-nominal-intent.js';
+import {
+  composeCapabilityDeniedAnswer,
+  resolveUniversalAnalyticalIntent,
+} from '../domain/resolve-universal-analytical-intent.js';
+import { isAdvisorInterpretiveQuestion } from '../domain/classify-advisor-factual-response.js';
 import {
   ADVISOR_CURRENT_SNAPSHOT_FACT_NAME,
 } from '../domain/advisor-current-snapshot-facts.js';
@@ -204,6 +210,53 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         }),
       );
 
+      const universalIntent = resolveUniversalAnalyticalIntent({
+        content: question,
+        now: input.now,
+        referenceMonthKey: input.monthKey,
+      });
+      if (
+        universalIntent.kind === 'RESOLVED' &&
+        universalIntent.validation.ok === false &&
+        !isAdvisorInterpretiveQuestion(question)
+      ) {
+        const deniedAnswer = composeCapabilityDeniedAnswer({
+          query: universalIntent.query,
+          validation: universalIntent.validation,
+        });
+        const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+          senderType: 'CONSULTANT',
+          content: deniedAnswer,
+        });
+        console.info(
+          JSON.stringify({
+            event: 'advisor_capability_denied',
+            tenantId,
+            conversationId: conversation.id,
+            reason: universalIntent.validation.reason,
+            operation: universalIntent.query.operation,
+            dimension: universalIntent.query.dimension ?? null,
+            direction: universalIntent.query.direction ?? null,
+          }),
+        );
+        return {
+          conversationId: conversation.id,
+          userMessage,
+          consultantMessage,
+          run: null,
+          factualAnswer: {
+            classification: 'FACTUAL_CLOSED',
+            providerCalled: false,
+            intentKind: 'FACTUAL_LIMITATION',
+            factKind: null,
+            identityStatus: null,
+            returnedCount: null,
+            coveragePercent: null,
+            composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+          },
+        };
+      }
+
       const conversationalCostCenter = resolveAdvisorConversationalCostCenter({
         content: question,
         period,
@@ -310,30 +363,37 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           now: input.now,
           priorUserContents,
         });
-        const ranked = await deps.analyticalTools.execute({
-          tenantId,
-          resolvedMonthKey: rankingPeriod.monthKey,
+        const rankingCategory = resolveAdvisorNominalIntent(conversationalNominal.rankingQuestion, {
           now: input.now,
-          call: {
-            id: 'preload-nominal-winner',
-            name: CASH_NOMINAL_RANKING_TOOL_NAME,
-            arguments: {
-              monthKey: rankingPeriod.monthKey,
-              categoryReference: 'convenio',
-            },
-          },
-        });
-        const winner = ranked.ok ? readWinnerFromToolContent(ranked.content) : null;
-        if (winner !== null) {
-          nominalIntent = {
-            toolName: CASH_NOMINAL_LOOKUP_TOOL_NAME,
-            entityQuery: winner.displayName,
-            categoryReference: 'convenio',
-            limit: 5,
-          };
-          anaphoraStatus = 'RESOLVED';
-        } else {
+        })?.categoryReference;
+        if (rankingCategory === undefined) {
           anaphoraStatus = 'UNRESOLVED';
+        } else {
+          const ranked = await deps.analyticalTools.execute({
+            tenantId,
+            resolvedMonthKey: rankingPeriod.monthKey,
+            now: input.now,
+            call: {
+              id: 'preload-nominal-winner',
+              name: CASH_NOMINAL_RANKING_TOOL_NAME,
+              arguments: {
+                monthKey: rankingPeriod.monthKey,
+                categoryReference: rankingCategory,
+              },
+            },
+          });
+          const winner = ranked.ok ? readWinnerFromToolContent(ranked.content) : null;
+          if (winner !== null) {
+            nominalIntent = {
+              toolName: CASH_NOMINAL_LOOKUP_TOOL_NAME,
+              entityQuery: winner.displayName,
+              categoryReference: rankingCategory,
+              limit: 5,
+            };
+            anaphoraStatus = 'RESOLVED';
+          } else {
+            anaphoraStatus = 'UNRESOLVED';
+          }
         }
       }
       const costCenterIntent =

@@ -80,7 +80,7 @@ export function extractAdvisorDrilldownLimit(folded: string): number {
  */
 export function extractExplicitAdvisorTopNLimit(folded: string): number | null {
   const match =
-    /\b(?:quais (?:foram )?)?(?:mostre(?:\s+os)?|os)\s+(\d{1,4})\s+(?:maiores?\s+)?(?:convenios?|fornecedores?|clientes?|contrapartes?|entidades?|recebimentos?|saidas?|pagamentos?|desembolsos?|movimentos?|categorias?|centros?(?:\s+de\s+custo)?)\b/.exec(
+    /\b(?:quais (?:foram )?)?(?:mostre(?:\s+os)?|os)\s+(\d{1,4})\s+(?:maiores?\s+)?(?:convenios?|fornecedor(?:es)?|clientes?|contrapartes?|entidades?|recebimentos?|saidas?|pagamentos?|desembolsos?|movimentos?|categorias?|centros?(?:\s+de\s+custo)?)\b/.exec(
       folded,
     ) ??
     /(?:os\s+)?(\d{1,4})\s+maior(?:es)?\b/.exec(folded) ??

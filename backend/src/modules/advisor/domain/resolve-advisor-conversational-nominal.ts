@@ -42,6 +42,14 @@ export function resolveAdvisorConversationalNominal(input: {
   readonly now?: Date;
 }): AdvisorConversationalNominal {
   const prior = input.priorUserContents ?? [];
+  if (currentQuestionReplacesNominalCategory(input.content)) {
+    return {
+      intent: null,
+      anaphora: 'NONE',
+      needsRankingWinner: false,
+      rankingQuestion: null,
+    };
+  }
   const direct = resolveAdvisorNominalIntent(input.content, {
     comparison: input.comparison,
     now: input.now,
@@ -66,10 +74,18 @@ export function resolveAdvisorConversationalNominal(input: {
   if (isAdvisorNominalIdentityFollowUp(input.content)) {
     const identityAnchor = resolveNominalAnchor(prior, input.now);
     if (identityAnchor.kind === 'ranking') {
+      if (identityAnchor.categoryReference === undefined) {
+        return {
+          intent: null,
+          anaphora: 'UNRESOLVED',
+          needsRankingWinner: false,
+          rankingQuestion: null,
+        };
+      }
       return {
         intent: {
           toolName: CASH_NOMINAL_RANKING_TOOL_NAME,
-          categoryReference: identityAnchor.categoryReference ?? 'convenio',
+          categoryReference: identityAnchor.categoryReference,
           limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
           ...(identityAnchor.civilRange !== undefined
             ? { civilRange: identityAnchor.civilRange }
@@ -81,10 +97,18 @@ export function resolveAdvisorConversationalNominal(input: {
       };
     }
     if (identityAnchor.kind === 'entity') {
+      if (identityAnchor.categoryReference === undefined) {
+        return {
+          intent: null,
+          anaphora: 'UNRESOLVED',
+          needsRankingWinner: false,
+          rankingQuestion: null,
+        };
+      }
       return {
         intent: {
           toolName: CASH_NOMINAL_RANKING_TOOL_NAME,
-          categoryReference: identityAnchor.categoryReference ?? 'convenio',
+          categoryReference: identityAnchor.categoryReference,
           limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
           ...(identityAnchor.civilRange !== undefined
             ? { civilRange: identityAnchor.civilRange }
@@ -105,10 +129,18 @@ export function resolveAdvisorConversationalNominal(input: {
   if (isAdvisorInterpretiveQuestion(input.content)) {
     const interpretiveAnchor = resolveNominalAnchor(prior, input.now);
     if (interpretiveAnchor.kind === 'ranking') {
+      if (interpretiveAnchor.categoryReference === undefined) {
+        return {
+          intent: null,
+          anaphora: 'UNRESOLVED',
+          needsRankingWinner: false,
+          rankingQuestion: null,
+        };
+      }
       return {
         intent: {
           toolName: CASH_NOMINAL_RANKING_TOOL_NAME,
-          categoryReference: interpretiveAnchor.categoryReference ?? 'convenio',
+          categoryReference: interpretiveAnchor.categoryReference,
           limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
           ...(interpretiveAnchor.civilRange !== undefined
             ? { civilRange: interpretiveAnchor.civilRange }
@@ -124,7 +156,9 @@ export function resolveAdvisorConversationalNominal(input: {
         intent: {
           toolName: CASH_NOMINAL_LOOKUP_TOOL_NAME,
           entityQuery: interpretiveAnchor.entityQuery,
-          categoryReference: interpretiveAnchor.categoryReference ?? 'convenio',
+          ...(interpretiveAnchor.categoryReference !== undefined
+            ? { categoryReference: interpretiveAnchor.categoryReference }
+            : {}),
           limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
           ...(interpretiveAnchor.civilRange !== undefined
             ? { civilRange: interpretiveAnchor.civilRange }
@@ -198,7 +232,9 @@ export function resolveAdvisorConversationalNominal(input: {
       intent: {
         toolName: CASH_NOMINAL_LOOKUP_TOOL_NAME,
         entityQuery: anchor.entityQuery,
-        categoryReference: anchor.categoryReference ?? 'convenio',
+        ...(anchor.categoryReference !== undefined
+          ? { categoryReference: anchor.categoryReference }
+          : {}),
         limit: ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
         ...(anchor.civilRange !== undefined ? { civilRange: anchor.civilRange } : {}),
       },
@@ -345,6 +381,18 @@ function resolveNominalAnchor(
     }
   }
   return { kind: 'none' };
+}
+
+/**
+ * Fornecedor, cliente ou contraparte explícitos substituem contexto nominal anterior.
+ * Convênio só permanece quando a pergunta atual também o nomeia.
+ */
+function currentQuestionReplacesNominalCategory(content: string): boolean {
+  const folded = foldPt(content);
+  if (/\bconvenios?\b/.test(folded)) {
+    return false;
+  }
+  return /\b(?:fornecedor(?:es)?|clientes?|contrapartes?)\b/.test(folded);
 }
 
 function foldPt(value: string): string {

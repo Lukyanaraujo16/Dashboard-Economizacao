@@ -49,7 +49,7 @@ export function resolveAdvisorNominalIntent(
   const categoryReference = extractAdvisorNominalCategoryReference(folded);
   const entityQuery = extractAdvisorNominalEntityQuery(content);
   const wantsRank =
-    /\b(mais fatur(?:ei|ou|aram|ava)?|que mais fatur(?:ei|ou|aram)?|que eu mais fatur(?:ei|ou)?|top\s+\d+|quanto recebi de cada|quais foram os\s+\d+\s+(?:convenios?|fornecedores?|clientes?|contrapartes?)|representam do total)\b/.test(
+    /\b(mais fatur(?:ei|ou|aram|ava)?|que mais fatur(?:ei|ou|aram)?|que eu mais fatur(?:ei|ou)?|top\s+\d+|quanto recebi de cada|quais foram os\s+\d+\s+(?:convenios?|fornecedor(?:es)?|clientes?|contrapartes?)|representam do total)\b/.test(
       folded,
     ) ||
     (categoryReference !== undefined &&
@@ -115,18 +115,19 @@ function resolveNominalRankingLimit(content: string, folded: string): number {
   return ADVISOR_DRILLDOWN_DEFAULT_LIMIT;
 }
 
+/**
+ * Só convênio é categoryReference executável.
+ * Fornecedor, cliente e contraparte são papel de COUNTERPARTY, não categoria default.
+ */
 export function extractAdvisorNominalCategoryReference(folded: string): string | undefined {
-  for (const reference of DIMENSION_REFERENCES) {
-    const pattern = new RegExp(`\\b${reference}s?\\b`);
-    if (pattern.test(folded)) {
-      return reference;
-    }
+  if (/\bconvenios?\b/.test(folded)) {
+    return 'convenio';
   }
   return undefined;
 }
 
 export function extractAdvisorNominalEntityQuery(content: string): string | null {
-  const dimensionAlt = 'conv[eê]nios?|fornecedores?|clientes?|contrapartes?';
+  const dimensionAlt = 'conv[eê]nios?|fornecedor(?:es)?|clientes?|contrapartes?';
   const patterns: RegExp[] = [
     new RegExp(
       `quanto\\s+(?:o|a)\\s+(?:${dimensionAlt})\\s+(.+?)\\s+(?:gerou|recebeu|fatur(?:ou|aram|ei))`,
