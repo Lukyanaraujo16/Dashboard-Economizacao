@@ -90,7 +90,7 @@ PRE-F13-HOME-POLISH-2: cobertura de expansão + drill-down analítico (local;
   homologado). Rankings `realizedByCategory` em Faturamento/Já recebido/
   Despesas/Entradas×Saídas; composição billing−despesas no Resultado; A receber
   honesto sem categoria expected. Sem commit. F13 NÃO iniciada.
-F13 (Consultor reativo, F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
+F13 (Consultor reativo): FECHADO LOCALMENTE em F13.9 — pronto para publicação; produção ainda não publicada.
   Motor único; provider/model por tenant (`OPENAI` | `ANTHROPIC`); secrets
   `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`; sem BYOK; sem fallback cruzado;
   sem retry automático de generate. Rate limit Redis 20 msg/10min
@@ -122,7 +122,7 @@ CASH-9C: transferências internas IMPLEMENTADAS (código + migration + testes).
   CASH-4C-CAT: donuts = caixa realizado (fecha com realized.inflows/outflows).
   CASH-6 HOMOLOGADA (commit `39e2ab3`): Relatórios/PDF/XLSX = MonthlyCashFlow
   (mesmo motor da Home; regime de caixa).
-  PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local IMPLEMENTADA — AGUARDANDO HOMOLOGAÇÃO REAL; produção NÃO.
+  PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local FECHADO em F13.9 — pronto para publicação; produção ainda não publicada.
 Faturamento Gerencial (F1-G): SUPERSEDED na Home (CASH-4B = caixa / MonthlyCashFlow)
   (fórmula de produto SUPERSEDED pela decisão Felipe acima).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
@@ -913,8 +913,9 @@ Critérios de aceite (V1)
 
 17. Fase 13 — Consultor Financeiro Reativo
 
-Status: IMPLEMENTADA LOCALMENTE — F13.7 homologada localmente; F13.8.1 wizard + overview + emojiPreference.
-F14 NÃO iniciada. Knowledge Files NÃO implementado. Produção NÃO homologada.
+Status: FECHADO LOCALMENTE em F13.9 — consultor reativo pronto para publicação. Produção ainda não publicada. F14 não iniciada.
+
+Fechamento: capabilities universais publicadas (29), incluindo cliente/fornecedor com campeão, TOP N, consulta e participação; estado analítico estruturado por conversa; conhecimento documental; gestão de provider; quality gate de identidade. Completude histórica de MONTH/YTD/YEAR permanece UNKNOWN quando a fonte não esgota a data do caixa: a resposta fica parcial, em linguagem de “nos dados disponíveis”. Isso é limitação aceita, não bug bloqueante. F14 proativo está fora deste fechamento.
 
 Objetivo
 

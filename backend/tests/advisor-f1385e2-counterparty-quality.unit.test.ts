@@ -339,7 +339,9 @@ describe('F13.8.5E.2 factual sem provider', () => {
     });
     expect(missing.openai.lastInput).toBeNull();
     expect(missingResult.factualAnswer?.providerCalled).toBe(false);
-    expect(missingResult.consultantMessage.content).toContain('Não há identificação oficial suficiente');
+    expect(missingResult.consultantMessage.content).toContain('Há pagamentos nos dados disponíveis');
+    expect(missingResult.consultantMessage.content).toContain('nenhum fornecedor está identificado');
+    expect(missingResult.consultantMessage.content).not.toContain('cobertura integral');
     expect(missingResult.consultantMessage.content.toLowerCase()).not.toContain('convenio');
   });
 });

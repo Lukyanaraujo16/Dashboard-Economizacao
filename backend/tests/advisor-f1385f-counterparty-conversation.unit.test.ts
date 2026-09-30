@@ -132,7 +132,9 @@ describe('F13.8.5F operações de contraparte', () => {
       query: customerQuery('SHARE', 'Alfa'),
     });
     expect(unknownShare.decision).toBe('PARTIAL');
-    expect(unknownShare.answer).toContain('não pode ser comprovada');
+    expect(unknownShare.answer).toContain('Nos dados disponíveis');
+    expect(unknownShare.answer).not.toContain('cobertura integral');
+    expect(unknownShare.quality.periodCoverage).toBe('UNKNOWN');
 
     const ambiguous = assessCounterpartyOperation({
       movements: [
@@ -234,7 +236,8 @@ describe('F13.8.5F conversa estruturada', () => {
     expect(harness.openai.lastInput).toBeNull();
     expect(top.consultantMessage.content).toContain('Alfa');
     expect(top.consultantMessage.content).toContain('Beta');
-    expect(top.consultantMessage.content).toContain('não pode ser comprovada');
+    expect(top.consultantMessage.content).toContain('Nos dados disponíveis');
+    expect(top.consultantMessage.content).not.toContain('cobertura integral');
     expect(top.factualAnswer?.providerCalled).toBe(false);
 
     const second = await ask('E o segundo?');
@@ -243,7 +246,8 @@ describe('F13.8.5F conversa estruturada', () => {
 
     const paid = await ask('Quanto ele me pagou?');
     expect(paid.consultantMessage.content).toContain('Beta');
-    expect(paid.consultantMessage.content).toContain('não pode ser comprovada');
+    expect(paid.consultantMessage.content).toContain('Nos dados disponíveis');
+    expect(paid.consultantMessage.content).not.toContain('cobertura integral');
 
     const share = await ask('Quanto ele representou das minhas entradas?');
     expect(share.consultantMessage.content).toContain('Beta');
@@ -272,6 +276,78 @@ describe('F13.8.5F conversa estruturada', () => {
     const otherTenant = await ask('E o segundo?', 'conv-a', 'tenant-b');
     expect(otherTenant.consultantMessage.content).not.toContain('Oficina');
     expect(otherTenant.consultantMessage.content).not.toContain('Beta');
+  });
+
+  it('reproduz a cadeia homologada quando fornecedores não fecham ranking', async () => {
+    const harness = createHarness({
+      counterpartyIdentity: {
+        async load(input) {
+          if (input.direction === 'OUTFLOW') {
+            return [
+              movement({
+                amount: '40',
+                partyId: null,
+                sameScope: false,
+                displayName: null,
+                profiles: [],
+                origin: 'MISSING',
+              }),
+            ];
+          }
+          if (input.period.kind === 'MONTH' && input.period.monthKey === '2026-07') {
+            return [movement({ amount: '30', partyId: 'n', displayName: 'Nilo' })];
+          }
+          return [
+            movement({ amount: '70', partyId: 'a', displayName: 'Alfa' }),
+            movement({ amount: '40', partyId: 'b', displayName: 'Beta' }),
+          ];
+        },
+      },
+    });
+    const ask = (question: string) =>
+      harness.send.execute({
+        tenantId: 'tenant-a',
+        userId: 'user-a',
+        conversationId: 'conv-homolog',
+        question,
+        now: NOW,
+      });
+
+    const top = await ask('Quais foram os clientes que mais me pagaram em agosto de 2026?');
+    expect(top.consultantMessage.content).toContain('Alfa');
+    expect(top.consultantMessage.content).toContain('Beta');
+    expect(top.consultantMessage.content).toContain('Nos dados disponíveis');
+    expect(top.factualAnswer?.providerCalled).toBe(false);
+
+    const second = await ask('E o segundo?');
+    expect(second.consultantMessage.content).toContain('posição 2');
+    expect(second.consultantMessage.content).toContain('Beta');
+
+    const paid = await ask('Quanto ele me pagou?');
+    expect(paid.consultantMessage.content).toContain('Beta');
+    expect(paid.consultantMessage.content).toContain('Nos dados disponíveis');
+
+    const share = await ask('Quanto ele representou das minhas entradas?');
+    expect(share.consultantMessage.content).toContain('Beta');
+    expect(share.consultantMessage.content).toContain('%');
+    expect(share.consultantMessage.content).toContain('entradas observadas');
+
+    const july = await ask('E em julho?');
+    expect(july.consultantMessage.content).toContain('Nilo');
+    expect(july.consultantMessage.content).not.toContain('Beta');
+
+    const suppliers = await ask('E fornecedores?');
+    expect(suppliers.consultantMessage.content).toContain('Há pagamentos nos dados disponíveis');
+    expect(suppliers.consultantMessage.content).toContain('nenhum fornecedor está identificado');
+    expect(suppliers.consultantMessage.content).not.toContain('Alfa');
+    expect(suppliers.consultantMessage.content).not.toContain('Nilo');
+
+    const first = await ask('E o primeiro?');
+    expect(first.consultantMessage.content).toContain('Não há a posição 1');
+    expect(first.consultantMessage.content).toContain('fornecedores');
+    expect(first.consultantMessage.content).not.toContain('Alfa');
+    expect(first.consultantMessage.content).not.toContain('Nilo');
+    expect(first.factualAnswer?.providerCalled).toBe(false);
   });
 });
 

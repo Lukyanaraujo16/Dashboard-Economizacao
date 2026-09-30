@@ -242,7 +242,9 @@ export function assessCounterpartyWinner(input: {
     winnerName: top?.displayName ?? null,
     winnerAmount: top?.amount ?? null,
     unidentifiedAmount: population.unidentifiedAmount,
-    periodCoverage: input.periodCoverage,
+    totalAmount: population.totalAmount,
+    identifiedAmount: new Prisma.Decimal(population.qualityBase.identifiedAmount),
+    movementCount: population.qualityBase.totalMovementCount,
   });
 
   return {
@@ -312,6 +314,28 @@ function decide(input: {
   return { decision: 'AVAILABLE', reasonCode: 'WINNER_GUARANTEED' };
 }
 
+function composeMissingIdentity(input: {
+  readonly profile: CounterpartyProfileRole;
+  readonly totalAmount: Prisma.Decimal;
+  readonly identifiedAmount: Prisma.Decimal;
+  readonly unidentifiedAmount: Prisma.Decimal;
+  readonly movementCount: number;
+}): string {
+  const role = input.profile === 'CUSTOMER' ? 'cliente' : 'fornecedor';
+  const rolePlural = input.profile === 'CUSTOMER' ? 'clientes' : 'fornecedores';
+  const flow = input.profile === 'CUSTOMER' ? 'recebimentos' : 'pagamentos';
+  if (input.movementCount > 0 && input.totalAmount.gt(0)) {
+    const total = formatAdvisorFactualBrl(input.totalAmount.toFixed(2));
+    const missing = formatAdvisorFactualBrl(input.unidentifiedAmount.toFixed(2));
+    const identified = formatAdvisorFactualBrl(input.identifiedAmount.toFixed(2));
+    if (input.identifiedAmount.lte(0)) {
+      return `Há ${flow} nos dados disponíveis desse recorte, no valor de ${total}, mas nenhum ${role} está identificado, então não consigo fechar um ranking confiável.`;
+    }
+    return `Há ${flow} nos dados disponíveis desse recorte: ${identified} com ${role} identificado e ${missing} sem identificação, então não consigo fechar um ranking confiável.`;
+  }
+  return `Não há identificação oficial suficiente de ${rolePlural} nesse recorte para fechar esse ranking com segurança.`;
+}
+
 function composeAnswer(input: {
   readonly decision: CounterpartyQualityDecision;
   readonly reasonCode: string;
@@ -319,7 +343,9 @@ function composeAnswer(input: {
   readonly winnerName: string | null;
   readonly winnerAmount: Prisma.Decimal | null;
   readonly unidentifiedAmount: Prisma.Decimal;
-  readonly periodCoverage: CounterpartyPeriodCoverageStatus;
+  readonly totalAmount: Prisma.Decimal;
+  readonly identifiedAmount: Prisma.Decimal;
+  readonly movementCount: number;
 }): string {
   const role = input.profile === 'CUSTOMER' ? 'cliente' : 'fornecedor';
   const rolePlural = input.profile === 'CUSTOMER' ? 'clientes' : 'fornecedores';
@@ -333,8 +359,17 @@ function composeAnswer(input: {
   if (input.reasonCode === 'EMPTY_PERIOD') {
     return `Não há ${flow} realizados nesse período.`;
   }
-  if (input.reasonCode === 'IDENTITY_ABSENT' || input.reasonCode === 'AMOUNT_SIGN_UNSUPPORTED') {
-    return `Não há identificação oficial suficiente de ${rolePlural} nesse recorte para fechar esse ranking com segurança.`;
+  if (input.reasonCode === 'AMOUNT_SIGN_UNSUPPORTED') {
+    return 'Não consigo fechar esse ranking porque os valores desse recorte não estão em uma forma comparável.';
+  }
+  if (input.reasonCode === 'IDENTITY_ABSENT') {
+    return composeMissingIdentity({
+      profile: input.profile,
+      totalAmount: input.totalAmount,
+      identifiedAmount: input.identifiedAmount,
+      unidentifiedAmount: input.unidentifiedAmount,
+      movementCount: input.movementCount,
+    });
   }
   const winnerMoney = money(input.winnerAmount);
   const missingMoney = money(input.unidentifiedAmount);
@@ -450,7 +485,9 @@ export function assessCounterpartyOperation(input: {
         winnerName: null,
         winnerAmount: null,
         unidentifiedAmount: population.unidentifiedAmount,
-        periodCoverage: input.periodCoverage,
+        totalAmount: population.totalAmount,
+        identifiedAmount: new Prisma.Decimal(population.qualityBase.identifiedAmount),
+        movementCount: population.qualityBase.totalMovementCount,
       }),
       rows: [],
       focusDisplayName: null,
@@ -473,7 +510,13 @@ export function assessCounterpartyOperation(input: {
         query: input.query,
         decision: absent.decision,
         reasonCode: absent.reasonCode,
-        answer: `Não há identificação oficial suficiente de ${rolePlural} nesse recorte para fechar esse ranking com segurança.`,
+        answer: composeMissingIdentity({
+          profile: input.partyProfile,
+          totalAmount: population.totalAmount,
+          identifiedAmount: new Prisma.Decimal(population.qualityBase.identifiedAmount),
+          unidentifiedAmount: population.unidentifiedAmount,
+          movementCount: population.qualityBase.totalMovementCount,
+        }),
         rows: [],
         focusDisplayName: null,
         winnerGuaranteed: false,
@@ -500,9 +543,6 @@ export function assessCounterpartyOperation(input: {
     const caveat = [
       identityGap
         ? `Há ${missing} em ${flow} sem ${role} identificado, então esta lista é a dos identificados e não fecha o ranking absoluto.`
-        : '',
-      periodOpen
-        ? 'A cobertura integral do período não pode ser comprovada pelos dados sincronizados.'
         : '',
       boundaryTie
         ? 'Há empate na última posição incluída, então o corte dessa lista não é único.'
@@ -577,9 +617,7 @@ export function assessCounterpartyOperation(input: {
       query: input.query,
       decision,
       reasonCode: periodOpen ? 'PERIOD_COVERAGE_UNPROVEN' : 'SHARE_OBSERVED',
-      answer: periodOpen
-        ? `Nos dados disponíveis, ${observed} A cobertura integral do período não pode ser comprovada pelos dados sincronizados.`
-        : observed,
+      answer: periodOpen ? `Nos dados disponíveis, ${observed}` : observed,
       rows: [
         {
           rank: 1,
@@ -601,7 +639,7 @@ export function assessCounterpartyOperation(input: {
     decision,
     reasonCode: periodOpen ? 'PERIOD_COVERAGE_UNPROVEN' : 'LOOKUP_OBSERVED',
     answer: periodOpen
-      ? `Nos dados disponíveis, ${observed} A cobertura integral do período não pode ser comprovada pelos dados sincronizados.`
+      ? `Nos dados disponíveis, ${observed}`
       : `O ${role} ${found.displayName} tem ${money} em ${flow} nesse período.`,
     rows: [
       {

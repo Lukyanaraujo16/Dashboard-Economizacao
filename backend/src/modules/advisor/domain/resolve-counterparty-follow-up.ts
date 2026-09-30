@@ -131,12 +131,8 @@ export function composeOrdinalAnswer(input: {
       focusDisplayName: input.state.focusDisplayName,
     };
   }
-  const observed = `No ranking anterior dos ${role} identificados, a posição ${row.rank} é ${row.displayName}.`;
-  if (input.state.decision === 'AVAILABLE' && input.state.periodCoverage === 'COMPLETE') {
-    return { answer: observed, focusDisplayName: row.displayName };
-  }
   return {
-    answer: `${observed} Isso permanece entre os identificados. A cobertura integral do período não pode ser comprovada pelos dados sincronizados.`,
+    answer: `No ranking anterior dos ${role} identificados, a posição ${row.rank} é ${row.displayName}.`,
     focusDisplayName: row.displayName,
   };
 }
