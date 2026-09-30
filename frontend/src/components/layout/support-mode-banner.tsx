@@ -13,25 +13,30 @@ export function SupportModeBanner() {
   const router = useRouter();
   const { support, applySession } = useAuth();
   const runtimeTheme = useOptionalRuntimeTheme();
-  const [exiting, setExiting] = useState(false);
+  const [pendingExitSessionId, setPendingExitSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!support.active) {
     return null;
   }
 
+  const sessionId = support.supportSessionId;
+  const exiting = pendingExitSessionId === sessionId;
+
   async function handleExit() {
     if (exiting) return;
-    setExiting(true);
+    setPendingExitSessionId(sessionId);
     setError(null);
     try {
       const session = await exitSupportMode();
       runtimeTheme?.clearBranding();
+      setError(null);
+      setPendingExitSessionId(null);
       applySession(session);
       router.replace('/empresas');
     } catch {
       setError('Não foi possível sair do modo suporte. Tente novamente.');
-      setExiting(false);
+      setPendingExitSessionId(null);
     }
   }
 
