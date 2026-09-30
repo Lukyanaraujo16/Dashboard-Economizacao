@@ -116,6 +116,7 @@ export function validateAnalyticalCapability(
       matchesDimension(capability, query) &&
       matchesPeriod(capability, query.period) &&
       matchesAllowedFiltersOnly(capability, query) &&
+      matchesPartyProfile(capability, query) &&
       matchesLimitAgainstCapability(capability, query),
   );
 
@@ -246,6 +247,17 @@ function matchesAllowedFiltersOnly(
     }
   }
   return true;
+}
+
+function matchesPartyProfile(
+  capability: AnalyticalCapability,
+  query: AnalyticalQuery,
+): boolean {
+  const profile = query.filters?.partyProfile;
+  if (capability.requiredPartyProfile === undefined) {
+    return profile === undefined;
+  }
+  return profile === capability.requiredPartyProfile;
 }
 
 function matchesRequiredFilters(

@@ -54,8 +54,8 @@ function expectNoConvenio(intent: Extract<UniversalAnalyticalIntent, { kind: 'RE
 }
 
 describe('F13.8.5E universal intent', () => {
-  it('mantém 21 capabilities publicadas', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(21);
+  it('publica 23 capabilities, incluindo o quality gate de contraparte', () => {
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(23);
   });
 
   it('não injeta convênio sem evidência na pergunta', () => {
@@ -148,11 +148,13 @@ describe('F13.8.5E universal intent', () => {
       period: { kind: 'YEAR', year: 2025 },
       filters: { partyProfile: 'SUPPLIER' },
     });
-    expect(intent.validation.ok).toBe(false);
-    if (intent.validation.ok) {
-      throw new Error('capability não deveria estar publicada');
+    expect(intent.validation.ok).toBe(true);
+    if (!intent.validation.ok) {
+      throw new Error('capability de fornecedor deveria estar publicada');
     }
-    expect(intent.validation.reason).toBe('CAPABILITY_NOT_FOUND');
+    expect(intent.validation.capability.key).toBe(
+      'realized_cash.counterparty.outflow.supplier.ranking_winner',
+    );
     expect(JSON.stringify(intent.query)).not.toContain('tenant');
   });
 
@@ -165,7 +167,7 @@ describe('F13.8.5E universal intent', () => {
       period: { kind: 'YEAR', year: 2025 },
       filters: { partyProfile: 'CUSTOMER' },
     });
-    expect(intent.validation.ok).toBe(false);
+    expect(intent.validation.ok).toBe(true);
     expectNoConvenio(intent);
   });
 
@@ -219,7 +221,7 @@ describe('F13.8.5E universal intent', () => {
 });
 
 describe('F13.8.5E capability denied no runtime', () => {
-  it('não executa tool nem provider para fornecedor, cliente ou contraparte sem capability', async () => {
+  it('não chama provider nem tool nominal para fornecedor, cliente, contraparte ou quem', async () => {
     for (const question of [SUPPLIER_WINNER, CUSTOMER_WINNER, COUNTERPARTY_WINNER, WHO_WINNER]) {
       const execute = vi.fn();
       const { send, openai } = createHarness({ analyticalTools: { execute } });
@@ -240,10 +242,6 @@ describe('F13.8.5E capability denied no runtime', () => {
       expect(result.consultantMessage.content).not.toContain('partyId');
       expect(result.consultantMessage.content).not.toContain('0,44');
       expect(result.consultantMessage.content).not.toContain('Conta Azul');
-      expect(
-        result.consultantMessage.content.includes('não há suporte analítico oficial suficiente') ||
-          result.consultantMessage.content.includes('recorte oficial necessário'),
-      ).toBe(true);
     }
   });
 

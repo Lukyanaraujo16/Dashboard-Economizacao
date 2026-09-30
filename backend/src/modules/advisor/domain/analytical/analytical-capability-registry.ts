@@ -10,13 +10,15 @@ import type {
   AnalyticalMetricKey,
   AnalyticalOperationKey,
   AnalyticalPeriodKind,
+  AnalyticalPartyProfile,
   AnalyticalSemanticFamily,
 } from './analytical-keys.js';
 
 /**
  * Capability Registry = capacidades PUBLICADAS/homologadas hoje.
  * Deny by default: engine teórico ≠ capability publicada.
- * Não publicar OUTFLOW×COUNTERPARTY YEAR, YTD/YEAR CC, bank, forecast, competence.
+ * Capability publicada não significa resultado AVAILABLE: o quality gate decide.
+ * Não publicar YTD/YEAR de centro de custo, bank, forecast ou competence universais.
  */
 export type AnalyticalCapability = {
   readonly key: string;
@@ -38,6 +40,11 @@ export type AnalyticalCapability = {
   readonly allowedFilters: readonly AnalyticalFilterKey[];
   /** Filters que devem estar presentes (não vazios). */
   readonly requiredFilters: readonly AnalyticalFilterKey[];
+  /**
+   * Quando definido, o valor de filters.partyProfile precisa ser exatamente este.
+   * A chave sozinha não autoriza CUSTOMER e SUPPLIER ao mesmo tempo.
+   */
+  readonly requiredPartyProfile?: AnalyticalPartyProfile;
   readonly identityRequired: boolean;
   readonly maxLimit: number | null;
   readonly defaultLimit: number | null;
@@ -279,6 +286,44 @@ export const ANALYTICAL_CAPABILITY_REGISTRY: readonly AnalyticalCapability[] = [
     defaultLimit: DRILL_DEFAULT,
     executorKey: 'realizedCashCounterparty',
     sourceToolOrSurface: 'compare_cash_nominal_dimension',
+  },
+
+  // --- counterparty por partyProfile (quality gate decide AVAILABLE/PARTIAL/UNAVAILABLE) ---
+  {
+    key: 'realized_cash.counterparty.inflow.customer.ranking_winner',
+    metric: 'REALIZED_CASH',
+    semanticFamily: 'FLOW',
+    directions: ['INFLOW'],
+    dimensions: ['COUNTERPARTY'],
+    periodKinds: ['MONTH', 'YTD', 'YEAR'],
+    comparisonChildKinds: null,
+    operations: ['RANKING_WINNER'],
+    allowedFilters: ['partyProfile'],
+    requiredFilters: ['partyProfile'],
+    requiredPartyProfile: 'CUSTOMER',
+    identityRequired: false,
+    maxLimit: 1,
+    defaultLimit: 1,
+    executorKey: 'realizedCashCounterparty',
+    sourceToolOrSurface: 'counterparty_identity_quality',
+  },
+  {
+    key: 'realized_cash.counterparty.outflow.supplier.ranking_winner',
+    metric: 'REALIZED_CASH',
+    semanticFamily: 'FLOW',
+    directions: ['OUTFLOW'],
+    dimensions: ['COUNTERPARTY'],
+    periodKinds: ['MONTH', 'YTD', 'YEAR'],
+    comparisonChildKinds: null,
+    operations: ['RANKING_WINNER'],
+    allowedFilters: ['partyProfile'],
+    requiredFilters: ['partyProfile'],
+    requiredPartyProfile: 'SUPPLIER',
+    identityRequired: false,
+    maxLimit: 1,
+    defaultLimit: 1,
+    executorKey: 'realizedCashCounterparty',
+    sourceToolOrSurface: 'counterparty_identity_quality',
   },
 
   // --- cash_cost_center_* (MONTH only hoje) ---

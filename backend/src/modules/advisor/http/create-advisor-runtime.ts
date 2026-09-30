@@ -37,6 +37,7 @@ import {
 } from '../domain/advisor-analytical-tools.js';
 import { createAdvisorNominalDimensionService } from '../domain/advisor-nominal-tools.js';
 import { createAdvisorCostCenterDimensionService } from '../domain/advisor-cost-center-tools.js';
+import { createCounterpartyIdentityService } from '../domain/load-counterparty-identity-population.js';
 import { createBuildAdvisorContext } from '../services/build-advisor-context.js';
 import {
   createAllowAllConsultantRateLimiter,
@@ -188,6 +189,12 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     categories,
   });
   const parties = createPartyReadRepository(prisma);
+  const counterpartyIdentity = createCounterpartyIdentityService({
+    ledger,
+    receivables,
+    payables,
+    parties,
+  });
   const cashCostCenter = createAdvisorCostCenterDimensionService({
     cashFlow,
     ledger,
@@ -236,6 +243,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
       rateLimiter,
       analyticalTools,
       cashComparison,
+      counterpartyIdentity,
     });
 
   return {

@@ -9,6 +9,7 @@ import type { AdvisorNominalDimensionService } from '../advisor-nominal-tools.js
 import type { AdvisorCostCenterDimensionService } from '../advisor-cost-center-tools.js';
 import type { AdvisorCashMovementSort } from '../advisor-cash-movement-lines.js';
 import type { FinancialStockSnapshot, MonthlyCashFlow } from '../../../analytics/domain/types.js';
+import type { CounterpartyIdentityService } from '../load-counterparty-identity-population.js';
 
 /**
  * Runtime seguro: tenant/user/now NÃO vêm da AnalyticalQuery nem do LLM.
@@ -21,6 +22,7 @@ export type AnalyticalExecutionRuntime = {
   readonly cashMovements?: AdvisorCashMovementLinesService;
   readonly cashNominal?: AdvisorNominalDimensionService;
   readonly cashCostCenter?: AdvisorCostCenterDimensionService;
+  readonly counterpartyIdentity?: CounterpartyIdentityService;
   /** Já materializados pelo Context Builder (preload). */
   readonly monthlyCashFlow?: MonthlyCashFlow | null;
   readonly financialStockSnapshot?: FinancialStockSnapshot | null;

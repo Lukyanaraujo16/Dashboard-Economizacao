@@ -87,8 +87,18 @@ describe('F13.8.5B executor registry', () => {
     ).toBe(false);
   });
 
-  it('não publica novas capabilities além das 21 da 5A (ajuste compare documentado)', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(21);
+  it('publica 23 capabilities, com o par CUSTOMER/SUPPLIER do quality gate', () => {
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(23);
+    expect(
+      ANALYTICAL_CAPABILITY_REGISTRY.some(
+        (capability) => capability.key === 'realized_cash.counterparty.inflow.customer.ranking_winner',
+      ),
+    ).toBe(true);
+    expect(
+      ANALYTICAL_CAPABILITY_REGISTRY.some(
+        (capability) => capability.key === 'realized_cash.counterparty.outflow.supplier.ranking_winner',
+      ),
+    ).toBe(true);
     const compare = ANALYTICAL_CAPABILITY_REGISTRY.find(
       (c) => c.key === 'realized_cash.counterparty.inflow.compare.month_pair',
     );

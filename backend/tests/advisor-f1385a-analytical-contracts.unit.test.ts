@@ -169,12 +169,14 @@ describe('F13.8.5A Capability Registry invariants', () => {
       ),
     ).toBe(false);
     expect(
-      caps.some(
-        (c) =>
-          c.dimensions.includes('COUNTERPARTY') &&
-          c.directions?.includes('OUTFLOW'),
-      ),
-    ).toBe(false);
+      caps
+        .filter(
+          (c) =>
+            c.dimensions.includes('COUNTERPARTY') &&
+            c.directions?.includes('OUTFLOW'),
+        )
+        .map((c) => c.key),
+    ).toEqual(['realized_cash.counterparty.outflow.supplier.ranking_winner']);
     expect(
       caps.some(
         (c) =>
@@ -183,8 +185,14 @@ describe('F13.8.5A Capability Registry invariants', () => {
       ),
     ).toBe(false);
     expect(
-      caps.some((c) => c.allowedFilters.includes('partyProfile')),
-    ).toBe(false);
+      caps
+        .filter((c) => c.allowedFilters.includes('partyProfile'))
+        .map((c) => c.key)
+        .sort(),
+    ).toEqual([
+      'realized_cash.counterparty.inflow.customer.ranking_winner',
+      'realized_cash.counterparty.outflow.supplier.ranking_winner',
+    ]);
   });
 
   it('SHARE não tem capability standalone publicada', () => {
@@ -441,7 +449,7 @@ describe('F13.8.5A capability deny — deny by default', () => {
     }
   });
 
-  it('nega filter partyProfile ainda não publicado', () => {
+  it('nega TOPN de cliente combinado com categoria', () => {
     const result = validateAnalyticalCapability({
       semanticFamily: 'FLOW',
       metric: 'REALIZED_CASH',

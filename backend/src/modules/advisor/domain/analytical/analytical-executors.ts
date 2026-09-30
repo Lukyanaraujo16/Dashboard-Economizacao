@@ -8,6 +8,7 @@ import { wrapLegacyAnalyticalResult } from './legacy-analytical-fact.js';
 import type { AnalyticalExecutorKey } from './analytical-keys.js';
 import type { AnalyticalPeriod } from './analytical-period.js';
 import type { AdvisorCivilRangeKind } from '../resolve-advisor-civil-range.js';
+import { assessOfficialCounterpartyWinner } from '../load-counterparty-identity-population.js';
 
 function success(input: {
   readonly validated: Parameters<AnalyticalExecutor>[0]['validated'];
@@ -139,6 +140,32 @@ export const executeRealizedCashCounterparty: AnalyticalExecutor = async ({
   validated,
   runtime,
 }) => {
+  const partyProfile = validated.query.filters?.partyProfile;
+  if (partyProfile === 'CUSTOMER' || partyProfile === 'SUPPLIER') {
+    if (runtime.counterpartyIdentity === undefined) {
+      throw new Error('EXECUTOR_DEPENDENCY_MISSING:counterpartyIdentity');
+    }
+    const assessment = await assessOfficialCounterpartyWinner({
+      service: runtime.counterpartyIdentity,
+      tenantId: runtime.tenantId,
+      query: validated.query,
+      now: runtime.now,
+    });
+    return {
+      ok: true,
+      capability: validated.capability,
+      executorKey: 'realizedCashCounterparty',
+      result: assessment.result,
+      legacyFact: {
+        kind: 'COUNTERPARTY_IDENTITY_QUALITY',
+        answer: assessment.answer,
+        decision: assessment.decision,
+        reasonCode: assessment.reasonCode,
+        winnerGuaranteed: assessment.quality.winnerGuaranteed,
+        periodCoverage: assessment.quality.periodCoverage,
+      },
+    };
+  }
   if (runtime.cashNominal === undefined) {
     throw new Error('EXECUTOR_DEPENDENCY_MISSING:cashNominal');
   }

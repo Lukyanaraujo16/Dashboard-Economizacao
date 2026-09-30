@@ -28,6 +28,8 @@ import {
   resolveUniversalAnalyticalIntent,
 } from '../domain/resolve-universal-analytical-intent.js';
 import { isAdvisorInterpretiveQuestion } from '../domain/classify-advisor-factual-response.js';
+import { executeAnalyticalQuery } from '../domain/analytical/execute-analytical-query.js';
+import type { CounterpartyIdentityService } from '../domain/load-counterparty-identity-population.js';
 import {
   ADVISOR_CURRENT_SNAPSHOT_FACT_NAME,
 } from '../domain/advisor-current-snapshot-facts.js';
@@ -115,6 +117,7 @@ export type SendAdvisorMessageDependencies = {
   readonly rateLimiter: ConsultantRateLimiter;
   readonly analyticalTools?: AdvisorAnalyticalToolExecutor;
   readonly cashComparison?: AdvisorCashComparisonService;
+  readonly counterpartyIdentity?: CounterpartyIdentityService;
 };
 
 /**
@@ -215,6 +218,59 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         now: input.now,
         referenceMonthKey: input.monthKey,
       });
+      if (
+        universalIntent.kind === 'RESOLVED' &&
+        universalIntent.validation.ok === true &&
+        isPartyProfileWinnerQuery(universalIntent.query) &&
+        !isAdvisorInterpretiveQuestion(question)
+      ) {
+        const outcome = await executeAnalyticalQuery({
+          query: universalIntent.query,
+          runtime: {
+            tenantId,
+            now: input.now,
+            counterpartyIdentity: deps.counterpartyIdentity,
+          },
+        });
+        const answer =
+          outcome.ok === true && typeof outcome.legacyFact.answer === 'string'
+            ? outcome.legacyFact.answer
+            : 'Não consigo fechar esse ranking com segurança porque a identificação oficial dessa contraparte não está disponível neste recorte.';
+        const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+          senderType: 'CONSULTANT',
+          content: answer,
+        });
+        console.info(
+          JSON.stringify({
+            event: 'advisor_counterparty_quality',
+            tenantId,
+            conversationId: conversation.id,
+            decision: outcome.ok === true ? outcome.legacyFact.decision ?? null : 'UNAVAILABLE',
+            reasonCode: outcome.ok === true ? outcome.legacyFact.reasonCode ?? null : outcome.reason,
+            direction: universalIntent.query.direction ?? null,
+            partyProfile: universalIntent.query.filters?.partyProfile ?? null,
+          }),
+        );
+        return {
+          conversationId: conversation.id,
+          userMessage,
+          consultantMessage,
+          run: null,
+          factualAnswer: {
+            classification: 'FACTUAL_CLOSED',
+            providerCalled: false,
+            intentKind:
+              outcome.ok === true && outcome.legacyFact.decision === 'AVAILABLE'
+                ? 'RANKING_WINNER'
+                : 'FACTUAL_LIMITATION',
+            factKind: 'COUNTERPARTY_IDENTITY_QUALITY',
+            identityStatus: outcome.ok === true ? String(outcome.legacyFact.decision ?? '') : null,
+            returnedCount: null,
+            coveragePercent: null,
+            composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+          },
+        };
+      }
       if (
         universalIntent.kind === 'RESOLVED' &&
         universalIntent.validation.ok === false &&
@@ -978,6 +1034,19 @@ async function preloadCostCenterFollowUp(input: {
       },
     },
   });
+}
+
+function isPartyProfileWinnerQuery(query: {
+  readonly operation: string;
+  readonly dimension?: string;
+  readonly filters?: { readonly partyProfile?: string };
+}): boolean {
+  const profile = query.filters?.partyProfile;
+  return (
+    query.operation === 'RANKING_WINNER' &&
+    query.dimension === 'COUNTERPARTY' &&
+    (profile === 'CUSTOMER' || profile === 'SUPPLIER')
+  );
 }
 
 function isRunErrorCode(code: string): code is AiRunErrorCode {
