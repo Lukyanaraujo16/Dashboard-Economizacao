@@ -29,6 +29,16 @@ import {
 } from '../domain/resolve-universal-analytical-intent.js';
 import { isAdvisorInterpretiveQuestion } from '../domain/classify-advisor-factual-response.js';
 import { executeAnalyticalQuery } from '../domain/analytical/execute-analytical-query.js';
+import { validateAnalyticalCapability } from '../domain/analytical/validate-analytical-capability.js';
+import {
+  parseAnalyticalConversationState,
+  type AnalyticalConversationState,
+} from '../domain/analytical-conversation-state.js';
+import {
+  composeOrdinalAnswer,
+  resolveCounterpartyFollowUp,
+} from '../domain/resolve-counterparty-follow-up.js';
+import type { AnalyticalQuery } from '../domain/analytical/analytical-query.js';
 import type { CounterpartyIdentityService } from '../domain/load-counterparty-identity-population.js';
 import {
   ADVISOR_CURRENT_SNAPSHOT_FACT_NAME,
@@ -109,7 +119,11 @@ export type SendAdvisorMessageDependencies = {
   readonly settings: Pick<AdvisorSettingsRepository, 'findSettingsByTenant'>;
   readonly conversations: Pick<
     AdvisorConversationRepository,
-    'findConversation' | 'createMessage' | 'updateConversationTitle' | 'listMessages'
+    | 'findConversation'
+    | 'createMessage'
+    | 'updateConversationTitle'
+    | 'listMessages'
+    | 'saveAnalyticalContext'
   >;
   readonly runs: Pick<AdvisorRunRepository, 'createRun' | 'updateRun'>;
   readonly context: AdvisorContextBuilder;
@@ -213,6 +227,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         }),
       );
 
+      const priorState = parseAnalyticalConversationState(conversation.analyticalContext);
       const universalIntent = resolveUniversalAnalyticalIntent({
         content: question,
         now: input.now,
@@ -221,55 +236,58 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       if (
         universalIntent.kind === 'RESOLVED' &&
         universalIntent.validation.ok === true &&
-        isPartyProfileWinnerQuery(universalIntent.query) &&
+        isPartyProfileAnalyticalQuery(universalIntent.query) &&
         !isAdvisorInterpretiveQuestion(question)
       ) {
-        const outcome = await executeAnalyticalQuery({
-          query: universalIntent.query,
-          runtime: {
-            tenantId,
-            now: input.now,
-            counterpartyIdentity: deps.counterpartyIdentity,
-          },
-        });
-        const answer =
-          outcome.ok === true && typeof outcome.legacyFact.answer === 'string'
-            ? outcome.legacyFact.answer
-            : 'Não consigo fechar esse ranking com segurança porque a identificação oficial dessa contraparte não está disponível neste recorte.';
-        const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
-          senderType: 'CONSULTANT',
-          content: answer,
-        });
-        console.info(
-          JSON.stringify({
-            event: 'advisor_counterparty_quality',
-            tenantId,
-            conversationId: conversation.id,
-            decision: outcome.ok === true ? outcome.legacyFact.decision ?? null : 'UNAVAILABLE',
-            reasonCode: outcome.ok === true ? outcome.legacyFact.reasonCode ?? null : outcome.reason,
-            direction: universalIntent.query.direction ?? null,
-            partyProfile: universalIntent.query.filters?.partyProfile ?? null,
-          }),
-        );
-        return {
+        return answerCounterpartyQuery({
+          deps,
+          tenantId,
           conversationId: conversation.id,
           userMessage,
-          consultantMessage,
-          run: null,
-          factualAnswer: {
-            classification: 'FACTUAL_CLOSED',
-            providerCalled: false,
-            intentKind:
-              outcome.ok === true && outcome.legacyFact.decision === 'AVAILABLE'
-                ? 'RANKING_WINNER'
-                : 'FACTUAL_LIMITATION',
-            factKind: 'COUNTERPARTY_IDENTITY_QUALITY',
-            identityStatus: outcome.ok === true ? String(outcome.legacyFact.decision ?? '') : null,
-            returnedCount: null,
-            coveragePercent: null,
-            composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
-          },
-        };
+          query: universalIntent.query,
+          now: input.now,
+        });
+      }
+      if (!isAdvisorInterpretiveQuestion(question)) {
+        const followUp = resolveCounterpartyFollowUp({
+          content: question,
+          state: priorState,
+          now: input.now,
+          referenceMonthKey: input.monthKey,
+        });
+        if (followUp.kind === 'CLEAR' && priorState !== null) {
+          await saveCounterpartyState(deps, tenantId, conversation.id, null);
+        }
+        if (followUp.kind === 'ORDINAL' && priorState !== null) {
+          const ordinal = composeOrdinalAnswer({ state: priorState, rank: followUp.rank });
+          await saveCounterpartyState(deps, tenantId, conversation.id, {
+            ...priorState,
+            focusDisplayName: ordinal.focusDisplayName,
+          });
+          const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+            senderType: 'CONSULTANT',
+            content: ordinal.answer,
+          });
+          return closedCounterparty(
+            conversation.id,
+            userMessage,
+            consultantMessage,
+            priorState.decision,
+          );
+        }
+        if (followUp.kind === 'QUERY') {
+          const validation = validatePartyQuery(followUp.query);
+          if (validation) {
+            return answerCounterpartyQuery({
+              deps,
+              tenantId,
+              conversationId: conversation.id,
+              userMessage,
+              query: followUp.query,
+              now: input.now,
+            });
+          }
+        }
       }
       if (
         universalIntent.kind === 'RESOLVED' &&
@@ -1036,17 +1054,181 @@ async function preloadCostCenterFollowUp(input: {
   });
 }
 
-function isPartyProfileWinnerQuery(query: {
+function isPartyProfileAnalyticalQuery(query: {
   readonly operation: string;
   readonly dimension?: string;
   readonly filters?: { readonly partyProfile?: string };
 }): boolean {
   const profile = query.filters?.partyProfile;
   return (
-    query.operation === 'RANKING_WINNER' &&
     query.dimension === 'COUNTERPARTY' &&
-    (profile === 'CUSTOMER' || profile === 'SUPPLIER')
+    (profile === 'CUSTOMER' || profile === 'SUPPLIER') &&
+    (query.operation === 'RANKING_WINNER' ||
+      query.operation === 'RANKING_TOPN' ||
+      query.operation === 'LOOKUP' ||
+      query.operation === 'SHARE')
   );
+}
+
+function validatePartyQuery(query: AnalyticalQuery): boolean {
+  const validation = validateAnalyticalCapability(query);
+  return validation.ok === true;
+}
+
+async function answerCounterpartyQuery(input: {
+  readonly deps: {
+    readonly conversations: {
+      createMessage: SendAdvisorMessageDependencies['conversations']['createMessage'];
+      saveAnalyticalContext?: SendAdvisorMessageDependencies['conversations']['saveAnalyticalContext'];
+    };
+    readonly counterpartyIdentity?: SendAdvisorMessageDependencies['counterpartyIdentity'];
+  };
+  readonly tenantId: string;
+  readonly conversationId: string;
+  readonly userMessage: AiMessageRecord;
+  readonly query: AnalyticalQuery;
+  readonly now?: Date;
+}) {
+  const outcome = await executeAnalyticalQuery({
+    query: input.query,
+    runtime: {
+      tenantId: input.tenantId,
+      now: input.now,
+      counterpartyIdentity: input.deps.counterpartyIdentity,
+    },
+  });
+  const answer =
+    outcome.ok === true && typeof outcome.legacyFact.answer === 'string'
+      ? outcome.legacyFact.answer
+      : 'Não consigo fechar esse recorte com segurança porque a identificação oficial dessa contraparte não está disponível.';
+  if (outcome.ok === true) {
+    await saveCounterpartyState(
+      input.deps,
+      input.tenantId,
+      input.conversationId,
+      stateFromLegacy(input.query, outcome.legacyFact),
+    );
+  }
+  const consultantMessage = await input.deps.conversations.createMessage(
+    input.tenantId,
+    input.conversationId,
+    { senderType: 'CONSULTANT', content: answer },
+  );
+  console.info(
+    JSON.stringify({
+      event: 'advisor_counterparty_quality',
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      decision: outcome.ok === true ? outcome.legacyFact.decision ?? null : 'UNAVAILABLE',
+      reasonCode: outcome.ok === true ? outcome.legacyFact.reasonCode ?? null : outcome.reason,
+      direction: input.query.direction ?? null,
+      partyProfile: input.query.filters?.partyProfile ?? null,
+      operation: input.query.operation,
+    }),
+  );
+  return closedCounterparty(
+    input.conversationId,
+    input.userMessage,
+    consultantMessage,
+    outcome.ok === true ? String(outcome.legacyFact.decision ?? 'PARTIAL') : 'UNAVAILABLE',
+  );
+}
+
+function stateFromLegacy(
+  query: AnalyticalQuery,
+  legacyFact: Record<string, unknown>,
+): AnalyticalConversationState | null {
+  if (query.direction !== 'INFLOW' && query.direction !== 'OUTFLOW') {
+    return null;
+  }
+  const profile = query.filters?.partyProfile;
+  if (profile !== 'CUSTOMER' && profile !== 'SUPPLIER') {
+    return null;
+  }
+  const decision = legacyFact.decision;
+  const periodCoverage = legacyFact.periodCoverage;
+  if (decision !== 'AVAILABLE' && decision !== 'PARTIAL' && decision !== 'UNAVAILABLE') {
+    return null;
+  }
+  if (periodCoverage !== 'COMPLETE' && periodCoverage !== 'PARTIAL' && periodCoverage !== 'UNKNOWN') {
+    return null;
+  }
+  const rows = Array.isArray(legacyFact.rows) ? legacyFact.rows : [];
+  return {
+    version: 1,
+    semanticFamily: 'FLOW',
+    metric: 'REALIZED_CASH',
+    direction: query.direction,
+    period: query.period,
+    dimension: 'COUNTERPARTY',
+    operation: query.operation,
+    partyProfile: profile,
+    limit: query.limit ?? null,
+    rows: rows.flatMap((row) => {
+      if (row === null || typeof row !== 'object') {
+        return [];
+      }
+      const item = row as Record<string, unknown>;
+      if (typeof item.displayName !== 'string' || typeof item.amount !== 'string') {
+        return [];
+      }
+      return [
+        {
+          rank: typeof item.rank === 'number' ? item.rank : 1,
+          displayName: item.displayName,
+          amount: item.amount,
+          movementCount: typeof item.movementCount === 'number' ? item.movementCount : 0,
+        },
+      ];
+    }),
+    focusDisplayName: typeof legacyFact.focusDisplayName === 'string' ? legacyFact.focusDisplayName : null,
+    decision,
+    periodCoverage,
+    reasonCode: typeof legacyFact.reasonCode === 'string' ? legacyFact.reasonCode : '',
+  };
+}
+
+async function saveCounterpartyState(
+  deps: {
+    readonly conversations: {
+      saveAnalyticalContext?: SendAdvisorMessageDependencies['conversations']['saveAnalyticalContext'];
+    };
+  },
+  tenantId: string,
+  conversationId: string,
+  state: AnalyticalConversationState | null,
+): Promise<void> {
+  if (typeof deps.conversations.saveAnalyticalContext !== 'function') {
+    return;
+  }
+  const payload =
+    state === null ? null : (JSON.parse(JSON.stringify(state)) as AnalyticalConversationState);
+  await deps.conversations.saveAnalyticalContext(tenantId, conversationId, payload);
+}
+
+function closedCounterparty(
+  conversationId: string,
+  userMessage: AiMessageRecord,
+  consultantMessage: AiMessageRecord,
+  decision: string,
+): SendAdvisorMessageResult {
+  return {
+    conversationId,
+    userMessage,
+    consultantMessage,
+    run: null,
+    factualAnswer: {
+      classification: 'FACTUAL_CLOSED' as const,
+      providerCalled: false as const,
+      intentKind:
+        decision === 'AVAILABLE' ? ('RANKING_WINNER' as const) : ('FACTUAL_LIMITATION' as const),
+      factKind: 'COUNTERPARTY_IDENTITY_QUALITY',
+      identityStatus: decision,
+      returnedCount: null,
+      coveragePercent: null,
+      composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+    },
+  };
 }
 
 function isRunErrorCode(code: string): code is AiRunErrorCode {

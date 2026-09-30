@@ -1,4 +1,4 @@
-import type { PrismaClient } from '../../../generated/prisma/client.js';
+import { Prisma, type PrismaClient } from '../../../generated/prisma/client.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import type {
   AiConversationRecord,
@@ -23,6 +23,7 @@ function toConversation(row: {
   userId: string;
   status: AiConversationStatus;
   title: string | null;
+  analyticalContext: Prisma.JsonValue | null;
   startedAt: Date;
   lastMessageAt: Date;
   createdAt: Date;
@@ -34,6 +35,7 @@ function toConversation(row: {
     userId: row.userId,
     status: row.status,
     title: row.title,
+    analyticalContext: row.analyticalContext,
     startedAt: row.startedAt,
     lastMessageAt: row.lastMessageAt,
     createdAt: row.createdAt,
@@ -78,6 +80,11 @@ export type AdvisorConversationRepository = {
     conversationId: string,
     title: string,
   ): Promise<AiConversationRecord | null>;
+  saveAnalyticalContext(
+    tenantId: string,
+    conversationId: string,
+    context: Prisma.InputJsonValue | null,
+  ): Promise<boolean>;
   deleteConversation(tenantId: string, userId: string, conversationId: string): Promise<boolean>;
   createMessage(
     tenantId: string,
@@ -154,6 +161,22 @@ export function createAdvisorConversationRepository(
         data: { title: title.trim() || null },
       });
       return toConversation(row);
+    },
+
+    async saveAnalyticalContext(tenantId, conversationId, context) {
+      assertAdvisorTenantId(tenantId);
+      const existing = await prisma.aiConversation.findFirst({
+        where: { id: conversationId, tenantId },
+        select: { id: true },
+      });
+      if (existing === null) {
+        return false;
+      }
+      await prisma.aiConversation.update({
+        where: { id: existing.id },
+        data: { analyticalContext: context === null ? Prisma.JsonNull : context },
+      });
+      return true;
     },
 
     async deleteConversation(tenantId, userId, conversationId) {

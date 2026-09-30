@@ -212,6 +212,7 @@ export type AiConversationRecord = {
   readonly userId: string;
   readonly status: AiConversationStatus;
   readonly title: string | null;
+  readonly analyticalContext: unknown | null;
   readonly startedAt: Date;
   readonly lastMessageAt: Date;
   readonly createdAt: Date;

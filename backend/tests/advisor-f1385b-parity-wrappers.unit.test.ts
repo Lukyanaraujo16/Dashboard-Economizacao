@@ -87,8 +87,8 @@ describe('F13.8.5B executor registry', () => {
     ).toBe(false);
   });
 
-  it('publica 23 capabilities, com o par CUSTOMER/SUPPLIER do quality gate', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(23);
+  it('publica 29 capabilities, com TOPN, lookup e share de contraparte', () => {
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(29);
     expect(
       ANALYTICAL_CAPABILITY_REGISTRY.some(
         (capability) => capability.key === 'realized_cash.counterparty.inflow.customer.ranking_winner',

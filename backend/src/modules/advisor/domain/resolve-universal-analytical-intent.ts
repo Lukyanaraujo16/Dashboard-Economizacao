@@ -54,9 +54,15 @@ export function resolveCompanyCashDirection(content: string): AnalyticalDirectio
   }
   if (
     /\bclientes?\b/.test(folded) &&
-    /\b(?:me pagou|pagou para a empresa|pagou pra empresa)\b/.test(folded)
+    /\b(?:me pag(?:ou|aram)|pagou para a empresa|pagou pra empresa)\b/.test(folded)
   ) {
     return 'INFLOW';
+  }
+  if (/\bme pag(?:ou|aram)\b/.test(folded) && !/\bfornecedor(?:es)?\b/.test(folded)) {
+    return 'INFLOW';
+  }
+  if (/\bpaguei\b/.test(folded) && !/\bclientes?\b/.test(folded)) {
+    return 'OUTFLOW';
   }
   if (
     /\bfornecedor(?:es)?\b/.test(folded) &&
@@ -142,7 +148,7 @@ export function resolveUniversalAnalyticalIntent(
     ...(dimension.dimension !== null ? { dimension: dimension.dimension } : {}),
     operation,
     ...(filters !== undefined ? { filters } : {}),
-    ...(identity !== undefined && operation === 'LOOKUP'
+    ...(identity !== undefined && (operation === 'LOOKUP' || operation === 'SHARE')
       ? { identity: { kind: 'QUERY', query: identity } }
       : {}),
     ...(limit !== undefined ? { limit } : {}),
@@ -198,6 +204,12 @@ function resolveDimension(folded: string): DimensionResolution | null {
   if (/\bclientes?\b/.test(folded)) {
     return { dimension: 'COUNTERPARTY', movementWording: false, partyProfile: 'CUSTOMER' };
   }
+  if (/\bme pag(?:ou|aram)\b/.test(folded)) {
+    return { dimension: 'COUNTERPARTY', movementWording: false, partyProfile: 'CUSTOMER' };
+  }
+  if (/\bpaguei\b/.test(folded)) {
+    return { dimension: 'COUNTERPARTY', movementWording: false, partyProfile: 'SUPPLIER' };
+  }
   if (
     /\bcontrapartes?\b/.test(folded) ||
     /\bquem mais\b/.test(folded) ||
@@ -232,6 +244,12 @@ function resolveOperation(
   if (explicitLimit !== null && dimension.dimension !== null) {
     return 'RANKING_TOPN';
   }
+  if (/\bquais\b/.test(folded) && dimension.partyProfile !== undefined) {
+    return 'RANKING_TOPN';
+  }
+  if (/\brepresentou\b/.test(folded) && dimension.partyProfile !== undefined) {
+    return 'SHARE';
+  }
   if (/\b(?:qual|quem)\b/.test(folded) && /\b(?:mais|maior)\b/.test(folded)) {
     return 'RANKING_WINNER';
   }
@@ -251,7 +269,7 @@ function resolveLimit(
   if (operation === 'RANKING_WINNER') {
     return 1;
   }
-  if (operation === 'VALUE' || operation === 'LOOKUP' || operation === 'COMPARE') {
+  if (operation === 'VALUE' || operation === 'LOOKUP' || operation === 'COMPARE' || operation === 'SHARE') {
     return undefined;
   }
   return explicitLimit ?? 5;
@@ -270,13 +288,18 @@ function resolveSearchIdentity(content: string): string | undefined {
 }
 
 function extractCounterpartyPayerIdentity(content: string): string | null {
-  const match =
-    /quanto\s+(?:o|a)\s+(?:fornecedor|cliente|conv[eê]nio)\s+(.+?)\s+pagou/i.exec(content);
-  const raw = match?.[1]?.replace(/[?.!].*$/g, '').trim();
-  if (raw === undefined || raw === '') {
-    return null;
+  const patterns = [
+    /quanto\s+(?:o|a)\s+(?:fornecedor|cliente|conv[eê]nio)\s+(.+?)\s+pagou/i,
+    /quanto\s+(?:a|o)\s+empresa\s+(.+?)\s+me\s+pagou/i,
+    /quanto\s+paguei\s+(?:ao|à|a)\s+(?:fornecedor\s+)?(.+?)(?:\s+em\b|\s+no\b|[?.!]|$)/i,
+  ];
+  for (const pattern of patterns) {
+    const raw = pattern.exec(content)?.[1]?.replace(/[?.!].*$/g, '').trim();
+    if (raw !== undefined && raw !== '') {
+      return raw;
+    }
   }
-  return raw;
+  return null;
 }
 
 function resolveFlowPeriod(input: ResolveUniversalAnalyticalIntentInput): AnalyticalPeriod | null {

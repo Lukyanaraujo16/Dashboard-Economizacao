@@ -54,11 +54,20 @@ export type CounterpartyIdentityQuality = {
   readonly winnerGuaranteed: boolean;
 };
 
+export type CounterpartyResultRow = {
+  readonly rank: number;
+  readonly displayName: string;
+  readonly amount: string;
+  readonly movementCount: number;
+};
+
 export type CounterpartyWinnerAssessment = {
   readonly quality: CounterpartyIdentityQuality;
   readonly decision: CounterpartyQualityDecision;
   readonly reasonCode: string;
   readonly winnerName: string | null;
+  readonly rows: readonly CounterpartyResultRow[];
+  readonly focusDisplayName: string | null;
   readonly answer: string;
   readonly result: AnalyticalResult;
 };
@@ -73,14 +82,33 @@ export function resolveCounterpartyPeriodCoverage(): CounterpartyPeriodCoverageS
   return 'UNKNOWN';
 }
 
-export function assessCounterpartyWinner(input: {
+export type RankedCounterparty = {
+  readonly partyId: string;
+  readonly displayName: string;
+  readonly amount: Prisma.Decimal;
+  readonly movementCount: number;
+};
+
+export type CounterpartyPopulation = {
+  readonly qualityBase: Omit<
+    CounterpartyIdentityQuality,
+    'winnerGuaranteed' | 'topIdentifiedAmount'
+  >;
+  readonly ranked: readonly RankedCounterparty[];
+  readonly negative: boolean;
+  readonly incompatibleCount: number;
+  readonly unidentifiedAmount: Prisma.Decimal;
+  readonly incompatibleAmount: Prisma.Decimal;
+  readonly totalAmount: Prisma.Decimal;
+};
+
+export function inspectCounterpartyPopulation(input: {
   readonly movements: readonly CounterpartyMovementInput[];
   readonly partyProfile: CounterpartyProfileRole;
   readonly direction: 'INFLOW' | 'OUTFLOW';
   readonly period: AnalyticalPeriod;
   readonly periodCoverage: CounterpartyPeriodCoverageStatus;
-  readonly query: AnalyticalQuery;
-}): CounterpartyWinnerAssessment {
+}): CounterpartyPopulation {
   const expectedOrigin = input.direction === 'INFLOW' ? 'RECEIVABLE' : 'PAYABLE';
   const groups = new Map<string, { amount: Prisma.Decimal; name: string; count: number }>();
   let totalCount = 0;
@@ -129,47 +157,91 @@ export function assessCounterpartyWinner(input: {
     unidentifiedAmount = unidentifiedAmount.plus(amount);
   }
 
-  const ranked = [...groups.values()].sort((left, right) => right.amount.comparedTo(left.amount));
+  const rankedParties = [...groups.entries()]
+    .map(([partyId, row]) => ({
+      partyId,
+      displayName: row.name,
+      amount: row.amount,
+      movementCount: row.count,
+    }))
+    .sort((left, right) => {
+      const byAmount = right.amount.comparedTo(left.amount);
+      if (byAmount !== 0) {
+        return byAmount;
+      }
+      const byName = left.displayName.localeCompare(right.displayName, 'pt');
+      if (byName !== 0) {
+        return byName;
+      }
+      return left.partyId.localeCompare(right.partyId);
+    });
+  return {
+    qualityBase: {
+      totalMovementCount: totalCount,
+      identifiedMovementCount: identifiedCount,
+      unidentifiedMovementCount: unidentifiedCount,
+      incompatibleProfileMovementCount: incompatibleCount,
+      totalAmount: totalAmount.toFixed(4),
+      identifiedAmount: identifiedAmount.toFixed(4),
+      unidentifiedAmount: unidentifiedAmount.toFixed(4),
+      incompatibleProfileAmount: incompatibleAmount.toFixed(4),
+      countCoverageRatio: ratio(identifiedCount, totalCount),
+      amountCoverageRatio: decimalRatio(identifiedAmount, totalAmount),
+      distinctIdentifiedParties: groups.size,
+      partyProfile: input.partyProfile,
+      direction: input.direction,
+      period: input.period,
+      periodCoverage: input.periodCoverage,
+    },
+    ranked: rankedParties,
+    negative,
+    incompatibleCount,
+    unidentifiedAmount,
+    incompatibleAmount,
+    totalAmount,
+  };
+}
+
+export function assessCounterpartyWinner(input: {
+  readonly movements: readonly CounterpartyMovementInput[];
+  readonly partyProfile: CounterpartyProfileRole;
+  readonly direction: 'INFLOW' | 'OUTFLOW';
+  readonly period: AnalyticalPeriod;
+  readonly periodCoverage: CounterpartyPeriodCoverageStatus;
+  readonly query: AnalyticalQuery;
+}): CounterpartyWinnerAssessment {
+  const population = inspectCounterpartyPopulation(input);
+  const ranked = population.ranked;
   const top = ranked[0] ?? null;
   const tied = top !== null && ranked.filter((row) => row.amount.equals(top.amount)).length > 1;
-  const unsafe = unidentifiedAmount.plus(incompatibleAmount);
+  const unsafe = population.unidentifiedAmount.plus(population.incompatibleAmount);
   const winnerGuaranteed =
-    !negative && !tied && top !== null && incompatibleCount === 0 && top.amount.gt(unsafe);
+    !population.negative &&
+    !tied &&
+    top !== null &&
+    population.incompatibleCount === 0 &&
+    top.amount.gt(unsafe);
 
   const quality: CounterpartyIdentityQuality = {
-    totalMovementCount: totalCount,
-    identifiedMovementCount: identifiedCount,
-    unidentifiedMovementCount: unidentifiedCount,
-    incompatibleProfileMovementCount: incompatibleCount,
-    totalAmount: totalAmount.toFixed(4),
-    identifiedAmount: identifiedAmount.toFixed(4),
-    unidentifiedAmount: unidentifiedAmount.toFixed(4),
-    incompatibleProfileAmount: incompatibleAmount.toFixed(4),
-    countCoverageRatio: ratio(identifiedCount, totalCount),
-    amountCoverageRatio: decimalRatio(identifiedAmount, totalAmount),
-    distinctIdentifiedParties: groups.size,
-    partyProfile: input.partyProfile,
-    direction: input.direction,
-    period: input.period,
-    periodCoverage: input.periodCoverage,
+    ...population.qualityBase,
     topIdentifiedAmount: top === null ? null : top.amount.toFixed(4),
     winnerGuaranteed,
   };
 
   const decision = decide({
     quality,
-    negative,
+    negative: population.negative,
     tied,
-    incompatibleCount,
-    winnerName: top?.name ?? null,
+    incompatibleCount: population.incompatibleCount,
+    winnerName: top?.displayName ?? null,
   });
   const answer = composeAnswer({
     decision: decision.decision,
     reasonCode: decision.reasonCode,
     profile: input.partyProfile,
-    winnerName: top?.name ?? null,
+    winnerName: top?.displayName ?? null,
     winnerAmount: top?.amount ?? null,
-    unidentifiedAmount,
+    unidentifiedAmount: population.unidentifiedAmount,
     periodCoverage: input.periodCoverage,
   });
 
@@ -177,14 +249,26 @@ export function assessCounterpartyWinner(input: {
     quality,
     decision: decision.decision,
     reasonCode: decision.reasonCode,
-    winnerName: decision.decision === 'AVAILABLE' ? (top?.name ?? null) : top?.name ?? null,
+    winnerName: top?.displayName ?? null,
+    rows:
+      top === null
+        ? []
+        : [
+            {
+              rank: 1,
+              displayName: top.displayName,
+              amount: top.amount.toFixed(4),
+              movementCount: top.movementCount,
+            },
+          ],
+    focusDisplayName: tied ? null : (top?.displayName ?? null),
     answer,
     result: toResult({
       query: input.query,
       decision: decision.decision,
       reasonCode: decision.reasonCode,
       answer,
-      winnerName: top?.name ?? null,
+      winnerName: top?.displayName ?? null,
       winnerAmount: top?.amount.toFixed(4) ?? null,
       quality,
     }),
@@ -333,6 +417,282 @@ function ratio(part: number, total: number): number | null {
     return null;
   }
   return part / total;
+}
+
+const COUNTERPARTY_TOPN_MAX = 20;
+
+export function assessCounterpartyOperation(input: {
+  readonly movements: readonly CounterpartyMovementInput[];
+  readonly partyProfile: CounterpartyProfileRole;
+  readonly direction: 'INFLOW' | 'OUTFLOW';
+  readonly period: AnalyticalPeriod;
+  readonly periodCoverage: CounterpartyPeriodCoverageStatus;
+  readonly query: AnalyticalQuery;
+}): CounterpartyWinnerAssessment {
+  if (input.query.operation === 'RANKING_WINNER') {
+    return assessCounterpartyWinner(input);
+  }
+  const population = inspectCounterpartyPopulation(input);
+  const role = input.partyProfile === 'CUSTOMER' ? 'cliente' : 'fornecedor';
+  const rolePlural = input.partyProfile === 'CUSTOMER' ? 'clientes' : 'fornecedores';
+  const flow = input.partyProfile === 'CUSTOMER' ? 'recebimentos' : 'pagamentos';
+  const empty = emptyPopulationDecision(population);
+  if (empty !== null && input.query.operation !== 'LOOKUP' && input.query.operation !== 'SHARE') {
+    return finish({
+      population,
+      query: input.query,
+      decision: empty.decision,
+      reasonCode: empty.reasonCode,
+      answer: composeAnswer({
+        decision: empty.decision,
+        reasonCode: empty.reasonCode,
+        profile: input.partyProfile,
+        winnerName: null,
+        winnerAmount: null,
+        unidentifiedAmount: population.unidentifiedAmount,
+        periodCoverage: input.periodCoverage,
+      }),
+      rows: [],
+      focusDisplayName: null,
+      winnerGuaranteed: false,
+    });
+  }
+
+  if (input.query.operation === 'RANKING_TOPN') {
+    const limit = Math.min(Math.max(input.query.limit ?? 5, 1), COUNTERPARTY_TOPN_MAX);
+    const rows = population.ranked.slice(0, limit).map((row, index) => ({
+      rank: index + 1,
+      displayName: row.displayName,
+      amount: row.amount.toFixed(4),
+      movementCount: row.movementCount,
+    }));
+    if (rows.length === 0) {
+      const absent = { decision: 'UNAVAILABLE' as const, reasonCode: 'IDENTITY_ABSENT' };
+      return finish({
+        population,
+        query: input.query,
+        decision: absent.decision,
+        reasonCode: absent.reasonCode,
+        answer: `Não há identificação oficial suficiente de ${rolePlural} nesse recorte para fechar esse ranking com segurança.`,
+        rows: [],
+        focusDisplayName: null,
+        winnerGuaranteed: false,
+      });
+    }
+    const last = population.ranked[limit];
+    const boundaryTie =
+      last !== undefined && population.ranked[limit - 1]?.amount.equals(last.amount) === true;
+    const identityGap =
+      population.unidentifiedAmount.gt(0) || population.incompatibleCount > 0;
+    const periodOpen = input.periodCoverage !== 'COMPLETE';
+    const decision = identityGap || periodOpen || boundaryTie ? 'PARTIAL' : 'AVAILABLE';
+    const reasonCode = identityGap
+      ? 'IDENTITY_INCOMPLETE'
+      : periodOpen
+        ? 'PERIOD_COVERAGE_UNPROVEN'
+        : boundaryTie
+          ? 'TOPN_BOUNDARY_TIE'
+          : 'TOPN_COMPLETE';
+    const lines = rows
+      .map((row) => `${row.rank}. ${row.displayName} — ${formatAdvisorFactualBrl(row.amount)}`)
+      .join('\n');
+    const missing = formatAdvisorFactualBrl(population.unidentifiedAmount.toFixed(2));
+    const caveat = [
+      identityGap
+        ? `Há ${missing} em ${flow} sem ${role} identificado, então esta lista é a dos identificados e não fecha o ranking absoluto.`
+        : '',
+      periodOpen
+        ? 'A cobertura integral do período não pode ser comprovada pelos dados sincronizados.'
+        : '',
+      boundaryTie
+        ? 'Há empate na última posição incluída, então o corte dessa lista não é único.'
+        : '',
+    ]
+      .filter((line) => line !== '')
+      .join(' ');
+    const lead =
+      decision === 'AVAILABLE'
+        ? `Os ${rolePlural} com maior valor nesse período são:`
+        : `Nos dados disponíveis, os ${rolePlural} identificados com maior valor são:`;
+    return finish({
+      population,
+      query: input.query,
+      decision,
+      reasonCode,
+      answer: `${lead}\n${lines}${caveat === '' ? '' : `\n${caveat}`}`,
+      rows,
+      focusDisplayName: rows.length === 1 ? rows[0]!.displayName : null,
+      winnerGuaranteed: false,
+    });
+  }
+
+  const identityQuery = input.query.identity?.query ?? '';
+  const matches = matchIdentity(population.ranked, identityQuery);
+  if (matches.length === 0) {
+    return finish({
+      population,
+      query: input.query,
+      decision: 'UNAVAILABLE',
+      reasonCode: 'IDENTITY_NOT_FOUND',
+      answer: `Não encontrei esse ${role} nos dados disponíveis desse recorte.`,
+      rows: [],
+      focusDisplayName: null,
+      winnerGuaranteed: false,
+    });
+  }
+  if (matches.length > 1) {
+    return finish({
+      population,
+      query: input.query,
+      decision: 'UNAVAILABLE',
+      reasonCode: 'IDENTITY_AMBIGUOUS',
+      answer: `Há mais de um ${role} com esse nome nos dados disponíveis, então não escolho um.`,
+      rows: [],
+      focusDisplayName: null,
+      winnerGuaranteed: false,
+    });
+  }
+  const found = matches[0]!;
+  const money = formatAdvisorFactualBrl(found.amount.toFixed(2));
+  const periodOpen = input.periodCoverage !== 'COMPLETE';
+  if (input.query.operation === 'SHARE') {
+    if (population.totalAmount.lte(0)) {
+      return finish({
+        population,
+        query: input.query,
+        decision: 'UNAVAILABLE',
+        reasonCode: 'EMPTY_TOTAL',
+        answer: `Não há ${flow} observados nesse recorte para calcular essa participação.`,
+        rows: [],
+        focusDisplayName: found.displayName,
+        winnerGuaranteed: false,
+      });
+    }
+    const share = formatShare(found.amount, population.totalAmount);
+    const total = formatAdvisorFactualBrl(population.totalAmount.toFixed(2));
+    const decision = periodOpen ? 'PARTIAL' : 'AVAILABLE';
+    const observed = `${found.displayName} representa ${share} das ${input.direction === 'INFLOW' ? 'entradas' : 'saídas'} observadas nesse recorte, com ${money} de um total de ${total}.`;
+    return finish({
+      population,
+      query: input.query,
+      decision,
+      reasonCode: periodOpen ? 'PERIOD_COVERAGE_UNPROVEN' : 'SHARE_OBSERVED',
+      answer: periodOpen
+        ? `Nos dados disponíveis, ${observed} A cobertura integral do período não pode ser comprovada pelos dados sincronizados.`
+        : observed,
+      rows: [
+        {
+          rank: 1,
+          displayName: found.displayName,
+          amount: found.amount.toFixed(4),
+          movementCount: found.movementCount,
+        },
+      ],
+      focusDisplayName: found.displayName,
+      winnerGuaranteed: false,
+    });
+  }
+
+  const decision = periodOpen ? 'PARTIAL' : 'AVAILABLE';
+  const observed = `${found.displayName} aparece com ${money} em ${flow}.`;
+  return finish({
+    population,
+    query: input.query,
+    decision,
+    reasonCode: periodOpen ? 'PERIOD_COVERAGE_UNPROVEN' : 'LOOKUP_OBSERVED',
+    answer: periodOpen
+      ? `Nos dados disponíveis, ${observed} A cobertura integral do período não pode ser comprovada pelos dados sincronizados.`
+      : `O ${role} ${found.displayName} tem ${money} em ${flow} nesse período.`,
+    rows: [
+      {
+        rank: 1,
+        displayName: found.displayName,
+        amount: found.amount.toFixed(4),
+        movementCount: found.movementCount,
+      },
+    ],
+    focusDisplayName: found.displayName,
+    winnerGuaranteed: false,
+  });
+}
+
+function emptyPopulationDecision(population: CounterpartyPopulation): {
+  readonly decision: CounterpartyQualityDecision;
+  readonly reasonCode: string;
+} | null {
+  if (population.negative) {
+    return { decision: 'UNAVAILABLE', reasonCode: 'AMOUNT_SIGN_UNSUPPORTED' };
+  }
+  if (population.qualityBase.totalMovementCount === 0) {
+    if (population.qualityBase.periodCoverage === 'COMPLETE') {
+      return { decision: 'UNAVAILABLE', reasonCode: 'EMPTY_PERIOD' };
+    }
+    if (population.qualityBase.periodCoverage === 'PARTIAL') {
+      return { decision: 'UNAVAILABLE', reasonCode: 'PERIOD_COVERAGE_PARTIAL' };
+    }
+    return { decision: 'UNAVAILABLE', reasonCode: 'PERIOD_COVERAGE_UNKNOWN' };
+  }
+  return null;
+}
+
+function matchIdentity(
+  ranked: readonly RankedCounterparty[],
+  query: string,
+): readonly RankedCounterparty[] {
+  const needle = foldIdentity(query);
+  if (needle === '') {
+    return [];
+  }
+  return ranked.filter((row) => foldIdentity(row.displayName) === needle);
+}
+
+function foldIdentity(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatShare(part: Prisma.Decimal, total: Prisma.Decimal): string {
+  return `${part.div(total).mul(100).toFixed(2).replace('.', ',')}%`;
+}
+
+function finish(input: {
+  readonly population: CounterpartyPopulation;
+  readonly query: AnalyticalQuery;
+  readonly decision: CounterpartyQualityDecision;
+  readonly reasonCode: string;
+  readonly answer: string;
+  readonly rows: readonly CounterpartyResultRow[];
+  readonly focusDisplayName: string | null;
+  readonly winnerGuaranteed: boolean;
+}): CounterpartyWinnerAssessment {
+  const quality: CounterpartyIdentityQuality = {
+    ...input.population.qualityBase,
+    topIdentifiedAmount: input.rows[0]?.amount ?? null,
+    winnerGuaranteed: input.winnerGuaranteed,
+  };
+  const top = input.rows[0] ?? null;
+  return {
+    quality,
+    decision: input.decision,
+    reasonCode: input.reasonCode,
+    winnerName: top?.displayName ?? null,
+    rows: input.rows,
+    focusDisplayName: input.focusDisplayName,
+    answer: input.answer,
+    result: toResult({
+      query: input.query,
+      decision: input.decision,
+      reasonCode: input.reasonCode,
+      answer: input.answer,
+      winnerName: top?.displayName ?? null,
+      winnerAmount: top?.amount ?? null,
+      quality,
+    }),
+  };
 }
 
 function decimalRatio(part: Prisma.Decimal, total: Prisma.Decimal): number | null {

@@ -175,8 +175,14 @@ describe('F13.8.5A Capability Registry invariants', () => {
             c.dimensions.includes('COUNTERPARTY') &&
             c.directions?.includes('OUTFLOW'),
         )
-        .map((c) => c.key),
-    ).toEqual(['realized_cash.counterparty.outflow.supplier.ranking_winner']);
+        .map((c) => c.key)
+        .sort(),
+    ).toEqual([
+      'realized_cash.counterparty.outflow.supplier.lookup',
+      'realized_cash.counterparty.outflow.supplier.ranking_topn',
+      'realized_cash.counterparty.outflow.supplier.ranking_winner',
+      'realized_cash.counterparty.outflow.supplier.share',
+    ]);
     expect(
       caps.some(
         (c) =>
@@ -190,15 +196,27 @@ describe('F13.8.5A Capability Registry invariants', () => {
         .map((c) => c.key)
         .sort(),
     ).toEqual([
+      'realized_cash.counterparty.inflow.customer.lookup',
+      'realized_cash.counterparty.inflow.customer.ranking_topn',
       'realized_cash.counterparty.inflow.customer.ranking_winner',
+      'realized_cash.counterparty.inflow.customer.share',
+      'realized_cash.counterparty.outflow.supplier.lookup',
+      'realized_cash.counterparty.outflow.supplier.ranking_topn',
       'realized_cash.counterparty.outflow.supplier.ranking_winner',
+      'realized_cash.counterparty.outflow.supplier.share',
     ]);
   });
 
-  it('SHARE não tem capability standalone publicada', () => {
+  it('SHARE standalone existe só para contraparte com perfil', () => {
     expect(
-      listAnalyticalCapabilities().some((c) => c.operations.includes('SHARE')),
-    ).toBe(false);
+      listAnalyticalCapabilities()
+        .filter((capability) => capability.operations.includes('SHARE'))
+        .map((capability) => capability.key)
+        .sort(),
+    ).toEqual([
+      'realized_cash.counterparty.inflow.customer.share',
+      'realized_cash.counterparty.outflow.supplier.share',
+    ]);
   });
 });
 

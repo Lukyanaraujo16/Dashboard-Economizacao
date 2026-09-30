@@ -163,6 +163,8 @@ export const executeRealizedCashCounterparty: AnalyticalExecutor = async ({
         reasonCode: assessment.reasonCode,
         winnerGuaranteed: assessment.quality.winnerGuaranteed,
         periodCoverage: assessment.quality.periodCoverage,
+        focusDisplayName: assessment.focusDisplayName,
+        rows: assessment.rows,
       },
     };
   }

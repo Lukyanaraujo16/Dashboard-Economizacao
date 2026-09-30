@@ -6,7 +6,7 @@ import type { PayableReadRepository } from '../../finance/repositories/payable-r
 import type { ReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import type { AnalyticalPeriod } from './analytical/analytical-period.js';
 import {
-  assessCounterpartyWinner,
+  assessCounterpartyOperation,
   resolveCounterpartyPeriodCoverage,
   type CounterpartyMovementInput,
   type CounterpartyProfileRole,
@@ -137,7 +137,7 @@ export async function assessOfficialCounterpartyWinner(input: {
     period: input.query.period,
     now: input.now,
   });
-  return assessCounterpartyWinner({
+  return assessCounterpartyOperation({
     movements,
     partyProfile: role,
     direction,
