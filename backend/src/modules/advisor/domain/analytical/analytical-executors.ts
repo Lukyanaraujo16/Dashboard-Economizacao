@@ -11,6 +11,9 @@ import type { AdvisorCivilRangeKind } from '../resolve-advisor-civil-range.js';
 import { assessOfficialCounterpartyWinner } from '../load-counterparty-identity-population.js';
 import { loadMonthlyPlanningFact } from '../load-monthly-planning-fact.js';
 import type { AdvisorPlanningSubject } from '../resolve-advisor-planning-intent.js';
+import { formatCivilDateKey } from '../../../analytics/domain/civil-calendar.js';
+import { ADVISOR_DAILY_CASH_MOVEMENT_FACT_KIND } from '../compose-advisor-daily-cash-movement-answer.js';
+import { resolveCatalogCostCenter } from '../resolve-advisor-daily-cash-movement.js';
 
 function success(input: {
   readonly validated: Parameters<AnalyticalExecutor>[0]['validated'];
@@ -367,6 +370,84 @@ export const executeFinancialFactsMonth: AnalyticalExecutor = async ({
       surface: 'FINANCIAL_FACTS',
       monthKey,
       content,
+    },
+  });
+};
+
+export const executeRealizedCashDayMovements: AnalyticalExecutor = async ({
+  validated,
+  runtime,
+}) => {
+  if (runtime.cashRealizedDay === undefined) {
+    throw new Error('EXECUTOR_DEPENDENCY_MISSING:cashRealizedDay');
+  }
+  if (validated.query.period.kind !== 'DAY') {
+    throw new Error('realizedCashDayMovements exige period DAY.');
+  }
+  if (validated.query.direction !== 'INFLOW' && validated.query.direction !== 'OUTFLOW') {
+    throw new Error('direction obrigatória para movimentos do dia.');
+  }
+  const date = validated.query.period.date;
+  const direction = validated.query.direction;
+  const costCenterQuery = validated.query.filters?.costCenterQuery?.trim() ?? '';
+  let costCenterId: string | undefined;
+  let costCenterName: string | null = null;
+  if (costCenterQuery !== '') {
+    if (runtime.costCenters === undefined) {
+      throw new Error('EXECUTOR_DEPENDENCY_MISSING:costCenters');
+    }
+    const centers = await runtime.costCenters.listByTenant(runtime.tenantId);
+    const resolved = resolveCatalogCostCenter(centers, costCenterQuery);
+    if (resolved.status !== 'FOUND') {
+      return success({
+        validated,
+        executorKey: 'realizedCashDayMovements',
+        legacyFact: {
+          kind: ADVISOR_DAILY_CASH_MOVEMENT_FACT_KIND,
+          status: resolved.status,
+          date,
+          direction,
+          costCenterName: null,
+          total: null,
+          returnedSum: null,
+          difference: null,
+          hasMore: false,
+          items: [],
+        },
+      });
+    }
+    costCenterId = resolved.id;
+    costCenterName = resolved.name;
+  }
+
+  const details = await runtime.cashRealizedDay.getCashRealizedDayDetails({
+    tenantId: runtime.tenantId,
+    date,
+    direction: direction === 'INFLOW' ? 'inflows' : 'outflows',
+    ...(costCenterId === undefined ? {} : { costCenterId, costCenterLabel: costCenterName }),
+    now: runtime.now,
+  });
+  return success({
+    validated,
+    executorKey: 'realizedCashDayMovements',
+    legacyFact: {
+      kind: ADVISOR_DAILY_CASH_MOVEMENT_FACT_KIND,
+      status: details.completeness,
+      date: details.date,
+      direction,
+      costCenterName,
+      total: details.total?.toString() ?? null,
+      returnedSum: details.returnedSum?.toString() ?? null,
+      difference: details.difference?.toString() ?? null,
+      hasMore: details.hasMore,
+      items: details.items.map((item) => ({
+        displayLabel: item.displayLabel,
+        description: item.description,
+        categoryName: item.categoryNames[0] ?? null,
+        amount: item.attributedAmount.toString(),
+        costCenterLabel: item.costCenterLabel,
+        occurredOn: formatCivilDateKey(item.occurredOn),
+      })),
     },
   });
 };

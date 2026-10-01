@@ -1,3 +1,4 @@
+import { civilDateUtcFromKey } from '../../../analytics/domain/civil-calendar.js';
 import {
   ANALYTICAL_CIVIL_TIME_ZONE,
   type AnalyticalPeriodKind,
@@ -44,12 +45,19 @@ export type AnalyticalComparisonPeriod = {
   readonly right: AnalyticalPeriod;
 };
 
+/** Um dia civil de baixa. `date` é YYYY-MM-DD, materializado com Date.UTC. */
+export type AnalyticalDayPeriod = {
+  readonly kind: 'DAY';
+  readonly date: string;
+};
+
 export type AnalyticalPeriod =
   | AnalyticalMonthPeriod
   | AnalyticalYtdPeriod
   | AnalyticalYearPeriod
   | AnalyticalCurrentPeriod
-  | AnalyticalComparisonPeriod;
+  | AnalyticalComparisonPeriod
+  | AnalyticalDayPeriod;
 
 export function analyticalPeriodKind(period: AnalyticalPeriod): AnalyticalPeriodKind {
   return period.kind;
@@ -57,6 +65,10 @@ export function analyticalPeriodKind(period: AnalyticalPeriod): AnalyticalPeriod
 
 export function isAnalyticalMonthKey(value: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+}
+
+export function isAnalyticalCivilDate(value: string): boolean {
+  return civilDateUtcFromKey(value) !== null;
 }
 
 export function isAnalyticalComparisonPeriod(

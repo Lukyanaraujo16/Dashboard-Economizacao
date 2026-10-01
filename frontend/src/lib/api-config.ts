@@ -425,6 +425,26 @@ export function dashboardCashRealizedDetailsPath(options: {
   return `${DASHBOARD_API_PREFIX}/cash-realized/details?${params.toString()}`;
 }
 
+export function dashboardCashRealizedDayDetailsPath(options: {
+  readonly date: string;
+  readonly direction: 'inflows' | 'outflows';
+  readonly costCenterId?: string | null;
+  readonly categoryId?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  params.set('date', options.date);
+  params.set('direction', options.direction);
+  const costCenterId = options.costCenterId?.trim();
+  if (costCenterId) {
+    params.set('costCenter', costCenterId);
+  }
+  const categoryId = options.categoryId?.trim();
+  if (categoryId) {
+    params.set('category', categoryId);
+  }
+  return `${DASHBOARD_API_PREFIX}/cash-realized/day-details?${params.toString()}`;
+}
+
 export function dashboardExecutiveInsightsPath(
   monthKey?: string | null,
   costCenterId?: string | null,

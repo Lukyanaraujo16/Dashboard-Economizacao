@@ -8,6 +8,7 @@ import {
   executeRealizedCashCategoryBreakdown,
   executeRealizedCashCounterparty,
   executeRealizedCashCostCenter,
+  executeRealizedCashDayMovements,
   executeRealizedCashMovements,
 } from './analytical-executors.js';
 
@@ -19,6 +20,7 @@ const ANALYTICAL_EXECUTOR_REGISTRY: Record<AnalyticalExecutorKey, AnalyticalExec
   compareCashMonths: executeCompareCashMonths,
   realizedCashCategoryBreakdown: executeRealizedCashCategoryBreakdown,
   realizedCashMovements: executeRealizedCashMovements,
+  realizedCashDayMovements: executeRealizedCashDayMovements,
   realizedCashCounterparty: executeRealizedCashCounterparty,
   realizedCashCostCenter: executeRealizedCashCostCenter,
   currentSnapshot: executeCurrentSnapshot,

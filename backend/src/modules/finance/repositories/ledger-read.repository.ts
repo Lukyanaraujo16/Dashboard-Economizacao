@@ -32,6 +32,25 @@ export type LedgerReadRepository = {
   ): Promise<readonly LedgerIdentitySettlementReadRecord[]>;
 };
 
+/**
+ * População do caixa realizado: ACTIVE, sem transferência interna, occurredOn inclusivo.
+ * Transferências com financialTransferId preenchido ficam fora mesmo se ACTIVE.
+ */
+export function cashRealizedOccurredOnWhere(
+  query: LedgerOccurredOnQuery,
+): Prisma.FinancialTransactionWhereInput {
+  const where: Prisma.FinancialTransactionWhereInput = {
+    tenantId: query.tenantId,
+    lifecycleStatus: 'ACTIVE',
+    financialTransferId: null,
+    occurredOn: { gte: query.from, lte: query.to },
+  };
+  if (query.integrationId !== undefined && query.integrationId.trim() !== '') {
+    where.integrationId = query.integrationId;
+  }
+  return where;
+}
+
 export function createLedgerReadRepository(prisma: PrismaClient): LedgerReadRepository {
   return {
     async listActiveByOccurredOn(query) {
@@ -39,16 +58,7 @@ export function createLedgerReadRepository(prisma: PrismaClient): LedgerReadRepo
       if (query.from.getTime() > query.to.getTime()) {
         return [];
       }
-      const where: Prisma.FinancialTransactionWhereInput = {
-        tenantId: query.tenantId,
-        lifecycleStatus: 'ACTIVE',
-        // CASH-9C: ghost de transferência interna fica ACTIVE, mas fora do realizado.
-        financialTransferId: null,
-        occurredOn: { gte: query.from, lte: query.to },
-      };
-      if (query.integrationId !== undefined && query.integrationId.trim() !== '') {
-        where.integrationId = query.integrationId;
-      }
+      const where = cashRealizedOccurredOnWhere(query);
       const rows = await prisma.financialTransaction.findMany({
         where,
         select: {
@@ -69,15 +79,7 @@ export function createLedgerReadRepository(prisma: PrismaClient): LedgerReadRepo
       if (query.from.getTime() > query.to.getTime()) {
         return [];
       }
-      const where: Prisma.FinancialTransactionWhereInput = {
-        tenantId: query.tenantId,
-        lifecycleStatus: 'ACTIVE',
-        financialTransferId: null,
-        occurredOn: { gte: query.from, lte: query.to },
-      };
-      if (query.integrationId !== undefined && query.integrationId.trim() !== '') {
-        where.integrationId = query.integrationId;
-      }
+      const where = cashRealizedOccurredOnWhere(query);
       const rows = await prisma.financialTransaction.findMany({
         where,
         select: {

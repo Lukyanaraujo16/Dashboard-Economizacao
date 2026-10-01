@@ -12,6 +12,7 @@ import {
   type AnalyticalDirection,
 } from './analytical-keys.js';
 import {
+  isAnalyticalCivilDate,
   isAnalyticalMonthKey,
   type AnalyticalPeriod,
 } from './analytical-period.js';
@@ -274,6 +275,12 @@ function parsePeriod(value: unknown): ParseStep<AnalyticalPeriod> {
         timeZone: ANALYTICAL_CIVIL_TIME_ZONE,
       },
     };
+  }
+  if (kind === 'DAY') {
+    if (typeof period.date !== 'string' || !isAnalyticalCivilDate(period.date)) {
+      return fail('INVALID_PERIOD', 'DAY exige date YYYY-MM-DD.');
+    }
+    return { ok: true, value: { kind: 'DAY', date: period.date } };
   }
   if (kind === 'COMPARISON') {
     const left = parsePeriod(period.left);

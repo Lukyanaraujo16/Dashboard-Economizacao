@@ -253,6 +253,25 @@ export const ANALYTICAL_CAPABILITY_REGISTRY: readonly AnalyticalCapability[] = [
     sourceToolOrSurface: 'cash_movement_lines',
   },
 
+  // Movimentos realizados de um dia civil. Mesma semântica do ponto diário da Home.
+  {
+    key: 'realized_cash.day.movements',
+    metric: 'REALIZED_CASH',
+    semanticFamily: 'FLOW',
+    directions: ['INFLOW', 'OUTFLOW'],
+    dimensions: [null],
+    periodKinds: ['DAY'],
+    comparisonChildKinds: null,
+    operations: ['MOVEMENTS'],
+    allowedFilters: ['costCenterQuery'],
+    requiredFilters: [],
+    identityRequired: false,
+    maxLimit: null,
+    defaultLimit: null,
+    executorKey: 'realizedCashDayMovements',
+    sourceToolOrSurface: 'cash_realized_day_movements',
+  },
+
   // --- cash_nominal_dimension_* (INFLOW only, published) ---
   {
     key: 'realized_cash.counterparty.inflow.ranking_winner',

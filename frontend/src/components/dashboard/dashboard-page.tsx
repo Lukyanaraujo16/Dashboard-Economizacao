@@ -153,6 +153,12 @@ import {
   resolveOperationalTenantId,
   shouldSkipOverviewFetch,
 } from './dashboard-overview-view';
+import { DailyRealizedCashChart } from './daily-realized-cash-chart';
+import {
+  nextScopedDaySelection,
+  visibleScopedDay,
+  type ScopedDaySelection,
+} from './cash-realized-day-selection';
 import { CategoryDonutChart } from './category-donut-chart';
 import { presentTopCategoryDonutSlices } from './category-donut-view';
 import {
@@ -1179,6 +1185,12 @@ export function DashboardPage() {
     return categories.find((item) => item.id === selectedCategoryId)?.name ?? null;
   }, [categories, selectedCategoryId]);
 
+  const [billingDaySelection, setBillingDaySelection] = useState<ScopedDaySelection | null>(null);
+  const [expenseDaySelection, setExpenseDaySelection] = useState<ScopedDaySelection | null>(null);
+  const realizedDayScope = `${selectedMonthKey}|${selectedCostCenterId ?? ''}|${selectedCategoryId ?? ''}`;
+  const billingDayDate = visibleScopedDay(billingDaySelection, realizedDayScope);
+  const expenseDayDate = visibleScopedDay(expenseDaySelection, realizedDayScope);
+
   useEffect(() => {
     if (
       operationalTenantId === null ||
@@ -1836,6 +1848,8 @@ export function DashboardPage() {
 
   const closeExpand = useCallback(() => {
     setExpandKind(null);
+    setBillingDaySelection(null);
+    setExpenseDaySelection(null);
     setReceivableStockDetailsView({ kind: 'idle' });
     setPayableStockDetailsView({ kind: 'idle' });
     setExpectedReceivableDetailsView({ kind: 'idle' });
@@ -2502,28 +2516,28 @@ export function DashboardPage() {
               </p>
             ) : null}
             {realizedInflows ? (
-              <>
-                <p className={styles.expandLabel}>Entradas por dia de baixa</p>
-                <div className={styles.expandChart}>
-                  <Sparkline
-                    points={realizedInflows}
-                    colorVar="--color-series-revenue"
-                    interactive
-                    ariaLabel="Entradas realizadas por dia de baixa"
-                    valueCaption="realizado no dia"
-                  />
-                </div>
-                <p className={styles.expandLabel}>Entradas realizadas acumuladas (dia de baixa)</p>
-                <div className={styles.expandChart}>
-                  <Sparkline
-                    points={accumulate(realizedInflows)}
-                    colorVar="--color-series-revenue"
-                    interactive
-                    ariaLabel="Entradas realizadas acumuladas por dia de baixa"
-                    valueCaption="acumulado de caixa"
-                  />
-                </div>
-              </>
+              <DailyRealizedCashChart
+                dailyPoints={realizedInflows}
+                accumulatedPoints={accumulate(realizedInflows)}
+                colorVar="--color-series-revenue"
+                dailyLabel="Entradas por dia de baixa"
+                accumulatedLabel="Entradas realizadas acumuladas (dia de baixa)"
+                dailyAriaLabel="Entradas realizadas por dia de baixa"
+                accumulatedAriaLabel="Entradas realizadas acumuladas por dia de baixa"
+                dailyCaption="realizado no dia"
+                accumulatedCaption="acumulado de caixa"
+                direction="inflows"
+                selectedDate={billingDayDate}
+                onSelectDate={(date) => {
+                  setBillingDaySelection((current) =>
+                    nextScopedDaySelection(current, realizedDayScope, date),
+                  );
+                }}
+                costCenterId={selectedCostCenterId}
+                categoryId={selectedCategoryId}
+                chartClassName={styles.expandChart}
+                labelClassName={styles.expandLabel}
+              />
             ) : null}
             {cashFlowModel.realizedInflowsByCategory &&
             cashFlowModel.realizedInflowsByCategory.items.length > 0 &&
@@ -2695,28 +2709,28 @@ export function DashboardPage() {
             </dl>
             {realizedOutflows ? (
               <div key="paid">
-                <p className={styles.expandLabel}>Pago por dia de baixa</p>
-                <div className={styles.expandChart}>
-                  <Sparkline
-                    points={realizedOutflows}
-                    colorVar="--color-series-expense"
-                    interactive
-                    ariaLabel="Saídas realizadas por dia de baixa"
-                    valueCaption="pago no dia"
-                  />
-                </div>
-                <p className={styles.expandLabel}>
-                  Saídas realizadas acumuladas (dia de baixa)
-                </p>
-                <div className={styles.expandChart}>
-                  <Sparkline
-                    points={accumulate(realizedOutflows)}
-                    colorVar="--color-series-expense"
-                    interactive
-                    ariaLabel="Saídas realizadas acumuladas por dia de baixa"
-                    valueCaption="acumulado de caixa"
-                  />
-                </div>
+                <DailyRealizedCashChart
+                  dailyPoints={realizedOutflows}
+                  accumulatedPoints={accumulate(realizedOutflows)}
+                  colorVar="--color-series-expense"
+                  dailyLabel="Pago por dia de baixa"
+                  accumulatedLabel="Saídas realizadas acumuladas (dia de baixa)"
+                  dailyAriaLabel="Saídas realizadas por dia de baixa"
+                  accumulatedAriaLabel="Saídas realizadas acumuladas por dia de baixa"
+                  dailyCaption="pago no dia"
+                  accumulatedCaption="acumulado de caixa"
+                  direction="outflows"
+                  selectedDate={expenseDayDate}
+                  onSelectDate={(date) => {
+                    setExpenseDaySelection((current) =>
+                      nextScopedDaySelection(current, realizedDayScope, date),
+                    );
+                  }}
+                  costCenterId={selectedCostCenterId}
+                  categoryId={selectedCategoryId}
+                  chartClassName={styles.expandChart}
+                  labelClassName={styles.expandLabel}
+                />
               </div>
             ) : null}
             {cashFlowModel.realizedOutflowsByCategory &&

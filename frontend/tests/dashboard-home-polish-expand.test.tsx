@@ -14,6 +14,7 @@ import { getDashboardPayableStockDetails } from '../src/services/dashboard/payab
 import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
 import { getDashboardExpectedPayableDetails } from '../src/services/dashboard/expected-payable-details';
 import { getDashboardCashRealizedDetails } from '../src/services/dashboard/cash-realized-details';
+import { getDashboardCashRealizedDayDetails } from '../src/services/dashboard/cash-realized-day-details';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -62,6 +63,9 @@ vi.mock('../src/services/dashboard/expected-payable-details', () => ({
 }));
 vi.mock('../src/services/dashboard/cash-realized-details', () => ({
   getDashboardCashRealizedDetails: vi.fn(),
+}));
+vi.mock('../src/services/dashboard/cash-realized-day-details', () => ({
+  getDashboardCashRealizedDayDetails: vi.fn(),
 }));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
@@ -982,5 +986,125 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
     });
     expect(getExpectedPayableDetails).not.toHaveBeenCalled();
     expect(within(payable).getByText('Títulos em aberto')).toBeTruthy();
+  });
+});
+
+describe('Home — detalhe diário de caixa realizado', () => {
+  const getDayDetails = vi.mocked(getDashboardCashRealizedDayDetails);
+
+  beforeEach(() => {
+    getDayDetails.mockResolvedValue({
+      date: '2026-08-05',
+      direction: 'inflows',
+      completeness: 'COMPLETE',
+      total: '888888.88',
+      returnedSum: '888888.88',
+      difference: '0',
+      hasMore: false,
+      itemCount: 1,
+      limit: 40,
+      items: [
+        {
+          occurredOn: '2026-08-05',
+          attributedAmount: '888888.88',
+          partyName: 'Empresa A',
+          description: null,
+          displayLabel: 'Empresa A',
+          categoryNames: ['Serviços'],
+          costCenterLabel: null,
+        },
+      ],
+    });
+  });
+
+  function mockPlot(element: HTMLElement) {
+    element.getBoundingClientRect = () =>
+      ({
+        width: 300,
+        height: 40,
+        left: 0,
+        top: 0,
+        right: 300,
+        bottom: 40,
+        x: 0,
+        y: 0,
+        toJSON() {
+          return {};
+        },
+      }) as DOMRect;
+  }
+
+  it('Faturamento abre o dia e a troca de mês não mantém o detalhe', async () => {
+    const dialog = await openKpiExpand('Faturamento');
+    expect(within(dialog).getByText('Selecione um dia para ver os lançamentos')).toBeTruthy();
+    const daily = within(dialog).getByRole('img', { name: /Entradas realizadas por dia de baixa/ });
+    const accumulated = within(dialog).getByRole('img', {
+      name: 'Entradas realizadas acumuladas por dia de baixa',
+    });
+    mockPlot(daily);
+    mockPlot(accumulated);
+    fireEvent.click(accumulated, { clientX: 10, clientY: 10 });
+    expect(within(dialog).queryByRole('region', { name: /Recebimentos em/ })).toBeNull();
+    fireEvent.click(daily, { clientX: 10, clientY: 10 });
+    expect(await within(dialog).findByRole('region', { name: 'Recebimentos em 5 AGO 2026' })).toBeTruthy();
+    expect(daily.querySelector('[data-sparkline-selected="true"]')).toBeTruthy();
+    expect(
+      within(dialog).getByText((_, node) => node?.getAttribute('data-cash-day-total') === 'true').textContent,
+    ).toMatch(/888\.888,88/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fechar' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    fireEvent.click(kpiScope('Faturamento').getByRole('button', { name: 'Expandir' }));
+    const reopened = await screen.findByRole('dialog');
+    expect(within(reopened).queryByRole('region', { name: /Recebimentos em/ })).toBeNull();
+  });
+
+  it('Despesas abre o dia e o acumulado não pede lançamentos', async () => {
+    getMonthlyCashFlow.mockResolvedValue({
+      ...cashFlowHomeFixture,
+      daily: {
+        realized: [
+          { date: '2026-08-05', inflows: '10.00', outflows: '20.00', result: '-10.00' },
+          { date: '2026-08-06', inflows: '10.00', outflows: '30.00', result: '-20.00' },
+        ],
+        expected: cashFlowHomeFixture.daily.expected,
+      },
+    });
+    getDayDetails.mockResolvedValue({
+      date: '2026-08-06',
+      direction: 'outflows',
+      completeness: 'COMPLETE',
+      total: '30.00',
+      returnedSum: '30.00',
+      difference: '0',
+      hasMore: false,
+      itemCount: 1,
+      limit: 40,
+      items: [
+        {
+          occurredOn: '2026-08-06',
+          attributedAmount: '30.00',
+          partyName: null,
+          description: 'Aluguel',
+          displayLabel: 'Aluguel',
+          categoryNames: [],
+          costCenterLabel: null,
+        },
+      ],
+    });
+    const dialog = await openKpiExpand('Despesas');
+    expect(within(dialog).getByText('Selecione um dia para ver os lançamentos')).toBeTruthy();
+    const accumulated = within(dialog).getByRole('img', {
+      name: 'Saídas realizadas acumuladas por dia de baixa',
+    });
+    expect(accumulated.getAttribute('aria-label')).not.toMatch(/Enter/);
+    const daily = within(dialog).getByRole('img', { name: /Saídas realizadas por dia de baixa/ });
+    mockPlot(daily);
+    fireEvent.click(daily, { clientX: 290, clientY: 10 });
+    expect(await within(dialog).findByText('Aluguel')).toBeTruthy();
+    expect(getDayDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ direction: 'outflows', date: '2026-08-06' }),
+    );
   });
 });

@@ -29,6 +29,10 @@ import {
 } from '../domain/resolve-universal-analytical-intent.js';
 import { isAdvisorInterpretiveQuestion } from '../domain/classify-advisor-factual-response.js';
 import { runAdvisorMonthlyPlanning } from '../domain/run-advisor-monthly-planning.js';
+import { runAdvisorDailyCashMovement } from '../domain/run-advisor-daily-cash-movement.js';
+import { parseDailyCashMovementConversationState } from '../domain/daily-cash-movement-conversation-state.js';
+import type { CashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
+import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import type { MonthlyPlanningServices } from '../domain/load-monthly-planning-fact.js';
 import { executeAnalyticalQuery } from '../domain/analytical/execute-analytical-query.js';
 import { validateAnalyticalCapability } from '../domain/analytical/validate-analytical-capability.js';
@@ -135,6 +139,10 @@ export type SendAdvisorMessageDependencies = {
   readonly cashComparison?: AdvisorCashComparisonService;
   readonly counterpartyIdentity?: CounterpartyIdentityService;
   readonly monthlyPlanning?: MonthlyPlanningServices;
+  readonly dailyCashMovements?: {
+    readonly details: Pick<CashRealizedDetailsService, 'getCashRealizedDayDetails'>;
+    readonly costCenters: Pick<CostCenterReadRepository, 'listByTenant'>;
+  };
 };
 
 /**
@@ -258,6 +266,42 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               providerCalled: false,
               intentKind: 'MONTHLY_PLANNING',
               factKind: 'MONTHLY_PLANNING',
+              identityStatus: null,
+              returnedCount: null,
+              coveragePercent: null,
+              composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+            },
+          };
+        }
+      }
+      if (deps.dailyCashMovements !== undefined && !isAdvisorInterpretiveQuestion(question)) {
+        const daily = await runAdvisorDailyCashMovement({
+          content: question,
+          referenceMonthKey: period.monthKey,
+          now: input.now,
+          priorState: parseDailyCashMovementConversationState(conversation.analyticalContext),
+          tenantId,
+          details: deps.dailyCashMovements.details,
+          costCenters: deps.dailyCashMovements.costCenters,
+        });
+        if (daily !== null) {
+          if (daily.state !== null) {
+            await deps.conversations.saveAnalyticalContext(tenantId, conversation.id, daily.state);
+          }
+          const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+            senderType: 'CONSULTANT',
+            content: daily.answer,
+          });
+          return {
+            conversationId: conversation.id,
+            userMessage,
+            consultantMessage,
+            run: null,
+            factualAnswer: {
+              classification: 'FACTUAL_CLOSED',
+              providerCalled: false,
+              intentKind: 'DAILY_CASH_MOVEMENT',
+              factKind: 'DAILY_CASH_MOVEMENTS',
               identityStatus: null,
               returnedCount: null,
               coveragePercent: null,

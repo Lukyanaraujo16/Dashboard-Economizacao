@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
+  type TouchEvent,
 } from 'react';
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
@@ -44,6 +45,16 @@ export type SparklineProps = {
   /** Séries que podem ser negativas: zero fica no meio do eixo. */
   readonly signed?: boolean;
   readonly className?: string;
+  /** Data YYYY-MM-DD do ponto que permanece marcado. Genérico: não conhece caixa. */
+  readonly selectedDate?: string | null;
+  /** Opcional. O componente continua genérico: não conhece caixa nem categoria. */
+  readonly onPointSelect?: (point: SparklinePointSelection) => void;
+};
+
+export type SparklinePointSelection = {
+  readonly date: string;
+  readonly amount: string;
+  readonly index: number;
 };
 
 /** Mini série diária por competência (Σ total do dia) — não representa caixa. */
@@ -55,9 +66,12 @@ export function Sparkline({
   valueCaption,
   signed = false,
   className,
+  selectedDate = null,
+  onPointSelect,
 }: SparklineProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
   const plotRef = useRef<HTMLDivElement>(null);
+  const ignoreClickAfterTouchRef = useRef(false);
 
   const values = useMemo(() => amountValues(points), [points]);
   const scale = useMemo(
@@ -113,9 +127,57 @@ export function Sparkline({
       if (event.key === 'End') {
         event.preventDefault();
         setActiveIndex(last);
+        return;
+      }
+      if ((event.key === 'Enter' || event.key === ' ') && onPointSelect && activeIndex >= 0) {
+        event.preventDefault();
+        const point = points[activeIndex];
+        if (point) {
+          onPointSelect({ date: point.date, amount: point.amount, index: activeIndex });
+        }
       }
     },
-    [activeIndex, interactive, points.length],
+    [activeIndex, interactive, onPointSelect, points],
+  );
+
+  const selectFromClientX = useCallback(
+    (clientX: number, width: number, left: number) => {
+      if (!onPointSelect || !interactive || width <= 0) {
+        return;
+      }
+      const index = indexFromRatio((clientX - left) / width, points.length);
+      const point = points[index];
+      if (!point) {
+        return;
+      }
+      onPointSelect({ date: point.date, amount: point.amount, index });
+    },
+    [interactive, onPointSelect, points],
+  );
+
+  const handleClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (ignoreClickAfterTouchRef.current) {
+        ignoreClickAfterTouchRef.current = false;
+        return;
+      }
+      const rect = event.currentTarget.getBoundingClientRect();
+      selectFromClientX(event.clientX, rect.width, rect.left);
+    },
+    [selectFromClientX],
+  );
+
+  const handleTouchEnd = useCallback(
+    (event: TouchEvent<HTMLDivElement>) => {
+      const touch = event.changedTouches[0];
+      if (!touch) {
+        return;
+      }
+      ignoreClickAfterTouchRef.current = true;
+      const rect = event.currentTarget.getBoundingClientRect();
+      selectFromClientX(touch.clientX, rect.width, rect.left);
+    },
+    [selectFromClientX],
   );
 
   const style = { '--sparkline-color': `var(${colorVar})` } as CSSProperties;
@@ -146,20 +208,35 @@ export function Sparkline({
 
   const activePoint = activeIndex >= 0 ? geometry[activeIndex] : undefined;
   const activeDaily = activeIndex >= 0 ? points[activeIndex] : undefined;
+  const selectedIndex =
+    selectedDate === null ? -1 : points.findIndex((point) => point.date === selectedDate);
+  const selectedPoint = selectedIndex >= 0 ? geometry[selectedIndex] : undefined;
+  const hoverDiffersFromSelection = activeIndex >= 0 && activeIndex !== selectedIndex;
 
   return (
     <div
       ref={plotRef}
-      className={cx(styles.root, interactive && styles.interactive, className)}
+      className={cx(
+        styles.root,
+        interactive && styles.interactive,
+        onPointSelect && styles.selectable,
+        className,
+      )}
       style={style}
       role="img"
-      aria-label={ariaLabel}
+      aria-label={
+        onPointSelect
+          ? `${ariaLabel}. Use as setas para escolher o dia e Enter ou Espaço para ver os lançamentos.`
+          : ariaLabel
+      }
       tabIndex={interactive ? 0 : undefined}
       onMouseMove={handleMove}
       onMouseLeave={interactive ? () => setActiveIndex(-1) : undefined}
       onFocus={interactive ? () => setActiveIndex(points.length - 1) : undefined}
       onBlur={interactive ? () => setActiveIndex(-1) : undefined}
       onKeyDown={handleKeyDown}
+      onClick={onPointSelect ? handleClick : undefined}
+      onTouchEnd={onPointSelect ? handleTouchEnd : undefined}
     >
       <svg
         className={styles.canvas}
@@ -184,7 +261,38 @@ export function Sparkline({
           points={toPolyline(geometry)}
           vectorEffect="non-scaling-stroke"
         />
-        {activePoint ? (
+        {selectedPoint ? (
+          <g data-sparkline-selected="true">
+            <line
+              className={styles.selectedMarker}
+              x1={selectedPoint.x}
+              y1={0}
+              x2={selectedPoint.x}
+              y2={VIEW_HEIGHT}
+              vectorEffect="non-scaling-stroke"
+            />
+            <circle
+              className={styles.selectedDot}
+              cx={selectedPoint.x}
+              cy={selectedPoint.y}
+              r={3.25}
+            />
+          </g>
+        ) : null}
+        {activePoint && hoverDiffersFromSelection ? (
+          <g>
+            <line
+              className={styles.marker}
+              x1={activePoint.x}
+              y1={0}
+              x2={activePoint.x}
+              y2={VIEW_HEIGHT}
+              vectorEffect="non-scaling-stroke"
+            />
+            <circle className={styles.dot} cx={activePoint.x} cy={activePoint.y} r={2.5} />
+          </g>
+        ) : null}
+        {activePoint && !selectedPoint ? (
           <g>
             <line
               className={styles.marker}

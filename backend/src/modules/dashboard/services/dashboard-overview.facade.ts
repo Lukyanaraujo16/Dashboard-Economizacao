@@ -55,6 +55,7 @@ import type {
   DashboardReceivableStockDetailsResponse,
   DashboardPayableStockDetailsResponse,
   DashboardCashRealizedDetailsResponse,
+  DashboardCashRealizedDayDetailsResponse,
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyRevenueResponse,
   DashboardExpenseCeilingResponse,
@@ -71,6 +72,7 @@ import { toDashboardExpectedPayableDetailsResponse } from '../http/to-dashboard-
 import { toDashboardReceivableStockDetailsResponse } from '../http/to-dashboard-receivable-stock-details-response.js';
 import { toDashboardPayableStockDetailsResponse } from '../http/to-dashboard-payable-stock-details-response.js';
 import { toDashboardCashRealizedDetailsResponse } from '../http/to-dashboard-cash-realized-details-response.js';
+import { toDashboardCashRealizedDayDetailsResponse } from '../http/to-dashboard-cash-realized-day-details-response.js';
 import { toDashboardMonthlyCashFlowResponse } from '../http/to-dashboard-monthly-cash-flow-response.js';
 import { toDashboardCashMovementHistoryResponse } from '../http/to-dashboard-cash-movement-history-response.js';
 import { toDashboardCashExpectedHorizonResponse } from '../http/to-dashboard-cash-expected-horizon-response.js';
@@ -225,6 +227,16 @@ export type DashboardOverviewFacade = {
       readonly offset?: number;
     },
   ): Promise<DashboardCashRealizedDetailsResponse>;
+  getCashRealizedDayDetails(
+    auth: AuthenticatedRequestContext,
+    input: {
+      readonly date: string;
+      readonly direction: CashRealizedDetailsDirection;
+      readonly costCenterId?: string | null;
+      readonly categoryId?: string | null;
+      readonly limit?: number;
+    },
+  ): Promise<DashboardCashRealizedDayDetailsResponse>;
   getMonthlyExecutiveInsights(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
@@ -599,6 +611,27 @@ export function createDashboardOverviewFacade(
         ...(input.offset === undefined ? {} : { offset: input.offset }),
       } satisfies GetCashRealizedDetailsInput);
       return toDashboardCashRealizedDetailsResponse(details);
+    },
+
+    async getCashRealizedDayDetails(auth, input) {
+      const detailsService = requireCashRealizedDetails(deps);
+      const tenantId = requireOperationalTenantId(auth);
+      const resolved = await resolveCostCenterId(deps, tenantId, input.costCenterId ?? null);
+      const costCenterLabel =
+        resolved === undefined
+          ? null
+          : (await deps.costCenters.findByIdForTenant(tenantId, resolved))?.name ?? null;
+      const categoryFilter = await resolveCategoryFilter(deps, tenantId, input.categoryId ?? null);
+      const details = await detailsService.getCashRealizedDayDetails({
+        tenantId,
+        date: input.date,
+        direction: input.direction,
+        ...costCenterFilter(resolved),
+        ...(costCenterLabel === null ? {} : { costCenterLabel }),
+        ...categoryFilterSpread(categoryFilter),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      });
+      return toDashboardCashRealizedDayDetailsResponse(details);
     },
 
     async getMonthlyExecutiveInsights(

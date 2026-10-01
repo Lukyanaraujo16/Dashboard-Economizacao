@@ -251,6 +251,17 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
         revenueGoals: createRevenueGoalRepository(prisma),
         expenseCeilings: createExpenseCeilingRepository(prisma),
       },
+      dailyCashMovements: {
+        details: createCashRealizedDetailsService({
+          ledger,
+          receivables,
+          payables,
+          categories,
+          parties,
+          costCenterAllocations,
+        }),
+        costCenters,
+      },
     });
 
   return {

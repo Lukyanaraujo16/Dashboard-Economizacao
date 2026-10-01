@@ -14,6 +14,12 @@ import {
   type CashRealizedDetails,
   type CashRealizedDetailsDirection,
 } from '../domain/cash-realized-details.js';
+import {
+  buildCashRealizedDayDetails,
+  clampCashRealizedDayDetailsLimit,
+  type CashRealizedDayDetails,
+} from '../domain/cash-realized-day-details.js';
+import { civilDateUtcFromKey } from '../domain/civil-calendar.js';
 import { civilMonthBounds, civilMonthBoundsFromKey, civilMonthKey } from '../domain/civil-calendar.js';
 import type { GetMonthlyCashFlowInput } from '../domain/types.js';
 
@@ -42,11 +48,24 @@ export type GetCashRealizedDetailsInput = GetMonthlyCashFlowInput & {
   readonly civilRange?: CashRealizedCivilRangeInput;
 };
 
+export type GetCashRealizedDayDetailsInput = {
+  readonly tenantId: string;
+  readonly integrationId?: string;
+  readonly date: string;
+  readonly direction: CashRealizedDetailsDirection;
+  readonly costCenterId?: string;
+  readonly costCenterLabel?: string | null;
+  readonly categoryFilter?: GetMonthlyCashFlowInput['categoryFilter'];
+  readonly limit?: number;
+  readonly now?: Date;
+};
+
 export type CashRealizedDetailsService = {
   getCashRealizedDetails(input: GetCashRealizedDetailsInput): Promise<CashRealizedDetails>;
   listAllCashRealizedDetails(
     input: Omit<GetCashRealizedDetailsInput, 'limit' | 'offset'>,
   ): Promise<CashRealizedDetails>;
+  getCashRealizedDayDetails(input: GetCashRealizedDayDetailsInput): Promise<CashRealizedDayDetails>;
 };
 
 export type CashRealizedDetailsServiceDependencies = {
@@ -285,6 +304,126 @@ export function createCashRealizedDetailsService(
       });
   }
 
+  async function loadDayDetails(
+    input: GetCashRealizedDayDetailsInput,
+  ): Promise<CashRealizedDayDetails> {
+    assertTenantId(input.tenantId);
+    const tenantId = input.tenantId.trim();
+    const day = civilDateUtcFromKey(input.date);
+    const limit = clampCashRealizedDayDetailsLimit(input.limit);
+    if (day === null) {
+      return buildCashRealizedDayDetails({
+        date: input.date,
+        direction: input.direction,
+        today: civilTodayInSaoPaulo(input.now ?? new Date()),
+        settlements: [],
+        partyNames: new Map(),
+        limit,
+      });
+    }
+    const today = civilTodayInSaoPaulo(input.now ?? new Date());
+    const scope = {
+      tenantId,
+      ...(input.integrationId !== undefined && input.integrationId.trim() !== ''
+        ? { integrationId: input.integrationId }
+        : {}),
+    };
+    const [settlements, receivables, payables] = await Promise.all([
+      deps.ledger.listActiveByOccurredOn({ ...scope, from: day, to: day }),
+      deps.receivables.findActiveByTenant(scope),
+      deps.payables.findActiveByTenant(scope),
+    ]);
+    const settlementSources = settlements.map((row) => ({
+      settlementExternalId: row.externalId,
+      installmentExternalId: row.installmentExternalId,
+      installmentKind: row.installmentKind,
+      transactionType: row.transactionType,
+      occurredOn: row.occurredOn,
+      netAmount: row.netAmount,
+    }));
+    const receivableIds = [
+      ...new Set(
+        settlements
+          .filter((row) => row.installmentKind === 'RECEIVABLE')
+          .map((row) => row.installmentExternalId),
+      ),
+    ];
+    const payableIds = [
+      ...new Set(
+        settlements
+          .filter((row) => row.installmentKind === 'PAYABLE')
+          .map((row) => row.installmentExternalId),
+      ),
+    ];
+    const [realizedReceivables, realizedPayables] = await Promise.all([
+      deps.receivables.findByExternalIds(scope, receivableIds),
+      deps.payables.findByExternalIds(scope, payableIds),
+    ]);
+    const realizedInstallments = new Map<string, FinancialInstallmentReadRecord>([
+      ...installmentMap('RECEIVABLE', realizedReceivables),
+      ...installmentMap('PAYABLE', realizedPayables),
+      ...installmentMap('RECEIVABLE', receivables),
+      ...installmentMap('PAYABLE', payables),
+    ]);
+    const categoryIds = collectCashCategoryExternalIds(
+      [...realizedInstallments.values()].map((row) => ({
+        categoryExternalIds: row.categoryExternalIds,
+      })),
+    );
+    const categories =
+      categoryIds.length === 0
+        ? []
+        : await deps.categories.findByTenantAndExternalIds({
+            ...scope,
+            externalIds: categoryIds,
+          });
+    const partyIds = [
+      ...new Set(
+        [...realizedInstallments.values()]
+          .map((row) => row.partyId)
+          .filter((id): id is string => typeof id === 'string' && id.trim() !== ''),
+      ),
+    ];
+    const partyNames = await deps.parties.findNamesByIds(scope, partyIds);
+    const base = {
+      date: input.date,
+      direction: input.direction,
+      today,
+      settlements: settlementSources,
+      realizedInstallments,
+      categories,
+      partyNames,
+      categoryFilter: input.categoryFilter ?? null,
+      costCenterLabel: input.costCenterLabel ?? null,
+      limit,
+    };
+    if (input.costCenterId === undefined) {
+      return buildCashRealizedDayDetails(base);
+    }
+    const allocations = requireAllocations(deps);
+    const [realizedReceivableAllocations, realizedPayableAllocations] = await Promise.all([
+      allocations.findHistoricalReceivableAllocationsByExternalIds({
+        ...scope,
+        costCenterId: input.costCenterId,
+        externalIds: receivableIds,
+      }),
+      allocations.findHistoricalPayableAllocationsByExternalIds({
+        ...scope,
+        costCenterId: input.costCenterId,
+        externalIds: payableIds,
+      }),
+    ]);
+    return buildCashRealizedDayDetails({
+      ...base,
+      costCenter: {
+        expectedReceivables: [],
+        expectedPayables: [],
+        realizedReceivables: realizedReceivableAllocations,
+        realizedPayables: realizedPayableAllocations,
+      },
+    });
+  }
+
   return {
     getCashRealizedDetails(input) {
       return loadDetails(input, clampLimit(input.limit), clampOffset(input.offset));
@@ -295,6 +434,9 @@ export function createCashRealizedDetailsService(
         CASH_REALIZED_DETAILS_ALL_MAX,
         0,
       );
+    },
+    getCashRealizedDayDetails(input) {
+      return loadDayDetails(input);
     },
   };
 }

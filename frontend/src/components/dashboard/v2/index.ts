@@ -81,7 +81,7 @@ export { RatioMeter } from './ratio-meter';
 export type { RatioMeterProps } from './ratio-meter';
 
 export { Sparkline } from './sparkline';
-export type { SparklineProps } from './sparkline';
+export type { SparklinePointSelection, SparklineProps } from './sparkline';
 
 export {
   goalProgressStatusFromApi,

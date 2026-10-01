@@ -586,3 +586,29 @@ export type DashboardCashRealizedDetailsResponse = {
   readonly offset: number;
   readonly items: readonly DashboardCashRealizedDetailItem[];
 };
+
+export type DashboardCashRealizedDayCompleteness = 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE';
+
+export type DashboardCashRealizedDayDetailItem = {
+  readonly occurredOn: string;
+  readonly attributedAmount: string;
+  readonly partyName: string | null;
+  readonly description: string | null;
+  readonly displayLabel: string;
+  readonly categoryNames: readonly string[];
+  readonly costCenterLabel: string | null;
+};
+
+/** Explicação de um ponto diário de caixa realizado. Completeness vem pronta do backend. */
+export type DashboardCashRealizedDayDetailsResponse = {
+  readonly date: string;
+  readonly direction: 'inflows' | 'outflows';
+  readonly completeness: DashboardCashRealizedDayCompleteness;
+  readonly total: string | null;
+  readonly returnedSum: string | null;
+  readonly difference: string | null;
+  readonly hasMore: boolean;
+  readonly itemCount: number;
+  readonly limit: number;
+  readonly items: readonly DashboardCashRealizedDayDetailItem[];
+};

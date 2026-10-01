@@ -16,6 +16,10 @@
   outline-offset: 2px;
 }
 
+.selectable {
+  cursor: pointer;
+}
+
 .canvas {
   display: block;
   width: 100%;
@@ -51,6 +55,18 @@
   fill: currentColor;
   stroke: var(--color-surface);
   stroke-width: 1;
+}
+
+.selectedMarker {
+  stroke: currentColor;
+  stroke-width: 1.25;
+  opacity: 0.9;
+}
+
+.selectedDot {
+  fill: var(--color-surface);
+  stroke: currentColor;
+  stroke-width: 1.75;
 }
 
 .flat {

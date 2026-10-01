@@ -48,6 +48,7 @@ export const ANALYTICAL_PERIOD_KINDS = [
   'YEAR',
   'CURRENT',
   'COMPARISON',
+  'DAY',
 ] as const;
 export type AnalyticalPeriodKind = (typeof ANALYTICAL_PERIOD_KINDS)[number];
 
@@ -80,6 +81,7 @@ export const ANALYTICAL_EXECUTOR_KEYS = [
   'compareCashMonths',
   'realizedCashCategoryBreakdown',
   'realizedCashMovements',
+  'realizedCashDayMovements',
   'realizedCashCounterparty',
   'realizedCashCostCenter',
   'currentSnapshot',

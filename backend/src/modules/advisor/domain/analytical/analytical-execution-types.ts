@@ -13,6 +13,8 @@ import type { MonthlyCashFlowService } from '../../../analytics/services/monthly
 import type { ExpenseCeilingRepository } from '../../../dashboard/repositories/expense-ceiling.repository.js';
 import type { RevenueGoalRepository } from '../../../dashboard/repositories/revenue-goal.repository.js';
 import type { CounterpartyIdentityService } from '../load-counterparty-identity-population.js';
+import type { CashRealizedDetailsService } from '../../../analytics/services/cash-realized-details.service.js';
+import type { CostCenterReadRepository } from '../../../finance/repositories/cost-center-read.repository.js';
 
 /**
  * Runtime seguro: tenant/user/now NÃO vêm da AnalyticalQuery nem do LLM.
@@ -33,6 +35,9 @@ export type AnalyticalExecutionRuntime = {
   readonly planningCashFlow?: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'>;
   readonly revenueGoals?: RevenueGoalRepository;
   readonly expenseCeilings?: ExpenseCeilingRepository;
+  /** Mesmo serviço do detalhe diário da Dashboard. */
+  readonly cashRealizedDay?: Pick<CashRealizedDetailsService, 'getCashRealizedDayDetails'>;
+  readonly costCenters?: Pick<CostCenterReadRepository, 'listByTenant'>;
 };
 
 /**

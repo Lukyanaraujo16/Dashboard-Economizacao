@@ -9,6 +9,40 @@ export function addCivilDays(civilDate: Date, days: number): Date {
   );
 }
 
+const CIVIL_DATE_KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * YYYY-MM-DD → meia-noite UTC, o mesmo contrato de occurredOn/@db.Date.
+ * Não usa `new Date('YYYY-MM-DD')`, que depende do fuso local.
+ */
+export function civilDateUtcFromKey(dateKey: string): Date | null {
+  const match = CIVIL_DATE_KEY.exec(dateKey.trim());
+  if (match === null) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+export function formatCivilDateKey(civilDate: Date): string {
+  const month = String(civilDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(civilDate.getUTCDate()).padStart(2, '0');
+  return `${civilDate.getUTCFullYear()}-${month}-${day}`;
+}
+
 export function civilMonthKey(civilDate: Date): string {
   const month = String(civilDate.getUTCMonth() + 1).padStart(2, '0');
   return `${civilDate.getUTCFullYear()}-${month}`;
