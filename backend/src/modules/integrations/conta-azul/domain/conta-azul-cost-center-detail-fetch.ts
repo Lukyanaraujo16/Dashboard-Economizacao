@@ -24,7 +24,10 @@ export const COST_CENTER_DETAIL_RULE_VERSION = 1;
  */
 export const COST_CENTER_DETAIL_STALE_AFTER_MS = 6 * 60 * 60 * 1000;
 
-/** Teto absoluto de revalidação stale por sync (além dos imediatos). */
+/**
+ * Teto da revalidação histórica (MANUAL / população fora do hot sync).
+ * A janela quente não usa este número: ver `selectHotCostCenterRotation`.
+ */
 export const COST_CENTER_DETAIL_STALE_REVALIDATE_MAX_PER_SYNC = 40;
 
 /** Reserva inicial do estoque operacional (mês anterior + atual + seguinte). */

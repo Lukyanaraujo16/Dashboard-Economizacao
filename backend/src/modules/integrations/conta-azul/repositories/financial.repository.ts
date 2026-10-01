@@ -1,4 +1,4 @@
-import type { PrismaClient } from '../../../../generated/prisma/client.js';
+import { Prisma, type PrismaClient } from '../../../../generated/prisma/client.js';
 import {
   emptyFinancialAccountCatalogUpsertCounters,
   type FinancialAccountCatalogUpsertCounters,
@@ -11,6 +11,7 @@ import {
   emptyPartyCatalogUpsertCounters,
   type PartyCatalogUpsertCounters,
 } from '../domain/conta-azul-party-catalog-metrics.js';
+import type { HotInstallmentBaseline } from '../domain/conta-azul-hot-sync.js';
 import type {
   MappedFinancialAccount,
   MappedFinancialCategory,
@@ -76,6 +77,24 @@ export type ContaAzulFinancialRepository = {
   }): Promise<number>;
   upsertReceivables(scope: FinancialSyncScope, items: readonly MappedInstallment[]): Promise<void>;
   upsertPayables(scope: FinancialSyncScope, items: readonly MappedInstallment[]): Promise<void>;
+  /**
+   * Atualiza só o nome da pessoa citada no título. Não inativa e não apaga documento.
+   * Sem id ou sem nome, o item é ignorado.
+   */
+  upsertReferencedPartyNames(
+    scope: FinancialSyncScope,
+    items: readonly { readonly externalId: string; readonly name: string }[],
+  ): Promise<void>;
+  listHotInstallmentBaselines(
+    scope: { readonly tenantId: string; readonly integrationId: string },
+    kind: 'RECEIVABLE' | 'PAYABLE',
+    externalIds: readonly string[],
+  ): Promise<ReadonlyMap<string, HotInstallmentBaseline>>;
+  findInstallmentLocalKeys(
+    scope: { readonly tenantId: string; readonly integrationId: string },
+    kind: 'RECEIVABLE' | 'PAYABLE',
+    externalIds: readonly string[],
+  ): Promise<ReadonlyMap<string, { readonly id: string; readonly total: Prisma.Decimal }>>;
   /** Contas ativas do escopo — captura de saldo-atual (08-C1). */
   listActiveAccounts(scope: {
     readonly tenantId: string;
@@ -629,6 +648,167 @@ export function createContaAzulFinancialRepository(
           })}\n`,
         );
       }
+    },
+
+    async upsertReferencedPartyNames(scope, items) {
+      const unique = new Map<string, string>();
+      for (const item of items) {
+        const externalId = item.externalId.trim();
+        const name = item.name.trim();
+        if (externalId && name) {
+          unique.set(externalId, name);
+        }
+      }
+      if (unique.size === 0) {
+        return;
+      }
+      await prisma.$transaction(
+        [...unique.entries()].map(([externalId, name]) =>
+          prisma.party.upsert({
+            where: {
+              integrationId_externalId: {
+                integrationId: scope.integrationId,
+                externalId,
+              },
+            },
+            create: {
+              tenantId: scope.tenantId,
+              integrationId: scope.integrationId,
+              externalId,
+              name,
+              document: null,
+              active: true,
+              profiles: [],
+              syncedAt: scope.syncedAt,
+            },
+            update: {
+              name,
+              syncedAt: scope.syncedAt,
+            },
+          }),
+        ),
+      );
+    },
+
+    async listHotInstallmentBaselines(scope, kind, externalIds) {
+      const ids = [...new Set(externalIds.filter(Boolean))];
+      const baselines = new Map<string, HotInstallmentBaseline>();
+      if (ids.length === 0) {
+        return baselines;
+      }
+      const rows =
+        kind === 'RECEIVABLE'
+          ? await prisma.receivable.findMany({
+              where: {
+                tenantId: scope.tenantId,
+                integrationId: scope.integrationId,
+                externalId: { in: ids },
+              },
+              select: {
+                externalId: true,
+                description: true,
+                dueDate: true,
+                competenceDate: true,
+                total: true,
+                paid: true,
+                unpaid: true,
+                status: true,
+                externalCustomerId: true,
+                categoryExternalIds: true,
+                costCenterDetailStatus: true,
+                costCenterDetailSyncedAt: true,
+                costCenterDetailRuleVersion: true,
+                upstreamUpdatedAt: true,
+              },
+            })
+          : await prisma.payable.findMany({
+              where: {
+                tenantId: scope.tenantId,
+                integrationId: scope.integrationId,
+                externalId: { in: ids },
+              },
+              select: {
+                externalId: true,
+                description: true,
+                dueDate: true,
+                competenceDate: true,
+                total: true,
+                paid: true,
+                unpaid: true,
+                status: true,
+                externalSupplierId: true,
+                categoryExternalIds: true,
+                costCenterDetailStatus: true,
+                costCenterDetailSyncedAt: true,
+                costCenterDetailRuleVersion: true,
+                upstreamUpdatedAt: true,
+              },
+            });
+      const sums = await prisma.financialTransaction.groupBy({
+        by: ['installmentExternalId'],
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          installmentKind: kind,
+          lifecycleStatus: 'ACTIVE',
+          installmentExternalId: { in: ids },
+        },
+        _sum: { netAmount: true },
+      });
+      const netByExternal = new Map(
+        sums.map((row) => [row.installmentExternalId, row._sum.netAmount ?? new Prisma.Decimal(0)]),
+      );
+      for (const row of rows) {
+        const externalPartyId =
+          'externalCustomerId' in row ? row.externalCustomerId : row.externalSupplierId;
+        baselines.set(row.externalId, {
+          description: row.description,
+          dueDate: row.dueDate,
+          competenceDate: row.competenceDate,
+          total: row.total,
+          paid: row.paid,
+          unpaid: row.unpaid,
+          status: row.status,
+          externalPartyId,
+          categoryExternalIds: row.categoryExternalIds,
+          activeNetSum: netByExternal.get(row.externalId) ?? new Prisma.Decimal(0),
+          detailStatus: row.costCenterDetailStatus,
+          detailSyncedAt: row.costCenterDetailSyncedAt,
+          detailRuleVersion: row.costCenterDetailRuleVersion,
+          upstreamUpdatedAt: row.upstreamUpdatedAt,
+        });
+      }
+      return baselines;
+    },
+
+    async findInstallmentLocalKeys(scope, kind, externalIds) {
+      const ids = [...new Set(externalIds.filter(Boolean))];
+      const keys = new Map<string, { id: string; total: Prisma.Decimal }>();
+      if (ids.length === 0) {
+        return keys;
+      }
+      const rows =
+        kind === 'RECEIVABLE'
+          ? await prisma.receivable.findMany({
+              where: {
+                tenantId: scope.tenantId,
+                integrationId: scope.integrationId,
+                externalId: { in: ids },
+              },
+              select: { id: true, externalId: true, total: true },
+            })
+          : await prisma.payable.findMany({
+              where: {
+                tenantId: scope.tenantId,
+                integrationId: scope.integrationId,
+                externalId: { in: ids },
+              },
+              select: { id: true, externalId: true, total: true },
+            });
+      for (const row of rows) {
+        keys.set(row.externalId, { id: row.id, total: row.total });
+      }
+      return keys;
     },
   };
 }

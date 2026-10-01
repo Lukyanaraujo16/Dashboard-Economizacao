@@ -10,7 +10,6 @@ import {
   CONTA_AZUL_SYNC_LOOKAHEAD_YEARS,
   CONTA_AZUL_SYNC_LOOKBACK_YEARS,
   CONTA_AZUL_SYNC_PAGE_SIZE,
-  CONTA_AZUL_SYNC_WINDOW_DAYS,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-sync.js';
 import { formatCivilDate } from '../src/modules/integrations/conta-azul/domain/conta-azul-dates.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
@@ -267,7 +266,7 @@ describe('10-B — TransferSync no fluxo padrão do engine', () => {
     expect(counts.transferUnmatched).toBeGreaterThanOrEqual(1);
   });
 
-  it('3 — sync SCHEDULED usa overlap/lookback de CONTA_AZUL_SYNC_WINDOW_DAYS', async () => {
+  it('3 — sync SCHEDULED usa a janela quente de mês anterior + atual', async () => {
     const { tenant, integration } = await seedConnected('10b-recurring', true);
     const spy = spyTransferSync();
     const run = await syncRuns.createPending({
@@ -294,11 +293,8 @@ describe('10-B — TransferSync no fluxo padrão do engine', () => {
       integrationId: integration.id,
     });
     expect(spy.calls).toHaveLength(1);
-    expect(formatCivilDate(spy.calls[0]!.to)).toBe('2026-09-05');
-    expect(formatCivilDate(spy.calls[0]!.from)).toBe('2026-06-08');
-    const span =
-      (spy.calls[0]!.to.getTime() - spy.calls[0]!.from.getTime()) / (24 * 60 * 60 * 1000) + 1;
-    expect(span).toBe(CONTA_AZUL_SYNC_WINDOW_DAYS);
+    expect(formatCivilDate(spy.calls[0]!.from)).toBe('2026-08-01');
+    expect(formatCivilDate(spy.calls[0]!.to)).toBe('2026-09-30');
   });
 
   it('4 — transferência criada depois com data retroativa entra no próximo SCHEDULED', async () => {

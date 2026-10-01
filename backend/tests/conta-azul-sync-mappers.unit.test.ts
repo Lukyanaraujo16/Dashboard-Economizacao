@@ -370,6 +370,7 @@ describe('Mappers financeiros', () => {
     });
     expect(receivable.items[0]?.status).toBe('OVERDUE');
     expect(receivable.items[0]?.externalPartyId).toBe('p-1');
+    expect(receivable.items[0]?.externalPartyName).toBe('Maria');
     expect(receivable.items[0]?.categoryExternalIds).toEqual(['cat-1']);
     expect(receivable.items[0]?.total.equals(new Prisma.Decimal('10.50'))).toBe(true);
 

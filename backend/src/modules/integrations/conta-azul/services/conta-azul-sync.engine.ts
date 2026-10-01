@@ -1,5 +1,10 @@
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
-import { buildDueDateWindows, buildTransferSyncCivilWindow, ContaAzulDateError } from '../domain/conta-azul-dates.js';
+import {
+  buildDueDateWindows,
+  buildTransferSyncCivilWindow,
+  ContaAzulDateError,
+  parseCivilDate,
+} from '../domain/conta-azul-dates.js';
 import {
   buildIncrementalWindow,
   splitAlterationChunks,
@@ -9,8 +14,20 @@ import {
   mapPartyPage,
   mapPayablePage,
   mapReceivablePage,
+  type MappedInstallment,
   type MappedPage,
 } from '../domain/conta-azul-financial-mappers.js';
+import {
+  buildHistoricalDueHorizon,
+  buildHotSyncCivilWindow,
+  dedupeHotInstallments,
+  hotCostCenterRotationBudget,
+  hotTitleChanged,
+  isHotCostCenterUrgent,
+  selectHotCostCenterRotation,
+  shouldRefetchHotSettlement,
+  type HotCostCenterRow,
+} from '../domain/conta-azul-hot-sync.js';
 import { ContaAzulMappingError } from '../domain/conta-azul-mapping.js';
 import { ContaAzulMoneyError } from '../domain/conta-azul-money.js';
 import {
@@ -41,6 +58,7 @@ import type { TenantRepository } from '../../../tenant/repositories/tenant.repos
 import type { ContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
 import type { ContaAzulRateLimiter } from './conta-azul-rate-limiter.js';
 import type { ContaAzulCostCenterSyncService } from './conta-azul-cost-center-sync.service.js';
+import type { CostCenterAllocationCandidate } from '../repositories/cost-center.repository.js';
 import type { ContaAzulLedgerSyncService } from './conta-azul-ledger-sync.service.js';
 import type { ContaAzulTransferSyncService } from './conta-azul-transfer-sync.service.js';
 import type { LedgerInstallmentCandidate } from '../domain/conta-azul-settlement-mappers.js';
@@ -151,6 +169,14 @@ function isUnauthorized(error: unknown): boolean {
   return error instanceof ContaAzulApiError && error.kind === 'unauthorized';
 }
 
+function referencedPartyNames(items: readonly MappedInstallment[]) {
+  return items.flatMap((item) =>
+    item.externalPartyId && item.externalPartyName
+      ? [{ externalId: item.externalPartyId, name: item.externalPartyName }]
+      : [],
+  );
+}
+
 function cursorByResource(
   cursors: readonly IntegrationSyncCursorRecord[],
   resource: IntegrationSyncCursorResource,
@@ -235,6 +261,7 @@ export function createContaAzulManualSyncEngine(deps: {
       }
       const runId = run.id;
       const triggerType = run.triggerType;
+      const executeStartedMs = Date.now();
 
       const processed = {
         categories: 0,
@@ -274,6 +301,9 @@ export function createContaAzulManualSyncEngine(deps: {
         installmentPresenceFound: 0,
         installmentPresenceFailed: 0,
       };
+
+      const hotDetailCandidates: CostCenterAllocationCandidate[] = [];
+      let hotLog: Record<string, unknown> | null = null;
 
       try {
         const tenant = await deps.tenants.findById(input.tenantId);
@@ -497,6 +527,10 @@ export function createContaAzulManualSyncEngine(deps: {
                   ),
                 mapPage,
                 persist: async (items) => {
+                  await deps.financial.upsertReferencedPartyNames(
+                    scopeOf(),
+                    referencedPartyNames(items),
+                  );
                   await persist(items);
                   for (const item of items) {
                     if (item.paid.gt(0)) {
@@ -524,30 +558,161 @@ export function createContaAzulManualSyncEngine(deps: {
           });
           processed.parties = await peopleWindow(peopleRange);
           await advanceCursor('PEOPLE', peopleRange.to, externalAccountId);
-          // Snapshot completo após incremental+cursor: ausência só aqui (11-D).
-          // Falha do snapshot não retroage o upsert incremental já persistido.
-          await partyCatalogSync.syncCatalog({
-            scope: scopeOf(),
-            requestWithAuth,
-            gatedGet,
-            heartbeat,
-          });
+          // Hot sync não baixa o catálogo completo de pessoas e não inativa por ausência parcial.
 
-          const receivablesRange = buildIncrementalWindow({
-            cursorAt: cursorByResource(existingCursors, 'RECEIVABLES')?.cursorAt ?? null,
-            baselineAt,
-            executionStartedAt: startedAt,
-          });
-          processed.receivables = await installmentWindows('receivables', receivablesRange);
-          await advanceCursor('RECEIVABLES', receivablesRange.to, externalAccountId);
+          const hotWindow = buildHotSyncCivilWindow(startedAt);
+          const dueHorizon = buildHistoricalDueHorizon(startedAt);
+          const hotStats = {
+            duePages: 0,
+            paymentPages: 0,
+            dueFound: 0,
+            paymentFound: 0,
+            deduped: 0,
+            changed: 0,
+            settlementsQueued: 0,
+            costCenterUrgent: 0,
+            costCenterRotating: 0,
+          };
 
-          const payablesRange = buildIncrementalWindow({
-            cursorAt: cursorByResource(existingCursors, 'PAYABLES')?.cursorAt ?? null,
-            baselineAt,
-            executionStartedAt: startedAt,
-          });
-          processed.payables = await installmentWindows('payables', payablesRange);
-          await advanceCursor('PAYABLES', payablesRange.to, externalAccountId);
+          async function collectHotSearch(
+            kind: 'receivables' | 'payables',
+            query: {
+              readonly dataVencimentoDe: string;
+              readonly dataVencimentoAte: string;
+              readonly dataPagamentoDe?: string;
+              readonly dataPagamentoAte?: string;
+            },
+          ): Promise<{ readonly items: MappedInstallment[]; readonly pages: number }> {
+            const search =
+              kind === 'receivables'
+                ? deps.apiClient.searchReceivables.bind(deps.apiClient)
+                : deps.apiClient.searchPayables.bind(deps.apiClient);
+            const mapPage = kind === 'receivables' ? mapReceivablePage : mapPayablePage;
+            const items: MappedInstallment[] = [];
+            let pages = 0;
+            await paginate({
+              fetchPage: (pagina) => {
+                pages += 1;
+                return requestWithAuth((accessToken) => search(accessToken, { pagina, ...query }));
+              },
+              mapPage,
+              persist: async (pageItems) => {
+                items.push(...pageItems);
+              },
+              heartbeat,
+            });
+            return { items, pages };
+          }
+
+          for (const kind of ['receivables', 'payables'] as const) {
+            const due = await collectHotSearch(kind, {
+              dataVencimentoDe: hotWindow.from,
+              dataVencimentoAte: hotWindow.to,
+            });
+            const payment = await collectHotSearch(kind, {
+              dataVencimentoDe: dueHorizon.from,
+              dataVencimentoAte: dueHorizon.to,
+              dataPagamentoDe: hotWindow.from,
+              dataPagamentoAte: hotWindow.to,
+            });
+            hotStats.duePages += due.pages;
+            hotStats.paymentPages += payment.pages;
+            hotStats.dueFound += due.items.length;
+            hotStats.paymentFound += payment.items.length;
+            const merged = dedupeHotInstallments(due.items, payment.items);
+            hotStats.deduped += merged.length;
+            const installmentKind = kind === 'receivables' ? 'RECEIVABLE' : 'PAYABLE';
+            const baselines = await deps.financial.listHotInstallmentBaselines(
+              { tenantId: input.tenantId, integrationId: input.integrationId },
+              installmentKind,
+              merged.map((item) => item.externalId),
+            );
+            const detailRows: Array<HotCostCenterRow & { readonly total: MappedInstallment['total'] }> =
+              merged.map((item) => {
+              const prior = baselines.get(item.externalId) ?? null;
+              const titleChanged = hotTitleChanged(item, prior);
+              if (titleChanged) {
+                hotStats.changed += 1;
+              }
+              if (
+                shouldRefetchHotSettlement({
+                  paid: item.paid,
+                  status: item.status,
+                  prior,
+                })
+              ) {
+                hotStats.settlementsQueued += 1;
+                ledgerCandidates.set(`${installmentKind}:${item.externalId}`, {
+                  kind: installmentKind,
+                  externalId: item.externalId,
+                });
+              }
+              return {
+                kind: installmentKind,
+                externalId: item.externalId,
+                detailSyncedAt: prior?.detailSyncedAt ?? null,
+                urgent: isHotCostCenterUrgent({
+                  titleChanged,
+                  detailStatus: prior?.detailStatus ?? 'UNKNOWN',
+                  detailRuleVersion: prior?.detailRuleVersion ?? 0,
+                  detailSyncedAt: prior?.detailSyncedAt ?? null,
+                  upstreamUpdatedAt: item.upstreamUpdatedAt,
+                }),
+                total: item.total,
+              };
+            });
+            const stableCount = detailRows.filter((row) => !row.urgent).length;
+            const rotation = selectHotCostCenterRotation(
+              detailRows,
+              hotCostCenterRotationBudget(stableCount),
+            );
+            hotStats.costCenterUrgent += rotation.urgent.length;
+            hotStats.costCenterRotating += rotation.rotating.length;
+            await deps.financial.upsertReferencedPartyNames(
+              scopeOf(),
+              referencedPartyNames(merged),
+            );
+            if (kind === 'receivables') {
+              await deps.financial.upsertReceivables(scopeOf(), merged);
+              processed.receivables = merged.length;
+            } else {
+              await deps.financial.upsertPayables(scopeOf(), merged);
+              processed.payables = merged.length;
+            }
+            const selectedIds = [...rotation.urgent, ...rotation.rotating].map(
+              (row) => row.externalId,
+            );
+            const localKeys = await deps.financial.findInstallmentLocalKeys(
+              { tenantId: input.tenantId, integrationId: input.integrationId },
+              installmentKind,
+              selectedIds,
+            );
+            for (const row of [...rotation.urgent, ...rotation.rotating]) {
+              const local = localKeys.get(row.externalId);
+              if (!local) {
+                continue;
+              }
+              hotDetailCandidates.push({
+                kind: row.kind,
+                localId: local.id,
+                externalId: row.externalId,
+                total: local.total,
+              });
+            }
+          }
+
+          hotLog = {
+            event: 'conta_azul_hot_sync',
+            mode: 'hot',
+            tenantId: input.tenantId,
+            integrationId: input.integrationId,
+            syncRunId: runId,
+            from: hotWindow.from,
+            to: hotWindow.to,
+            dueHorizonFrom: dueHorizon.from,
+            dueHorizonTo: dueHorizon.to,
+            ...hotStats,
+          };
         } else {
           // MANUAL/full: um único snapshot completo (substitui peopleWindow(null)).
           processed.parties = await partyCatalogSync.syncCatalog({
@@ -593,6 +758,7 @@ export function createContaAzulManualSyncEngine(deps: {
           const allocationResult = await deps.costCenterSync.syncAllocationsForInstallments({
             scope: scopeOf(),
             reusedDetails: reusedInstallmentDetails,
+            installments: incremental ? hotDetailCandidates : undefined,
             requestWithAuth,
             gatedGet,
             heartbeat,
@@ -636,13 +802,18 @@ export function createContaAzulManualSyncEngine(deps: {
         // Depois do ledger para que ghosts tipados já existam quando applyMatches roda.
         // Falha propaga como as demais etapas (não engolir).
         if (deps.transferSync) {
-          const transferWindow = buildTransferSyncCivilWindow({
-            now: now(),
-            mode: incremental ? 'recurring' : 'full',
-            lookbackYears: CONTA_AZUL_SYNC_LOOKBACK_YEARS,
-            lookaheadYears: CONTA_AZUL_SYNC_LOOKAHEAD_YEARS,
-            recurringLookbackDays: CONTA_AZUL_SYNC_WINDOW_DAYS,
-          });
+          const transferWindow =
+            incremental && hotLog && typeof hotLog.from === 'string' && typeof hotLog.to === 'string'
+              ? {
+                  from: parseCivilDate(hotLog.from, 'hot.from'),
+                  to: parseCivilDate(hotLog.to, 'hot.to'),
+                }
+              : buildTransferSyncCivilWindow({
+                  now: now(),
+                  mode: 'full',
+                  lookbackYears: CONTA_AZUL_SYNC_LOOKBACK_YEARS,
+                  lookaheadYears: CONTA_AZUL_SYNC_LOOKAHEAD_YEARS,
+                });
           const transferResult = await deps.transferSync.sync({
             scope: scopeOf(),
             from: transferWindow.from,
@@ -664,7 +835,7 @@ export function createContaAzulManualSyncEngine(deps: {
               tenantId: input.tenantId,
               integrationId: input.integrationId,
               syncRunId: runId,
-              mode: incremental ? 'recurring' : 'full',
+              mode: incremental ? 'hot' : 'full',
               from: transferResult.from,
               to: transferResult.to,
               pages: transferResult.pages,
@@ -697,6 +868,19 @@ export function createContaAzulManualSyncEngine(deps: {
           );
         }
 
+        if (hotLog) {
+          process.stdout.write(
+            `${JSON.stringify({
+              ...hotLog,
+              success: true,
+              durationMs: Date.now() - executeStartedMs,
+              ledgerFetched: processed.ledgerFetched,
+              costCenterDetailRequested: processed.costCenterDetailRequested,
+              transferFetched: processed.transferFetched,
+            })}\n`,
+          );
+        }
+
         const finalCounts: ContaAzulSyncCounts = { ...processed };
         await deps.syncRuns.markSuccess({
           id: runId,
@@ -706,6 +890,16 @@ export function createContaAzulManualSyncEngine(deps: {
         });
       } catch (error) {
         const mapped = mapUpstreamError(error);
+        if (hotLog) {
+          process.stdout.write(
+            `${JSON.stringify({
+              ...hotLog,
+              success: false,
+              errorCode: mapped.code,
+              durationMs: Date.now() - executeStartedMs,
+            })}\n`,
+          );
+        }
         await deps.syncRuns.markFailed({
           id: runId,
           errorCode: mapped.code,

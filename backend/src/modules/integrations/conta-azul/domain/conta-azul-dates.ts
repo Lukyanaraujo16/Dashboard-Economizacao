@@ -118,9 +118,8 @@ export function addUtcYears(date: Date, years: number): Date {
  * Janela civil de GET /transferencias (filtra por `data` = occurredOn, não alteração).
  *
  * - `full` (carga manual / onboarding): mesmo horizonte MVP do restante (5y+2y).
- * - `recurring` (SCHEDULED): lookback rolante de CONTA_AZUL_SYNC_WINDOW_DAYS dias
- *   inclusive até hoje — cobre transferências criadas hoje com data retroativa
- *   dentro da janela (overlap estrutural; a API não expõe data_alteracao).
+ * - `recurring`: lookback rolante opcional. O hot sync agendado não usa este modo;
+ *   ele passa a janela civil de mês anterior + mês atual.
  */
 export function buildTransferSyncCivilWindow(input: {
   readonly now: Date;

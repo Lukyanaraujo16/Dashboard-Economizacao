@@ -58,6 +58,8 @@ export type MappedInstallment = {
   readonly paid: Prisma.Decimal;
   readonly unpaid: Prisma.Decimal;
   readonly externalPartyId: string | null;
+  /** Nome vindo do título (`cliente.nome` / `fornecedor.nome`). Ausente não apaga o catálogo. */
+  readonly externalPartyName: string | null;
   readonly categoryExternalIds: string[];
 };
 
@@ -289,6 +291,7 @@ function mapInstallmentItem(
     paid: parseContaAzulMoney(item.pago, 'pago'),
     unpaid: parseContaAzulMoney(item.nao_pago, 'nao_pago'),
     externalPartyId: party ? readOptionalId(party.id, `${partyField}.id`) : null,
+    externalPartyName: party ? readOptionalString(party.nome, 255) : null,
     categoryExternalIds: mapCategoryRefs(item.categorias),
   };
 }

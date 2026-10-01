@@ -83,7 +83,7 @@ describe('Janela incremental e timezone São Paulo', () => {
 });
 
 describe('Frequência, jitter e elegibilidade', () => {
-  it('default 60 minutos e env inválido falha', () => {
+  it('default 15 minutos e env explícito preservado', () => {
     expect(parseAutoSyncIntervalMinutes(undefined)).toBe(
       CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_DEFAULT,
     );

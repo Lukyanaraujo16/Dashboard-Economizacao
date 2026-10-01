@@ -58,7 +58,8 @@ export const CONTA_AZUL_PLAN_SYNCS_SCHEDULER_ID = 'conta-azul-plan-syncs';
 /** Tick do planner (1 min). O intervalo de sync por tenant é outro env. */
 export const CONTA_AZUL_PLAN_SYNCS_TICK_MS = 60_000;
 
-export const CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_DEFAULT = 60;
+/** Cadência do hot sync. Env explícito continua tendo precedência sobre este default. */
+export const CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_DEFAULT = 15;
 
 export const CONTA_AZUL_AUTO_SYNC_INTERVAL_MINUTES_MIN = 5;
 

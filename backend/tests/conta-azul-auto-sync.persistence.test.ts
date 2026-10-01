@@ -9,6 +9,10 @@ import { createContaAzulFinancialRepository } from '../src/modules/integrations/
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
 import { createContaAzulSyncCursorRepository } from '../src/modules/integrations/conta-azul/repositories/sync-cursor.repository.js';
 import { createContaAzulSyncRunRepository } from '../src/modules/integrations/conta-azul/repositories/sync-run.repository.js';
+import {
+  buildHistoricalDueHorizon,
+  buildHotSyncCivilWindow,
+} from '../src/modules/integrations/conta-azul/domain/conta-azul-hot-sync.js';
 import { createContaAzulRateLimiter } from '../src/modules/integrations/conta-azul/services/conta-azul-rate-limiter.js';
 import {
   ContaAzulSyncExecutionError,
@@ -152,7 +156,7 @@ describe('Cursors e engine incremental', () => {
     });
   });
 
-  it('AR/AP incremental envia vencimento 90d e data_alteracao', async () => {
+  it('AR/AP agendado usa a janela quente e não o cursor de alteração', async () => {
     const { tenant, integration } = await seedReady('auto-arap');
     const captured = capturingClient();
     const run = await syncRuns.createPending({
@@ -177,23 +181,31 @@ describe('Cursors e engine incremental', () => {
       tenantId: tenant.id,
       integrationId: integration.id,
     });
-    const first = captured.receivableQueries[0] as {
-      dataVencimentoDe: string;
-      dataVencimentoAte: string;
-      dataAlteracaoDe: string;
-      dataAlteracaoAte: string;
-    };
-    expect(first.dataAlteracaoDe).toBe('2026-08-18T07:00:00');
-    expect(first.dataAlteracaoAte).toBe('2026-08-18T10:00:00');
-    const from = Date.parse(`${first.dataVencimentoDe}T00:00:00.000Z`);
-    const to = Date.parse(`${first.dataVencimentoAte}T00:00:00.000Z`);
-    expect(to - from).toBeLessThanOrEqual(89 * 24 * 60 * 60 * 1000);
-    expect(captured.payableQueries[0]).toMatchObject({
-      dataAlteracaoDe: '2026-08-18T07:00:00',
+    const hot = buildHotSyncCivilWindow(STARTED);
+    const horizon = buildHistoricalDueHorizon(STARTED);
+    expect(captured.receivableQueries).toHaveLength(2);
+    expect(captured.payableQueries).toHaveLength(2);
+    expect(captured.receivableQueries[0]).toMatchObject({
+      dataVencimentoDe: hot.from,
+      dataVencimentoAte: hot.to,
     });
+    expect(captured.receivableQueries[1]).toMatchObject({
+      dataVencimentoDe: horizon.from,
+      dataVencimentoAte: horizon.to,
+      dataPagamentoDe: hot.from,
+      dataPagamentoAte: hot.to,
+    });
+    expect(captured.payableQueries[0]).toMatchObject({
+      dataVencimentoDe: hot.from,
+      dataVencimentoAte: hot.to,
+    });
+    expect(captured.receivableQueries[0]).not.toHaveProperty('dataPagamentoDe');
+    for (const query of [...captured.receivableQueries, ...captured.payableQueries]) {
+      expect(query).not.toHaveProperty('dataAlteracaoDe');
+    }
   });
 
-  it('falha em AP não avança o cursor de AP; People/AR avançam; lastSuccessful não muda', async () => {
+  it('falha em AP não marca sucesso; o cursor de pessoas já gravado permanece e títulos não usam cursor', async () => {
     const { tenant, integration } = await seedReady('auto-partial');
     const captured = capturingClient({ failPayables: true });
     const run = await syncRuns.createPending({
@@ -224,9 +236,7 @@ describe('Cursors e engine incremental', () => {
     expect(stored.find((row) => row.resource === 'PEOPLE')?.cursorAt.toISOString()).toBe(
       STARTED.toISOString(),
     );
-    expect(stored.find((row) => row.resource === 'RECEIVABLES')?.cursorAt.toISOString()).toBe(
-      STARTED.toISOString(),
-    );
+    expect(stored.find((row) => row.resource === 'RECEIVABLES')).toBeUndefined();
     expect(stored.find((row) => row.resource === 'PAYABLES')).toBeUndefined();
     const integrationAfter = await prisma.integration.findUniqueOrThrow({
       where: { id: integration.id },
