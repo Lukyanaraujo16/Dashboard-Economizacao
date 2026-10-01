@@ -26,7 +26,7 @@ export const AI_MESSAGE_TYPES = ['TEXT'] as const;
 
 export type AiMessageType = (typeof AI_MESSAGE_TYPES)[number];
 
-export const AI_RUN_TYPES = ['QUESTION_REPLY'] as const;
+export const AI_RUN_TYPES = ['QUESTION_REPLY', 'PROACTIVE_NARRATION'] as const;
 
 export type AiRunType = (typeof AI_RUN_TYPES)[number];
 

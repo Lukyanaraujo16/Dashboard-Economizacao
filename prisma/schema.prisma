@@ -69,6 +69,10 @@ model Tenant {
   aiConversations            AiConversation[]
   aiMessages                 AiMessage[]
   aiRuns                     AiRun[]
+  proactiveTriggerConfigurations ProactiveTriggerConfiguration[]
+  analyticalEvents           AnalyticalEvent[]
+  aiInsights                 AiInsight[]
+  aiInsightReads             AiInsightRead[]
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
@@ -166,6 +170,7 @@ model User {
   aiKnowledgeDocumentsCreated  AiKnowledgeDocument[]
   aiConversations              AiConversation[]
   aiRuns                       AiRun[]
+  aiInsightReads               AiInsightRead[]
 
   @@index([tenantId], map: "idx_users_tenant_id")
   @@map("users")
@@ -880,6 +885,8 @@ enum AiMessageType {
 
 enum AiRunType {
   QUESTION_REPLY
+  /// Redação futura de um insight já persistido. Nesta fase nenhum provider é chamado.
+  PROACTIVE_NARRATION
 
   @@map("ai_run_type")
 }
@@ -1033,21 +1040,24 @@ model AiConversation {
   @@map("ai_conversations")
 }
 
-/// Mensagem de uma conversa. Sem related_insight_id (F14).
+/// Mensagem de uma conversa. related_insight_id liga uma prosa futura ao insight, sem ser o fato.
 model AiMessage {
-  id             String              @id @default(uuid()) @db.Uuid
-  conversationId String              @map("conversation_id") @db.Uuid
-  tenantId       String              @map("tenant_id") @db.Uuid
-  senderType     AiMessageSenderType @map("sender_type")
-  content        String              @db.Text
-  messageType    AiMessageType       @default(TEXT) @map("message_type")
-  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  conversation   AiConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  runs           AiRun[]
+  id               String              @id @default(uuid()) @db.Uuid
+  conversationId   String              @map("conversation_id") @db.Uuid
+  tenantId         String              @map("tenant_id") @db.Uuid
+  senderType       AiMessageSenderType @map("sender_type")
+  content          String              @db.Text
+  messageType      AiMessageType       @default(TEXT) @map("message_type")
+  relatedInsightId String?             @map("related_insight_id") @db.Uuid
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  conversation     AiConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  relatedInsight   AiInsight?          @relation(fields: [relatedInsightId], references: [id], onDelete: SetNull)
+  runs             AiRun[]
 
   @@index([tenantId], map: "idx_ai_messages_tenant_id")
   @@index([conversationId, createdAt], map: "idx_ai_messages_conversation_created_at")
+  @@index([relatedInsightId], map: "idx_ai_messages_related_insight_id")
   @@map("ai_messages")
 }
 
@@ -1058,6 +1068,7 @@ model AiRun {
   userId         String?         @map("user_id") @db.Uuid
   conversationId String?         @map("conversation_id") @db.Uuid
   messageId      String?         @map("message_id") @db.Uuid
+  insightId      String?         @map("insight_id") @db.Uuid
   runType        AiRunType       @default(QUESTION_REPLY) @map("run_type")
   provider       AiProvider
   model          String
@@ -1072,7 +1083,150 @@ model AiRun {
   user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   conversation   AiConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   message        AiMessage?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  insight        AiInsight?      @relation(fields: [insightId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt], map: "idx_ai_runs_tenant_created_at")
+  @@index([insightId], map: "idx_ai_runs_insight_id")
   @@map("ai_runs")
+}
+
+/// Tipos certificados. Novo tipo exige enum + catálogo no código, não fórmula livre.
+enum ProactiveTriggerType {
+  REVENUE_GOAL_PERCENTAGE
+  EXPENSE_CEILING_PERCENTAGE
+  EXPENSE_CEILING_EXCEEDED
+  TITLE_DUE_SOON
+
+  @@map("proactive_trigger_type")
+}
+
+enum ProactiveTitleKind {
+  RECEIVABLE
+  PAYABLE
+
+  @@map("proactive_title_kind")
+}
+
+/// Níveis documentados em CONSULTOR-008. O mapeamento por gatilho ainda não está definido.
+enum ProactiveSeverity {
+  INFORMATIVE
+  ATTENTION
+  IMPORTANT
+  CRITICAL
+
+  @@map("proactive_severity")
+}
+
+enum AnalyticalEventStatus {
+  DETECTED
+
+  @@map("analytical_event_status")
+}
+
+/// Ciclo da prosa. Não é leitura. Leitura fica em ai_insight_reads, por usuário.
+enum AiInsightNarrationStatus {
+  AWAITING_NARRATION
+  NARRATED
+  NARRATION_FAILED
+
+  @@map("ai_insight_narration_status")
+}
+
+/// Instância de um tipo certificado para um tenant. Não guarda fórmula nem expressão.
+model ProactiveTriggerConfiguration {
+  id             String               @id @default(uuid()) @db.Uuid
+  tenantId       String               @map("tenant_id") @db.Uuid
+  triggerType    ProactiveTriggerType @map("trigger_type")
+  /// Chave canônica dos parâmetros validados. Faz parte da identidade da configuração.
+  parameterKey   String               @map("parameter_key")
+  percentage     Int?
+  daysAhead      Int?                 @map("days_ahead")
+  minimumAmount  Decimal?             @map("minimum_amount") @db.Decimal(19, 4)
+  titleKind      ProactiveTitleKind?  @map("title_kind")
+  active         Boolean              @default(true)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  events         AnalyticalEvent[]
+
+  @@unique([tenantId, triggerType, parameterKey], map: "uq_proactive_trigger_configurations_identity")
+  @@index([tenantId, active], map: "idx_proactive_trigger_configurations_tenant_active")
+  @@map("proactive_trigger_configurations")
+}
+
+/// Fato detectado. Independente do texto da Lia e da abertura do frontend.
+model AnalyticalEvent {
+  id                     String                         @id @default(uuid()) @db.Uuid
+  tenantId               String                         @map("tenant_id") @db.Uuid
+  triggerConfigurationId String                         @map("trigger_configuration_id") @db.Uuid
+  eventType              ProactiveTriggerType           @map("event_type")
+  /// Cópia da parameterKey no momento da detecção. Editar a configuração não reescreve isto.
+  parameterKey           String                         @map("parameter_key")
+  periodKey              String                         @map("period_key")
+  /// Vazio quando o fato é do mês. Para título: KIND:externalId.
+  subjectKey             String                         @default("") @map("subject_key")
+  /// tenant + configuração + período + sujeito + parâmetros. Retry e workers concorrentes colidem aqui.
+  occurrenceKey          String                         @map("occurrence_key")
+  severity               ProactiveSeverity?
+  periodStart            DateTime                       @map("period_start") @db.Date
+  periodEnd              DateTime                       @map("period_end") @db.Date
+  sourceMetric           String                         @map("source_metric")
+  payload                Json
+  detectedAt             DateTime                       @map("detected_at") @db.Timestamptz(3)
+  processedAt            DateTime?                      @map("processed_at") @db.Timestamptz(3)
+  status                 AnalyticalEventStatus          @default(DETECTED)
+  createdAt              DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant                 Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  configuration          ProactiveTriggerConfiguration  @relation(fields: [triggerConfigurationId], references: [id], onDelete: Restrict)
+  insight                AiInsight?
+
+  @@unique([tenantId, occurrenceKey], map: "uq_analytical_events_occurrence")
+  @@index([tenantId, detectedAt], map: "idx_analytical_events_tenant_detected_at")
+  @@index([triggerConfigurationId], map: "idx_analytical_events_configuration_id")
+  @@map("analytical_events")
+}
+
+/// Comunicação persistida do fato. O conteúdo pode nascer vazio até a redação futura.
+model AiInsight {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  tenantId           String                   @map("tenant_id") @db.Uuid
+  analyticalEventId  String                   @unique @map("analytical_event_id") @db.Uuid
+  insightType        ProactiveTriggerType     @map("insight_type")
+  category           String?
+  title              String?
+  content            String?                  @db.Text
+  severity           ProactiveSeverity?
+  source             String                   @default("RULE")
+  periodStart        DateTime                 @map("period_start") @db.Date
+  periodEnd          DateTime                 @map("period_end") @db.Date
+  supportingData     Json                     @map("supporting_data")
+  narrationStatus    AiInsightNarrationStatus @default(AWAITING_NARRATION) @map("narration_status")
+  detectedAt         DateTime                 @map("detected_at") @db.Timestamptz(3)
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  analyticalEvent    AnalyticalEvent          @relation(fields: [analyticalEventId], references: [id], onDelete: Restrict)
+  reads              AiInsightRead[]
+  messages           AiMessage[]
+  runs               AiRun[]
+
+  @@index([tenantId, narrationStatus], map: "idx_ai_insights_tenant_narration_status")
+  @@index([tenantId, detectedAt], map: "idx_ai_insights_tenant_detected_at")
+  @@map("ai_insights")
+}
+
+/// Leitura individual. Um usuário lido não altera o outro. Não existe estado global de lido.
+model AiInsightRead {
+  id        String    @id @default(uuid()) @db.Uuid
+  insightId String    @map("insight_id") @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  readAt    DateTime  @map("read_at") @db.Timestamptz(3)
+  insight   AiInsight @relation(fields: [insightId], references: [id], onDelete: Restrict)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([insightId, userId], map: "uq_ai_insight_reads_insight_user")
+  @@index([tenantId, userId], map: "idx_ai_insight_reads_tenant_user")
+  @@map("ai_insight_reads")
 }
