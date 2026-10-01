@@ -72,11 +72,6 @@ import {
   DashboardExpectedReceivableDetailsRequestError,
   type DashboardExpectedReceivableDetailsResponse,
 } from '../../services/dashboard/expected-receivable-details.types';
-import { getDashboardExpectedPayableDetails } from '../../services/dashboard/expected-payable-details';
-import {
-  DashboardExpectedPayableDetailsRequestError,
-  type DashboardExpectedPayableDetailsResponse,
-} from '../../services/dashboard/expected-payable-details.types';
 import { getDashboardOverview } from '../../services/dashboard/overview';
 import {
   DashboardOverviewRequestError,
@@ -93,7 +88,6 @@ import {
 import { StateWrapper } from '../financial';
 import { Badge, Button, Typography } from '../ui';
 import { UI_ICON_STROKE } from '../ui/icons';
-import { CashCategoryRanking } from './cash-category-ranking';
 import { CashCategoryDrilldown } from './cash-category-drilldown';
 import { CashRealizedCategoryPanel } from './cash-realized-category-panel';
 import { ExpectedReceivableDetailsPanel } from './expected-receivable-details-panel';
@@ -245,12 +239,6 @@ type ExpectedReceivableDetailsView =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly data: DashboardExpectedReceivableDetailsResponse };
-
-type ExpectedPayableDetailsView =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly data: DashboardExpectedPayableDetailsResponse };
 
 /** Estado do overview aplicado a cada widget antes dos dados locais. */
 type WidgetGate = 'loading' | 'first-sync' | 'blocked' | 'ready';
@@ -463,8 +451,6 @@ export function DashboardPage() {
     useState<PayableStockDetailsView>({ kind: 'idle' });
   const [expectedReceivableDetailsView, setExpectedReceivableDetailsView] =
     useState<ExpectedReceivableDetailsView>({ kind: 'idle' });
-  const [expectedPayableDetailsView, setExpectedPayableDetailsView] =
-    useState<ExpectedPayableDetailsView>({ kind: 'idle' });
   const [monthlyCashMode, setMonthlyCashMode] = useState<MonthlyCashMode>('realized');
   const [periodMode, setPeriodMode] = useState<PeriodMode>('daily');
   const [expectedHorizon, setExpectedHorizon] = useState<ExpectedHorizon>(3);
@@ -506,13 +492,8 @@ export function DashboardPage() {
   const expectedReceivableDetailsCacheRef = useRef(
     createDashboardFilterCache<DashboardExpectedReceivableDetailsResponse>(),
   );
-  const expectedPayableDetailsCacheRef = useRef(
-    createDashboardFilterCache<DashboardExpectedPayableDetailsResponse>(),
-  );
   const expectedReceivableDetailsViewRef = useRef(expectedReceivableDetailsView);
   expectedReceivableDetailsViewRef.current = expectedReceivableDetailsView;
-  const expectedPayableDetailsViewRef = useRef(expectedPayableDetailsView);
-  expectedPayableDetailsViewRef.current = expectedPayableDetailsView;
 
   const operationalTenantId = useMemo(
     () => resolveOperationalTenantId(user, support),
@@ -797,53 +778,6 @@ export function DashboardPage() {
             ? error.message
             : 'Não foi possível carregar os recebimentos previstos.';
         setExpectedReceivableDetailsView({ kind: 'error', message });
-      }
-    },
-    [],
-  );
-
-  const loadExpectedPayableDetails = useCallback(
-    async (
-      signal: AbortSignal,
-      monthKey: string,
-      todayMonthKey: string,
-      costCenterId: string | null,
-      categoryId: string | null,
-    ) => {
-      const tenantId = operationalTenantIdRef.current;
-      if (tenantId === null) {
-        return;
-      }
-      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
-      const cached = expectedPayableDetailsCacheRef.current.get(cacheKey);
-      if (cached) {
-        setExpectedPayableDetailsView({ kind: 'ready', data: cached });
-      } else {
-        setExpectedPayableDetailsView({ kind: 'loading' });
-      }
-      try {
-        const data = await getDashboardExpectedPayableDetails(
-          monthKey === todayMonthKey ? null : monthKey,
-          costCenterId,
-          categoryId,
-        );
-        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
-          return;
-        }
-        expectedPayableDetailsCacheRef.current.set(cacheKey, data);
-        setExpectedPayableDetailsView({ kind: 'ready', data });
-      } catch (error) {
-        if (signal.aborted) {
-          return;
-        }
-        if (expectedPayableDetailsViewRef.current.kind === 'ready') {
-          return;
-        }
-        const message =
-          error instanceof DashboardExpectedPayableDetailsRequestError
-            ? error.message
-            : 'Não foi possível carregar os pagamentos previstos.';
-        setExpectedPayableDetailsView({ kind: 'error', message });
       }
     },
     [],
@@ -1429,30 +1363,6 @@ export function DashboardPage() {
   ]);
 
   useEffect(() => {
-    if (expandKind !== 'expense' || view.kind !== 'ready') {
-      setExpectedPayableDetailsView({ kind: 'idle' });
-      return;
-    }
-    const controller = new AbortController();
-    void loadExpectedPayableDetails(
-      controller.signal,
-      selectedMonthKey,
-      todayMonthKey,
-      selectedCostCenterId,
-      selectedCategoryId,
-    );
-    return () => controller.abort();
-  }, [
-    expandKind,
-    loadExpectedPayableDetails,
-    selectedCategoryId,
-    selectedCostCenterId,
-    selectedMonthKey,
-    todayMonthKey,
-    view.kind,
-  ]);
-
-  useEffect(() => {
     const rawMonth = searchParams.get('month');
     const rawCostCenter = searchParams.get('costCenter');
     const rawSituation = searchParams.get('situation');
@@ -1681,10 +1591,6 @@ export function DashboardPage() {
     () => (cashFlowModel ? cashRealizedOutflowsSeries(cashFlowModel) : undefined),
     [cashFlowModel],
   );
-  const expectedPayables = useMemo(
-    () => (cashFlowModel ? cashExpectedPayablesSeries(cashFlowModel) : undefined),
-    [cashFlowModel],
-  );
   const dailySeries = {
     inflows: realizedInflows,
     outflows: realizedOutflows,
@@ -1848,7 +1754,6 @@ export function DashboardPage() {
     setReceivableStockDetailsView({ kind: 'idle' });
     setPayableStockDetailsView({ kind: 'idle' });
     setExpectedReceivableDetailsView({ kind: 'idle' });
-    setExpectedPayableDetailsView({ kind: 'idle' });
   }, []);
 
   return (
@@ -2701,51 +2606,18 @@ export function DashboardPage() {
                 </div>
               </div>
             ) : null}
-            {expectedPayables && expectedPayables.length > 0 ? (
-              <div key="payable">
-                <p className={styles.expandLabel}>A pagar por vencimento (no prazo)</p>
-                <div className={styles.expandChart}>
-                  <Sparkline
-                    points={expectedPayables}
-                    colorVar="--color-series-expense"
-                    interactive
-                    ariaLabel="A pagar por dia de vencimento no prazo"
-                    valueCaption="previsto no prazo"
-                  />
-                </div>
-              </div>
-            ) : (
-              <p className={styles.expandLabel}>Sem valores a pagar no prazo neste mês.</p>
-            )}
-            <h3 className={expectedPayableStyles.sectionTitle}>Títulos a pagar no prazo</h3>
-            {expectedPayableDetailsView.kind === 'loading' ? (
-              <p className={expectedPayableStyles.loading}>Carregando detalhes…</p>
-            ) : null}
-            {expectedPayableDetailsView.kind === 'error' ? (
-              <p className={expectedPayableStyles.error} role="alert">
-                {expectedPayableDetailsView.message}
-              </p>
-            ) : null}
-            {expectedPayableDetailsView.kind === 'ready' &&
-            expectedPayableDetailsView.data.available ? (
-              <ExpectedPayableDetailsPanel
-                items={expectedPayableDetailsView.data.items}
-                emptyMessage="Nenhum pagamento previsto no prazo neste período."
-                ariaLabel="Títulos a pagar no prazo"
-              />
-            ) : null}
-            {expectedPayableDetailsView.kind === 'ready' &&
-            !expectedPayableDetailsView.data.available ? (
-              <p className={expectedPayableStyles.empty}>
-                Detalhamento indisponível para o centro de custo selecionado.
-              </p>
-            ) : null}
             {cashFlowModel.realizedOutflowsByCategory &&
-            cashFlowModel.realizedOutflowsByCategory.items.length > 0 ? (
+            cashFlowModel.realizedOutflowsByCategory.items.length > 0 &&
+            operationalTenantId !== null ? (
               <>
                 <p className={styles.expandLabel}>Maiores categorias das saídas realizadas</p>
-                <CashCategoryRanking
+                <CashCategoryDrilldown
                   composition={cashFlowModel.realizedOutflowsByCategory}
+                  direction="outflows"
+                  monthKey={selectedMonthKey}
+                  tenantId={operationalTenantId}
+                  costCenterId={selectedCostCenterId}
+                  categoryId={selectedCategoryId}
                   sectionTitle="Maiores categorias das saídas realizadas"
                   colorVar="--color-series-expense"
                   emptyMessage="Sem saídas categorizadas neste mês."

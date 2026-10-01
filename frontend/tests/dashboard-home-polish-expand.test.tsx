@@ -13,6 +13,7 @@ import { getDashboardReceivableStockDetails } from '../src/services/dashboard/re
 import { getDashboardPayableStockDetails } from '../src/services/dashboard/payable-stock-details';
 import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
 import { getDashboardExpectedPayableDetails } from '../src/services/dashboard/expected-payable-details';
+import { getDashboardCashRealizedDetails } from '../src/services/dashboard/cash-realized-details';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -59,6 +60,9 @@ vi.mock('../src/services/dashboard/expected-receivable-details', () => ({
 vi.mock('../src/services/dashboard/expected-payable-details', () => ({
   getDashboardExpectedPayableDetails: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/cash-realized-details', () => ({
+  getDashboardCashRealizedDetails: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -74,6 +78,7 @@ const getReceivableStockDetails = vi.mocked(getDashboardReceivableStockDetails);
 const getPayableStockDetails = vi.mocked(getDashboardPayableStockDetails);
 const getExpectedReceivableDetails = vi.mocked(getDashboardExpectedReceivableDetails);
 const getExpectedPayableDetails = vi.mocked(getDashboardExpectedPayableDetails);
+const getCashRealizedDetails = vi.mocked(getDashboardCashRealizedDetails);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 
 const CENTER = '11111111-1111-4111-8111-111111111111';
@@ -337,6 +342,21 @@ beforeEach(() => {
         ? futureExpectedPayableDetails
         : currentExpectedPayableDetails,
   );
+  getCashRealizedDetails.mockResolvedValue({
+    today: '2026-08-19',
+    monthKey: '2026-08',
+    from: '2026-08-01',
+    to: '2026-08-31',
+    direction: 'outflows',
+    categoryKey: 'cat:Salários',
+    categoryKind: 'category',
+    available: true,
+    total: '0',
+    itemCount: 0,
+    limit: 100,
+    offset: 0,
+    items: [],
+  });
   getHistory.mockResolvedValue({
     today: '2026-08-19',
     startMonth: '2025-09',
@@ -419,6 +439,9 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(getReceivableStockDetails).not.toHaveBeenCalled();
     expect(within(dialog).getByText('Títulos a receber no prazo')).toBeTruthy();
     expect(within(dialog).getByText('Cliente Previsto')).toBeTruthy();
+    expect(within(dialog).getByText('Categorias das entradas realizadas')).toBeTruthy();
+    const inflowCategory = within(dialog).getByRole('button', { name: /Serviços/i });
+    expect(inflowCategory.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('Z4 — Já recebido não aparece como card principal; Faturamento mantém Recebido', async () => {
@@ -485,22 +508,21 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     const paidAccumulated = within(dialog).getByText(
       'Saídas realizadas acumuladas (dia de baixa)',
     );
-    const payableDue = within(dialog).getByText('A pagar por vencimento (no prazo)');
+    const categories = within(dialog).getByText('Maiores categorias das saídas realizadas');
     expect(
       paidDaily.compareDocumentPosition(paidAccumulated) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      paidAccumulated.compareDocumentPosition(payableDue) & Node.DOCUMENT_POSITION_FOLLOWING,
+      paidAccumulated.compareDocumentPosition(categories) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
-    expect(within(dialog).getByText('Maiores categorias das saídas realizadas')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: /Salários/i })).toBeTruthy();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
-    await waitFor(() => {
-      expect(getExpectedPayableDetails).toHaveBeenCalledWith(null, null, null);
-    });
+    expect(within(dialog).queryByText('A pagar por vencimento (no prazo)')).toBeNull();
+    expect(within(dialog).queryByText('Títulos a pagar no prazo')).toBeNull();
+    expect(within(dialog).queryByText('Sem valores a pagar no prazo neste mês.')).toBeNull();
+    expect(getExpectedPayableDetails).not.toHaveBeenCalled();
     expect(getPayableStockDetails).not.toHaveBeenCalled();
-    expect(within(dialog).getByText('Títulos a pagar no prazo')).toBeTruthy();
-    expect(within(dialog).getByText('Fornecedor Previsto')).toBeTruthy();
   });
 
   it('Z11/Z12 — Resultado abre com managerialResult', async () => {
@@ -678,14 +700,11 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
     expect(within(dialog).getByRole('heading', { name: 'Despesas' })).toBeTruthy();
     expect(within(dialog).getByText('A pagar')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*166\.188,45/).length).toBeGreaterThan(0);
-    expect(within(dialog).getByText('A pagar por vencimento (no prazo)')).toBeTruthy();
-    await waitFor(() => {
-      expect(getExpectedPayableDetails).toHaveBeenCalledWith('2026-10', null, null);
-    });
+    expect(within(dialog).queryByText('A pagar por vencimento (no prazo)')).toBeNull();
+    expect(getExpectedPayableDetails).not.toHaveBeenCalled();
     expect(getPayableStockDetails).not.toHaveBeenCalled();
-    expect(within(dialog).getByText('Títulos a pagar no prazo')).toBeTruthy();
-    expect(within(dialog).getByText('Fornecedor Outubro')).toBeTruthy();
-    expect(within(dialog).getByText(/15\/10\/2026/)).toBeTruthy();
+    expect(within(dialog).queryByText('Títulos a pagar no prazo')).toBeNull();
+    expect(within(dialog).queryByText('Fornecedor Outubro')).toBeNull();
     expect(within(dialog).queryByText('Maiores categorias das saídas realizadas')).toBeNull();
     expect(within(dialog).getAllByText('Sem movimento').length).toBeGreaterThan(0);
   });
@@ -706,16 +725,20 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
     expect(within(dialog).getAllByText('Sem movimento').length).toBeGreaterThan(0);
   });
 
-  it('mês atual lista somente títulos no prazo do expected, sem virar vencido em previsto', async () => {
+  it('mês atual de Despesas não lista títulos a pagar; o estoque continua em Contas a pagar', async () => {
     const dialog = await openKpiExpand('Despesas');
-    await waitFor(() => {
-      expect(getExpectedPayableDetails).toHaveBeenCalledWith(null, null, null);
-    });
-    expect(within(dialog).getByText('Fornecedor Previsto')).toBeTruthy();
-    expect(within(dialog).getByText(/28\/08\/2026/)).toBeTruthy();
+    expect(within(dialog).queryByText('Fornecedor Previsto')).toBeNull();
     expect(within(dialog).queryByText('Fornecedor XYZ')).toBeNull();
-    expect(within(dialog).queryByText(/vencido/i)).toBeNull();
+    expect(getExpectedPayableDetails).not.toHaveBeenCalled();
     expect(getPayableStockDetails).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fechar' }));
+    fireEvent.click(kpiScope('Contas a pagar').getByRole('button', { name: 'Expandir' }));
+    const payable = await screen.findByRole('dialog');
+    await waitFor(() => {
+      expect(getPayableStockDetails).toHaveBeenCalled();
+    });
+    expect(within(payable).getByText('Títulos em aberto')).toBeTruthy();
+    expect(within(payable).getByText('Fornecedor XYZ')).toBeTruthy();
   });
 
   it('mês passado mantém realizado e expected pode ficar vazio', async () => {
@@ -725,17 +748,17 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
     expect(within(dialog).getAllByText(/R\$\s*100\.000,00/).length).toBeGreaterThan(0);
     expect(within(dialog).getByText('Pago por dia de baixa')).toBeTruthy();
     expect(within(dialog).getByText('Saídas realizadas acumuladas (dia de baixa)')).toBeTruthy();
-    await waitFor(() => {
-      expect(getExpectedPayableDetails).toHaveBeenCalledWith('2026-07', null, null);
-    });
-    expect(within(dialog).getByText('Nenhum pagamento previsto no prazo neste período.')).toBeTruthy();
+    expect(getExpectedPayableDetails).not.toHaveBeenCalled();
+    expect(within(dialog).queryByText('Nenhum pagamento previsto no prazo neste período.')).toBeNull();
+    expect(within(dialog).queryByText('A pagar por vencimento (no prazo)')).toBeNull();
+    expect(within(dialog).queryByText('Títulos a pagar no prazo')).toBeNull();
     expect(within(dialog).queryByText('Fornecedor Outubro')).toBeNull();
     expect(within(dialog).queryByText('Fornecedor Previsto')).toBeNull();
   });
 
-  it('envia centro de custo e categoria ao expected-details de Despesas', async () => {
+  it('envia período, centro de custo e categoria ao detalhe realizado de Despesas', async () => {
     dashboardSearchParams = new URLSearchParams(
-      `month=2026-10&costCenter=${CENTER}&category=${CATEGORY}`,
+      `month=2026-08&costCenter=${CENTER}&category=${CATEGORY}`,
     );
     getCostCenters.mockResolvedValue({
       items: [{ id: CENTER, name: 'Centro A', code: null, active: true }],
@@ -743,11 +766,182 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
     getCategories.mockResolvedValue({
       items: [{ id: CATEGORY, name: 'Categoria A', type: 'EXPENSE' }],
     });
-    await openKpiExpand('Despesas');
-    await waitFor(() => {
-      expect(getExpectedPayableDetails).toHaveBeenCalledWith('2026-10', CENTER, CATEGORY);
+    getCashRealizedDetails.mockResolvedValue({
+      today: '2026-08-19',
+      monthKey: '2026-08',
+      from: '2026-08-01',
+      to: '2026-08-31',
+      direction: 'outflows',
+      categoryKey: 'cat:Salários',
+      categoryKind: 'category',
+      available: true,
+      total: '111111.11',
+      itemCount: 1,
+      limit: 100,
+      offset: 0,
+      items: [
+        {
+          settlementExternalId: 's-sal',
+          installmentExternalId: 'ap-sal',
+          installmentKind: 'PAYABLE',
+          occurredOn: '2026-08-05',
+          netAmount: '111111.11',
+          attributedAmount: '111111.11',
+          description: null,
+          partyName: 'Folha Oficial',
+          categoryNames: ['Salários'],
+          categoryExternalIds: ['cat-sal'],
+          categoryKey: 'cat:Salários',
+          categoryKind: 'category',
+          categoryName: 'Salários',
+        },
+      ],
     });
-    expect(getMonthlyCashFlow).toHaveBeenCalledWith('2026-10', CENTER, CATEGORY);
+    const dialog = await openKpiExpand('Despesas');
+    expect(getExpectedPayableDetails).not.toHaveBeenCalled();
+    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, CENTER, CATEGORY);
+    fireEvent.click(within(dialog).getByRole('button', { name: /Salários/i }));
+    await waitFor(() => {
+      expect(getCashRealizedDetails).toHaveBeenCalledWith(
+        expect.objectContaining({
+          direction: 'outflows',
+          monthKey: '2026-08',
+          costCenterId: CENTER,
+          categoryId: CATEGORY,
+          categoryKey: 'cat:Salários',
+          categoryKind: 'category',
+        }),
+      );
+    });
+    expect(await within(dialog).findByText('Folha Oficial')).toBeTruthy();
+  });
+
+  it('expande e recolhe mais de uma categoria sem inventar contraparte', async () => {
+    getMonthlyCashFlow.mockResolvedValue({
+      ...cashFlowHomeFixture,
+      realizedByCategory: {
+        inflows: singleCashCategoryComposition('Serviços', '888888.88'),
+        outflows: {
+          total: '111111.11',
+          classified: '111111.11',
+          uncategorized: '0',
+          imprecise: '0',
+          coverageRate: '100',
+          items: [
+            {
+              kind: 'category',
+              key: 'cat-sal',
+              name: 'Salário dos Colaboradores',
+              amount: '80000.00',
+              percentage: '72',
+            },
+            {
+              kind: 'category',
+              key: 'cat-pro',
+              name: 'Pró-labore',
+              amount: '31111.11',
+              percentage: '28',
+            },
+          ],
+        },
+      },
+    });
+    getCashRealizedDetails.mockImplementation(async (input) => {
+      const salary = input.categoryKey === 'cat-sal';
+      return {
+        today: '2026-08-19',
+        monthKey: '2026-08',
+        from: '2026-08-01',
+        to: '2026-08-31',
+        direction: 'outflows' as const,
+        categoryKey: salary ? 'cat-sal' : 'cat-pro',
+        categoryKind: 'category' as const,
+        available: true,
+        total: salary ? '80000.00' : '31111.11',
+        itemCount: salary ? 2 : 1,
+        limit: 100,
+        offset: 0,
+        items: salary
+          ? [
+              {
+                settlementExternalId: 's1',
+                installmentExternalId: 'ap-1',
+                installmentKind: 'PAYABLE',
+                occurredOn: '2026-08-05',
+                netAmount: '50000.00',
+                attributedAmount: '50000.00',
+                description: 'Folha',
+                partyName: 'Colaboradores',
+                categoryNames: ['Salário dos Colaboradores'],
+                categoryExternalIds: ['cat-sal'],
+                categoryKey: 'cat-sal',
+                categoryKind: 'category',
+                categoryName: 'Salário dos Colaboradores',
+              },
+              {
+                settlementExternalId: 's2',
+                installmentExternalId: 'ap-2',
+                installmentKind: 'PAYABLE',
+                occurredOn: '2026-08-06',
+                netAmount: '30000.00',
+                attributedAmount: '30000.00',
+                description: null,
+                partyName: null,
+                categoryNames: ['Salário dos Colaboradores'],
+                categoryExternalIds: ['cat-sal'],
+                categoryKey: 'cat-sal',
+                categoryKind: 'category',
+                categoryName: 'Salário dos Colaboradores',
+              },
+            ]
+          : [
+              {
+                settlementExternalId: 's3',
+                installmentExternalId: 'ap-3',
+                installmentKind: 'PAYABLE',
+                occurredOn: '2026-08-07',
+                netAmount: '31111.11',
+                attributedAmount: '31111.11',
+                description: null,
+                partyName: 'Sócio Oficial',
+                categoryNames: ['Pró-labore'],
+                categoryExternalIds: ['cat-pro'],
+                categoryKey: 'cat-pro',
+                categoryKind: 'category',
+                categoryName: 'Pró-labore',
+              },
+            ],
+      };
+    });
+
+    const dialog = await openKpiExpand('Despesas');
+    expect(within(dialog).getAllByText(/R\$\s*133\.333,33/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(/R\$\s*80\.000,00/)).toBeTruthy();
+    expect(within(dialog).getByText(/R\$\s*31\.111,11/)).toBeTruthy();
+
+    const salary = within(dialog).getByRole('button', { name: /Salário dos Colaboradores/i });
+    expect(salary.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(salary);
+    expect(salary.getAttribute('aria-expanded')).toBe('true');
+    expect(await within(dialog).findByText('Colaboradores')).toBeTruthy();
+    expect(within(dialog).getByText('Sem contraparte identificada')).toBeTruthy();
+    expect(within(dialog).queryByText('Fornecedor inventado')).toBeNull();
+
+    fireEvent.click(salary);
+    expect(salary.getAttribute('aria-expanded')).toBe('false');
+    expect(within(dialog).queryByText('Colaboradores')).toBeNull();
+
+    const proLabore = within(dialog).getByRole('button', { name: /Pró-labore/i });
+    fireEvent.click(proLabore);
+    expect(proLabore.getAttribute('aria-expanded')).toBe('true');
+    expect(salary.getAttribute('aria-expanded')).toBe('false');
+    expect(await within(dialog).findByText('Sócio Oficial')).toBeTruthy();
+    expect(getCashRealizedDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ direction: 'outflows', monthKey: '2026-08', categoryKey: 'cat-sal' }),
+    );
+    expect(getCashRealizedDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ direction: 'outflows', monthKey: '2026-08', categoryKey: 'cat-pro' }),
+    );
   });
 
   it('envia centro de custo e categoria ao expected-details de Faturamento', async () => {
