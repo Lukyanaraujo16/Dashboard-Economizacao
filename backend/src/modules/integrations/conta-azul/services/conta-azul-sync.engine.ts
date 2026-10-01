@@ -1,4 +1,5 @@
 import { ContaAzulApiError, type ContaAzulApiClient } from '../connector/conta-azul-api-client.js';
+import { runAfterSyncSuccess } from '../domain/after-sync-success.js';
 import {
   buildDueDateWindows,
   buildTransferSyncCivilWindow,
@@ -206,6 +207,8 @@ export function createContaAzulManualSyncEngine(deps: {
    * Default seguro no serviço = false quando omitido.
    */
   readonly installmentPresenceAutoTombstone?: boolean;
+  /** Enfileira avaliação proativa depois do sucesso. Não participa do resultado do sync. */
+  readonly onSyncSucceeded?: (tenantId: string) => Promise<void>;
 }): ContaAzulManualSyncEngine {
   const now = deps.clock ?? (() => new Date());
   const timeoutMs = deps.timeoutMs ?? CONTA_AZUL_SYNC_JOB_TIMEOUT_MS;
@@ -888,6 +891,7 @@ export function createContaAzulManualSyncEngine(deps: {
           counts: finalCounts,
           at: now(),
         });
+        await runAfterSyncSuccess(input.tenantId, deps.onSyncSucceeded);
       } catch (error) {
         const mapped = mapUpstreamError(error);
         if (hotLog) {

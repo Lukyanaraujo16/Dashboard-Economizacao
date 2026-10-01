@@ -50,6 +50,7 @@ function toMessage(row: {
   senderType: AiMessageRecord['senderType'];
   content: string;
   messageType: AiMessageRecord['messageType'];
+  relatedInsightId: string | null;
   createdAt: Date;
 }): AiMessageRecord {
   return {
@@ -59,6 +60,7 @@ function toMessage(row: {
     senderType: row.senderType,
     content: row.content,
     messageType: row.messageType,
+    relatedInsightId: row.relatedInsightId,
     createdAt: row.createdAt,
   };
 }
@@ -221,6 +223,18 @@ export function createAdvisorConversationRepository(
       }
 
       const content = requireText(input.content, 'MESSAGE_CONTENT_REQUIRED', 'Conteúdo da mensagem é obrigatório.');
+      if (input.relatedInsightId) {
+        const insight = await prisma.aiInsight.findFirst({
+          where: { id: input.relatedInsightId, tenantId: conversation.tenantId },
+          select: { id: true },
+        });
+        if (insight === null) {
+          throw new AdvisorDomainError(
+            'INSIGHT_NOT_FOUND',
+            'Insight não encontrado neste tenant.',
+          );
+        }
+      }
       const now = new Date();
       const [row] = await prisma.$transaction([
         prisma.aiMessage.create({
@@ -230,6 +244,7 @@ export function createAdvisorConversationRepository(
             senderType: input.senderType,
             content,
             messageType: 'TEXT',
+            relatedInsightId: input.relatedInsightId ?? null,
           },
         }),
         prisma.aiConversation.update({

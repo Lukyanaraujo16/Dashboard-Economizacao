@@ -10,6 +10,7 @@ export type ConsultantFabProps = {
   readonly onOpen: () => void;
   readonly available?: boolean;
   readonly consultantName?: string;
+  readonly unreadCount?: number;
   readonly fabRef?: Ref<HTMLButtonElement>;
 };
 
@@ -17,12 +18,18 @@ export function ConsultantFab({
   onOpen,
   available = false,
   consultantName = 'Consultor',
+  unreadCount = 0,
   fabRef,
 }: ConsultantFabProps) {
   const workspace = useConsultantWorkspace();
-  const label = available
+  const baseLabel = available
     ? `Falar com ${consultantName}`
     : `Falar com ${consultantName} — indisponível`;
+  const visibleCount = unreadCount > 9 ? '9+' : String(unreadCount);
+  const label =
+    unreadCount > 0
+      ? `${baseLabel}. ${unreadCount} ${unreadCount === 1 ? 'aviso novo' : 'avisos novos'}`
+      : baseLabel;
 
   return (
     <button
@@ -38,6 +45,9 @@ export function ConsultantFab({
     >
       <Sparkles size={18} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />
       <span className={styles.fabLabel}>{`Falar com ${consultantName}`}</span>
+      {unreadCount > 0 ? (
+        <span className={styles.fabBadge}>{visibleCount}</span>
+      ) : null}
       <span className={styles.fabStatus}>
         <ConsultantPresence available={available} />
       </span>

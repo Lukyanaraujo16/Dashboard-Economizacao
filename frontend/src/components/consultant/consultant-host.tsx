@@ -10,6 +10,8 @@ import {
   getConsultantConversation,
   getConsultantStatus,
   listConsultantConversations,
+  presentProactiveInsights,
+  getProactiveUnreadCount,
   sendConsultantMessage,
   ConsultantRequestError,
   type ConsultantConversation,
@@ -89,6 +91,7 @@ export function ConsultantHost() {
   const [draft, setDraft] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [retryContent, setRetryContent] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const panelGenRef = useRef(0);
   const fabRef = useRef<HTMLButtonElement | null>(null);
   const returnFocusToFabRef = useRef(false);
@@ -123,6 +126,7 @@ export function ConsultantHost() {
     setDraft('');
     setSendError(null);
     setRetryContent(null);
+    setUnreadCount(0);
   }, []);
 
   useEffect(() => {
@@ -156,6 +160,27 @@ export function ConsultantHost() {
         setAvailabilityReady(true);
       });
   }, [visible, sessionKey]);
+
+  useEffect(() => {
+    if (!visible || !operationalTenantId) {
+      return;
+    }
+    let cancelled = false;
+    void getProactiveUnreadCount()
+      .then((count) => {
+        if (!cancelled) {
+          setUnreadCount(count);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUnreadCount(0);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [operationalTenantId, sessionKey, visible]);
 
   const month = resolveConsultantReferenceMonth(searchParams);
 
@@ -229,6 +254,27 @@ export function ConsultantHost() {
           : userId && operationalTenantId
             ? readActiveConversationId(userId, operationalTenantId)
             : null;
+      try {
+        const presented = await presentProactiveInsights(storedId);
+        if (requestId !== panelGenRef.current) {
+          return;
+        }
+        if (presented) {
+          setConversations((current) => [
+            presented,
+            ...current.filter((item) => item.id !== presented.id),
+          ]);
+          setActiveConversation(presented);
+          persistActiveId(presented.id);
+          setUnreadCount(0);
+          setUiState('OPEN');
+          return;
+        }
+      } catch {
+        if (requestId !== panelGenRef.current) {
+          return;
+        }
+      }
       if (storedId) {
         await restoreConversation(storedId, requestId);
       }
@@ -429,6 +475,7 @@ export function ConsultantHost() {
           onOpen={() => void openPanel()}
           available={availability.status === 'ACTIVE'}
           consultantName={availability.consultantName}
+          unreadCount={unreadCount}
         />
       ) : null}
       {uiState !== 'CLOSED' ? (

@@ -8,6 +8,10 @@ import { createContaAzulManualSyncPublisher } from './infrastructure/jobs/conta-
 import { createContaAzulManualSyncWorker } from './infrastructure/jobs/conta-azul-manual-sync.worker.js';
 import { createContaAzulPlanSyncsScheduler } from './infrastructure/jobs/conta-azul-plan-syncs.queue.js';
 import { createContaAzulPlanSyncsWorker } from './infrastructure/jobs/conta-azul-plan-syncs.worker.js';
+import { createProactiveEvaluationPublisher } from './infrastructure/jobs/proactive-evaluation.queue.js';
+import { createProactiveEvaluationWorker } from './infrastructure/jobs/proactive-evaluation.worker.js';
+import { createProactiveNarrationPublisher } from './infrastructure/jobs/proactive-narration.queue.js';
+import { createProactiveNarrationWorker } from './infrastructure/jobs/proactive-narration.worker.js';
 import { getPrismaClient } from './infrastructure/database/prisma.js';
 import { createContaAzulApiClient } from './modules/integrations/conta-azul/connector/conta-azul-api-client.js';
 import { createContaAzulTokenClient } from './modules/integrations/conta-azul/connector/conta-azul-token-client.js';
@@ -29,6 +33,8 @@ import { createContaAzulSyncReconciler } from './modules/integrations/conta-azul
 import { createTenantRepository } from './modules/tenant/repositories/tenant.repository.js';
 import { createContaAzulTransferRepository } from './modules/integrations/conta-azul/repositories/transfer.repository.js';
 import { createContaAzulInstallmentPresenceRepository } from './modules/integrations/conta-azul/repositories/installment-presence.repository.js';
+import { createProactiveEvaluationRuntime } from './modules/advisor/services/proactive-evaluation.runtime.js';
+import { runProactiveTenantEvaluation } from './modules/advisor/services/proactive-evaluation.service.js';
 
 const rootEnvPath = resolve(process.cwd(), '../.env');
 const localEnvPath = resolve(process.cwd(), '.env');
@@ -99,6 +105,17 @@ const oauth = createContaAzulOAuthService({
   autoSyncIntervalMinutes: environment.autoSyncIntervalMinutes,
 });
 
+const connection = createBullmqRedisOptions(environment.redisUrl);
+const proactiveEvaluationPublisher = createProactiveEvaluationPublisher({
+  connection,
+  nodeEnv: environment.nodeEnv,
+});
+const proactiveNarrationPublisher = createProactiveNarrationPublisher({
+  connection,
+  nodeEnv: environment.nodeEnv,
+});
+const proactiveRuntime = createProactiveEvaluationRuntime(prisma, environment);
+
 const engine = createContaAzulManualSyncEngine({
   tenants,
   integrations,
@@ -114,9 +131,9 @@ const engine = createContaAzulManualSyncEngine({
   getValidAccessToken: (tenantId) => oauth.getValidAccessToken(tenantId),
   forceRefresh: (tenantId) => oauth.forceRefresh(tenantId),
   rateLimiter: createContaAzulRateLimiter(),
+  onSyncSucceeded: (tenantId) => proactiveEvaluationPublisher.enqueue(tenantId),
 });
 
-const connection = createBullmqRedisOptions(environment.redisUrl);
 const worker = createContaAzulManualSyncWorker({
   connection,
   nodeEnv: environment.nodeEnv,
@@ -148,6 +165,25 @@ const planWorker = createContaAzulPlanSyncsWorker({
 const reconciler = createContaAzulSyncReconciler({
   syncRuns,
   getJobState: (syncRunId) => publisher.getJobState(syncRunId),
+});
+const proactiveEvaluationWorker = createProactiveEvaluationWorker({
+  connection,
+  nodeEnv: environment.nodeEnv,
+  run: (tenantId) =>
+    runProactiveTenantEvaluation(
+      {
+        engine: proactiveRuntime.engine,
+        insights: proactiveRuntime.insights,
+        enqueueNarration: (insightId) =>
+          proactiveNarrationPublisher.enqueue({ tenantId, insightId }),
+      },
+      tenantId,
+    ).then(() => undefined),
+});
+const proactiveNarrationWorker = createProactiveNarrationWorker({
+  connection,
+  nodeEnv: environment.nodeEnv,
+  run: (payload) => proactiveRuntime.narrate(payload).then(() => undefined),
 });
 
 worker.on('ready', () => {
@@ -206,7 +242,11 @@ planWorker.on('error', () => {
 async function shutdown(): Promise<void> {
   await worker.close();
   await planWorker.close();
+  await proactiveEvaluationWorker.close();
+  await proactiveNarrationWorker.close();
   await publisher.close();
+  await proactiveEvaluationPublisher.close();
+  await proactiveNarrationPublisher.close();
   await planScheduler.close();
   process.exit(0);
 }

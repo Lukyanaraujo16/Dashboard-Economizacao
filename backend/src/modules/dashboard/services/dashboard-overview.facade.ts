@@ -26,6 +26,7 @@ import type { FinancialCategoryReadRepository } from '../../finance/repositories
 import type { DashboardCategoryFilter } from '../../analytics/domain/dashboard-home-filters.js';
 import type { DashboardSituation } from '../../analytics/domain/dashboard-home-filters.js';
 import { ForbiddenError, NotFoundError } from '../../../shared/errors/application-error.js';
+import { scheduleProactiveEvaluationForSavedMonth } from '../../advisor/domain/schedule-proactive-evaluation.js';
 import { resolveOperationalTenantId } from '../domain/operational-tenant.js';
 import { resolveCostCenterListVisibility } from '../domain/resolve-cost-center-list-visibility.js';
 import { resolveFinancialCategoryListVisibility } from '../domain/resolve-financial-category-list-visibility.js';
@@ -290,6 +291,9 @@ export type DashboardOverviewFacadeDependencies = {
   readonly cashRealizedDetails?: CashRealizedDetailsService;
   /** 08-C2 — histórico de saldo bancário por snapshots. */
   readonly cashBalanceHistory?: CashBalanceHistoryService;
+  /** Avaliação proativa do mês corrente. Não bloqueia o salvamento. */
+  readonly scheduleProactiveEvaluation?: (tenantId: string) => Promise<void>;
+  readonly clock?: () => Date;
 };
 
 export function createDashboardOverviewFacade(
@@ -682,6 +686,12 @@ export function createDashboardOverviewFacade(
     ) {
       const tenantId = requireOperationalTenantId(auth);
       await deps.revenueGoals.upsert(tenantId, monthKey, targetAmount);
+      await scheduleProactiveEvaluationForSavedMonth({
+        monthKey,
+        now: deps.clock?.() ?? new Date(),
+        tenantId,
+        schedule: deps.scheduleProactiveEvaluation,
+      });
       return loadRevenueGoal(deps, tenantId, monthKey, historyMonths);
     },
 
@@ -696,6 +706,12 @@ export function createDashboardOverviewFacade(
     async upsertExpenseCeiling(auth, monthKey, ceilingAmount) {
       const tenantId = requireOperationalTenantId(auth);
       await deps.expenseCeilings.upsert(tenantId, monthKey, ceilingAmount);
+      await scheduleProactiveEvaluationForSavedMonth({
+        monthKey,
+        now: deps.clock?.() ?? new Date(),
+        tenantId,
+        schedule: deps.scheduleProactiveEvaluation,
+      });
       return loadExpenseCeiling(deps, tenantId, monthKey);
     },
   };

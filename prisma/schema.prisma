@@ -70,6 +70,7 @@ model Tenant {
   aiMessages                 AiMessage[]
   aiRuns                     AiRun[]
   proactiveTriggerConfigurations ProactiveTriggerConfiguration[]
+  proactiveTriggerBootstrap  ProactiveTriggerBootstrap?
   analyticalEvents           AnalyticalEvent[]
   aiInsights                 AiInsight[]
   aiInsightReads             AiInsightRead[]
@@ -1229,4 +1230,16 @@ model AiInsightRead {
   @@unique([insightId, userId], map: "uq_ai_insight_reads_insight_user")
   @@index([tenantId, userId], map: "idx_ai_insight_reads_tenant_user")
   @@map("ai_insight_reads")
+}
+
+/// Pacote padrão já aplicado neste tenant. Distingue "nunca provisionado" de exclusão deliberada.
+model ProactiveTriggerBootstrap {
+  tenantId       String   @id @map("tenant_id") @db.Uuid
+  packageVersion Int      @map("package_version")
+  createdCount   Int      @map("created_count")
+  preservedCount Int      @map("preserved_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@map("proactive_trigger_bootstraps")
 }

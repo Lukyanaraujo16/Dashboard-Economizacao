@@ -49,6 +49,7 @@ export function createAdminConsultantService(deps: {
   readonly knowledge: AdvisorKnowledgeRepository;
   readonly nodeEnv?: string;
   readonly resolveProviderApiKey?: (provider: AiProviderId) => Promise<string | null>;
+  readonly bootstrapDefaults?: (tenantId: string) => Promise<void>;
 }): AdminConsultantService {
   async function requireTenant(tenantId: string): Promise<void> {
     const tenant = await deps.tenants.findById(tenantId);
@@ -90,6 +91,9 @@ export function createAdminConsultantService(deps: {
           }
         }
         const settings = await deps.settings.upsertSettings(tenantId, input);
+        if (settings.status === 'ACTIVE' && deps.bootstrapDefaults) {
+          await deps.bootstrapDefaults(tenantId);
+        }
         return toPublicAdminConsultantSettings(settings);
       });
     },

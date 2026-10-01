@@ -352,6 +352,10 @@ describe('UI admin gatilhos da Lia (F14.3)', () => {
 
     await screen.findByRole('heading', { name: 'Meta de faturamento' });
     expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Meta em 100%' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Teto em 100%' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Meta atingida' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Teto atingido' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Teto ultrapassado' }));
     expect(await screen.findByRole('heading', { name: 'Novo gatilho' })).toBeTruthy();

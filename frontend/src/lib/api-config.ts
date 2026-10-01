@@ -682,3 +682,11 @@ export function consultantConversationPath(conversationId: string): string {
 export function consultantConversationMessagesPath(conversationId: string): string {
   return `${consultantConversationPath(conversationId)}/messages`;
 }
+
+export function consultantProactiveUnreadPath(): string {
+  return `${CONSULTANT_API_PREFIX}/proactive-insights/unread`;
+}
+
+export function consultantProactivePresentPath(): string {
+  return `${CONSULTANT_API_PREFIX}/proactive-insights/present`;
+}

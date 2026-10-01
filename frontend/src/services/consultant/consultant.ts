@@ -2,6 +2,8 @@ import {
   consultantConversationMessagesPath,
   consultantConversationPath,
   consultantConversationsPath,
+  consultantProactivePresentPath,
+  consultantProactiveUnreadPath,
   consultantStatusPath,
 } from '../../lib/api-config';
 import type {
@@ -244,6 +246,43 @@ export async function getConsultantStatus(): Promise<ConsultantUserStatus> {
   }
 
   return toConsultantUserStatus(body);
+}
+
+export async function getProactiveUnreadCount(): Promise<number> {
+  const response = await consultantFetch(consultantProactiveUnreadPath(), { method: 'GET' });
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
+  if (!isRecord(body) || typeof body.count !== 'number' || !Number.isInteger(body.count) || body.count < 0) {
+    throw new ConsultantRequestError('unavailable', UNAVAILABLE_MESSAGE, {
+      httpStatus: response.status,
+    });
+  }
+  return body.count;
+}
+
+export async function presentProactiveInsights(
+  conversationId?: string | null,
+): Promise<ConsultantConversationDetail | null> {
+  const response = await consultantFetch(consultantProactivePresentPath(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(conversationId ? { conversationId } : {}),
+  });
+  const body = await readJsonBody(response);
+  if (!response.ok) {
+    throw toConsultantFailure(response, body);
+  }
+  if (!isRecord(body) || body.conversation === null) {
+    return null;
+  }
+  if (!isConversationDetail(body.conversation)) {
+    throw new ConsultantRequestError('unavailable', UNAVAILABLE_MESSAGE, {
+      httpStatus: response.status,
+    });
+  }
+  return body.conversation;
 }
 
 export async function listConsultantConversations(): Promise<readonly ConsultantConversation[]> {

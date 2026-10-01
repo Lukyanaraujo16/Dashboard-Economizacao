@@ -146,11 +146,11 @@ function summarize(item: ProactiveTriggerConfiguration): string {
 }
 
 function revenueSuggestionLabel(percentage: number): string {
-  return percentage === 100 ? 'Meta atingida' : `Meta em ${percentage}%`;
+  return `Meta em ${percentage}%`;
 }
 
 function ceilingSuggestionLabel(percentage: number): string {
-  return percentage === 100 ? 'Teto atingido' : `Teto em ${percentage}%`;
+  return `Teto em ${percentage}%`;
 }
 
 function helperFor(triggerType: string): string {

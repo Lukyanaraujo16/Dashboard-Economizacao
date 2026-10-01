@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { createBullmqRedisOptions } from '../../../infrastructure/jobs/bullmq-connection.js';
+import { createProactiveEvaluationPublisher } from '../../../infrastructure/jobs/proactive-evaluation.queue.js';
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
 import { createAnalyticsService } from '../../analytics/services/analytics.service.js';
 import { createExpectedReceivableDetailsService } from '../../analytics/services/expected-receivable-details.service.js';
@@ -61,6 +63,18 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
   const cashBalanceHistory = createCashBalanceHistoryService({
     snapshots: createContaAzulBalanceSnapshotRepository(prisma),
   });
+  const redisUrl = process.env.REDIS_URL?.trim();
+  const proactiveEvaluation = redisUrl
+    ? createProactiveEvaluationPublisher({
+        connection: createBullmqRedisOptions(redisUrl),
+        nodeEnv: process.env.NODE_ENV ?? 'development',
+      })
+    : null;
+  if (proactiveEvaluation) {
+    app.addHook('onClose', async () => {
+      await proactiveEvaluation.close();
+    });
+  }
   const dashboard = createDashboardOverviewFacade({
     analytics: createAnalyticsService({
       receivables,
@@ -108,6 +122,9 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
     expenseCeilings: createExpenseCeilingRepository(prisma),
     costCenters,
     categories,
+    scheduleProactiveEvaluation: proactiveEvaluation
+      ? (tenantId) => proactiveEvaluation.enqueue(tenantId)
+      : undefined,
   });
 
   app.get(

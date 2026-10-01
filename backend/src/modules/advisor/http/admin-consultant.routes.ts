@@ -19,7 +19,9 @@ import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowle
 import { createAdvisorKnowledgeDocumentRepository } from '../repositories/advisor-knowledge-document.repository.js';
 import { createAdvisorPlatformCredentialRepository } from '../repositories/advisor-platform-credential.repository.js';
 import { createAdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
+import { createProactiveTriggerRepository } from '../repositories/proactive-trigger.repository.js';
 import { createAdminConsultantProvidersService } from '../services/admin-consultant-providers.service.js';
+import { createProactiveTriggerBootstrap } from '../services/proactive-trigger-bootstrap.service.js';
 import { createResolveProviderApiKey } from './create-advisor-runtime.js';
 import { createAdminConsultantService } from '../services/admin-consultant.service.js';
 import { createAdminConsultantKnowledgeDocumentService } from '../services/admin-consultant-knowledge-document.service.js';
@@ -133,6 +135,12 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
     knowledge: createAdvisorKnowledgeRepository(prisma),
     nodeEnv: environment.nodeEnv,
     resolveProviderApiKey,
+    bootstrapDefaults: async (tenantId) => {
+      await createProactiveTriggerBootstrap({
+        prisma,
+        triggers: createProactiveTriggerRepository(prisma),
+      }).ensureDefaultPackage(tenantId);
+    },
   });
   const adminProviders = createAdminConsultantProvidersService({
     credentials: createAdvisorPlatformCredentialRepository(prisma),

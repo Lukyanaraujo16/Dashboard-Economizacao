@@ -230,12 +230,14 @@ export type AiMessageRecord = {
   readonly senderType: AiMessageSenderType;
   readonly content: string;
   readonly messageType: AiMessageType;
+  readonly relatedInsightId?: string | null;
   readonly createdAt: Date;
 };
 
 export type CreateAiMessageInput = {
   readonly senderType: AiMessageSenderType;
   readonly content: string;
+  readonly relatedInsightId?: string | null;
 };
 
 export type AiRunRecord = {
@@ -270,6 +272,7 @@ export type CreateAiRunInput = {
   readonly userId?: string | null;
   readonly conversationId?: string | null;
   readonly messageId?: string | null;
+  readonly insightId?: string | null;
   readonly runType?: AiRunType;
   readonly provider: AiProviderId;
   readonly model: string;

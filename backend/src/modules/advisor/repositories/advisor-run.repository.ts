@@ -118,12 +118,23 @@ export function createAdvisorRunRepository(prisma: PrismaClient): AdvisorRunRepo
         }
       }
 
+      if (input.insightId) {
+        const insight = await prisma.aiInsight.findFirst({
+          where: { id: input.insightId, tenantId },
+          select: { id: true },
+        });
+        if (insight === null) {
+          throw new AdvisorDomainError('INSIGHT_NOT_FOUND', 'Insight da execução não encontrado neste tenant.');
+        }
+      }
+
       const row = await prisma.aiRun.create({
         data: {
           tenantId,
           userId: input.userId ?? null,
           conversationId: input.conversationId ?? null,
           messageId: input.messageId ?? null,
+          insightId: input.insightId ?? null,
           runType: input.runType ?? 'QUESTION_REPLY',
           provider: input.provider,
           model,

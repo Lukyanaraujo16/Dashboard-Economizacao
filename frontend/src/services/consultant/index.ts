@@ -3,7 +3,9 @@ export {
   deleteConsultantConversation,
   getConsultantConversation,
   getConsultantStatus,
+  getProactiveUnreadCount,
   listConsultantConversations,
+  presentProactiveInsights,
   sendConsultantMessage,
 } from './consultant';
 export type {
