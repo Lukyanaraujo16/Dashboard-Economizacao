@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 
@@ -76,6 +76,17 @@ const existingConfiguration = {
   active: true,
 };
 
+const titleConfiguration = {
+  id: '33333333-3333-4333-8333-333333333333',
+  triggerType: 'TITLE_DUE_SOON',
+  parameterKey: 'daysAhead:3|kind:PAYABLE|minimumAmount:5000.0000',
+  percentage: null,
+  daysAhead: 3,
+  minimumAmount: '5000.0000',
+  titleKind: 'PAYABLE',
+  active: false,
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -84,12 +95,8 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function requestUrl(input: RequestInfo | URL): string {
-  if (typeof input === 'string') {
-    return input;
-  }
-  if (input instanceof URL) {
-    return input.href;
-  }
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
   return input.url;
 }
 
@@ -118,9 +125,18 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-function installFetch(options?: { readonly catalog?: ProactiveTriggerCatalog; readonly configurations?: readonly unknown[] }) {
+type FetchOptions = {
+  readonly catalog?: ProactiveTriggerCatalog;
+  readonly configurations?: readonly unknown[];
+  readonly postStatus?: number;
+  readonly deleteStatus?: number;
+  readonly holdPost?: boolean;
+};
+
+function installFetch(options?: FetchOptions) {
   const activeCatalog = options?.catalog ?? catalog;
   const configurations = [...(options?.configurations ?? [existingConfiguration])];
+  let releasePost: ((response: Response) => void) | null = null;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = requestUrl(input);
     const method = init?.method ?? 'GET';
@@ -134,7 +150,7 @@ function installFetch(options?: { readonly catalog?: ProactiveTriggerCatalog; re
         triggerType: string;
         parameters: { percentage?: number };
       };
-      return jsonResponse(
+      const response = jsonResponse(
         {
           id: '22222222-2222-4222-8222-222222222222',
           triggerType: body.triggerType,
@@ -144,8 +160,32 @@ function installFetch(options?: { readonly catalog?: ProactiveTriggerCatalog; re
           titleKind: null,
           active: true,
         },
-        201,
+        options?.postStatus ?? 201,
       );
+      if (options?.holdPost) {
+        return new Promise<Response>((resolve) => {
+          releasePost = resolve;
+        }).then(() => response);
+      }
+      return response;
+    }
+
+    if (url.includes('/active') && method === 'POST') {
+      return jsonResponse({ ...existingConfiguration, active: false });
+    }
+
+    if (url.includes('/proactive-triggers/') && method === 'PATCH') {
+      return jsonResponse({ ...existingConfiguration, percentage: 90 });
+    }
+
+    if (url.includes('/proactive-triggers/') && method === 'DELETE') {
+      if ((options?.deleteStatus ?? 204) === 409) {
+        return jsonResponse(
+          { error: { code: 'CONFLICT', message: 'Configuração com evento histórico só pode ser desativada.' } },
+          409,
+        );
+      }
+      return new Response(null, { status: 204 });
     }
 
     if (url.endsWith(`/admin/tenants/${companyId}/proactive-triggers`)) {
@@ -160,7 +200,7 @@ function installFetch(options?: { readonly catalog?: ProactiveTriggerCatalog; re
   });
 
   vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
+  return { fetchMock, release: () => releasePost };
 }
 
 function renderPage() {
@@ -179,12 +219,17 @@ function renderPage() {
   );
 }
 
-function postCalls(fetchMock: ReturnType<typeof installFetch>) {
-  return fetchMock.mock.calls.filter((call) => (call[1] as RequestInit | undefined)?.method === 'POST');
+function callsWithMethod(fetchMock: ReturnType<typeof vi.fn>, method: string) {
+  return fetchMock.mock.calls.filter((call) => (call[1] as RequestInit | undefined)?.method === method);
 }
 
 function optionLabels(select: HTMLSelectElement): string[] {
   return [...select.options].map((option) => option.text);
+}
+
+async function openCreate() {
+  fireEvent.click(await screen.findByRole('button', { name: '+ Novo gatilho' }));
+  expect(await screen.findByRole('heading', { name: 'Novo gatilho' })).toBeTruthy();
 }
 
 describe('UI admin gatilhos da Lia (F14.3)', () => {
@@ -196,41 +241,58 @@ describe('UI admin gatilhos da Lia (F14.3)', () => {
     cleanup();
   });
 
-  it('mostra o catálogo da API, o nome amigável e esconde chaves técnicas', async () => {
-    const fetchMock = installFetch();
+  it('mostra o nome amigável, esconde chaves técnicas e não abre o formulário sozinho', async () => {
+    const { fetchMock } = installFetch();
     renderPage();
 
-    expect(await screen.findByRole('heading', { name: 'META DE FATURAMENTO' })).toBeTruthy();
-    expect(screen.getByText('Avise quando o faturamento atingir 80% da meta mensal.')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Meta de faturamento' })).toBeTruthy();
+    expect(screen.getByText('Avisar quando atingir 80% da meta mensal.')).toBeTruthy();
     expect(screen.getByText('Ativo')).toBeTruthy();
-    expect(screen.getByText('Avise quando o faturamento atingir X% da meta mensal.')).toBeTruthy();
-    expect(screen.getByText('Avise quando as despesas atingirem X% do teto mensal.')).toBeTruthy();
-    expect(screen.getByText('Avise quando as despesas ultrapassarem o teto mensal.')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Gatilhos da Lia' })).toBeTruthy();
     expect(
-      screen.getByText(
-        'Avise quando um título a pagar/a receber de pelo menos R$ X vencer nos próximos N dias.',
-      ),
+      screen.getByText('Defina quando a Lia deve avisar sobre situações financeiras importantes.'),
     ).toBeTruthy();
-    expect(screen.getByText(/Gatilho inativo não gera novas ocorrências/)).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Novo gatilho' })).toBeNull();
+    expect(screen.queryByLabelText(/Tipo de gatilho/)).toBeNull();
     expect(screen.getByTestId('company-section-gatilhos').getAttribute('href')).toBe(
       `/empresas/${companyId}/gatilhos`,
     );
 
-    const select = screen.getByLabelText(/^Tipo do gatilho/) as HTMLSelectElement;
-    expect(optionLabels(select)).toEqual([
-      'META DE FATURAMENTO',
-      'TETO DE GASTOS — PERCENTUAL',
-      'TETO DE GASTOS — ULTRAPASSADO',
-      'TÍTULO PRÓXIMO DO VENCIMENTO',
-    ]);
-
     const text = document.body.textContent ?? '';
     expect(text).not.toContain('parameterKey');
     expect(text).not.toContain('occurrenceKey');
+    expect(text).not.toContain('REVENUE_GOAL_PERCENTAGE');
+    expect(text).not.toContain('EXPENSE_CEILING_PERCENTAGE');
+    expect(text).not.toContain('EXPENSE_CEILING_EXCEEDED');
+    expect(text).not.toContain('TITLE_DUE_SOON');
     expect(fetchMock.mock.calls.some((call) => requestUrl(call[0]).includes('/admin/proactive-triggers/catalog'))).toBe(
       true,
     );
-    expect(postCalls(fetchMock)).toHaveLength(0);
+    expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(0);
+  });
+
+  it('mostra o estado vazio e abre o formulário pelo primeiro gatilho', async () => {
+    installFetch({ configurations: [] });
+    renderPage();
+
+    expect(await screen.findByText('Nenhum gatilho configurado')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Crie gatilhos para definir em quais situações financeiras a Lia deverá chamar a atenção do usuário.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByLabelText(/Tipo de gatilho/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Criar primeiro gatilho' }));
+    expect(await screen.findByRole('heading', { name: 'Novo gatilho' })).toBeTruthy();
+    expect(screen.getByLabelText(/Tipo de gatilho/)).toBeTruthy();
+  });
+
+  it('abre o formulário pelo botão novo gatilho', async () => {
+    installFetch();
+    renderPage();
+    await openCreate();
+    expect(screen.getByLabelText(/Tipo de gatilho/)).toBeTruthy();
   });
 
   it('não oferece tipo ausente no catálogo da API', async () => {
@@ -245,77 +307,187 @@ describe('UI admin gatilhos da Lia (F14.3)', () => {
     });
     renderPage();
 
-    const select = (await screen.findByLabelText(/^Tipo do gatilho/)) as HTMLSelectElement;
-    expect(optionLabels(select)).toEqual(['META DE FATURAMENTO', 'TETO DE GASTOS — ULTRAPASSADO']);
+    fireEvent.click(await screen.findByRole('button', { name: '+ Criar primeiro gatilho' }));
+    const select = (await screen.findByLabelText(/Tipo de gatilho/)) as HTMLSelectElement;
+    expect(optionLabels(select)).toEqual(['Meta de faturamento', 'Teto de gastos — ultrapassado']);
+    expect(screen.queryByRole('button', { name: 'Teto em 80%' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Título relevante vencendo' })).toBeNull();
   });
 
   it('troca o formulário conforme o tipo escolhido', async () => {
     installFetch();
     renderPage();
+    await openCreate();
 
-    const select = (await screen.findByLabelText(/^Tipo do gatilho/)) as HTMLSelectElement;
-    expect(screen.getByLabelText(/^Percentual/)).toBeTruthy();
+    const select = screen.getByLabelText(/Tipo de gatilho/) as HTMLSelectElement;
+    expect(screen.getByLabelText(/Percentual da meta/)).toBeTruthy();
+    expect(screen.getByText(/atingir esse percentual da meta mensal/)).toBeTruthy();
 
     fireEvent.change(select, { target: { value: 'EXPENSE_CEILING_EXCEEDED' } });
-    expect(screen.queryByLabelText(/^Percentual/)).toBeNull();
-    expect(screen.queryByLabelText(/Antecedência em dias/)).toBeNull();
-    expect(screen.queryByLabelText(/^Valor mínimo/)).toBeNull();
-    expect(screen.queryByLabelText(/Tipo de título/)).toBeNull();
+    expect(screen.queryByLabelText(/Percentual/)).toBeNull();
+    expect(screen.queryByLabelText(/Antecedência/)).toBeNull();
+    expect(screen.queryByLabelText(/Valor mínimo/)).toBeNull();
+    expect(screen.queryByLabelText(/Tipo do título/)).toBeNull();
+    expect(screen.getByText(/ultrapassarem o teto mensal configurado/)).toBeTruthy();
 
     fireEvent.change(select, { target: { value: 'TITLE_DUE_SOON' } });
-    expect(screen.queryByLabelText(/^Percentual/)).toBeNull();
-    expect(screen.getByLabelText(/Antecedência em dias/)).toBeTruthy();
-    expect(screen.getByLabelText(/^Valor mínimo/)).toBeTruthy();
-    const kind = screen.getByLabelText(/Tipo de título/) as HTMLSelectElement;
+    expect(screen.queryByLabelText(/Percentual/)).toBeNull();
+    expect(screen.getByLabelText(/Antecedência/)).toBeTruthy();
+    expect(screen.getByLabelText(/Valor mínimo/)).toBeTruthy();
+    const kind = screen.getByLabelText(/Tipo do título/) as HTMLSelectElement;
     expect(kind.querySelector('option[value="RECEIVABLE"]')?.textContent).toBe('A receber');
     expect(kind.querySelector('option[value="PAYABLE"]')?.textContent).toBe('A pagar');
 
     fireEvent.change(select, { target: { value: 'EXPENSE_CEILING_PERCENTAGE' } });
-    expect(screen.getByLabelText(/^Percentual/)).toBeTruthy();
-    expect(screen.queryByLabelText(/Antecedência em dias/)).toBeNull();
-    expect(screen.queryByLabelText(/^Valor mínimo/)).toBeNull();
-    expect(screen.queryByLabelText(/Tipo de título/)).toBeNull();
+    expect(screen.getByLabelText(/Percentual do teto/)).toBeTruthy();
+    expect(screen.getByText(/percentual do teto mensal/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Antecedência/)).toBeNull();
+    expect(screen.queryByLabelText(/Valor mínimo/)).toBeNull();
+    expect(screen.queryByLabelText(/Tipo do título/)).toBeNull();
   });
 
-  it('preenche a sugestão e só grava ao salvar', async () => {
-    const fetchMock = installFetch();
+  it('preenche a sugestão sem salvar e só grava ao confirmar', async () => {
+    const { fetchMock } = installFetch();
     renderPage();
 
-    await screen.findByRole('heading', { name: 'META DE FATURAMENTO' });
-    expect(postCalls(fetchMock)).toHaveLength(0);
+    await screen.findByRole('heading', { name: 'Meta de faturamento' });
+    expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Estouro do teto' }));
-    expect(screen.queryByLabelText(/^Percentual/)).toBeNull();
-    expect((screen.getByLabelText(/^Tipo do gatilho/) as HTMLSelectElement).value).toBe(
+    fireEvent.click(screen.getByRole('button', { name: 'Teto ultrapassado' }));
+    expect(await screen.findByRole('heading', { name: 'Novo gatilho' })).toBeTruthy();
+    expect(screen.queryByLabelText(/Percentual/)).toBeNull();
+    expect((screen.getByLabelText(/Tipo de gatilho/) as HTMLSelectElement).value).toBe(
       'EXPENSE_CEILING_EXCEEDED',
     );
-    expect(postCalls(fetchMock)).toHaveLength(0);
+    expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Título em 3 dias' }));
-    expect((screen.getByLabelText(/Antecedência em dias/) as HTMLInputElement).value).toBe('3');
-    expect((screen.getByLabelText(/^Valor mínimo/) as HTMLInputElement).value).toBe('5000');
-    expect((screen.getByLabelText(/Tipo de título/) as HTMLSelectElement).value).toBe('PAYABLE');
-    expect(postCalls(fetchMock)).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByRole('heading', { name: 'Novo gatilho' })).toBeNull();
+    expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Meta 80%' }));
-    expect((screen.getByLabelText(/^Tipo do gatilho/) as HTMLSelectElement).value).toBe(
+    fireEvent.click(screen.getByRole('button', { name: 'Título relevante vencendo' }));
+    expect((await screen.findByLabelText(/Antecedência/)) as HTMLInputElement).toBeTruthy();
+    expect((screen.getByLabelText(/Antecedência/) as HTMLInputElement).value).toBe('3');
+    expect((screen.getByLabelText(/Valor mínimo/) as HTMLInputElement).value).toBe('5.000,00');
+    expect((screen.getByLabelText(/Tipo do título/) as HTMLSelectElement).value).toBe('PAYABLE');
+    expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Meta em 80%' }));
+    expect((screen.getByLabelText(/Tipo de gatilho/) as HTMLSelectElement).value).toBe(
       'REVENUE_GOAL_PERCENTAGE',
     );
-    expect((screen.getByLabelText(/^Percentual/) as HTMLInputElement).value).toBe('80');
-    expect(postCalls(fetchMock)).toHaveLength(0);
+    expect((screen.getByLabelText(/Percentual da meta/) as HTMLInputElement).value).toBe('80');
+    expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Salvar gatilho' }));
 
     await waitFor(() => {
-      expect(postCalls(fetchMock)).toHaveLength(1);
+      expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(1);
     });
 
-    const post = postCalls(fetchMock)[0];
-    expect(post).toBeTruthy();
+    const post = callsWithMethod(fetchMock, 'POST')[0];
     const body = JSON.parse(String((post?.[1] as RequestInit).body));
     expect(body).toEqual({
       triggerType: 'REVENUE_GOAL_PERCENTAGE',
       parameters: { percentage: 80 },
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Novo gatilho' })).toBeNull();
+    });
+    expect(screen.getByRole('status').textContent).toContain('Gatilho salvo.');
+  });
+
+  it('edita um gatilho com os dados já preenchidos', async () => {
+    const { fetchMock } = installFetch({ configurations: [existingConfiguration, titleConfiguration] });
+    renderPage();
+
+    const item = (await screen.findByText(/A partir de R\$\s*5\.000,00/)).closest(
+      '[data-testid="proactive-trigger-item"]',
+    );
+    expect(item).toBeTruthy();
+    fireEvent.click(within(item as HTMLElement).getByRole('button', { name: 'Editar' }));
+
+    expect(await screen.findByRole('heading', { name: 'Editar gatilho' })).toBeTruthy();
+    expect(screen.queryByLabelText(/Tipo de gatilho/)).toBeNull();
+    expect(screen.getByText('Título próximo do vencimento')).toBeTruthy();
+    expect((screen.getByLabelText(/Antecedência/) as HTMLInputElement).value).toBe('3');
+    expect((screen.getByLabelText(/Valor mínimo/) as HTMLInputElement).value).toBe('5.000,00');
+    expect((screen.getByLabelText(/Tipo do título/) as HTMLSelectElement).value).toBe('PAYABLE');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar gatilho' }));
+    await waitFor(() => {
+      expect(callsWithMethod(fetchMock, 'PATCH')).toHaveLength(1);
+    });
+    const patch = callsWithMethod(fetchMock, 'PATCH')[0];
+    const body = JSON.parse(String((patch?.[1] as RequestInit).body));
+    expect(body).toEqual({
+      parameters: { daysAhead: 3, minimumAmount: '5000.00', titleKind: 'PAYABLE' },
+    });
+  });
+
+  it('ativa e desativa sem abrir o formulário', async () => {
+    const { fetchMock } = installFetch();
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Desativar' }));
+    await waitFor(() => {
+      expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(1);
+    });
+    const post = callsWithMethod(fetchMock, 'POST')[0];
+    expect(requestUrl(post?.[0] as RequestInfo).endsWith('/active')).toBe(true);
+    expect(JSON.parse(String((post?.[1] as RequestInit).body))).toEqual({ active: false });
+    expect(screen.queryByRole('heading', { name: 'Novo gatilho' })).toBeNull();
+  });
+
+  it('pede confirmação antes de excluir', async () => {
+    const { fetchMock } = installFetch();
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Excluir' }));
+    expect(screen.getByRole('group', { name: 'Confirmar exclusão' })).toBeTruthy();
+    expect(callsWithMethod(fetchMock, 'DELETE')).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar exclusão' }));
+    await waitFor(() => {
+      expect(callsWithMethod(fetchMock, 'DELETE')).toHaveLength(1);
+    });
+  });
+
+  it('explica em linguagem simples quando o gatilho tem histórico', async () => {
+    installFetch({ deleteStatus: 409 });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Excluir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar exclusão' }));
+
+    expect(
+      await screen.findByText(
+        'Este gatilho já possui histórico e não pode ser excluído. Você pode desativá-lo.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('indica o salvamento e não envia o formulário duas vezes', async () => {
+    const { fetchMock, release } = installFetch({ holdPost: true });
+    renderPage();
+    await openCreate();
+
+    fireEvent.change(screen.getByLabelText(/Percentual da meta/), { target: { value: '80' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar gatilho' }));
+    fireEvent.click(screen.getByRole('button', { name: /Salvar gatilho/ }));
+
+    await waitFor(() => {
+      expect(callsWithMethod(fetchMock, 'POST')).toHaveLength(1);
+    });
+    const saveButton = screen.getByRole('button', { name: /Salvar gatilho/ });
+    expect(saveButton.hasAttribute('disabled')).toBe(true);
+    expect(saveButton.getAttribute('aria-busy')).toBe('true');
+
+    const resolve = release();
+    expect(resolve).toBeTruthy();
+    resolve?.(jsonResponse({ id: '22222222-2222-4222-8222-222222222222' }, 201));
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Novo gatilho' })).toBeNull();
     });
   });
 });

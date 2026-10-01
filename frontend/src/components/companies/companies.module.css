@@ -414,6 +414,7 @@
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-background) 70%, var(--color-surface));
   width: fit-content;
+  max-width: 100%;
 }
 
 .companyHubTab {
