@@ -29,6 +29,7 @@ import {
   CONSULTANT_UNAVAILABLE_MESSAGE,
   type ConsultantUiState,
 } from './consultant-surface';
+import { useConsultantWorkspace } from './consultant-workspace';
 import styles from './consultant.module.css';
 
 const FOCUSABLE_SELECTOR =
@@ -110,10 +111,8 @@ export function ConsultantPanel({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const canCompose = uiState === 'OPEN' && !sending;
-  const showDesktopBackdrop =
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(min-width: 768px)').matches;
+  const workspace = useConsultantWorkspace();
+  const modal = !workspace;
   const historyGroups = groupConversations(conversations);
   const messages = activeConversation?.messages ?? [];
   const showEmpty =
@@ -146,18 +145,28 @@ export function ConsultantPanel({
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     panelRef.current?.focus();
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
     return () => {
-      document.body.style.overflow = previousOverflow;
       restoreFocusRef.current?.focus();
     };
   }, []);
 
   useEffect(() => {
+    if (!modal) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [modal]);
+
+  useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') {
+        return;
+      }
+      if (document.querySelector('[data-dashboard-modal="open"]')) {
         return;
       }
       event.preventDefault();
@@ -171,8 +180,8 @@ export function ConsultantPanel({
       }
       onClose();
     };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+    document.addEventListener('keydown', handleEscape, true);
+    return () => document.removeEventListener('keydown', handleEscape, true);
   }, [historyOpen, onClose, onToggleHistory, pendingDeleteId]);
 
   useEffect(() => {
@@ -245,17 +254,24 @@ export function ConsultantPanel({
 
   const panel = (
     <>
-      {showDesktopBackdrop ? (
-        <div className={styles.backdrop} onMouseDown={onClose} aria-hidden="true" />
+      {modal ? (
+        <div
+          className={styles.backdrop}
+          data-consultant-backdrop="true"
+          onMouseDown={onClose}
+          aria-hidden="true"
+        />
       ) : null}
       <div
         ref={panelRef}
-        className={styles.panel}
-        role="dialog"
-        aria-modal="true"
+        className={cx(styles.panel, workspace && styles.panelWorkspace)}
+        role={modal ? 'dialog' : 'complementary'}
+        aria-modal={modal ? true : undefined}
         aria-labelledby={titleId}
+        data-consultant-mode={modal ? 'modal' : 'workspace'}
+        data-lia-layer={modal ? 'modal' : 'overlay'}
         tabIndex={-1}
-        onKeyDown={handleTabTrap}
+        onKeyDown={modal ? handleTabTrap : undefined}
       >
         <header className={styles.header}>
           <div className={styles.heading}>
@@ -289,8 +305,8 @@ export function ConsultantPanel({
             <IconButton
               size="sm"
               variant="ghost"
-              aria-label="Fechar o Consultor"
-              title="Fechar o Consultor"
+              aria-label="Minimizar o Consultor"
+              title="Minimizar o Consultor"
               onClick={onClose}
             >
               <X size={16} strokeWidth={UI_ICON_STROKE} aria-hidden="true" />

@@ -121,6 +121,10 @@
   outline-offset: -2px;
 }
 
+.panelWorkspace {
+  z-index: var(--z-overlay);
+}
+
 .header {
   display: flex;
   align-items: center;

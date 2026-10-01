@@ -113,7 +113,12 @@ export function WidgetExpandDialog({
   }
 
   return createPortal(
-    <div className={styles.overlay} onMouseDown={handleOverlayMouseDown}>
+    <div
+      className={styles.overlay}
+      data-dashboard-modal="open"
+      data-lia-layer="modal"
+      onMouseDown={handleOverlayMouseDown}
+    >
       <div
         ref={dialogRef}
         className={styles.dialog}

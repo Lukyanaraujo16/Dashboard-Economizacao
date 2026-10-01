@@ -7,7 +7,10 @@ import {
 } from '../../../shared/errors/application-error.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
+import { isPlatformRole } from '../../auth/domain/types.js';
+import type { AuthenticatedRequestContext } from '../../auth/domain/authentication-context.js';
 import { resolveOperationalTenantId } from '../../dashboard/domain/operational-tenant.js';
+import type { AdvisorConversationActor } from '../repositories/advisor-conversation.repository.js';
 import { assertNoTenantIdQuery } from '../../dashboard/http/assert-no-tenant-id-query.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createConsultantService } from '../services/consultant.service.js';
@@ -38,6 +41,24 @@ function requireOperationalTenant(request: FastifyRequest): {
   }
 
   return { userId: auth.userId, tenantId };
+}
+
+/**
+ * Operador de suporte só quando a sessão do servidor já aponta para este tenant.
+ * Papel de plataforma fora do suporte não recebe este ator.
+ */
+function resolveConversationActor(
+  auth: AuthenticatedRequestContext,
+  tenantId: string,
+): AdvisorConversationActor {
+  if (
+    auth.support.active &&
+    auth.support.tenantId === tenantId &&
+    isPlatformRole(auth.role)
+  ) {
+    return 'support-operator';
+  }
+  return 'tenant-member';
 }
 
 export async function registerConsultantRoutes(
@@ -76,9 +97,18 @@ export async function registerConsultantRoutes(
     { preHandler: requireAuthentication },
     async (request, reply) => {
       assertNoTenantIdQuery(request.query);
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
       const { tenantId, userId } = requireOperationalTenant(request);
       const body = parseCreateConversationBody(request.body);
-      const created = await consultant.createConversation(tenantId, userId, body);
+      const created = await consultant.createConversation(
+        tenantId,
+        userId,
+        body,
+        resolveConversationActor(auth, tenantId),
+      );
       return reply.status(201).header('Cache-Control', 'private, no-store').send(created);
     },
   );

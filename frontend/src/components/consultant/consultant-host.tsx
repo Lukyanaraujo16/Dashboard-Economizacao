@@ -90,6 +90,8 @@ export function ConsultantHost() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [retryContent, setRetryContent] = useState<string | null>(null);
   const panelGenRef = useRef(0);
+  const fabRef = useRef<HTMLButtonElement | null>(null);
+  const returnFocusToFabRef = useRef(false);
   const sendGenRef = useRef(0);
   const statusGenRef = useRef(0);
 
@@ -240,9 +242,18 @@ export function ConsultantHost() {
   }, [activeConversation, operationalTenantId, restoreConversation, userId]);
 
   const closePanel = useCallback(() => {
+    returnFocusToFabRef.current = true;
     setUiState('CLOSED');
     setHistoryOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (uiState !== 'CLOSED' || !returnFocusToFabRef.current) {
+      return;
+    }
+    returnFocusToFabRef.current = false;
+    fabRef.current?.focus();
+  }, [uiState]);
 
   const selectConversation = useCallback(
     async (conversationId: string) => {
@@ -414,6 +425,7 @@ export function ConsultantHost() {
     <>
       {uiState === 'CLOSED' && showFab ? (
         <ConsultantFab
+          fabRef={fabRef}
           onOpen={() => void openPanel()}
           available={availability.status === 'ACTIVE'}
           consultantName={availability.consultantName}

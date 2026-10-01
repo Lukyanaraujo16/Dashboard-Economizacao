@@ -1,7 +1,9 @@
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConsultantHost } from '../src/components/consultant';
+import { WidgetExpandDialog } from '../src/components/dashboard/v2/widget-expand-dialog';
 import { useAuth } from '../src/auth';
 import type { AuthenticatedUser, SupportState } from '../src/auth/types';
 import {
@@ -164,7 +166,7 @@ describe('chat do Consultor', () => {
     renderChat();
 
     await openConsultant();
-    fireEvent.click(screen.getByRole('button', { name: 'Fechar o Consultor' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Minimizar o Consultor' }));
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: /Consultor/ })).toBeNull();
@@ -233,6 +235,9 @@ describe('chat do Consultor', () => {
     expect(sentPayload).not.toHaveProperty('provider');
     expect(sentPayload).not.toHaveProperty('model');
     expect(sentPayload).not.toHaveProperty('resolvedMonth');
+    expect(sentPayload).not.toHaveProperty('costCenter');
+    expect(sentPayload).not.toHaveProperty('category');
+    expect(sentPayload).not.toHaveProperty('categoryId');
 
     resolveSend({
       userMessage: {
@@ -502,13 +507,14 @@ describe('chat do Consultor', () => {
     await openConsultant();
     await openHistoryConversation('Caixa de setembro');
     expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Fechar o Consultor' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Minimizar o Consultor' }));
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
     await openConsultant();
     expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
     expect(await screen.findByText('O caixa do mês está estável.')).toBeTruthy();
+    expect(createConsultantConversation).not.toHaveBeenCalled();
   });
 
   it('restaura a conversa persistida após um novo mount', async () => {
@@ -725,5 +731,280 @@ describe('chat do Consultor', () => {
       'Como está meu faturamento este mês?',
     );
     expect(sendConsultantMessage).not.toHaveBeenCalled();
+  });
+});
+
+function installMatchMedia(matches: (query: string) => boolean) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: matches(query),
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
+describe('Lia — painel por largura e suporte', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'matchMedia');
+  });
+
+  it('ADMIN em suporte abre a Lia e a primeira conversa segue pelo cliente', async () => {
+    const admin: AuthenticatedUser = {
+      ...mockAuthenticatedUser,
+      id: 'admin-1',
+      role: 'ADMIN',
+      tenantId: null,
+    };
+    vi.mocked(listConsultantConversations).mockResolvedValue([]);
+    vi.mocked(createConsultantConversation).mockResolvedValue({
+      ...conversation,
+      id: 'conv-support',
+      title: null,
+    });
+    vi.mocked(sendConsultantMessage).mockResolvedValue({
+      conversation: { ...conversation, id: 'conv-support', title: null },
+      userMessage: {
+        id: 'msg-user-support',
+        senderType: 'USER',
+        content: 'O que entrou hoje?',
+        createdAt: '2026-09-01T10:00:00.000Z',
+      },
+      consultantMessage: {
+        id: 'msg-ai-support',
+        senderType: 'CONSULTANT',
+        content: 'Entrou o caixa do dia.',
+        createdAt: '2026-09-01T10:01:00.000Z',
+      },
+    });
+    renderChat(admin, {
+      active: true,
+      tenantId: 'tenant-1',
+      tenantDisplayName: 'Empresa suporte',
+      startedAt: '2026-09-01T00:00:00.000Z',
+      supportSessionId: 'ss-1',
+    });
+    expect(await screen.findByRole('button', { name: /Falar com/ })).toBeTruthy();
+    await openConsultant();
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'O que entrou hoje?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await waitFor(() => {
+      expect(createConsultantConversation).toHaveBeenCalledTimes(1);
+    });
+    expect(sendConsultantMessage).toHaveBeenCalledWith(
+      'conv-support',
+      expect.objectContaining({ content: 'O que entrou hoje?' }),
+    );
+  });
+
+  it('guarda a conversa ativa por tenant e não a remostra depois da troca', async () => {
+    renderChat();
+    await openConsultant();
+    await openHistoryConversation('Caixa de setembro');
+    expect(sessionStorage.getItem('de.consultant.activeConversation.v1:user-1:tenant-1')).toBe(
+      'conv-1',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Trocar tenant' }));
+    await waitFor(() => {
+      expect(screen.queryByText('O caixa do mês está estável.')).toBeNull();
+    });
+    expect(sessionStorage.getItem('de.consultant.activeConversation.v1:user-1:tenant-2')).toBeNull();
+    expect(sessionStorage.getItem('de.consultant.activeConversation.v1:user-1:tenant-1')).toBe(
+      'conv-1',
+    );
+  });
+
+  it('no desktop largo a Lia não bloqueia, minimiza e restaura a mesma conversa', async () => {
+    installMatchMedia((query) => query.includes('min-width: 1024px'));
+    function DesktopShell() {
+      const [, setTick] = useState(0);
+      return (
+        <>
+          <button type="button">Faturamento</button>
+          <button type="button">Despesas</button>
+          <button type="button">Contas a receber</button>
+          <button type="button">Contas a pagar</button>
+          <button
+            type="button"
+            onClick={() => {
+              pathname = '/relatorios';
+              setTick((value) => value + 1);
+            }}
+          >
+            Ir para Relatórios
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              pathname = '/';
+              setTick((value) => value + 1);
+            }}
+          >
+            Voltar à Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              searchParams = new URLSearchParams('month=2026-08');
+              setTick((value) => value + 1);
+            }}
+          >
+            Mudar mês da Home
+          </button>
+          <ConsultantHost />
+        </>
+      );
+    }
+    renderWithAuth(<DesktopShell />, {
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(mockAuthenticatedUser),
+      hydrateOnMount: true,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /Falar com/ }));
+    const panel = await screen.findByRole('complementary', { name: /Consultor/ });
+    expect(panel.getAttribute('aria-modal')).toBeNull();
+    expect(panel.getAttribute('data-consultant-mode')).toBe('workspace');
+    expect(panel.getAttribute('data-lia-layer')).toBe('overlay');
+    expect(document.querySelector('[data-consultant-backdrop]')).toBeNull();
+    expect(document.body.style.overflow).not.toBe('hidden');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Faturamento' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Despesas' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Contas a receber' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Contas a pagar' }));
+
+    await openHistoryConversation('Caixa de setembro');
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'rascunho de setembro' },
+    });
+    const tabEvent = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    panel.dispatchEvent(tabEvent);
+    expect(tabEvent.defaultPrevented).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Minimizar o Consultor' }));
+    const fab = await screen.findByRole('button', { name: /Falar com/ });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(fab);
+    });
+    expect(fab.getAttribute('data-lia-layer')).toBe('overlay');
+    fireEvent.click(fab);
+    expect(await screen.findByRole('complementary', { name: /Consultor/ })).toBeTruthy();
+    expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
+    expect((screen.getByLabelText('Mensagem para o Consultor') as HTMLTextAreaElement).value).toBe(
+      'rascunho de setembro',
+    );
+    expect(createConsultantConversation).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ir para Relatórios' }));
+    expect(await screen.findByText('Como está o caixa?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar à Dashboard' }));
+    expect(await screen.findByText('O caixa do mês está estável.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mudar mês da Home' }));
+    fireEvent.change(screen.getByLabelText('Mensagem para o Consultor'), {
+      target: { value: 'e neste mês?' },
+    });
+    vi.mocked(sendConsultantMessage).mockResolvedValue({
+      conversation,
+      userMessage: {
+        id: 'msg-month',
+        senderType: 'USER',
+        content: 'e neste mês?',
+        createdAt: '2026-09-01T11:00:00.000Z',
+      },
+      consultantMessage: {
+        id: 'msg-month-ai',
+        senderType: 'CONSULTANT',
+        content: 'Setembro.',
+        createdAt: '2026-09-01T11:01:00.000Z',
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }));
+    await waitFor(() => {
+      expect(sendConsultantMessage).toHaveBeenCalledWith('conv-1', {
+        content: 'e neste mês?',
+        month: '2026-08',
+      });
+    });
+    const payload = vi.mocked(sendConsultantMessage).mock.calls.at(-1)?.[1];
+    expect(payload).not.toHaveProperty('costCenter');
+    expect(payload).not.toHaveProperty('category');
+  });
+
+  it('modal financeiro fica na frente e o primeiro Escape não minimiza a Lia', async () => {
+    installMatchMedia((query) => query.includes('min-width: 1024px'));
+    function Harness() {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Abrir Faturamento
+          </button>
+          <WidgetExpandDialog open={open} title="Faturamento do mês" onClose={() => setOpen(false)}>
+            <p>Detalhe do faturamento</p>
+          </WidgetExpandDialog>
+          <ConsultantHost />
+        </>
+      );
+    }
+    renderWithAuth(<Harness />, {
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(mockAuthenticatedUser),
+      hydrateOnMount: true,
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Falar com/ }));
+    expect(await screen.findByRole('complementary', { name: /Consultor/ })).toBeTruthy();
+    const modal = document.querySelector('[data-dashboard-modal="open"]');
+    expect(modal?.getAttribute('data-lia-layer')).toBe('modal');
+    expect(screen.getByRole('complementary', { name: /Consultor/ }).getAttribute('data-lia-layer')).toBe(
+      'overlay',
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(document.querySelector('[data-dashboard-modal="open"]')).toBeNull();
+    });
+    expect(screen.getByRole('complementary', { name: /Consultor/ })).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('complementary', { name: /Consultor/ })).toBeNull();
+    });
+    expect(screen.getByRole('button', { name: /Falar com/ }).getAttribute('data-lia-layer')).toBe(
+      'overlay',
+    );
+  });
+
+  it('abaixo de 1024px a Lia continua modal, com trap e scroll travado', async () => {
+    installMatchMedia((query) => query.includes('min-width: 768px') && !query.includes('1024px'));
+    renderChat();
+    await openConsultant();
+    const panel = screen.getByRole('dialog', { name: /Consultor/ });
+    expect(panel.getAttribute('aria-modal')).toBe('true');
+    expect(panel.getAttribute('data-consultant-mode')).toBe('modal');
+    expect(document.querySelector('[data-consultant-backdrop]')).toBeTruthy();
+    expect(document.body.style.overflow).toBe('hidden');
+    const focusable = [
+      ...panel.querySelectorAll<HTMLElement>('button:not([disabled]), textarea:not([disabled])'),
+    ];
+    focusable[focusable.length - 1]?.focus();
+    expect(fireEvent.keyDown(panel, { key: 'Tab' })).toBe(false);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /Consultor/ })).toBeNull();
+    });
+  });
+
+  it('no mobile a Lia ocupa o diálogo modal e não o workspace', async () => {
+    installMatchMedia(() => false);
+    renderChat();
+    await openConsultant();
+    const panel = screen.getByRole('dialog', { name: /Consultor/ });
+    expect(panel.getAttribute('data-consultant-mode')).toBe('modal');
+    expect(panel.getAttribute('aria-modal')).toBe('true');
+    expect(document.querySelector('[data-consultant-backdrop]')).toBeTruthy();
+    expect(panel.className).not.toContain('panelWorkspace');
   });
 });

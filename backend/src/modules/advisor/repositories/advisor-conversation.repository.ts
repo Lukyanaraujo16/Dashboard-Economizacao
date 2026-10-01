@@ -63,11 +63,18 @@ function toMessage(row: {
   };
 }
 
+/**
+ * `support-operator` só pode ser definido pelo servidor, a partir da sessão
+ * de Support Mode. Nunca a partir de um campo enviado pelo cliente.
+ */
+export type AdvisorConversationActor = 'tenant-member' | 'support-operator';
+
 export type AdvisorConversationRepository = {
   createConversation(
     tenantId: string,
     userId: string,
     input?: CreateAiConversationInput,
+    actor?: AdvisorConversationActor,
   ): Promise<AiConversationRecord>;
   findConversation(
     tenantId: string,
@@ -98,7 +105,7 @@ export function createAdvisorConversationRepository(
   prisma: PrismaClient,
 ): AdvisorConversationRepository {
   return {
-    async createConversation(tenantId, userId, input = {}) {
+    async createConversation(tenantId, userId, input = {}, actor = 'tenant-member') {
       assertAdvisorTenantId(tenantId);
       if (userId.trim() === '') {
         throw new AdvisorDomainError('USER_ID_REQUIRED', 'userId é obrigatório na conversa do Consultor.');
@@ -106,9 +113,15 @@ export function createAdvisorConversationRepository(
 
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, tenantId: true },
+        select: { id: true, tenantId: true, role: true },
       });
-      if (user === null || user.tenantId !== tenantId) {
+      const tenantMember = user !== null && user.tenantId === tenantId;
+      const supportOperator =
+        actor === 'support-operator' &&
+        user !== null &&
+        user.tenantId === null &&
+        (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN');
+      if (!tenantMember && !supportOperator) {
         throw new AdvisorDomainError(
           'USER_NOT_IN_TENANT',
           'Conversa do Consultor exige usuário do mesmo tenant.',

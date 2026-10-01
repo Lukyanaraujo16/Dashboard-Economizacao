@@ -15,7 +15,10 @@ import type {
   AiProviderId,
   AiTenantSettingsRecord,
 } from '../domain/types.js';
-import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
+import type {
+  AdvisorConversationActor,
+  AdvisorConversationRepository,
+} from '../repositories/advisor-conversation.repository.js';
 import type { AdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
 import type {
   PublicConsultantConversation,
@@ -94,6 +97,7 @@ export type ConsultantService = {
     tenantId: string,
     userId: string,
     input?: { readonly title?: string },
+    actor?: AdvisorConversationActor,
   ): Promise<PublicConsultantConversation>;
   getConversation(
     tenantId: string,
@@ -168,12 +172,15 @@ export function createConsultantService(deps: {
       };
     },
 
-    async createConversation(tenantId, userId, input = {}) {
+    async createConversation(tenantId, userId, input = {}, actor = 'tenant-member') {
       assertConsultantWritable((await loadAvailability(tenantId)).status);
       try {
-        const created = await deps.conversations.createConversation(tenantId, userId, {
-          title: input.title,
-        });
+        const created = await deps.conversations.createConversation(
+          tenantId,
+          userId,
+          { title: input.title },
+          actor,
+        );
         return toPublicConversation(created);
       } catch (error) {
         mapAdvisorHttpError(error);

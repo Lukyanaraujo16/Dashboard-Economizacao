@@ -758,3 +758,216 @@ describe('API do usuário /consultant (F13.4)', () => {
     expect(runsAfter.every((run) => run.conversationId === null)).toBe(true);
   });
 });
+
+describe('Consultor em Support Mode', () => {
+  async function enterSupport(
+    app: Awaited<ReturnType<typeof buildTestApp>>,
+    cookie: string,
+    tenantId: string,
+  ) {
+    const enter = await app.inject({
+      method: 'POST',
+      url: '/auth/support/enter',
+      headers: { cookie, 'user-agent': 'consultant-support' },
+      payload: { tenantId },
+    });
+    expect(enter.statusCode).toBe(200);
+    return cookie;
+  }
+
+  async function exitSupport(app: Awaited<ReturnType<typeof buildTestApp>>, cookie: string) {
+    const exit = await app.inject({
+      method: 'POST',
+      url: '/auth/support/exit',
+      headers: { cookie, 'user-agent': 'consultant-support' },
+    });
+    expect(exit.statusCode).toBe(200);
+  }
+
+  it('ADMIN e SUPER_ADMIN em suporte conversam no tenant suportado, sem ver conversas de usuários', async () => {
+    const tenant = await tenants.create({
+      name: 'lia-support',
+      displayName: 'Empresa Suportada',
+    });
+    const otherTenant = await tenants.create({
+      name: 'lia-support-other',
+      displayName: 'Outra Empresa',
+    });
+    await settings.upsertSettings(tenant.id, { provider: 'OPENAI', status: 'ACTIVE' });
+    await settings.upsertSettings(otherTenant.id, { provider: 'OPENAI', status: 'ACTIVE' });
+    const member = await createUser({
+      email: 'lia-member@api.test',
+      role: 'USER',
+      tenantId: tenant.id,
+    });
+    const admin = await createUser({ email: 'lia-admin@api.test', role: 'ADMIN' });
+    const superAdmin = await createUser({ email: 'lia-super@api.test', role: 'SUPER_ADMIN' });
+    const app = await buildTestApp();
+    const memberCookie = await loginAs(app, member.email);
+    const adminCookie = await loginAs(app, admin.email);
+    const superCookie = await loginAs(app, superAdmin.email);
+
+    const memberConversation = await app.inject({
+      method: 'POST',
+      url: '/consultant/conversations',
+      headers: { cookie: memberCookie },
+      payload: { title: 'Conversa do usuário' },
+    });
+    expect(memberConversation.statusCode).toBe(201);
+    const memberId = memberConversation.json().id as string;
+    const memberMessage = await app.inject({
+      method: 'POST',
+      url: `/consultant/conversations/${memberId}/messages`,
+      headers: { cookie: memberCookie },
+      payload: { content: 'Quanto entrou hoje?' },
+    });
+    expect(memberMessage.statusCode).toBe(200);
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/consultant/conversations',
+      headers: { cookie: adminCookie },
+      payload: {},
+    });
+    expect(blocked.statusCode).toBe(403);
+    const blockedSuper = await app.inject({
+      method: 'GET',
+      url: '/consultant/status',
+      headers: { cookie: superCookie },
+    });
+    expect(blockedSuper.statusCode).toBe(403);
+
+    await enterSupport(app, adminCookie, tenant.id);
+    const forged = await app.inject({
+      method: 'POST',
+      url: '/consultant/conversations',
+      headers: { cookie: adminCookie },
+      payload: { title: 'Forjada', tenantId: otherTenant.id, supportMode: true },
+    });
+    expect(forged.statusCode).toBe(400);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/consultant/conversations',
+      headers: { cookie: adminCookie },
+      payload: { title: 'Suporte' },
+    });
+    expect(created.statusCode).toBe(201);
+    const conversationId = created.json().id as string;
+    const row = await prisma.aiConversation.findUniqueOrThrow({ where: { id: conversationId } });
+    expect(row.tenantId).toBe(tenant.id);
+    expect(row.userId).toBe(admin.id);
+    const operator = await prisma.user.findUniqueOrThrow({ where: { id: admin.id } });
+    expect(operator.tenantId).toBeNull();
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/consultant/conversations',
+      headers: { cookie: adminCookie },
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().data.map((item: { id: string }) => item.id)).toEqual([conversationId]);
+
+    const foreignRead = await app.inject({
+      method: 'GET',
+      url: `/consultant/conversations/${memberId}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(foreignRead.statusCode).toBe(404);
+    const foreignMessage = await app.inject({
+      method: 'POST',
+      url: `/consultant/conversations/${memberId}/messages`,
+      headers: { cookie: adminCookie },
+      payload: { content: 'não deve' },
+    });
+    expect(foreignMessage.statusCode).toBe(404);
+    const foreignDelete = await app.inject({
+      method: 'DELETE',
+      url: `/consultant/conversations/${memberId}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(foreignDelete.statusCode).toBe(404);
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/consultant/conversations/${conversationId}/messages`,
+      headers: { cookie: adminCookie },
+      payload: { content: 'Quanto faturou a clínica?' },
+    });
+    expect(sent.statusCode).toBe(200);
+    const runs = await prisma.aiRun.findMany({ where: { conversationId } });
+    expect(runs.length).toBeGreaterThan(0);
+    expect(runs.every((run) => run.tenantId === tenant.id && run.userId === admin.id)).toBe(true);
+
+    for (const url of [
+      '/admin/consultant/options',
+      '/admin/consultant/providers',
+      `/admin/tenants/${tenant.id}/consultant`,
+      `/admin/tenants/${tenant.id}/consultant/knowledge`,
+      `/admin/tenants/${tenant.id}/consultant/knowledge-documents`,
+    ]) {
+      const adminRoute = await app.inject({
+        method: 'GET',
+        url,
+        headers: { cookie: adminCookie },
+      });
+      expect(adminRoute.statusCode).toBe(403);
+    }
+
+    await exitSupport(app, adminCookie);
+    const afterExit = await app.inject({
+      method: 'GET',
+      url: '/consultant/status',
+      headers: { cookie: adminCookie },
+    });
+    expect(afterExit.statusCode).toBe(403);
+
+    await enterSupport(app, adminCookie, otherTenant.id);
+    const otherList = await app.inject({
+      method: 'GET',
+      url: '/consultant/conversations',
+      headers: { cookie: adminCookie },
+    });
+    expect(otherList.statusCode).toBe(200);
+    expect(otherList.json().data).toEqual([]);
+    const crossTenant = await app.inject({
+      method: 'GET',
+      url: `/consultant/conversations/${conversationId}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(crossTenant.statusCode).toBe(404);
+    const switched = await app.inject({
+      method: 'POST',
+      url: '/consultant/conversations',
+      headers: { cookie: adminCookie },
+      payload: {},
+    });
+    expect(switched.statusCode).toBe(201);
+    const switchedRow = await prisma.aiConversation.findUniqueOrThrow({
+      where: { id: switched.json().id as string },
+    });
+    expect(switchedRow.tenantId).toBe(otherTenant.id);
+    expect(switchedRow.userId).toBe(admin.id);
+
+    await enterSupport(app, superCookie, tenant.id);
+    const superCreated = await app.inject({
+      method: 'POST',
+      url: '/consultant/conversations',
+      headers: { cookie: superCookie },
+      payload: { title: 'Super' },
+    });
+    expect(superCreated.statusCode).toBe(201);
+    const superRow = await prisma.aiConversation.findUniqueOrThrow({
+      where: { id: superCreated.json().id as string },
+    });
+    expect(superRow.tenantId).toBe(tenant.id);
+    expect(superRow.userId).toBe(superAdmin.id);
+    const superList = await app.inject({
+      method: 'GET',
+      url: '/consultant/conversations',
+      headers: { cookie: superCookie },
+    });
+    expect(superList.json().data.map((item: { id: string }) => item.id)).not.toContain(memberId);
+    expect(superList.json().data.map((item: { id: string }) => item.id)).not.toContain(conversationId);
+  });
+});
