@@ -648,6 +648,25 @@ export function adminTenantConsultantKnowledgeDocumentPath(
   return `${adminTenantConsultantKnowledgeDocumentsPath(tenantId)}/${documentId}`;
 }
 
+export function adminProactiveTriggerCatalogPath(): string {
+  return `${ADMIN_API_PREFIX}/proactive-triggers/catalog`;
+}
+
+export function adminTenantProactiveTriggersPath(tenantId: string): string {
+  return `${adminTenantPath(tenantId)}/proactive-triggers`;
+}
+
+export function adminTenantProactiveTriggerPath(tenantId: string, configurationId: string): string {
+  return `${adminTenantProactiveTriggersPath(tenantId)}/${configurationId}`;
+}
+
+export function adminTenantProactiveTriggerActivePath(
+  tenantId: string,
+  configurationId: string,
+): string {
+  return `${adminTenantProactiveTriggerPath(tenantId, configurationId)}/active`;
+}
+
 export function consultantStatusPath(): string {
   return `${CONSULTANT_API_PREFIX}/status`;
 }

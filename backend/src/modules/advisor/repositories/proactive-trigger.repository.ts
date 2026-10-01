@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from '../../../generated/prisma/client.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
+import type { ProactiveSeverity } from '../domain/proactive-trigger-severity.js';
 import {
   buildProactiveOccurrenceKey,
   type ParsedProactiveParameters,
@@ -101,6 +102,7 @@ export type ProactiveTriggerRepository = {
     readonly sourceMetric: string;
     readonly payload: Record<string, unknown>;
     readonly detectedAt: Date;
+    readonly severity?: ProactiveSeverity | null;
   }): Promise<RecordedProactiveOccurrence>;
   markRead(input: {
     readonly tenantId: string;
@@ -251,7 +253,7 @@ export function createProactiveTriggerRepository(prisma: PrismaClient): Proactiv
               periodKey: input.periodKey,
               subjectKey: input.subjectKey,
               occurrenceKey,
-              severity: null,
+              severity: input.severity ?? null,
               periodStart: input.periodStart,
               periodEnd: input.periodEnd,
               sourceMetric: input.sourceMetric,
@@ -265,7 +267,7 @@ export function createProactiveTriggerRepository(prisma: PrismaClient): Proactiv
               tenantId: input.tenantId,
               analyticalEventId: event.id,
               insightType: configuration.triggerType,
-              severity: null,
+              severity: input.severity ?? null,
               source: 'RULE',
               periodStart: input.periodStart,
               periodEnd: input.periodEnd,

@@ -1,5 +1,6 @@
 import {
   ConflictError,
+  ForbiddenError,
   NotFoundError,
   ValidationError,
 } from '../../../shared/errors/application-error.js';
@@ -12,8 +13,15 @@ export function mapAdvisorDomainError(error: AdvisorDomainError): never {
     case 'KNOWLEDGE_AUTHOR_NOT_FOUND':
     case 'CONVERSATION_NOT_FOUND':
     case 'RUN_NOT_FOUND':
+    case 'TRIGGER_CONFIGURATION_NOT_FOUND':
       throw new NotFoundError(error.message);
+    case 'TRIGGER_ADMIN_FORBIDDEN':
+    case 'SUPPORT_CANNOT_ADMINISTER_TRIGGERS':
+      throw new ForbiddenError(error.message);
     case 'USER_NOT_IN_TENANT':
+    case 'TRIGGER_CONFIGURATION_DUPLICATE':
+    case 'TRIGGER_CONFIGURATION_HAS_HISTORY':
+    case 'TRIGGER_TYPE_IMMUTABLE':
       throw new ConflictError(error.message);
     case 'AI_CONSULTANT_STATUS_INVALID':
     case 'AI_PROVIDER_INVALID':
@@ -41,6 +49,14 @@ export function mapAdvisorDomainError(error: AdvisorDomainError): never {
     case 'AI_RUN_STATUS_INVALID':
     case 'AI_RUN_ERROR_CODE_INVALID':
       throw new ValidationError(error.message);
+    case 'TRIGGER_TYPE_UNKNOWN':
+    case 'TRIGGER_PARAMETER_UNKNOWN':
+    case 'TRIGGER_PARAMETER_INVALID':
+    case 'TRIGGER_PERCENTAGE_INVALID':
+    case 'TRIGGER_DAYS_AHEAD_INVALID':
+    case 'TRIGGER_MINIMUM_AMOUNT_INVALID':
+    case 'TRIGGER_TITLE_KIND_INVALID':
+      throw new ValidationError(error.message, { httpStatus: 400 });
     default:
       throw error;
   }

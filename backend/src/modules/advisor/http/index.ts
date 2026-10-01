@@ -1,4 +1,5 @@
 export { registerAdminConsultantRoutes } from './admin-consultant.routes.js';
+export { registerAdminProactiveTriggerRoutes } from './admin-proactive-trigger.routes.js';
 export { registerConsultantRoutes } from './consultant.routes.js';
 export {
   ADVISOR_ADMIN_FIELD_LIMITS,

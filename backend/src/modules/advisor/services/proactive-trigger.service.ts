@@ -14,6 +14,7 @@ import {
   PROACTIVE_TRIGGER_SUGGESTED_DEFAULTS,
   type CertifiedProactiveTriggerType,
 } from '../domain/proactive-trigger-catalog.js';
+import type { ProactiveSeverity } from '../domain/proactive-trigger-severity.js';
 import type {
   ProactiveTriggerConfigurationRecord,
   ProactiveTriggerRepository,
@@ -60,6 +61,7 @@ export type ProactiveTriggerService = {
     readonly sourceMetric: string;
     readonly payload: unknown;
     readonly detectedAt: Date;
+    readonly severity?: ProactiveSeverity | null;
   }): Promise<RecordedProactiveOccurrence>;
   markInsightRead(
     actor: ProactiveActor,
@@ -142,6 +144,7 @@ export function createProactiveTriggerService(
         sourceMetric: input.sourceMetric,
         payload,
         detectedAt: input.detectedAt,
+        severity: input.severity ?? null,
       });
     },
 

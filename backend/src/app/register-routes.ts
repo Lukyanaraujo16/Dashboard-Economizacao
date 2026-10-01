@@ -19,6 +19,7 @@ import { registerDashboardOverviewRoutes } from '../modules/dashboard/index.js';
 import { registerReportsRoutes } from '../modules/reports/index.js';
 import {
   registerAdminConsultantRoutes,
+  registerAdminProactiveTriggerRoutes,
   registerConsultantRoutes,
 } from '../modules/advisor/http/index.js';
 import { registerAdminTenantRoutes } from '../modules/tenant/index.js';
@@ -44,6 +45,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerDashboardOverviewRoutes);
   await app.register(registerReportsRoutes);
   await app.register(registerAdminConsultantRoutes);
+  await app.register(registerAdminProactiveTriggerRoutes);
   await app.register(registerConsultantRoutes);
 
   const environment = loadEnvironment();
