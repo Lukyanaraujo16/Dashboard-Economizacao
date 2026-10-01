@@ -21,6 +21,8 @@ import { createPartyReadRepository } from '../../finance/repositories/party-read
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { createReportCashDetailsService } from '../../reports/services/report-cash-details.service.js';
 import { createCashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
+import { createExpenseCeilingRepository } from '../../dashboard/repositories/expense-ceiling.repository.js';
+import { createRevenueGoalRepository } from '../../dashboard/repositories/revenue-goal.repository.js';
 import { createAdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import { createAdvisorKnowledgeDocumentRepository } from '../repositories/advisor-knowledge-document.repository.js';
@@ -244,6 +246,11 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
       analyticalTools,
       cashComparison,
       counterpartyIdentity,
+      monthlyPlanning: {
+        cashFlow,
+        revenueGoals: createRevenueGoalRepository(prisma),
+        expenseCeilings: createExpenseCeilingRepository(prisma),
+      },
     });
 
   return {

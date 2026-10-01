@@ -70,7 +70,9 @@ export function toMonthlyCashFlowView(data: DashboardMonthlyCashFlowResponse): M
   const expectedReceivables = data.expected.receivables;
   const realizedOutflows = data.realized.outflows;
   const expectedPayables = data.expected.payables;
-  const monthlyExpenses = addNullable(realizedOutflows, expectedPayables);
+  const composedExpenses = addNullable(realizedOutflows, expectedPayables);
+  const monthlyExpenses =
+    data.monthlyExpenses !== undefined ? data.monthlyExpenses : composedExpenses;
 
   return {
     monthKey: data.monthKey,

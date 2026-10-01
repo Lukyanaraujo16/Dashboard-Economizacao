@@ -9,6 +9,9 @@ import type { AdvisorNominalDimensionService } from '../advisor-nominal-tools.js
 import type { AdvisorCostCenterDimensionService } from '../advisor-cost-center-tools.js';
 import type { AdvisorCashMovementSort } from '../advisor-cash-movement-lines.js';
 import type { FinancialStockSnapshot, MonthlyCashFlow } from '../../../analytics/domain/types.js';
+import type { MonthlyCashFlowService } from '../../../analytics/services/monthly-cash-flow.service.js';
+import type { ExpenseCeilingRepository } from '../../../dashboard/repositories/expense-ceiling.repository.js';
+import type { RevenueGoalRepository } from '../../../dashboard/repositories/revenue-goal.repository.js';
 import type { CounterpartyIdentityService } from '../load-counterparty-identity-population.js';
 
 /**
@@ -26,6 +29,10 @@ export type AnalyticalExecutionRuntime = {
   /** Já materializados pelo Context Builder (preload). */
   readonly monthlyCashFlow?: MonthlyCashFlow | null;
   readonly financialStockSnapshot?: FinancialStockSnapshot | null;
+  /** Planejamento mensal consolidado. Não herda filtro de centro de custo. */
+  readonly planningCashFlow?: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'>;
+  readonly revenueGoals?: RevenueGoalRepository;
+  readonly expenseCeilings?: ExpenseCeilingRepository;
 };
 
 /**

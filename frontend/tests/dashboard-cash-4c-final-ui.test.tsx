@@ -41,6 +41,10 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/expense-ceiling', () => ({
+  getDashboardExpenseCeiling: vi.fn(),
+  putDashboardExpenseCeiling: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/cost-centers', () => ({ getDashboardCostCenters: vi.fn() }));
 vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories: vi.fn() }));
 
@@ -155,7 +159,8 @@ describe('PRE-F13-CASH-4C-CAT-FINAL-UI — Home sem Leitura executiva', () => {
     expect(compact.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(compact.querySelector('[data-financial-section="inadimplencia"]')).toBeTruthy();
     expect(compact.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
-    expect(compact.getAttribute('data-cols')).toBe('2');
+    expect(compact.getAttribute('data-cols')).toBe('3');
+    expect(compact.querySelector('[data-financial-section="teto-gastos"]')).toBeTruthy();
     expect(document.querySelector('[data-home-band="executive-reading"]')).toBeNull();
 
     // UI12 — KPI faturamento Life

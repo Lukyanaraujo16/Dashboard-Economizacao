@@ -24,6 +24,7 @@ import { createLedgerReadRepository } from '../../finance/repositories/ledger-re
 import { createContaAzulIntegrationRepository } from '../../integrations/conta-azul/repositories/integration.repository.js';
 import { createDashboardOverviewFacade } from '../../dashboard/services/dashboard-overview.facade.js';
 import { createRevenueGoalRepository } from '../../dashboard/repositories/revenue-goal.repository.js';
+import { createExpenseCeilingRepository } from '../../dashboard/repositories/expense-ceiling.repository.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { assertNoTenantIdQuery } from '../../dashboard/http/assert-no-tenant-id-query.js';
 import { parseDashboardCategoryQuery } from '../../dashboard/http/parse-dashboard-category-query.js';
@@ -96,6 +97,7 @@ export async function registerReportsRoutes(app: FastifyInstance): Promise<void>
     }),
     integrations: createContaAzulIntegrationRepository(prisma),
     revenueGoals: createRevenueGoalRepository(prisma),
+    expenseCeilings: createExpenseCeilingRepository(prisma),
     costCenters,
     categories,
   });

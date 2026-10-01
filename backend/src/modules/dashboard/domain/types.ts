@@ -217,6 +217,30 @@ export type DashboardExecutiveInsightsResponse = {
   }[];
 };
 
+export type DashboardExpenseCeilingStatus =
+  | 'NO_TARGET'
+  | 'IN_PROGRESS'
+  | 'CONTAINED'
+  | 'ACHIEVED'
+  | 'EXCEEDED'
+  | 'PLANNED'
+  | 'UNAVAILABLE';
+
+/**
+ * Teto mensal de gastos, consolidado da empresa.
+ * `monthlyExpenses` = realized.outflows + expected.payables. null = indisponível.
+ * `consumedRate` já vem × 100.
+ */
+export type DashboardExpenseCeilingResponse = {
+  readonly monthKey: string;
+  readonly ceiling: string | null;
+  readonly monthlyExpenses: string | null;
+  readonly consumedRate: string | null;
+  readonly available: string | null;
+  readonly exceeded: string | null;
+  readonly status: DashboardExpenseCeilingStatus;
+};
+
 export type DashboardRevenueGoalStatus =
   | 'NO_TARGET'
   | 'IN_PROGRESS'
@@ -337,6 +361,8 @@ export type DashboardMonthlyCashFlowResponse = {
   readonly to: string;
   readonly costCenterCashSplit: boolean;
   readonly billing: string | null;
+  /** realized.outflows + expected.payables. null = indisponível. */
+  readonly monthlyExpenses: string | null;
   readonly realized: DashboardMonthlyCashFlowMoney;
   readonly realizedByCategory: {
     readonly inflows: DashboardCashRealizedCategoryComposition | null;

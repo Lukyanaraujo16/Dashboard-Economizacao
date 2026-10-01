@@ -17,6 +17,8 @@ export type {
   DashboardOverviewResponse,
   DashboardReceivableCompositionResponse,
   DashboardRevenueGoalHistoryPoint,
+  DashboardExpenseCeilingResponse,
+  DashboardExpenseCeilingStatus,
   DashboardRevenueGoalResponse,
   DashboardRevenueGoalStatus,
   DashboardUpcomingResponse,
@@ -28,6 +30,19 @@ export {
   shiftRevenueGoalMonthKey,
 } from './domain/revenue-goal-math.js';
 export type { RevenueGoalProgress, RevenueGoalStatus } from './domain/revenue-goal-math.js';
+export { createExpenseCeilingRepository } from './repositories/expense-ceiling.repository.js';
+export type {
+  ExpenseCeilingRecord,
+  ExpenseCeilingRepository,
+} from './repositories/expense-ceiling.repository.js';
+export {
+  calculateExpenseCeilingProgress,
+  parseExpenseCeilingAmount,
+} from './domain/expense-ceiling-math.js';
+export type {
+  ExpenseCeilingProgress,
+  ExpenseCeilingStatus,
+} from './domain/expense-ceiling-math.js';
 export { createRevenueGoalRepository } from './repositories/revenue-goal.repository.js';
 export type {
   RevenueGoalRecord,

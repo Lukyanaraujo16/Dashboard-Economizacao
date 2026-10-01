@@ -179,6 +179,42 @@ export const ANALYTICAL_CAPABILITY_REGISTRY: readonly AnalyticalCapability[] = [
     sourceToolOrSurface: 'FINANCIAL_FACTS',
   },
 
+  // --- planejamento mensal consolidado (meta e teto) ---
+  {
+    key: 'revenue_goal.value.month',
+    metric: 'REVENUE_GOAL',
+    semanticFamily: 'PLANNING',
+    directions: null,
+    dimensions: [null],
+    periodKinds: ['MONTH'],
+    comparisonChildKinds: null,
+    operations: ['VALUE'],
+    allowedFilters: [],
+    requiredFilters: [],
+    identityRequired: false,
+    maxLimit: null,
+    defaultLimit: null,
+    executorKey: 'monthlyPlanning',
+    sourceToolOrSurface: 'monthly_planning',
+  },
+  {
+    key: 'expense_ceiling.value.month',
+    metric: 'EXPENSE_CEILING',
+    semanticFamily: 'PLANNING',
+    directions: null,
+    dimensions: [null],
+    periodKinds: ['MONTH'],
+    comparisonChildKinds: null,
+    operations: ['VALUE'],
+    allowedFilters: [],
+    requiredFilters: [],
+    identityRequired: false,
+    maxLimit: null,
+    defaultLimit: null,
+    executorKey: 'monthlyPlanning',
+    sourceToolOrSurface: 'monthly_planning',
+  },
+
   // --- cash_realized_breakdown ---
   {
     key: 'realized_cash.category.month.breakdown',

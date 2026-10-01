@@ -54,6 +54,7 @@ model Tenant {
   costCenters         CostCenter[]
   installmentCostCenterAllocations InstallmentCostCenterAllocation[]
   revenueGoals        RevenueGoal[]
+  expenseCeilings     ExpenseCeiling[]
   financialTransactions FinancialTransaction[]
   financialTransfers    FinancialTransfer[]
   financialAccountBalanceSnapshots FinancialAccountBalanceSnapshot[]
@@ -620,6 +621,22 @@ model RevenueGoal {
   @@unique([tenantId, monthKey], map: "uq_revenue_goals_tenant_month")
   @@index([tenantId, monthKey], map: "idx_revenue_goals_tenant_month")
   @@map("revenue_goals")
+}
+
+/// Teto mensal de gastos gerencial por tenant. Valor consolidado da empresa.
+/// O consumo NÃO é persistido — vem de monthlyExpenses (caixa).
+model ExpenseCeiling {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  monthKey       String   @map("month_key") @db.VarChar(7)
+  ceilingAmount  Decimal  @map("ceiling_amount") @db.Decimal(19, 4)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, monthKey], map: "uq_expense_ceilings_tenant_month")
+  @@index([tenantId, monthKey], map: "idx_expense_ceilings_tenant_month")
+  @@map("expense_ceilings")
 }
 
 /// Uma linha = uma baixa Conta Azul (CASH-2). Sem FK para AR/AP.

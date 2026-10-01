@@ -444,6 +444,11 @@ export function dashboardRevenueGoalPath(monthKey?: string | null): string {
   return `${DASHBOARD_API_PREFIX}/revenue-goal${dashboardQueryString({ monthKey })}`;
 }
 
+/** Teto mensal de gastos — sempre consolidado; sem `costCenter`. */
+export function dashboardExpenseCeilingPath(monthKey?: string | null): string {
+  return `${DASHBOARD_API_PREFIX}/expense-ceiling${dashboardQueryString({ monthKey })}`;
+}
+
 export function reportsRevenuePath(options: {
   readonly from: string;
   readonly to: string;

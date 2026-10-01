@@ -1,5 +1,5 @@
 import type { Prisma } from '../../../generated/prisma/client.js';
-import { monthlyBilling } from '../../analytics/domain/monthly-cash-flow.js';
+import { monthlyBilling, monthlyExpenses } from '../../analytics/domain/monthly-cash-flow.js';
 import type {
   MonthlyCashFlow,
   MonthlyCashFlowRealizedCategoryComposition,
@@ -46,6 +46,7 @@ export function toDashboardMonthlyCashFlowResponse(
     to: serializeCivilDate(flow.to),
     costCenterCashSplit: flow.costCenterCashSplit,
     billing: serializeNullableDecimal(monthlyBilling(flow)),
+    monthlyExpenses: serializeNullableDecimal(monthlyExpenses(flow)),
     realized: {
       inflows: serializeNullableDecimal(flow.realized.inflows),
       outflows: serializeNullableDecimal(flow.realized.outflows),

@@ -55,6 +55,10 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/expense-ceiling', () => ({
+  getDashboardExpenseCeiling: vi.fn(),
+  putDashboardExpenseCeiling: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/cost-centers', () => ({ getDashboardCostCenters: vi.fn() }));
 vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories: vi.fn() }));
 

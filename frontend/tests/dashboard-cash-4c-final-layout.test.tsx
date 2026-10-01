@@ -38,6 +38,10 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/expense-ceiling', () => ({
+  getDashboardExpenseCeiling: vi.fn(),
+  putDashboardExpenseCeiling: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/cost-centers', () => ({ getDashboardCostCenters: vi.fn() }));
 vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories: vi.fn() }));
 
@@ -141,10 +145,11 @@ describe('CASH-4C-CAT-FINAL — refino visual Home', () => {
     expect(document.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
 
     expect(compact!.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
+    expect(compact!.querySelector('[data-financial-section="teto-gastos"]')).toBeTruthy();
     expect(compact!.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(compact!.querySelector('[data-financial-section="inadimplencia"]')).toBeTruthy();
     expect(compact!.querySelector('[data-financial-section="leitura-executiva"]')).toBeNull();
-    expect(compact!.getAttribute('data-cols')).toBe('2');
+    expect(compact!.getAttribute('data-cols')).toBe('3');
 
     expect(screen.queryByRole('heading', { name: 'Leitura executiva' })).toBeNull();
     expect(screen.getByText('Meta ainda não definida')).toBeTruthy();

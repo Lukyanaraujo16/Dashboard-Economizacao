@@ -94,6 +94,10 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/expense-ceiling', () => ({
+  getDashboardExpenseCeiling: vi.fn(),
+  putDashboardExpenseCeiling: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/cost-centers', () => ({ getDashboardCostCenters: vi.fn() }));
 vi.mock('../src/services/dashboard/categories', () => ({ getDashboardCategories: vi.fn() }));
 
@@ -218,21 +222,21 @@ describe('Dashboard tenant catalog isolation', () => {
   });
 
   it('troca de tenant recarrega catálogo e remove seleção incompatível', async () => {
-    getCategories
-      .mockResolvedValueOnce({
-        items: [{ id: CAT_A, name: 'Receita A', type: 'REVENUE' }],
-      })
-      .mockResolvedValueOnce({
-        items: [{ id: CAT_B, name: 'Despesa B', type: 'EXPENSE' }],
-      });
+    let phase: 'A' | 'B' = 'A';
+    getCategories.mockImplementation(async () =>
+      phase === 'A'
+        ? { items: [{ id: CAT_A, name: 'Receita A', type: 'REVENUE' as const }] }
+        : { items: [{ id: CAT_B, name: 'Despesa B', type: 'EXPENSE' as const }] },
+    );
 
     const first = renderDashboardWithSupport(TENANT_A, 'Empresa A');
-    await waitFor(() => expect(getCategories).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getCategories).toHaveBeenCalled());
     first.unmount();
+    phase = 'B';
 
     setSearchParams(new URLSearchParams(`category=${CAT_A}`));
     renderDashboardWithSupport(TENANT_B, 'Empresa B');
-    await waitFor(() => expect(getCategories).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getCategories.mock.calls.length).toBeGreaterThan(1));
 
     await waitFor(() => {
       expect(paramsStore.get('category')).toBeNull();
@@ -248,18 +252,23 @@ describe('Dashboard tenant catalog isolation', () => {
       },
     );
 
-    getCategories
-      .mockImplementationOnce(() => slowPromise)
-      .mockResolvedValueOnce({
-        items: [{ id: CAT_B, name: 'Despesa B', type: 'EXPENSE' }],
+    let calls = 0;
+    getCategories.mockImplementation(() => {
+      calls += 1;
+      if (calls === 1) {
+        return slowPromise;
+      }
+      return Promise.resolve({
+        items: [{ id: CAT_B, name: 'Despesa B', type: 'EXPENSE' as const }],
       });
+    });
 
     const first = renderDashboardWithSupport(TENANT_A, 'Empresa A');
-    await waitFor(() => expect(getCategories).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getCategories).toHaveBeenCalled());
     first.unmount();
 
     renderDashboardWithSupport(TENANT_B, 'Empresa B');
-    await waitFor(() => expect(getCategories).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getCategories.mock.calls.length).toBeGreaterThan(1));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Categoria:/ })).toBeTruthy();

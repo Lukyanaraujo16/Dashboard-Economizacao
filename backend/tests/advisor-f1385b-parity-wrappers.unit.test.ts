@@ -87,8 +87,16 @@ describe('F13.8.5B executor registry', () => {
     ).toBe(false);
   });
 
-  it('publica 29 capabilities, com TOPN, lookup e share de contraparte', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(29);
+  it('publica 31 capabilities, com TOPN, lookup, share e planejamento mensal', () => {
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(31);
+    expect(
+      ANALYTICAL_CAPABILITY_REGISTRY.some((capability) => capability.key === 'revenue_goal.value.month'),
+    ).toBe(true);
+    expect(
+      ANALYTICAL_CAPABILITY_REGISTRY.some(
+        (capability) => capability.key === 'expense_ceiling.value.month',
+      ),
+    ).toBe(true);
     expect(
       ANALYTICAL_CAPABILITY_REGISTRY.some(
         (capability) => capability.key === 'realized_cash.counterparty.inflow.customer.ranking_winner',

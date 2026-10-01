@@ -7,6 +7,7 @@ export const ANALYTICAL_SEMANTIC_FAMILIES = [
   'FLOW',
   'STOCK',
   'BILLING',
+  'PLANNING',
   'BANK_BALANCE',
   'FORECAST',
   'COMPETENCE',
@@ -17,6 +18,8 @@ export const ANALYTICAL_METRIC_KEYS = [
   'REALIZED_CASH',
   'CASH_RESULT',
   'BILLING',
+  'REVENUE_GOAL',
+  'EXPENSE_CEILING',
   'RECEIVABLE_STOCK',
   'PAYABLE_STOCK',
   'DELINQUENCY',
@@ -81,6 +84,7 @@ export const ANALYTICAL_EXECUTOR_KEYS = [
   'realizedCashCostCenter',
   'currentSnapshot',
   'financialFactsMonth',
+  'monthlyPlanning',
 ] as const;
 export type AnalyticalExecutorKey = (typeof ANALYTICAL_EXECUTOR_KEYS)[number];
 

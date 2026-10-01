@@ -4,6 +4,7 @@ import {
   executeCompareCashMonths,
   executeCurrentSnapshot,
   executeFinancialFactsMonth,
+  executeMonthlyPlanning,
   executeRealizedCashCategoryBreakdown,
   executeRealizedCashCounterparty,
   executeRealizedCashCostCenter,
@@ -22,6 +23,7 @@ const ANALYTICAL_EXECUTOR_REGISTRY: Record<AnalyticalExecutorKey, AnalyticalExec
   realizedCashCostCenter: executeRealizedCashCostCenter,
   currentSnapshot: executeCurrentSnapshot,
   financialFactsMonth: executeFinancialFactsMonth,
+  monthlyPlanning: executeMonthlyPlanning,
 };
 
 export function getAnalyticalExecutor(

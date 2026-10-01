@@ -99,6 +99,12 @@ export type { RevenueGoalCardProps, RevenueGoalHistoryListProps } from './revenu
 export { RevenueGoalEditDialog } from './revenue-goal-edit-dialog';
 export type { RevenueGoalEditDialogProps } from './revenue-goal-edit-dialog';
 
+export { ExpenseCeilingCard } from './expense-ceiling-card';
+export type { ExpenseCeilingCardProps } from './expense-ceiling-card';
+
+export { ExpenseCeilingEditDialog } from './expense-ceiling-edit-dialog';
+export type { ExpenseCeilingEditDialogProps } from './expense-ceiling-edit-dialog';
+
 export { WidgetExpandDialog } from './widget-expand-dialog';
 export type { WidgetExpandDialogProps } from './widget-expand-dialog';
 

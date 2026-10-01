@@ -9,6 +9,8 @@ import type { AnalyticalExecutorKey } from './analytical-keys.js';
 import type { AnalyticalPeriod } from './analytical-period.js';
 import type { AdvisorCivilRangeKind } from '../resolve-advisor-civil-range.js';
 import { assessOfficialCounterpartyWinner } from '../load-counterparty-identity-population.js';
+import { loadMonthlyPlanningFact } from '../load-monthly-planning-fact.js';
+import type { AdvisorPlanningSubject } from '../resolve-advisor-planning-intent.js';
 
 function success(input: {
   readonly validated: Parameters<AnalyticalExecutor>[0]['validated'];
@@ -310,6 +312,35 @@ export const executeCurrentSnapshot: AnalyticalExecutor = async ({ validated, ru
       string,
       unknown
     >,
+  });
+};
+
+export const executeMonthlyPlanning: AnalyticalExecutor = async ({ validated, runtime }) => {
+  if (
+    runtime.planningCashFlow === undefined ||
+    runtime.revenueGoals === undefined ||
+    runtime.expenseCeilings === undefined
+  ) {
+    throw new Error('EXECUTOR_DEPENDENCY_MISSING:monthlyPlanning');
+  }
+  const monthKey = requireMonthKey(validated.query.period, 'self');
+  const subject: AdvisorPlanningSubject =
+    validated.query.metric === 'EXPENSE_CEILING' ? 'EXPENSE_CEILING' : 'REVENUE_GOAL';
+  const legacyFact = await loadMonthlyPlanningFact({
+    tenantId: runtime.tenantId,
+    monthKey,
+    now: runtime.now,
+    subject,
+    services: {
+      cashFlow: runtime.planningCashFlow,
+      revenueGoals: runtime.revenueGoals,
+      expenseCeilings: runtime.expenseCeilings,
+    },
+  });
+  return success({
+    validated,
+    executorKey: 'monthlyPlanning',
+    legacyFact,
   });
 };
 

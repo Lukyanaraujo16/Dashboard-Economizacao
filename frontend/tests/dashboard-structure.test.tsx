@@ -25,6 +25,7 @@ import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard
 import { DashboardMonthlyCashFlowRequestError } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-expenses';
 import type { DashboardMonthlyExpenseResponse } from '../src/services/dashboard/monthly-expenses.types';
+import { getDashboardExpenseCeiling } from '../src/services/dashboard/expense-ceiling';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -72,6 +73,10 @@ vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/expense-ceiling', () => ({
+  getDashboardExpenseCeiling: vi.fn(),
+  putDashboardExpenseCeiling: vi.fn(),
+}));
 
 vi.mock('../src/services/dashboard/cost-centers', () => ({
   getDashboardCostCenters: vi.fn(),
@@ -87,6 +92,7 @@ const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
+const getExpenseCeiling = vi.mocked(getDashboardExpenseCeiling);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
 
@@ -346,7 +352,7 @@ describe('Dashboard V2 structure', () => {
     expect(document.querySelector('[data-financial-section="meta-faturamento"]')).toBeTruthy();
     expect(document.querySelector('[data-financial-section="ate-fim-do-mes"]')).toBeNull();
     expect(document.querySelector('[data-home-band="compact-kpis"]')?.getAttribute('data-cols')).toBe(
-      '2',
+      '3',
     );
     expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
     expect(document.querySelector('[data-financial-section="movimentacao-diaria"]')).toBeNull();
@@ -397,9 +403,10 @@ describe('Dashboard V2 structure', () => {
       expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
     });
     expect(await screen.findByText('Visão executiva · Operações')).toBeTruthy();
-    expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
+    expect(await screen.findAllByText(/Consolidado da empresa/)).toHaveLength(2);
     expect(getOverview).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
     expect(getRevenueGoal).toHaveBeenCalledWith(null);
+    expect(getExpenseCeiling).toHaveBeenCalledWith(null);
   });
 
   it('propaga category aos widgets mensais e preserva meta consolidada', async () => {
@@ -428,8 +435,9 @@ describe('Dashboard V2 structure', () => {
     });
     expect(document.querySelector('[data-situation-selector]')).toBeNull();
     expect(screen.getByRole('button', { name: /Categoria: Serviços/ })).toBeTruthy();
-    expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
+    expect(await screen.findAllByText(/Consolidado da empresa/)).toHaveLength(2);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, centerId, categoryId);
+    expect(getExpenseCeiling).toHaveBeenCalledWith(null);
     expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-07', centerId, categoryId);
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getOverview).toHaveBeenCalledWith(centerId);
@@ -453,8 +461,9 @@ describe('Dashboard V2 structure', () => {
       status: 'IN_PROGRESS',
     });
     renderDashboard();
-    expect(await screen.findByText(/Meta consolidada da empresa/)).toBeTruthy();
+    expect(await screen.findAllByText(/Consolidado da empresa/)).toHaveLength(2);
     expect(getRevenueGoal).toHaveBeenCalledWith(null);
+    expect(getExpenseCeiling).toHaveBeenCalledWith(null);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, categoryId);
   });
 
@@ -629,7 +638,7 @@ describe('Dashboard V2 structure', () => {
     expect(screen.queryByRole('heading', { name: 'Receitas × Despesas' })).toBeNull();
     expect(document.querySelector('[data-financial-section="comparativo-mensal"]')).toBeNull();
     expect(document.querySelector('[data-home-band="compact-kpis"]')?.getAttribute('data-cols')).toBe(
-      '2',
+      '3',
     );
   });
 

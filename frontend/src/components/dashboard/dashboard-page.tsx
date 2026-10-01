@@ -82,6 +82,12 @@ import {
   putDashboardRevenueGoal,
 } from '../../services/dashboard/revenue-goal';
 import {
+  getDashboardExpenseCeiling,
+  putDashboardExpenseCeiling,
+} from '../../services/dashboard/expense-ceiling';
+import { DashboardExpenseCeilingRequestError } from '../../services/dashboard/expense-ceiling.types';
+import type { ExpenseCeilingSnapshot } from '../../services/dashboard/expense-ceiling.types';
+import {
   DashboardRevenueGoalRequestError,
   type RevenueGoalSnapshot,
 } from '../../services/dashboard/revenue-goal.types';
@@ -153,6 +159,8 @@ import {
   CashMonthlyGroupedBars,
   CompetenceDailyBars,
   ExecutiveKpiCard,
+  ExpenseCeilingCard,
+  ExpenseCeilingEditDialog,
   RevenueGoalCard,
   RevenueGoalEditDialog,
   RevenueGoalHistoryList,
@@ -200,6 +208,12 @@ type RevenueGoalView =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly data: RevenueGoalSnapshot };
+
+type ExpenseCeilingView =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'ready'; readonly data: ExpenseCeilingSnapshot };
 
 /** Histórico de 12 meses — modo Mensal da Movimentação financeira (Correção 08-B). */
 type CashMovementHistoryView =
@@ -436,6 +450,7 @@ export function DashboardPage() {
     kind: 'idle',
   });
   const [revenueGoalView, setRevenueGoalView] = useState<RevenueGoalView>({ kind: 'idle' });
+  const [expenseCeilingView, setExpenseCeilingView] = useState<ExpenseCeilingView>({ kind: 'idle' });
   const [costCenters, setCostCenters] = useState<readonly DashboardCostCenterItem[]>([]);
   const [costCentersLoading, setCostCentersLoading] = useState(false);
   const [categories, setCategories] = useState<readonly DashboardCategoryItem[]>([]);
@@ -444,6 +459,9 @@ export function DashboardPage() {
   const [goalEditOpen, setGoalEditOpen] = useState(false);
   const [goalSaving, setGoalSaving] = useState(false);
   const [goalSaveError, setGoalSaveError] = useState<string | null>(null);
+  const [ceilingEditOpen, setCeilingEditOpen] = useState(false);
+  const [ceilingSaving, setCeilingSaving] = useState(false);
+  const [ceilingSaveError, setCeilingSaveError] = useState<string | null>(null);
   const [expandKind, setExpandKind] = useState<ExpandKind | null>(null);
   const [receivableStockDetailsView, setReceivableStockDetailsView] =
     useState<ReceivableStockDetailsView>({ kind: 'idle' });
@@ -513,6 +531,7 @@ export function DashboardPage() {
         setCashMovementHistoryView({ kind: 'idle' });
         setCashBalanceHistoryView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
+        setExpenseCeilingView({ kind: 'idle' });
         setCostCenters([]);
         return;
       }
@@ -522,6 +541,7 @@ export function DashboardPage() {
         setCashMovementHistoryView({ kind: 'idle' });
         setCashBalanceHistoryView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
+        setExpenseCeilingView({ kind: 'idle' });
         setCostCenters([]);
         return;
       }
@@ -552,6 +572,7 @@ export function DashboardPage() {
             setCashMovementHistoryView({ kind: 'idle' });
             setCashBalanceHistoryView({ kind: 'idle' });
           setRevenueGoalView({ kind: 'idle' });
+          setExpenseCeilingView({ kind: 'idle' });
           return;
         }
         overviewCacheRef.current.set(cacheKey, data);
@@ -566,6 +587,7 @@ export function DashboardPage() {
             setCashMovementHistoryView({ kind: 'idle' });
             setCashBalanceHistoryView({ kind: 'idle' });
           setRevenueGoalView({ kind: 'idle' });
+          setExpenseCeilingView({ kind: 'idle' });
           return;
         }
         const message =
@@ -580,6 +602,7 @@ export function DashboardPage() {
         setCashMovementHistoryView({ kind: 'idle' });
         setCashBalanceHistoryView({ kind: 'idle' });
         setRevenueGoalView({ kind: 'idle' });
+        setExpenseCeilingView({ kind: 'idle' });
       }
     },
     [support, user],
@@ -966,6 +989,29 @@ export function DashboardPage() {
     [],
   );
 
+  const loadExpenseCeiling = useCallback(
+    async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
+      setExpenseCeilingView({ kind: 'loading' });
+      try {
+        const data = await getDashboardExpenseCeiling(monthKey === todayMonthKey ? null : monthKey);
+        if (signal.aborted) {
+          return;
+        }
+        setExpenseCeilingView({ kind: 'ready', data });
+      } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
+        const message =
+          error instanceof DashboardExpenseCeilingRequestError
+            ? error.message
+            : 'Não foi possível carregar o teto de gastos.';
+        setExpenseCeilingView({ kind: 'error', message });
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (status !== 'authenticated' || operationalTenantId === null) {
       setCategories([]);
@@ -1212,12 +1258,22 @@ export function DashboardPage() {
   useEffect(() => {
     if (view.kind !== 'ready') {
       setRevenueGoalView({ kind: 'idle' });
+      setExpenseCeilingView({ kind: 'idle' });
       return;
     }
     const controller = new AbortController();
     void loadRevenueGoal(controller.signal, selectedMonthKey, todayMonthKey);
     return () => controller.abort();
   }, [loadRevenueGoal, selectedMonthKey, todayMonthKey, view.kind]);
+
+  useEffect(() => {
+    if (view.kind !== 'ready') {
+      return;
+    }
+    const controller = new AbortController();
+    void loadExpenseCeiling(controller.signal, selectedMonthKey, todayMonthKey);
+    return () => controller.abort();
+  }, [loadExpenseCeiling, selectedMonthKey, todayMonthKey, view.kind]);
 
   useEffect(() => {
     if (periodMode !== 'monthly' || view.kind !== 'ready') {
@@ -1503,6 +1559,32 @@ export function DashboardPage() {
     [selectedMonthKey],
   );
 
+  const openCeilingEditor = useCallback(() => {
+    setCeilingSaveError(null);
+    setCeilingEditOpen(true);
+  }, []);
+
+  const saveExpenseCeiling = useCallback(
+    (ceiling: string) => {
+      setCeilingSaving(true);
+      setCeilingSaveError(null);
+      void putDashboardExpenseCeiling({ month: selectedMonthKey, ceiling })
+        .then((data) => {
+          setExpenseCeilingView({ kind: 'ready', data });
+          setCeilingEditOpen(false);
+        })
+        .catch((error: unknown) => {
+          setCeilingSaveError(
+            error instanceof DashboardExpenseCeilingRequestError
+              ? error.message
+              : 'Não foi possível salvar o teto de gastos.',
+          );
+        })
+        .finally(() => setCeilingSaving(false));
+    },
+    [selectedMonthKey],
+  );
+
   const lastSyncAt = view.kind === 'ready' ? view.data.integration.lastSuccessfulSyncAt : null;
   const freshness = formatSyncTimestamp(lastSyncAt);
   const integrationStatus = view.kind === 'ready' ? view.data.integration.status : null;
@@ -1528,6 +1610,9 @@ export function DashboardPage() {
   const revenueGoalData = revenueGoalView.kind === 'ready' ? revenueGoalView.data : null;
   const revenueGoalError = revenueGoalView.kind === 'error' ? revenueGoalView.message : null;
   const canExpandGoal = gate === 'ready' && revenueGoalData !== null;
+  const expenseCeilingData = expenseCeilingView.kind === 'ready' ? expenseCeilingView.data : null;
+  const expenseCeilingError =
+    expenseCeilingView.kind === 'error' ? expenseCeilingView.message : null;
 
   const billingKpi = cashFlowModel
     ? toCashBillingKpi(cashFlowModel, selectedMonthPhase)
@@ -2255,7 +2340,7 @@ export function DashboardPage() {
 
       <div
         className={styles.compactSecondaryGrid}
-        data-cols="2"
+        data-cols="3"
         data-home-band="compact-kpis"
       >
         <WidgetShell
@@ -2280,7 +2365,35 @@ export function DashboardPage() {
             />
             {sliceFilterActive ? (
               <p className={styles.goalConsolidatedNote}>
-                Meta consolidada da empresa — não é afetada pelos filtros da Home.
+                Consolidado da empresa — não é afetado pelos filtros da Home.
+              </p>
+            ) : null}
+          </WidgetBody>
+        </WidgetShell>
+
+        <WidgetShell
+          id="teto-gastos"
+          sectionId="teto-gastos"
+          title="Teto de gastos"
+          subtitle={monthLabel}
+        >
+          <WidgetBody
+            gate={gate}
+            loadingLabel="Carregando teto de gastos"
+            error={expenseCeilingError}
+            onRetry={() => {
+              void loadExpenseCeiling(new AbortController().signal, selectedMonthKey, todayMonthKey);
+            }}
+            pending={expenseCeilingData === null && expenseCeilingError === null}
+          >
+            <ExpenseCeilingCard
+              monthLabel={monthLabel}
+              snapshot={expenseCeilingData}
+              onEdit={openCeilingEditor}
+            />
+            {sliceFilterActive ? (
+              <p className={styles.goalConsolidatedNote}>
+                Consolidado da empresa — não é afetado pelos filtros da Home.
               </p>
             ) : null}
           </WidgetBody>
@@ -2854,6 +2967,20 @@ export function DashboardPage() {
           </div>
         </WidgetExpandDialog>
       ) : null}
+
+      <ExpenseCeilingEditDialog
+        open={ceilingEditOpen}
+        monthLabel={monthLabel}
+        currentCeiling={expenseCeilingData?.ceiling ?? null}
+        saving={ceilingSaving}
+        error={ceilingSaveError}
+        onSubmit={saveExpenseCeiling}
+        onClose={() => {
+          if (!ceilingSaving) {
+            setCeilingEditOpen(false);
+          }
+        }}
+      />
 
       <RevenueGoalEditDialog
         open={goalEditOpen}

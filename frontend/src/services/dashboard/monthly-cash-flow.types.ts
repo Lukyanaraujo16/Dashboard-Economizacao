@@ -70,6 +70,11 @@ export type DashboardMonthlyCashFlowResponse = {
   readonly to: string;
   readonly costCenterCashSplit: boolean;
   readonly billing: string | null;
+  /**
+   * Despesas oficiais do mês (realized.outflows + expected.payables).
+   * Ausente só em fixtures antigas; a API sempre envia. null = indisponível.
+   */
+  readonly monthlyExpenses?: string | null;
   readonly realized: DashboardMonthlyCashFlowMoney;
   readonly realizedByCategory: {
     readonly inflows: DashboardCashRealizedCategoryComposition | null;

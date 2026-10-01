@@ -302,6 +302,21 @@ export function monthlyBilling(flow: {
   return flow.realized.inflows.plus(flow.expected.receivables);
 }
 
+/**
+ * Despesas do mês homologadas na Home:
+ * saídas realizadas + a pagar ainda no prazo no mês.
+ * Vencido NÃO entra. null em qualquer parcela = indisponível, nunca zero.
+ */
+export function monthlyExpenses(flow: {
+  readonly realized: { readonly outflows: Prisma.Decimal | null };
+  readonly expected: { readonly payables: Prisma.Decimal | null };
+}): Prisma.Decimal | null {
+  if (flow.realized.outflows === null || flow.expected.payables === null) {
+    return null;
+  }
+  return flow.realized.outflows.plus(flow.expected.payables);
+}
+
 export function calculateMonthlyCashFlow(input: CalculateMonthlyCashFlowInput): MonthlyCashFlow {
   const monthKey = civilMonthKey(input.from);
   const categoryFilter = input.categoryFilter ?? null;

@@ -2,7 +2,7 @@ import type { Prisma } from '../../../generated/prisma/client.js';
 import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
 import { civilMonthKey, listInclusiveMonthKeysFromKeys } from '../../analytics/domain/civil-calendar.js';
 import type { AnalyticsService } from '../../analytics/services/analytics.service.js';
-import { monthlyBilling } from '../../analytics/domain/monthly-cash-flow.js';
+import { monthlyBilling, monthlyExpenses } from '../../analytics/domain/monthly-cash-flow.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import type { ExpectedReceivableDetailsService } from '../../analytics/services/expected-receivable-details.service.js';
 import type { ExpectedPayableDetailsService } from '../../analytics/services/expected-payable-details.service.js';
@@ -34,7 +34,9 @@ import {
   listRevenueGoalHistoryMonthKeys,
   type RevenueGoalProgress,
 } from '../domain/revenue-goal-math.js';
+import { calculateExpenseCeilingProgress } from '../domain/expense-ceiling-math.js';
 import type { RevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
+import type { ExpenseCeilingRepository } from '../repositories/expense-ceiling.repository.js';
 import type {
   DashboardCashFlowForecastResponse,
   DashboardCashBalanceHistoryResponse,
@@ -55,6 +57,7 @@ import type {
   DashboardCashRealizedDetailsResponse,
   DashboardMonthlyExpenseResponse,
   DashboardMonthlyRevenueResponse,
+  DashboardExpenseCeilingResponse,
   DashboardRevenueGoalResponse,
   DashboardUpcomingDays,
   DashboardUpcomingResponse,
@@ -76,6 +79,7 @@ import { toDashboardMonthlyRevenueResponse } from '../http/to-dashboard-monthly-
 import { toDashboardOverviewResponse } from '../http/to-dashboard-overview-response.js';
 import { toDashboardReceivableCompositionResponse } from '../http/to-dashboard-receivable-composition-response.js';
 import { toDashboardRevenueGoalResponse } from '../http/to-dashboard-revenue-goal-response.js';
+import { toDashboardExpenseCeilingResponse } from '../http/to-dashboard-expense-ceiling-response.js';
 import { toDashboardUpcomingResponse } from '../http/to-dashboard-upcoming-response.js';
 import { toExpensesReportResponse } from '../../reports/http/to-expenses-report-response.js';
 import { toRevenueReportResponse } from '../../reports/http/to-revenue-report-response.js';
@@ -244,12 +248,22 @@ export type DashboardOverviewFacade = {
     targetAmount: Prisma.Decimal,
     historyMonths?: number,
   ): Promise<DashboardRevenueGoalResponse>;
+  getExpenseCeiling(
+    auth: AuthenticatedRequestContext,
+    monthKey: string | null,
+  ): Promise<DashboardExpenseCeilingResponse>;
+  upsertExpenseCeiling(
+    auth: AuthenticatedRequestContext,
+    monthKey: string,
+    ceilingAmount: Prisma.Decimal,
+  ): Promise<DashboardExpenseCeilingResponse>;
 };
 
 export type DashboardOverviewFacadeDependencies = {
   readonly analytics: AnalyticsService;
   readonly integrations: ContaAzulIntegrationRepository;
   readonly revenueGoals: RevenueGoalRepository;
+  readonly expenseCeilings: ExpenseCeilingRepository;
   readonly costCenters: CostCenterReadRepository;
   readonly categories: FinancialCategoryReadRepository;
   /** CASH-3B. Ausente nas rotas de Relatórios, que não expõem caixa. */
@@ -637,6 +651,20 @@ export function createDashboardOverviewFacade(
       await deps.revenueGoals.upsert(tenantId, monthKey, targetAmount);
       return loadRevenueGoal(deps, tenantId, monthKey, historyMonths);
     },
+
+    /**
+     * Teto permanece consolidado da empresa — filtros da Home não entram.
+     */
+    async getExpenseCeiling(auth, monthKey) {
+      const tenantId = requireOperationalTenantId(auth);
+      return loadExpenseCeiling(deps, tenantId, monthKey);
+    },
+
+    async upsertExpenseCeiling(auth, monthKey, ceilingAmount) {
+      const tenantId = requireOperationalTenantId(auth);
+      await deps.expenseCeilings.upsert(tenantId, monthKey, ceilingAmount);
+      return loadExpenseCeiling(deps, tenantId, monthKey);
+    },
   };
 }
 
@@ -694,6 +722,37 @@ async function loadRevenueGoal(
   });
 
   return toDashboardRevenueGoalResponse(selected, history);
+}
+
+/** Despesas da Home, company-level — sem filtro de centro de custo. */
+async function loadMonthlyExpensesActual(
+  deps: DashboardOverviewFacadeDependencies,
+  tenantId: string,
+  monthKey: string | null,
+): Promise<{ readonly monthKey: string; readonly monthlyExpenses: Prisma.Decimal | null }> {
+  const flow = await requireCashFlow(deps).getMonthlyCashFlow({
+    tenantId,
+    ...(monthKey === null ? {} : { monthKey }),
+  });
+  return { monthKey: flow.monthKey, monthlyExpenses: monthlyExpenses(flow) };
+}
+
+async function loadExpenseCeiling(
+  deps: DashboardOverviewFacadeDependencies,
+  tenantId: string,
+  monthKey: string | null,
+): Promise<DashboardExpenseCeilingResponse> {
+  const actual = await loadMonthlyExpensesActual(deps, tenantId, monthKey);
+  const referenceMonthKey = civilMonthKey(civilTodayInSaoPaulo(new Date()));
+  const row = await deps.expenseCeilings.findByTenantMonth(tenantId, actual.monthKey);
+  return toDashboardExpenseCeilingResponse(
+    calculateExpenseCeilingProgress({
+      monthKey: actual.monthKey,
+      ceiling: row?.ceilingAmount ?? null,
+      monthlyExpenses: actual.monthlyExpenses,
+      referenceMonthKey,
+    }),
+  );
 }
 
 async function resolveCategoryFilter(

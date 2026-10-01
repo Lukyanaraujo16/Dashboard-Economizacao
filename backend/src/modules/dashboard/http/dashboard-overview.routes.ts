@@ -21,6 +21,7 @@ import { createContaAzulIntegrationRepository } from '../../integrations/conta-a
 import { createContaAzulBalanceSnapshotRepository } from '../../integrations/conta-azul/repositories/balance-snapshot.repository.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import { createRevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
+import { createExpenseCeilingRepository } from '../repositories/expense-ceiling.repository.js';
 import {
   createCashBalanceHistoryService,
   resolveOfficialBankBalanceBase,
@@ -33,6 +34,7 @@ import { parseDashboardCostCenterListPeriod } from './parse-dashboard-cost-cente
 import { parseDashboardCostCenterQuery } from './parse-dashboard-cost-center-query.js';
 import { parseDashboardMonth } from './parse-dashboard-month.js';
 import { parseDashboardRevenueGoalBody } from './parse-dashboard-revenue-goal-body.js';
+import { parseDashboardExpenseCeilingBody } from './parse-dashboard-expense-ceiling-body.js';
 import { parseDashboardSituationQuery } from './parse-dashboard-situation-query.js';
 import { parseDashboardUpcomingDays } from './parse-dashboard-upcoming-days.js';
 import { parseCashExpectedHorizonQuery } from './parse-cash-expected-horizon-query.js';
@@ -102,6 +104,7 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
     cashBalanceHistory,
     integrations: createContaAzulIntegrationRepository(prisma),
     revenueGoals: createRevenueGoalRepository(prisma),
+    expenseCeilings: createExpenseCeilingRepository(prisma),
     costCenters,
     categories,
   });
@@ -509,6 +512,41 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       assertNoTenantIdQuery(request.query);
       const command = parseDashboardRevenueGoalBody(request.body);
       const body = await dashboard.upsertRevenueGoal(auth, command.monthKey, command.targetAmount);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
+    '/dashboard/expense-ceiling',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      // Teto é sempre company-level — costCenter/situation/category, se presentes, são ignorados.
+      const monthKey = parseDashboardMonth(request.query);
+      const body = await dashboard.getExpenseCeiling(auth, monthKey);
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.put(
+    '/dashboard/expense-ceiling',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      assertNoTenantIdQuery(request.query);
+      const command = parseDashboardExpenseCeilingBody(request.body);
+      const body = await dashboard.upsertExpenseCeiling(
+        auth,
+        command.monthKey,
+        command.ceilingAmount,
+      );
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );

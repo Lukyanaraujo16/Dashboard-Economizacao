@@ -53,6 +53,22 @@ export const ANALYTICAL_METRIC_REGISTRY: readonly AnalyticalMetricDefinition[] =
     publicationStatus: 'HAS_PUBLISHED_CAPABILITIES',
   },
   {
+    key: 'REVENUE_GOAL',
+    semanticFamily: 'PLANNING',
+    factualMeaning: 'COMPANY_MONTHLY_REVENUE_GOAL_VERSUS_BILLING',
+    temporalSemantics: 'civilMonth',
+    possibleDirections: [],
+    publicationStatus: 'HAS_PUBLISHED_CAPABILITIES',
+  },
+  {
+    key: 'EXPENSE_CEILING',
+    semanticFamily: 'PLANNING',
+    factualMeaning: 'COMPANY_MONTHLY_EXPENSE_CEILING_VERSUS_MONTHLY_EXPENSES',
+    temporalSemantics: 'civilMonth',
+    possibleDirections: [],
+    publicationStatus: 'HAS_PUBLISHED_CAPABILITIES',
+  },
+  {
     key: 'RECEIVABLE_STOCK',
     semanticFamily: 'STOCK',
     factualMeaning: 'RECEIVABLE_OPEN_STOCK',

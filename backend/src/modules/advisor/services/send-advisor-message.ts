@@ -28,6 +28,8 @@ import {
   resolveUniversalAnalyticalIntent,
 } from '../domain/resolve-universal-analytical-intent.js';
 import { isAdvisorInterpretiveQuestion } from '../domain/classify-advisor-factual-response.js';
+import { runAdvisorMonthlyPlanning } from '../domain/run-advisor-monthly-planning.js';
+import type { MonthlyPlanningServices } from '../domain/load-monthly-planning-fact.js';
 import { executeAnalyticalQuery } from '../domain/analytical/execute-analytical-query.js';
 import { validateAnalyticalCapability } from '../domain/analytical/validate-analytical-capability.js';
 import {
@@ -132,6 +134,7 @@ export type SendAdvisorMessageDependencies = {
   readonly analyticalTools?: AdvisorAnalyticalToolExecutor;
   readonly cashComparison?: AdvisorCashComparisonService;
   readonly counterpartyIdentity?: CounterpartyIdentityService;
+  readonly monthlyPlanning?: MonthlyPlanningServices;
 };
 
 /**
@@ -228,6 +231,41 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       );
 
       const priorState = parseAnalyticalConversationState(conversation.analyticalContext);
+      if (deps.monthlyPlanning !== undefined && !isAdvisorInterpretiveQuestion(question)) {
+        const planned = await runAdvisorMonthlyPlanning({
+          content: question,
+          monthKey: period.monthKey,
+          runtime: {
+            tenantId,
+            now: input.now,
+            planningCashFlow: deps.monthlyPlanning.cashFlow,
+            revenueGoals: deps.monthlyPlanning.revenueGoals,
+            expenseCeilings: deps.monthlyPlanning.expenseCeilings,
+          },
+        });
+        if (planned !== null) {
+          const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+            senderType: 'CONSULTANT',
+            content: planned.answer,
+          });
+          return {
+            conversationId: conversation.id,
+            userMessage,
+            consultantMessage,
+            run: null,
+            factualAnswer: {
+              classification: 'FACTUAL_CLOSED',
+              providerCalled: false,
+              intentKind: 'MONTHLY_PLANNING',
+              factKind: 'MONTHLY_PLANNING',
+              identityStatus: null,
+              returnedCount: null,
+              coveragePercent: null,
+              composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+            },
+          };
+        }
+      }
       const universalIntent = resolveUniversalAnalyticalIntent({
         content: question,
         now: input.now,
