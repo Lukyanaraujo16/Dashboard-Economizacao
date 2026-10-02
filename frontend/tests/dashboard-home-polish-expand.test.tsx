@@ -441,12 +441,12 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getAllByText(/R\$\s*888\.888,88/).length).toBeGreaterThan(0);
     expect(within(dialog).getByText('A receber')).toBeTruthy();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
-    await waitFor(() => {
-      expect(getExpectedReceivableDetails).toHaveBeenCalledWith(null, null, null);
-    });
+    expect(getExpectedReceivableDetails).not.toHaveBeenCalled();
     expect(getReceivableStockDetails).not.toHaveBeenCalled();
-    expect(within(dialog).getByText('Títulos a receber no prazo')).toBeTruthy();
-    expect(within(dialog).getByText('Cliente Previsto')).toBeTruthy();
+    expect(within(dialog).queryByText('Títulos a receber no prazo')).toBeNull();
+    expect(within(dialog).queryByText('Cliente Previsto')).toBeNull();
+    expect(within(dialog).getByText('Entradas por dia de baixa')).toBeTruthy();
+    expect(within(dialog).getByText('Entradas realizadas acumuladas (dia de baixa)')).toBeTruthy();
     expect(within(dialog).getByText('Categorias das entradas realizadas')).toBeTruthy();
     const inflowCategory = within(dialog).getByRole('button', { name: /Serviços/i });
     expect(inflowCategory.getAttribute('aria-expanded')).toBe('false');
@@ -481,6 +481,13 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
       expect(getReceivableStockDetails).toHaveBeenCalled();
     });
     expect(getExpectedReceivableDetails).not.toHaveBeenCalled();
+    const receivableChart = within(dialog).getByRole('img', {
+      name: 'A receber no prazo por dia de vencimento',
+    });
+    const receivableTitles = within(dialog).getByText('Títulos em aberto');
+    expect(
+      receivableChart.compareDocumentPosition(receivableTitles) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
     expect(within(dialog).getByText('Cliente Teste')).toBeTruthy();
     expect(
@@ -500,8 +507,76 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
       expect(getPayableStockDetails).toHaveBeenCalled();
     });
     expect(getExpectedPayableDetails).not.toHaveBeenCalled();
+    const payableChart = within(dialog).getByRole('img', {
+      name: 'A pagar no prazo por dia de vencimento',
+    });
+    const payableTitles = within(dialog).getByText('Títulos em aberto');
+    expect(
+      payableChart.compareDocumentPosition(payableTitles) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
     expect(within(dialog).getByText('Fornecedor XYZ')).toBeTruthy();
+  });
+
+  it('lista longa de títulos permanece abaixo do gráfico ampliado', async () => {
+    getReceivableStockDetails.mockResolvedValue({
+      today: '2026-08-19',
+      available: true,
+      total: '111111.11',
+      overdue: '1.00',
+      dueToday: '0',
+      upcoming: '111110.11',
+      items: Array.from({ length: 12 }, (_, index) => ({
+        id: `item-${index}`,
+        externalId: `ext-${index}`,
+        dueDate: '2026-08-28',
+        amount: '10.00',
+        description: `Título longo ${index + 1}`,
+        customerName: `Cliente ${index + 1}`,
+        categoryNames: ['Serviços'],
+        situation: 'UPCOMING' as const,
+        overdueDays: null,
+      })),
+    });
+    getPayableStockDetails.mockResolvedValue({
+      today: '2026-08-19',
+      available: true,
+      total: '22222.22',
+      overdue: '2.00',
+      dueToday: '0',
+      upcoming: '22020.22',
+      items: Array.from({ length: 12 }, (_, index) => ({
+        id: `ap-${index}`,
+        externalId: `ext-ap-${index}`,
+        dueDate: '2026-08-28',
+        amount: '10.00',
+        description: `Conta longa ${index + 1}`,
+        supplierName: `Fornecedor ${index + 1}`,
+        categoryNames: ['Contabilidade'],
+        situation: 'UPCOMING' as const,
+        overdueDays: null,
+      })),
+    });
+
+    const receivable = await openKpiExpand('A receber');
+    const receivableChart = within(receivable).getByRole('img', {
+      name: 'A receber no prazo por dia de vencimento',
+    });
+    const lastReceivable = within(receivable).getByText(/Título longo 12/);
+    expect(
+      receivableChart.compareDocumentPosition(lastReceivable) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    fireEvent.click(within(receivable).getByRole('button', { name: 'Fechar' }));
+
+    fireEvent.click(kpiScope('Contas a pagar').getByRole('button', { name: 'Expandir' }));
+    const payable = await screen.findByRole('dialog');
+    const payableChart = within(payable).getByRole('img', {
+      name: 'A pagar no prazo por dia de vencimento',
+    });
+    const lastPayable = await within(payable).findByText(/Conta longa 12/);
+    expect(
+      payableChart.compareDocumentPosition(lastPayable) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('Z9/Z10 — Despesas abre com Pago, acumulado e A pagar', async () => {
@@ -541,6 +616,11 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     expect(within(dialog).getAllByText(/R\$\s*866\.666,66/).length).toBeGreaterThan(0);
     expect(within(dialog).queryByText('Resultado realizado')).toBeNull();
     expect(within(dialog).queryByText('Previsto restante')).toBeNull();
+    expect(
+      within(dialog).getByRole('img', {
+        name: 'Resultado projetado do mês (realizado + previsto no prazo)',
+      }),
+    ).toBeTruthy();
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
@@ -717,18 +797,16 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
     expect(within(dialog).getAllByText('Sem movimento').length).toBeGreaterThan(0);
   });
 
-  it('Faturamento em mês futuro lista títulos de expected-details e mantém baixa vazia', async () => {
+  it('Faturamento em mês futuro não lista títulos e mantém baixa vazia', async () => {
     dashboardSearchParams = new URLSearchParams('month=2026-10');
     const dialog = await openKpiExpand('Faturamento previsto');
     expect(within(dialog).getByText('A receber')).toBeTruthy();
     expect(within(dialog).getAllByText(/R\$\s*50\.000,00/).length).toBeGreaterThan(0);
-    await waitFor(() => {
-      expect(getExpectedReceivableDetails).toHaveBeenCalledWith('2026-10', null, null);
-    });
+    expect(getExpectedReceivableDetails).not.toHaveBeenCalled();
     expect(getReceivableStockDetails).not.toHaveBeenCalled();
-    expect(within(dialog).getByText('Títulos a receber no prazo')).toBeTruthy();
-    expect(within(dialog).getByText('Cliente Outubro')).toBeTruthy();
-    expect(within(dialog).getByText(/20\/10\/2026/)).toBeTruthy();
+    expect(within(dialog).queryByText('Títulos a receber no prazo')).toBeNull();
+    expect(within(dialog).queryByText('Cliente Outubro')).toBeNull();
+    expect(within(dialog).queryByText(/20\/10\/2026/)).toBeNull();
     expect(within(dialog).queryByText('Categorias das entradas realizadas')).toBeNull();
     expect(within(dialog).getAllByText('Sem movimento').length).toBeGreaterThan(0);
   });
@@ -952,7 +1030,7 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
     );
   });
 
-  it('envia centro de custo e categoria ao expected-details de Faturamento', async () => {
+  it('envia centro de custo e categoria ao fluxo de caixa do Faturamento', async () => {
     dashboardSearchParams = new URLSearchParams(`costCenter=${CENTER}&category=${CATEGORY}`);
     getCostCenters.mockResolvedValue({
       items: [{ id: CENTER, name: 'Centro A', code: null, active: true }],
@@ -961,9 +1039,7 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
       items: [{ id: CATEGORY, name: 'Categoria A', type: 'REVENUE' }],
     });
     await openKpiExpand('Faturamento');
-    await waitFor(() => {
-      expect(getExpectedReceivableDetails).toHaveBeenCalledWith(null, CENTER, CATEGORY);
-    });
+    expect(getExpectedReceivableDetails).not.toHaveBeenCalled();
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, CENTER, CATEGORY);
   });
 

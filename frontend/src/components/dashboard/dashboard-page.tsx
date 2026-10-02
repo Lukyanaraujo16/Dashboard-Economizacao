@@ -67,11 +67,6 @@ import {
   DashboardPayableStockDetailsRequestError,
   type DashboardPayableStockDetailsResponse,
 } from '../../services/dashboard/payable-stock-details.types';
-import { getDashboardExpectedReceivableDetails } from '../../services/dashboard/expected-receivable-details';
-import {
-  DashboardExpectedReceivableDetailsRequestError,
-  type DashboardExpectedReceivableDetailsResponse,
-} from '../../services/dashboard/expected-receivable-details.types';
 import { getDashboardOverview } from '../../services/dashboard/overview';
 import {
   DashboardOverviewRequestError,
@@ -253,12 +248,6 @@ type PayableStockDetailsView =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
   | { readonly kind: 'ready'; readonly data: DashboardPayableStockDetailsResponse };
-
-type ExpectedReceivableDetailsView =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly data: DashboardExpectedReceivableDetailsResponse };
 
 /** Estado do overview aplicado a cada widget antes dos dados locais. */
 type WidgetGate = 'loading' | 'first-sync' | 'blocked' | 'ready';
@@ -473,8 +462,6 @@ export function DashboardPage() {
     useState<ReceivableStockDetailsView>({ kind: 'idle' });
   const [payableStockDetailsView, setPayableStockDetailsView] =
     useState<PayableStockDetailsView>({ kind: 'idle' });
-  const [expectedReceivableDetailsView, setExpectedReceivableDetailsView] =
-    useState<ExpectedReceivableDetailsView>({ kind: 'idle' });
   const [monthlyCashMode, setMonthlyCashMode] = useState<MonthlyCashMode>('realized');
   const [periodMode, setPeriodMode] = useState<PeriodMode>('daily');
   const [expectedHorizon, setExpectedHorizon] = useState<ExpectedHorizon>(3);
@@ -513,12 +500,6 @@ export function DashboardPage() {
   receivableStockDetailsViewRef.current = receivableStockDetailsView;
   const payableStockDetailsViewRef = useRef(payableStockDetailsView);
   payableStockDetailsViewRef.current = payableStockDetailsView;
-  const expectedReceivableDetailsCacheRef = useRef(
-    createDashboardFilterCache<DashboardExpectedReceivableDetailsResponse>(),
-  );
-  const expectedReceivableDetailsViewRef = useRef(expectedReceivableDetailsView);
-  expectedReceivableDetailsViewRef.current = expectedReceivableDetailsView;
-
   const operationalTenantId = useMemo(
     () => resolveOperationalTenantId(user, support),
     [user, support],
@@ -760,53 +741,6 @@ export function DashboardPage() {
             ? error.message
             : 'Não foi possível carregar o estoque a pagar.';
         setPayableStockDetailsView({ kind: 'error', message });
-      }
-    },
-    [],
-  );
-
-  const loadExpectedReceivableDetails = useCallback(
-    async (
-      signal: AbortSignal,
-      monthKey: string,
-      todayMonthKey: string,
-      costCenterId: string | null,
-      categoryId: string | null,
-    ) => {
-      const tenantId = operationalTenantIdRef.current;
-      if (tenantId === null) {
-        return;
-      }
-      const cacheKey = dashboardCashFlowCacheKey(tenantId, monthKey, costCenterId, categoryId);
-      const cached = expectedReceivableDetailsCacheRef.current.get(cacheKey);
-      if (cached) {
-        setExpectedReceivableDetailsView({ kind: 'ready', data: cached });
-      } else {
-        setExpectedReceivableDetailsView({ kind: 'loading' });
-      }
-      try {
-        const data = await getDashboardExpectedReceivableDetails(
-          monthKey === todayMonthKey ? null : monthKey,
-          costCenterId,
-          categoryId,
-        );
-        if (signal.aborted || operationalTenantIdRef.current !== tenantId) {
-          return;
-        }
-        expectedReceivableDetailsCacheRef.current.set(cacheKey, data);
-        setExpectedReceivableDetailsView({ kind: 'ready', data });
-      } catch (error) {
-        if (signal.aborted) {
-          return;
-        }
-        if (expectedReceivableDetailsViewRef.current.kind === 'ready') {
-          return;
-        }
-        const message =
-          error instanceof DashboardExpectedReceivableDetailsRequestError
-            ? error.message
-            : 'Não foi possível carregar os recebimentos previstos.';
-        setExpectedReceivableDetailsView({ kind: 'error', message });
       }
     },
     [],
@@ -1407,30 +1341,6 @@ export function DashboardPage() {
   ]);
 
   useEffect(() => {
-    if (expandKind !== 'billing' || view.kind !== 'ready') {
-      setExpectedReceivableDetailsView({ kind: 'idle' });
-      return;
-    }
-    const controller = new AbortController();
-    void loadExpectedReceivableDetails(
-      controller.signal,
-      selectedMonthKey,
-      todayMonthKey,
-      selectedCostCenterId,
-      selectedCategoryId,
-    );
-    return () => controller.abort();
-  }, [
-    expandKind,
-    loadExpectedReceivableDetails,
-    selectedCategoryId,
-    selectedCostCenterId,
-    selectedMonthKey,
-    todayMonthKey,
-    view.kind,
-  ]);
-
-  useEffect(() => {
     const rawMonth = searchParams.get('month');
     const rawCostCenter = searchParams.get('costCenter');
     const rawSituation = searchParams.get('situation');
@@ -1852,7 +1762,6 @@ export function DashboardPage() {
     setExpenseDaySelection(null);
     setReceivableStockDetailsView({ kind: 'idle' });
     setPayableStockDetailsView({ kind: 'idle' });
-    setExpectedReceivableDetailsView({ kind: 'idle' });
   }, []);
 
   return (
@@ -2492,29 +2401,6 @@ export function DashboardPage() {
                 </div>
               ) : null}
             </dl>
-            <h3 className={expectedReceivableStyles.sectionTitle}>Títulos a receber no prazo</h3>
-            {expectedReceivableDetailsView.kind === 'loading' ? (
-              <p className={expectedReceivableStyles.loading}>Carregando detalhes…</p>
-            ) : null}
-            {expectedReceivableDetailsView.kind === 'error' ? (
-              <p className={expectedReceivableStyles.error} role="alert">
-                {expectedReceivableDetailsView.message}
-              </p>
-            ) : null}
-            {expectedReceivableDetailsView.kind === 'ready' &&
-            expectedReceivableDetailsView.data.available ? (
-              <ExpectedReceivableDetailsPanel
-                items={expectedReceivableDetailsView.data.items}
-                emptyMessage="Nenhum recebimento previsto no prazo neste período."
-                ariaLabel="Títulos a receber no prazo"
-              />
-            ) : null}
-            {expectedReceivableDetailsView.kind === 'ready' &&
-            !expectedReceivableDetailsView.data.available ? (
-              <p className={expectedReceivableStyles.empty}>
-                Detalhamento indisponível para o centro de custo selecionado.
-              </p>
-            ) : null}
             {realizedInflows ? (
               <DailyRealizedCashChart
                 dailyPoints={realizedInflows}
@@ -2538,7 +2424,9 @@ export function DashboardPage() {
                 chartClassName={styles.expandChart}
                 labelClassName={styles.expandLabel}
               />
-            ) : null}
+            ) : (
+              <p className={styles.expandLabel}>Sem movimento</p>
+            )}
             {cashFlowModel.realizedInflowsByCategory &&
             cashFlowModel.realizedInflowsByCategory.items.length > 0 &&
             operationalTenantId !== null ? (
@@ -2595,6 +2483,18 @@ export function DashboardPage() {
                 </dd>
               </div>
             </dl>
+            {receivableDaily && receivableDaily.length > 0 ? (
+              <CompetenceDailyBars
+                revenueDaily={receivableDaily}
+                expenseDaily={receivableDaily.map((point) => ({ date: point.date, amount: '0' }))}
+                monthKey={selectedMonthKey}
+                revenueLabel="A receber"
+                expenseLabel="—"
+                ariaLabel={CASH_RECEIVABLE_SPARKLINE_CAPTION}
+                caption={CASH_RECEIVABLE_SPARKLINE_CAPTION}
+                emptyMessage="Sem movimento"
+              />
+            ) : null}
             <h3 className={expectedReceivableStyles.sectionTitle}>Títulos em aberto</h3>
             {receivableStockDetailsView.kind === 'loading' ? (
               <p className={expectedReceivableStyles.loading}>Carregando detalhes…</p>
@@ -2656,6 +2556,18 @@ export function DashboardPage() {
                 </dd>
               </div>
             </dl>
+            {payableDaily && payableDaily.length > 0 && !isFlatSeries(payableDaily) ? (
+              <CompetenceDailyBars
+                revenueDaily={payableDaily.map((point) => ({ date: point.date, amount: '0' }))}
+                expenseDaily={payableDaily}
+                monthKey={selectedMonthKey}
+                revenueLabel="—"
+                expenseLabel="A pagar"
+                ariaLabel={CASH_PAYABLE_SPARKLINE_CAPTION}
+                caption={CASH_PAYABLE_SPARKLINE_CAPTION}
+                emptyMessage="Sem movimento"
+              />
+            ) : null}
             <h3 className={expectedPayableStyles.sectionTitle}>Títulos em aberto</h3>
             {payableStockDetailsView.kind === 'loading' ? (
               <p className={expectedPayableStyles.loading}>Carregando detalhes…</p>
@@ -2796,8 +2708,8 @@ export function DashboardPage() {
                     colorVar="--color-series-result"
                     interactive
                     signed
-                    ariaLabel="Resultado projetado do mês ao longo dos dias"
-                    valueCaption="projetado (realizado + previsto no prazo)"
+                    ariaLabel={CASH_RESULT_SPARKLINE_CAPTION}
+                    valueCaption={CASH_RESULT_SPARKLINE_CAPTION}
                   />
                 </div>
               </>
