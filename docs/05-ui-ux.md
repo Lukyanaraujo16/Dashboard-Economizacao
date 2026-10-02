@@ -101,7 +101,7 @@ A tela de login deverá conter:
 * campo de e-mail;
 * campo de senha;
 * ação de entrar;
-* ação de recuperação de senha (AUTH-004: obrigatória neste MVP e ainda PENDENTE; o controle visível hoje não inicia o fluxo);
+* ação de recuperação de senha (AUTH-004 V1: leva a `/recuperar-senha`, recuperação assistida pelo administrador via WhatsApp);
 * mensagens de erro;
 * loading durante autenticação.
 
@@ -125,23 +125,25 @@ Após autenticação, o sistema carrega a identidade visual da empresa correspon
 
 5.3 Recuperação de Senha
 
-Fluxo:
+AUTH-004 V1 — recuperação assistida pelo administrador via WhatsApp. Não é reset automático por e-mail.
+
+Fluxo vigente:
 
 Login
 ↓
 Esqueci minha senha
 ↓
-Informar e-mail
+`/recuperar-senha`
 ↓
-Confirmação de solicitação
+E-mail de acesso e empresa digitados pelo solicitante
 ↓
-Link seguro
+WhatsApp administrativo com mensagem pré-preenchida
 ↓
-Nova senha
-↓
-Retorno ao login
+Administrador confere o cadastro e redefine a senha no painel
 
-Mensagens não deverão revelar desnecessariamente se determinado e-mail existe na plataforma.
+A tela não consulta cadastro, não diz que encontrou a conta e não revela usuário, empresa cadastrada, status ou tenant. O número do WhatsApp fica só em `NEXT_PUBLIC_ADMIN_WHATSAPP_E164`.
+
+O fluxo antigo com link por e-mail permanece evolução futura, quando houver e-mail transacional homologado. Mensagens não deverão revelar se determinado e-mail existe na plataforma.
 
 ⸻
 

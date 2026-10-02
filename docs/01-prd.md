@@ -202,18 +202,22 @@ Critérios de aceite
 
 AUTH-004 — Recuperação de senha
 
-Status: PENDENTE. Obrigatória neste MVP. Será implementada antes do encerramento. Não marcar como concluída.
+Status: V1 ENTREGUE como recuperação assistida pelo administrador via WhatsApp. Não é reset automático.
 
-Requisito
+O proprietário da plataforma ainda não possui e-mail comercial/transacional homologado. Nesta versão a pessoa informa, na tela pública, o e-mail de acesso e o nome da empresa que ela mesma digita, e abre o WhatsApp administrativo com essa mensagem. O administrador confere o cadastro no painel e usa a troca de senha já existente. A tela pública não consulta o cadastro e não revela se a conta existe.
 
-O sistema deverá prever fluxo seguro de recuperação de senha.
+A redefinição autônoma por e-mail, com token temporário, fica como evolução futura, quando existir infraestrutura de e-mail transacional homologada. Os critérios antigos de token não se aplicam a esta V1.
 
-Critérios de aceite
+Requisito vigente
 
-* usuário poderá solicitar redefinição;
-* redefinição deverá utilizar mecanismo temporário e seguro;
-* token expirado ou inválido não poderá redefinir senha;
-* senha anterior deixará de ser válida após alteração.
+O usuário deverá conseguir solicitar a redefinição da senha ao administrador, sem enumerar contas.
+
+Critérios de aceite da V1
+
+* o login leva a `/recuperar-senha`;
+* a mensagem leva só o e-mail e a empresa digitados pelo solicitante;
+* não há endpoint público de consulta de usuário;
+* a troca da senha continua no painel administrativo já existente.
 
 ⸻
 

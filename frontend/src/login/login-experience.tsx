@@ -367,7 +367,13 @@ export function LoginExperience({
                       >
                         Entrar
                       </Button>
-                      <Button type="button" variant="ghost" size="sm" className={styles.forgot}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className={styles.forgot}
+                        onClick={() => router.push('/recuperar-senha')}
+                      >
                         Esqueci minha senha
                       </Button>
                     </Stack>

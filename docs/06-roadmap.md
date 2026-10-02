@@ -303,7 +303,7 @@ Escopo
 * recuperação de senha;
 * usuário ativo/inativo.
 
-AUTH-004 — Recuperação de senha: PENDENTE. Permanece obrigatória neste MVP e será implementada antes do encerramento. Login, logout, sessão e usuário ativo/inativo já estão entregues. Não marcar AUTH-004 como concluída.
+AUTH-004 — Recuperação de senha: V1 assistida pelo administrador via WhatsApp, em `/recuperar-senha`. Não é reset automático por e-mail. Login, logout, sessão e usuário ativo/inativo já estavam entregues. A troca de senha continua no painel.
 
 Requisitos relacionados
 

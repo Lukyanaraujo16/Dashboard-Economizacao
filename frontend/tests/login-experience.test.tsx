@@ -11,11 +11,12 @@ import {
 } from './helpers/render-with-auth';
 
 const replaceMock = vi.fn();
+const pushMock = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     replace: replaceMock,
-    push: vi.fn(),
+    push: pushMock,
   }),
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -29,6 +30,7 @@ afterEach(() => {
 
 beforeEach(() => {
   replaceMock.mockReset();
+  pushMock.mockReset();
 });
 
 describe('LoginExperience (visual freeze)', () => {
@@ -45,6 +47,12 @@ describe('LoginExperience (visual freeze)', () => {
     expect(screen.getByText('Controle inteligente')).toBeTruthy();
     expect(screen.getByText('Segurança')).toBeTruthy();
     expect(screen.getByText('Performance')).toBeTruthy();
+  });
+
+  it('leva Esqueci minha senha para a recuperação assistida', () => {
+    renderWithAuth(<LoginExperience />);
+    fireEvent.click(screen.getByRole('button', { name: 'Esqueci minha senha' }));
+    expect(pushMock).toHaveBeenCalledWith('/recuperar-senha');
   });
 
   it('mantém autocomplete adequado a password managers', () => {
