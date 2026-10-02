@@ -66,8 +66,9 @@ do PRD fora da V1).
 PRE-IA-1 — Admin shell: HOMOLOGADA HUMANAMENTE (25/08/2026).
 PRE-IA-2 — Saúde operacional na lista `/empresas`: IMPLEMENTADA.
   Resumo Conta Azul (`Integration.status`) + `lastSuccessfulSyncAt`.
-  Não é dashboard administrativa. Histórico de sync, métricas e auditoria
-  permanecem na Fase 17. Sem heurística de “sync atrasada”. Sem migration.
+  Não é dashboard administrativa. O histórico, a saúde além desse resumo,
+  as falhas, as execuções de IA e a auditoria estão na Fase 17 (§21).
+  Sem heurística de “sync atrasada”. Sem migration nesta nota.
 M1 (seletor mensal por competência + `?month=`): HOMOLOGADA — NÃO é pendência F11.
 L0 (spike baixas GET-only): PARCIAL (GET + reconciliação de quitação comprovados).
 L1-A / CASH-2 (financial_transactions): IMPLEMENTADA no HEAD (persistência).
@@ -156,7 +157,7 @@ D1 drill-down: NÃO INICIADO (reserva; não é bloqueio do encerramento).
 FV1 fixa×variável: CONGELADO / FORA DO MVP ATUAL (02/10/2026).
   Não é pendência de encerramento. Histórico em docs/11 §14.
 E4: ADIADA.
-Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
+Histórico de sync (2.5 interna): leitura administrativa entregue na Fase 17 (§21).
 
 ⸻
 
@@ -218,7 +219,7 @@ Fase 13 — Consultor Financeiro Reativo
 Fase 14 — Consultor Proativo e Insights — IMPLANTADA EM PRODUÇÃO (`47c1e9a`)
 Fase 15 — Notificações Internas — SUBSTITUÍDA / ENCERRADA POR DECISÃO DE PRODUTO
 Fase 16 — Modo Suporte
-Fase 17 — Logs, Auditoria e Observabilidade — PARCIALMENTE IMPLEMENTADA / PENDENTE DE CONCLUSÃO
+Fase 17 — Logs, Auditoria e Observabilidade — CONCLUÍDA NO ESCOPO ADMINISTRATIVO
 Refinamento visual final — polish anterior ao Hardening
 Fase 18 — Hardening
 Fase 19 — Preparação para Produção — reconciliação contra o ambiente real
@@ -1154,11 +1155,22 @@ Critérios de aceite
 
 21. Fase 17 — Logs, Auditoria e Observabilidade
 
-Status: PARCIALMENTE IMPLEMENTADA / PENDENTE DE CONCLUSÃO.
+Status: CONCLUÍDA NO ESCOPO ADMINISTRATIVO.
 
-Permanece no MVP. O escopo abaixo continua objetivo e administrativo. Esta decisão não o amplia.
+Permanece no MVP. O escopo abaixo continua objetivo e administrativo. Esta decisão não o amplia para observabilidade externa.
 
-Já existem `SyncRun`, `ai_runs`, o resumo PRE-IA-2 na lista de empresas e a auditoria de entrada e saída do modo suporte. Faltam o histórico administrativo de sincronização, a visão de saúde além desse resumo e a trilha das demais alterações administrativas.
+Já existiam `SyncRun`, `Integration` (status, última sincronização e último erro), `ai_runs`, o resumo PRE-IA-2 na lista de empresas e `SupportSession` para entrada e saída do modo suporte. A conclusão adiciona a leitura administrativa em `/operacao` e a trilha `audit_logs`.
+
+Entrega
+
+* `GET /admin/operations/sync-runs`, `/failures`, `/health`, `/ai-runs` e `/audit-logs`;
+* paginação `limit`/`offset` com teto 100;
+* ADMIN e SUPER_ADMIN; USER e modo suporte recebem 403;
+* `audit_logs` nas mutações administrativas já existentes (empresa, usuários, administradores, aparência, Consultor, conhecimento, gatilhos, conectar, desconectar e sincronização manual);
+* metadata sanitizada: sem senha, hash, token, chave, prompt ou conteúdo financeiro;
+* modo suporte continua só em `support_sessions`.
+
+A gravação do `audit_logs` ocorre depois do commit da mutação. Falha nesse insert não desfaz a mutação já confirmada pelo repositório; a requisição responde erro e a repetição precisa conviver com o estado gravado.
 
 Objetivo
 
@@ -1176,8 +1188,9 @@ Escopo
 * visão administrativa de saúde.
 
 PRE-IA-2 cobre apenas o resumo `status` + `lastSuccessfulSyncAt` na lista
-`/empresas`. Não substitui esta fase: histórico de sync, auditoria, métricas
-SaaS e `ai_runs` continuam aqui.
+`/empresas`. Não substitui esta fase. O histórico, a saúde além do resumo,
+as falhas, `ai_runs` e a auditoria estão em `/operacao`. As contagens
+exibidas são as já persistidas em `SyncRun`; não há plataforma de métricas.
 
 Requisitos relacionados
 

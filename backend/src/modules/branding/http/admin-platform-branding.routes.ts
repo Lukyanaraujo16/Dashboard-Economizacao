@@ -5,6 +5,7 @@ import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createFileStorage } from '../../../infrastructure/storage/index.js';
 import { ValidationError } from '../../../shared/errors/application-error.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder, fieldNamesMetadata } from '../../audit/index.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createRequirePlatformRole } from '../../auth/http/require-platform-role.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
@@ -72,6 +73,7 @@ export async function registerAdminPlatformBrandingRoutes(app: FastifyInstance):
     files,
     storage,
   });
+  const audit = createAdminAuditRecorder(prisma);
 
   const adminGuard = [requireAuthentication, requirePlatformRole];
 
@@ -83,25 +85,50 @@ export async function registerAdminPlatformBrandingRoutes(app: FastifyInstance):
   app.patch('/admin/platform/branding', { preHandler: adminGuard }, async (request, reply) => {
     const body = parsePatchPlatformBrandingRequestBody(request.body);
     const response = await adminPlatformBranding.update(body);
+    await audit(request, {
+      action: AUDIT_ACTIONS.PLATFORM_BRANDING_UPDATED,
+      tenantId: null,
+      targetType: 'platform_branding',
+      targetId: null,
+      metadata: fieldNamesMetadata(body),
+    });
     return reply.status(200).send(response);
   });
 
-  app.delete('/admin/platform/branding', { preHandler: adminGuard }, async (_request, reply) => {
+  app.delete('/admin/platform/branding', { preHandler: adminGuard }, async (request, reply) => {
     await adminPlatformBranding.reset();
+    await audit(request, {
+      action: AUDIT_ACTIONS.PLATFORM_BRANDING_RESET,
+      tenantId: null,
+      targetType: 'platform_branding',
+      targetId: null,
+    });
     return reply.status(204).send();
   });
 
   app.post('/admin/platform/branding/logo', { preHandler: adminGuard }, async (request, reply) => {
     const { body, declaredMimeType } = await readNamedMultipart(request, 'logo');
     const response = await adminPlatformBranding.uploadLogo(body, declaredMimeType);
+    await audit(request, {
+      action: AUDIT_ACTIONS.PLATFORM_BRANDING_LOGO_UPDATED,
+      tenantId: null,
+      targetType: 'platform_branding',
+      targetId: null,
+    });
     return reply.status(200).send(response);
   });
 
   app.delete(
     '/admin/platform/branding/logo',
     { preHandler: adminGuard },
-    async (_request, reply) => {
+    async (request, reply) => {
       await adminPlatformBranding.deleteLogo();
+      await audit(request, {
+        action: AUDIT_ACTIONS.PLATFORM_BRANDING_LOGO_REMOVED,
+        tenantId: null,
+        targetType: 'platform_branding',
+        targetId: null,
+      });
       return reply.status(204).send();
     },
   );
@@ -112,6 +139,12 @@ export async function registerAdminPlatformBrandingRoutes(app: FastifyInstance):
     async (request, reply) => {
       const { body, declaredMimeType } = await readNamedMultipart(request, 'favicon');
       const response = await adminPlatformBranding.uploadFavicon(body, declaredMimeType);
+      await audit(request, {
+        action: AUDIT_ACTIONS.PLATFORM_BRANDING_FAVICON_UPDATED,
+        tenantId: null,
+        targetType: 'platform_branding',
+        targetId: null,
+      });
       return reply.status(200).send(response);
     },
   );
@@ -119,8 +152,14 @@ export async function registerAdminPlatformBrandingRoutes(app: FastifyInstance):
   app.delete(
     '/admin/platform/branding/favicon',
     { preHandler: adminGuard },
-    async (_request, reply) => {
+    async (request, reply) => {
       await adminPlatformBranding.deleteFavicon();
+      await audit(request, {
+        action: AUDIT_ACTIONS.PLATFORM_BRANDING_FAVICON_REMOVED,
+        tenantId: null,
+        targetType: 'platform_branding',
+        targetId: null,
+      });
       return reply.status(204).send();
     },
   );
@@ -128,14 +167,26 @@ export async function registerAdminPlatformBrandingRoutes(app: FastifyInstance):
   app.post('/admin/platform/branding/icon', { preHandler: adminGuard }, async (request, reply) => {
     const { body, declaredMimeType } = await readNamedMultipart(request, 'icon');
     const response = await adminPlatformBranding.uploadIcon(body, declaredMimeType);
+    await audit(request, {
+      action: AUDIT_ACTIONS.PLATFORM_BRANDING_ICON_UPDATED,
+      tenantId: null,
+      targetType: 'platform_branding',
+      targetId: null,
+    });
     return reply.status(200).send(response);
   });
 
   app.delete(
     '/admin/platform/branding/icon',
     { preHandler: adminGuard },
-    async (_request, reply) => {
+    async (request, reply) => {
       await adminPlatformBranding.deleteIcon();
+      await audit(request, {
+        action: AUDIT_ACTIONS.PLATFORM_BRANDING_ICON_REMOVED,
+        tenantId: null,
+        targetType: 'platform_branding',
+        targetId: null,
+      });
       return reply.status(204).send();
     },
   );

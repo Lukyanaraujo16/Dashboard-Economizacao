@@ -16,6 +16,7 @@ function createCleanerMock() {
     aiConversation: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     aiKnowledgeEntry: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     aiTenantSettings: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    auditLog: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     userCredential: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     user: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     tenantBranding: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },

@@ -8,6 +8,7 @@ describe('resolveShellSystemBar', () => {
     expect(resolveShellSystemBar('/empresas')).toEqual({ breadcrumbs: null });
     expect(resolveShellSystemBar('/relatorios')).toEqual({ breadcrumbs: null });
     expect(resolveShellSystemBar('/administradores')).toEqual({ breadcrumbs: null });
+    expect(resolveShellSystemBar('/operacao')).toEqual({ breadcrumbs: null });
     expect(resolveShellSystemBar('/configuracoes/aparencia')).toEqual({ breadcrumbs: null });
   });
 

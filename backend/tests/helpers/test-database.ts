@@ -30,6 +30,7 @@ type TestDatabaseCleaner = {
   readonly financialAccountBalanceSnapshot: { deleteMany: () => Promise<unknown> };
   readonly financialAccount: { deleteMany: () => Promise<unknown> };
   readonly supportSession: { deleteMany: () => Promise<unknown> };
+  readonly auditLog: { deleteMany: () => Promise<unknown> };
   readonly integrationCredential: { deleteMany: () => Promise<unknown> };
   readonly integrationExternalAccount: { deleteMany: () => Promise<unknown> };
   readonly integration: { deleteMany: () => Promise<unknown> };
@@ -130,6 +131,7 @@ export async function cleanTestDatabase(
   await prisma.financialCategory.deleteMany();
   await prisma.financialAccountBalanceSnapshot.deleteMany();
   await prisma.financialAccount.deleteMany();
+  await prisma.auditLog.deleteMany();
   await prisma.supportSession.deleteMany();
   await prisma.integrationCredential.deleteMany();
   await prisma.integrationExternalAccount.deleteMany();

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { loadEnvironment } from '../../../../config/env.js';
 import { getPrismaClient } from '../../../../infrastructure/database/prisma.js';
 import { UnauthenticatedError } from '../../../../shared/errors/application-error.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder } from '../../../audit/index.js';
 import { createRequireAuthentication } from '../../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../../auth/repositories/user.repository.js';
 import { createTenantRepository } from '../../../tenant/repositories/tenant.repository.js';
@@ -17,6 +18,7 @@ export async function registerContaAzulCallbackRoutes(app: FastifyInstance): Pro
   const users = createUserRepository(prisma);
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const { oauth } = createContaAzulRuntime(app);
+  const audit = createAdminAuditRecorder(prisma);
 
   app.get('/integrations/conta-azul/callback', async (request, reply) => {
     const query = parseCallbackQuery(request.query);
@@ -37,7 +39,13 @@ export async function registerContaAzulCallbackRoutes(app: FastifyInstance): Pro
       auth,
     });
 
-    if (result.signal === 'connected') {
+    if (result.signal === 'connected' && result.tenantId) {
+      await audit(request, {
+        action: AUDIT_ACTIONS.INTEGRATION_CONNECTED,
+        tenantId: result.tenantId,
+        targetType: 'integration',
+        targetId: null,
+      });
       request.log.info({ tenantId: result.tenantId }, 'conta_azul_oauth_connected');
     } else {
       request.log.info(

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createFileStorage } from '../../../infrastructure/storage/index.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder, fieldNamesMetadata } from '../../audit/index.js';
 import { createRequirePlatformRole } from '../../auth/http/require-platform-role.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
@@ -36,6 +37,7 @@ export async function registerAdminTenantRoutes(app: FastifyInstance): Promise<v
     storage: createFileStorage(environment),
   });
   const adminTenants = createAdminTenantService({ tenants, brandingAssets });
+  const audit = createAdminAuditRecorder(prisma);
 
   const adminGuard = [requireAuthentication, requirePlatformRole];
 
@@ -57,6 +59,12 @@ export async function registerAdminTenantRoutes(app: FastifyInstance): Promise<v
   app.post('/admin/tenants', { preHandler: adminGuard }, async (request, reply) => {
     const body = parseCreateTenantRequestBody(request.body);
     const tenant = await adminTenants.create(body);
+    await audit(request, {
+      action: AUDIT_ACTIONS.TENANT_CREATED,
+      tenantId: tenant.id,
+      targetType: 'tenant',
+      targetId: tenant.id,
+    });
 
     return reply.status(201).send(toPublicTenantResponse(tenant));
   });
@@ -72,6 +80,13 @@ export async function registerAdminTenantRoutes(app: FastifyInstance): Promise<v
     const tenantId = parseTenantIdParam(request.params);
     const body = parseUpdateTenantRequestBody(request.body);
     const tenant = await adminTenants.update(tenantId, body);
+    await audit(request, {
+      action: AUDIT_ACTIONS.TENANT_UPDATED,
+      tenantId: tenant.id,
+      targetType: 'tenant',
+      targetId: tenant.id,
+      metadata: fieldNamesMetadata(body),
+    });
 
     return reply.status(200).send(toPublicTenantResponse(tenant));
   });
@@ -82,6 +97,12 @@ export async function registerAdminTenantRoutes(app: FastifyInstance): Promise<v
     async (request, reply) => {
       const tenantId = parseTenantIdParam(request.params);
       const tenant = await adminTenants.disable(tenantId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_DISABLED,
+        tenantId: tenant.id,
+        targetType: 'tenant',
+        targetId: tenant.id,
+      });
 
       return reply.status(200).send(toPublicTenantResponse(tenant));
     },
@@ -93,6 +114,12 @@ export async function registerAdminTenantRoutes(app: FastifyInstance): Promise<v
     async (request, reply) => {
       const tenantId = parseTenantIdParam(request.params);
       const tenant = await adminTenants.reactivate(tenantId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_REACTIVATED,
+        tenantId: tenant.id,
+        targetType: 'tenant',
+        targetId: tenant.id,
+      });
 
       return reply.status(200).send(toPublicTenantResponse(tenant));
     },
@@ -101,6 +128,12 @@ export async function registerAdminTenantRoutes(app: FastifyInstance): Promise<v
   app.delete('/admin/tenants/:tenantId', { preHandler: adminGuard }, async (request, reply) => {
     const tenantId = parseTenantIdParam(request.params);
     await adminTenants.delete(tenantId);
+    await audit(request, {
+      action: AUDIT_ACTIONS.TENANT_DELETED,
+      tenantId: null,
+      targetType: 'tenant',
+      targetId: tenantId,
+    });
 
     return reply.status(204).send();
   });

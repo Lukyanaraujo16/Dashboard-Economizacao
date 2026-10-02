@@ -15,6 +15,7 @@ import {
   IconLayoutDashboard,
   IconLogOut,
   IconKeyRound,
+  IconList,
   IconSettings2,
   IconShieldUser,
 } from '../ui/icons';
@@ -44,6 +45,12 @@ const NAV_ITEMS = [
     label: 'Administradores',
     surface: 'platform',
     icon: IconShieldUser,
+  },
+  {
+    href: '/operacao',
+    label: 'Operação',
+    surface: 'platform',
+    icon: IconList,
   },
   {
     href: '/configuracoes/aparencia',

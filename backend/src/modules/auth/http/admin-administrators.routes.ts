@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createArgon2idPasswordHasher } from '../crypto/password-hasher.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder, fieldNamesMetadata } from '../../audit/index.js';
 import { createRequireAuthentication } from './require-authentication.js';
 import { createRequirePlatformRole } from './require-platform-role.js';
 import { toPublicUserResponse } from './to-public-user-response.js';
@@ -34,6 +35,7 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
   const sessionPrefix = buildSessionKeyPrefix(environment.nodeEnv);
+  const audit = createAdminAuditRecorder(prisma);
   const administrators = createAdminAdministratorsService({
     users,
     credentials,
@@ -60,6 +62,13 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
   app.post('/admin/administrators', { preHandler: adminGuard }, async (request, reply) => {
     const body = parseCreateAdminUserRequestBody(request.body);
     const user = await administrators.create(body);
+    await audit(request, {
+      action: AUDIT_ACTIONS.ADMINISTRATOR_CREATED,
+      tenantId: null,
+      targetType: 'user',
+      targetId: user.id,
+      metadata: fieldNamesMetadata(body),
+    });
     return reply.status(201).send(toPublicUserResponse(user));
   });
 
@@ -73,6 +82,13 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
     const userId = parseUserIdParam(request.params);
     const body = parseUpdateAdminUserRequestBody(request.body);
     const user = await administrators.update(userId, body);
+    await audit(request, {
+      action: AUDIT_ACTIONS.ADMINISTRATOR_UPDATED,
+      tenantId: null,
+      targetType: 'user',
+      targetId: user.id,
+      metadata: fieldNamesMetadata(body),
+    });
     return reply.status(200).send(toPublicUserResponse(user));
   });
 
@@ -82,6 +98,12 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
     async (request, reply) => {
       const userId = parseUserIdParam(request.params);
       const user = await administrators.block(userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.ADMINISTRATOR_BLOCKED,
+        tenantId: null,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -92,6 +114,12 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
     async (request, reply) => {
       const userId = parseUserIdParam(request.params);
       const user = await administrators.unblock(userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.ADMINISTRATOR_UNBLOCKED,
+        tenantId: null,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -102,6 +130,12 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
     async (request, reply) => {
       const userId = parseUserIdParam(request.params);
       const user = await administrators.disable(userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.ADMINISTRATOR_DISABLED,
+        tenantId: null,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -112,6 +146,12 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
     async (request, reply) => {
       const userId = parseUserIdParam(request.params);
       const user = await administrators.enable(userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.ADMINISTRATOR_ENABLED,
+        tenantId: null,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -123,6 +163,12 @@ export async function registerAdminAdministratorsRoutes(app: FastifyInstance): P
       const userId = parseUserIdParam(request.params);
       const body = parseResetPasswordRequestBody(request.body);
       const user = await administrators.resetPassword(userId, { password: body.password });
+      await audit(request, {
+        action: AUDIT_ACTIONS.ADMINISTRATOR_PASSWORD_RESET,
+        tenantId: null,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send({
         status: 'ok' as const,
         user: toPublicUserResponse(user),

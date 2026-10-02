@@ -5,6 +5,7 @@ import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { createFileStorage } from '../../../infrastructure/storage/index.js';
 import { ValidationError } from '../../../shared/errors/application-error.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder, fieldNamesMetadata } from '../../audit/index.js';
 import { createRequirePlatformRole } from '../../auth/http/require-platform-role.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
@@ -68,6 +69,7 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminBranding = createAdminBrandingService({ tenants, branding, files, storage });
+  const audit = createAdminAuditRecorder(prisma);
 
   const adminGuard = [requireAuthentication, requirePlatformRole];
 
@@ -89,6 +91,13 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
       const tenantId = parseTenantIdParam(request.params);
       const body = parsePatchTenantBrandingRequestBody(request.body);
       const response = await adminBranding.update(tenantId, body);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_BRANDING_UPDATED,
+        tenantId,
+        targetType: 'tenant_branding',
+        targetId: tenantId,
+        metadata: fieldNamesMetadata(body),
+      });
 
       return reply.status(200).send(response);
     },
@@ -100,6 +109,12 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
     async (request, reply) => {
       const tenantId = parseTenantIdParam(request.params);
       await adminBranding.reset(tenantId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_BRANDING_RESET,
+        tenantId,
+        targetType: 'tenant_branding',
+        targetId: tenantId,
+      });
 
       return reply.status(204).send();
     },
@@ -112,6 +127,12 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
       const tenantId = parseTenantIdParam(request.params);
       const { body, declaredMimeType } = await readNamedMultipart(request, 'logo');
       const response = await adminBranding.uploadLogo(tenantId, body, declaredMimeType);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_BRANDING_LOGO_UPDATED,
+        tenantId,
+        targetType: 'tenant_branding',
+        targetId: tenantId,
+      });
 
       return reply.status(200).send(response);
     },
@@ -123,6 +144,12 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
     async (request, reply) => {
       const tenantId = parseTenantIdParam(request.params);
       await adminBranding.deleteLogo(tenantId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_BRANDING_LOGO_REMOVED,
+        tenantId,
+        targetType: 'tenant_branding',
+        targetId: tenantId,
+      });
 
       return reply.status(204).send();
     },
@@ -135,6 +162,12 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
       const tenantId = parseTenantIdParam(request.params);
       const { body, declaredMimeType } = await readNamedMultipart(request, 'icon');
       const response = await adminBranding.uploadIcon(tenantId, body, declaredMimeType);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_BRANDING_ICON_UPDATED,
+        tenantId,
+        targetType: 'tenant_branding',
+        targetId: tenantId,
+      });
 
       return reply.status(200).send(response);
     },
@@ -146,6 +179,12 @@ export async function registerAdminBrandingRoutes(app: FastifyInstance): Promise
     async (request, reply) => {
       const tenantId = parseTenantIdParam(request.params);
       await adminBranding.deleteIcon(tenantId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_BRANDING_ICON_REMOVED,
+        tenantId,
+        targetType: 'tenant_branding',
+        targetId: tenantId,
+      });
 
       return reply.status(204).send();
     },

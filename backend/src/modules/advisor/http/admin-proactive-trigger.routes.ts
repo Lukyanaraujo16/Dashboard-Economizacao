@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
 import { UnauthenticatedError } from '../../../shared/errors/application-error.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder } from '../../audit/index.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createRequirePlatformRole } from '../../auth/http/require-platform-role.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
@@ -57,6 +58,7 @@ export async function registerAdminProactiveTriggerRoutes(app: FastifyInstance):
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
   const triggers = createProactiveTriggerService(createProactiveTriggerRepository(prisma));
+  const audit = createAdminAuditRecorder(prisma);
 
   app.get('/admin/proactive-triggers/catalog', { preHandler: adminGuard }, async (_request, reply) => {
     return reply.status(200).send({
@@ -86,6 +88,13 @@ export async function registerAdminProactiveTriggerRoutes(app: FastifyInstance):
       const created = await withAdvisorDomainError(() =>
         triggers.createConfiguration(actor, tenantId, body.triggerType, body.parameters),
       );
+      await audit(request, {
+        action: AUDIT_ACTIONS.PROACTIVE_TRIGGER_CREATED,
+        tenantId,
+        targetType: 'proactive_trigger',
+        targetId: created.id,
+        metadata: { triggerType: created.triggerType },
+      });
       return reply.status(201).send(toPublicConfiguration(created));
     },
   );
@@ -101,6 +110,13 @@ export async function registerAdminProactiveTriggerRoutes(app: FastifyInstance):
       const updated = await withAdvisorDomainError(() =>
         triggers.updateConfiguration(actor, tenantId, configurationId, body.parameters),
       );
+      await audit(request, {
+        action: AUDIT_ACTIONS.PROACTIVE_TRIGGER_UPDATED,
+        tenantId,
+        targetType: 'proactive_trigger',
+        targetId: updated.id,
+        metadata: { triggerType: updated.triggerType },
+      });
       return reply.status(200).send(toPublicConfiguration(updated));
     },
   );
@@ -116,6 +132,13 @@ export async function registerAdminProactiveTriggerRoutes(app: FastifyInstance):
       const updated = await withAdvisorDomainError(() =>
         triggers.setConfigurationActive(actor, tenantId, configurationId, body.active),
       );
+      await audit(request, {
+        action: AUDIT_ACTIONS.PROACTIVE_TRIGGER_ACTIVATED,
+        tenantId,
+        targetType: 'proactive_trigger',
+        targetId: updated.id,
+        metadata: { triggerType: updated.triggerType, active: updated.active },
+      });
       return reply.status(200).send(toPublicConfiguration(updated));
     },
   );
@@ -130,6 +153,12 @@ export async function registerAdminProactiveTriggerRoutes(app: FastifyInstance):
       await withAdvisorDomainError(() =>
         triggers.deleteConfiguration(actor, tenantId, configurationId),
       );
+      await audit(request, {
+        action: AUDIT_ACTIONS.PROACTIVE_TRIGGER_DELETED,
+        tenantId,
+        targetType: 'proactive_trigger',
+        targetId: configurationId,
+      });
       return reply.status(204).send();
     },
   );

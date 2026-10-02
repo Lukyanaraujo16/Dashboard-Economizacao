@@ -660,6 +660,26 @@ export function adminTenantProactiveTriggerPath(tenantId: string, configurationI
   return `${adminTenantProactiveTriggersPath(tenantId)}/${configurationId}`;
 }
 
+export function adminOperationsSyncRunsPath(): string {
+  return `${ADMIN_API_PREFIX}/operations/sync-runs`;
+}
+
+export function adminOperationsFailuresPath(): string {
+  return `${ADMIN_API_PREFIX}/operations/failures`;
+}
+
+export function adminOperationsHealthPath(): string {
+  return `${ADMIN_API_PREFIX}/operations/health`;
+}
+
+export function adminOperationsAiRunsPath(): string {
+  return `${ADMIN_API_PREFIX}/operations/ai-runs`;
+}
+
+export function adminOperationsAuditLogsPath(): string {
+  return `${ADMIN_API_PREFIX}/operations/audit-logs`;
+}
+
 export function adminTenantProactiveTriggerActivePath(
   tenantId: string,
   configurationId: string,

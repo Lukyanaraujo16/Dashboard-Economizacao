@@ -1258,7 +1258,7 @@ Backlog (não 10B/10C/E1/E2): a mesma Integration CONTA_AZUL do tenant deverá
 poder ser operada pela área administrativa e, no futuro, pela área do
 próprio cliente. Uma conexão; dois contextos de UX. Não implementar agora.
 
-KPIs residuais citados neste trecho histórico não bloqueiam o caminho então descrito. Desde 02/10/2026, fixas×variáveis estão fora do MVP atual. A Fase 17 permanece pendente de conclusão. O deploy genérico não é mais “produção inexistente”: o ambiente opera o commit `47c1e9a`; falta promover `75a1cb8` e reconciliar a Fase 19.
+KPIs residuais citados neste trecho histórico não bloqueiam o caminho então descrito. Desde 02/10/2026, fixas×variáveis estão fora do MVP atual. A Fase 17 está concluída no escopo administrativo (histórico operacional e auditoria). O deploy genérico não é mais “produção inexistente”: o ambiente opera o commit `47c1e9a`; falta promover `75a1cb8` e reconciliar a Fase 19.
 
 ===========================================================
 

@@ -41,6 +41,7 @@ export function resolveShellSystemBar(pathname: string): ShellSystemBarMeta {
     pathname === '/empresas' ||
     pathname === '/relatorios' ||
     pathname === '/administradores' ||
+    pathname === '/operacao' ||
     pathname === '/configuracoes' ||
     pathname === '/configuracoes/aparencia' ||
     pathname === '/configuracoes/consultor'
@@ -107,6 +108,9 @@ export function resolveShellPageMeta(pathname: string): ShellPageMeta {
     }
     if (pathname.startsWith('/administradores')) {
       return { context: 'Administradores', title: 'Administradores' };
+    }
+    if (pathname.startsWith('/operacao')) {
+      return { context: 'Operação', title: 'Operação' };
     }
     if (pathname.startsWith('/empresas')) {
       return { context: 'Empresas', title: 'Empresas' };

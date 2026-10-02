@@ -9,6 +9,7 @@ import {
   UnauthenticatedError,
   ValidationError,
 } from '../../../shared/errors/application-error.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder, fieldNamesMetadata } from '../../audit/index.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createRequirePlatformRole } from '../../auth/http/require-platform-role.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
@@ -117,6 +118,7 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
+  const audit = createAdminAuditRecorder(prisma);
   const environment = loadEnvironment();
   const encryptionKey = environment.integrationEncryptionKey;
   const platformCredentials = createAdvisorPlatformCredentialRepository(prisma);
@@ -174,7 +176,15 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
       }
       const provider = parseProviderParam(request.params);
       const body = parsePutAdminProviderCredentialBody(request.body);
-      return reply.status(200).send(await adminProviders.upsertCredential(provider, body.credential));
+      const saved = await adminProviders.upsertCredential(provider, body.credential);
+      await audit(request, {
+        action: AUDIT_ACTIONS.CONSULTANT_PROVIDER_CREDENTIAL_SET,
+        tenantId: null,
+        targetType: 'ai_provider',
+        targetId: null,
+        metadata: { provider },
+      });
+      return reply.status(200).send(saved);
     },
   );
 
@@ -183,7 +193,15 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
     { preHandler: adminGuard },
     async (request, reply) => {
       const provider = parseProviderParam(request.params);
-      return reply.status(200).send(await adminProviders.deleteCredential(provider));
+      const removed = await adminProviders.deleteCredential(provider);
+      await audit(request, {
+        action: AUDIT_ACTIONS.CONSULTANT_PROVIDER_CREDENTIAL_REMOVED,
+        tenantId: null,
+        targetType: 'ai_provider',
+        targetId: null,
+        metadata: { provider },
+      });
+      return reply.status(200).send(removed);
     },
   );
 
@@ -195,7 +213,15 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
   app.put('/admin/tenants/:tenantId/consultant', { preHandler: adminGuard }, async (request, reply) => {
     const tenantId = parseTenantIdParam(request.params);
     const body = parsePutAdminConsultantRequestBody(request.body);
-    return reply.status(200).send(await adminConsultant.upsertSettings(tenantId, body));
+    const saved = await adminConsultant.upsertSettings(tenantId, body);
+    await audit(request, {
+      action: AUDIT_ACTIONS.CONSULTANT_SETTINGS_UPDATED,
+      tenantId,
+      targetType: 'consultant_settings',
+      targetId: tenantId,
+      metadata: fieldNamesMetadata(body),
+    });
+    return reply.status(200).send(saved);
   });
 
   app.get(
@@ -218,9 +244,14 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
       if (!auth) {
         throw new UnauthenticatedError();
       }
-      return reply
-        .status(201)
-        .send(await adminConsultant.createKnowledge(tenantId, body, auth.userId));
+      const created = await adminConsultant.createKnowledge(tenantId, body, auth.userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.KNOWLEDGE_ENTRY_CREATED,
+        tenantId,
+        targetType: 'ai_knowledge_entry',
+        targetId: created.id,
+      });
+      return reply.status(201).send(created);
     },
   );
 
@@ -231,7 +262,14 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
       const tenantId = parseTenantIdParam(request.params);
       const entryId = parseKnowledgeEntryIdParam(request.params);
       const body = parseUpdateAdminKnowledgeRequestBody(request.body);
-      return reply.status(200).send(await adminConsultant.updateKnowledge(tenantId, entryId, body));
+      const updated = await adminConsultant.updateKnowledge(tenantId, entryId, body);
+      await audit(request, {
+        action: AUDIT_ACTIONS.KNOWLEDGE_ENTRY_UPDATED,
+        tenantId,
+        targetType: 'ai_knowledge_entry',
+        targetId: updated.id,
+      });
+      return reply.status(200).send(updated);
     },
   );
 
@@ -242,6 +280,12 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
       const tenantId = parseTenantIdParam(request.params);
       const entryId = parseKnowledgeEntryIdParam(request.params);
       await adminConsultant.deleteKnowledge(tenantId, entryId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.KNOWLEDGE_ENTRY_DELETED,
+        tenantId,
+        targetType: 'ai_knowledge_entry',
+        targetId: entryId,
+      });
       return reply.status(204).send();
     },
   );
@@ -273,6 +317,12 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
         title: uploaded.title,
         createdById: auth.userId,
       });
+      await audit(request, {
+        action: AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_CREATED,
+        tenantId,
+        targetType: 'ai_knowledge_document',
+        targetId: created.id,
+      });
       return reply.status(201).send(created);
     },
   );
@@ -294,9 +344,15 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
       const tenantId = parseTenantIdParam(request.params);
       const documentId = parseKnowledgeDocumentIdParam(request.params);
       const body = parseUpdateAdminKnowledgeDocumentRequestBody(request.body);
-      return reply
-        .status(200)
-        .send(await knowledgeDocuments.updateDocument(tenantId, documentId, body));
+      const updated = await knowledgeDocuments.updateDocument(tenantId, documentId, body);
+      await audit(request, {
+        action: AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_UPDATED,
+        tenantId,
+        targetType: 'ai_knowledge_document',
+        targetId: updated.id,
+        metadata: fieldNamesMetadata(body),
+      });
+      return reply.status(200).send(updated);
     },
   );
 
@@ -307,6 +363,12 @@ export async function registerAdminConsultantRoutes(app: FastifyInstance): Promi
       const tenantId = parseTenantIdParam(request.params);
       const documentId = parseKnowledgeDocumentIdParam(request.params);
       await knowledgeDocuments.deleteDocument(tenantId, documentId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_DELETED,
+        tenantId,
+        targetType: 'ai_knowledge_document',
+        targetId: documentId,
+      });
       return reply.status(204).send();
     },
   );

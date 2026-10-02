@@ -22,6 +22,7 @@ import {
   registerAdminProactiveTriggerRoutes,
   registerConsultantRoutes,
 } from '../modules/advisor/http/index.js';
+import { registerAdminOperationsRoutes } from '../modules/audit/index.js';
 import { registerAdminTenantRoutes } from '../modules/tenant/index.js';
 import {
   registerAdminContaAzulRoutes,
@@ -34,6 +35,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(redisHealthRoutes);
   await registerAuthHttpRoutes(app);
   await app.register(registerAdminTenantRoutes);
+  await app.register(registerAdminOperationsRoutes);
   await app.register(registerAdminContaAzulRoutes);
   await app.register(registerContaAzulCallbackRoutes);
   await app.register(registerAdminAdministratorsRoutes);

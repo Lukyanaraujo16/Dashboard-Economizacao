@@ -1391,6 +1391,8 @@ Tokens nunca deverão ser exibidos.
 
 A empresa deverá possuir histórico operacional de sincronização acessível aos administradores autorizados.
 
+A visão administrativa correspondente está em `/operacao` (saúde, sincronizações, falhas, execuções da IA e auditoria). Usuário cliente e modo suporte não acessam essa área.
+
 Colunas candidatas:
 
 * início;

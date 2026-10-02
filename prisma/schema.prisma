@@ -45,6 +45,7 @@ model Tenant {
   branding        TenantBranding?
   files           StoredFile[]
   supportSessions SupportSession[]
+  auditLogs           AuditLog[]
   integrations        Integration[]
   financialCategories FinancialCategory[]
   financialAccounts   FinancialAccount[]
@@ -168,6 +169,7 @@ model User {
   tenant                 Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   credential             UserCredential?
   supportSessions        SupportSession[] @relation("SupportSessionOperator")
+  auditLogs                  AuditLog[]           @relation("AuditLogOperator")
   aiKnowledgeCreated           AiKnowledgeEntry[]
   aiKnowledgeDocumentsCreated  AiKnowledgeDocument[]
   aiConversations              AiConversation[]
@@ -197,6 +199,34 @@ model SupportSession {
   @@index([tenantId, startedAt], map: "idx_support_sessions_tenant_started_at")
   @@index([redisSessionId], map: "idx_support_sessions_redis_session_id")
   @@map("support_sessions")
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+
+  @@map("audit_result")
+}
+
+/// Trilha administrativa (Fase 17). Não substitui SupportSession nem log técnico.
+/// Sem senha, hash, token, segredo, conteúdo financeiro ou prompt.
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  operatorUserId String      @map("operator_user_id") @db.Uuid
+  tenantId       String?     @map("tenant_id") @db.Uuid
+  action         String      @db.VarChar(64)
+  targetType     String      @map("target_type") @db.VarChar(64)
+  targetId       String?     @map("target_id") @db.VarChar(64)
+  result         AuditResult
+  metadata       Json?
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  operator       User        @relation("AuditLogOperator", fields: [operatorUserId], references: [id], onDelete: Restrict)
+  tenant         Tenant?     @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt], map: "idx_audit_logs_created_at")
+  @@index([tenantId, createdAt], map: "idx_audit_logs_tenant_created_at")
+  @@index([operatorUserId, createdAt], map: "idx_audit_logs_operator_created_at")
+  @@map("audit_logs")
 }
 
 enum IntegrationProvider {

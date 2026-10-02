@@ -7,6 +7,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../../../shared/errors/application-error.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder } from '../../../audit/index.js';
 import { createRequireAuthentication } from '../../../auth/http/require-authentication.js';
 import { createRequirePlatformRole } from '../../../auth/http/require-platform-role.js';
 import { createUserRepository } from '../../../auth/repositories/user.repository.js';
@@ -22,6 +23,7 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
+  const audit = createAdminAuditRecorder(prisma);
   const { configured, oauth, identity, sync } = createContaAzulRuntime(app);
 
   app.get(
@@ -44,6 +46,12 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
       }
       const tenantId = parseTenantIdParam(request.params);
       const result = await oauth.startConnect(tenantId, request.auth!);
+      await audit(request, {
+        action: AUDIT_ACTIONS.INTEGRATION_CONNECT_STARTED,
+        tenantId,
+        targetType: 'integration',
+        targetId: null,
+      });
       request.log.info(
         { tenantId, actorUserId: request.auth?.userId },
         'conta_azul_oauth_connect_started',
@@ -99,6 +107,13 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
       }
       const tenantId = parseTenantIdParam(request.params);
       const accepted = await sync.start(tenantId, request.auth!);
+      await audit(request, {
+        action: AUDIT_ACTIONS.INTEGRATION_SYNC_TRIGGERED,
+        tenantId,
+        targetType: 'sync_run',
+        targetId: accepted.syncRunId,
+        metadata: { triggerType: 'MANUAL' },
+      });
       request.log.info(
         { tenantId, actorUserId: request.auth?.userId, syncRunId: accepted.syncRunId },
         'conta_azul_manual_sync_accepted',
@@ -123,6 +138,12 @@ export async function registerAdminContaAzulRoutes(app: FastifyInstance): Promis
     async (request, reply) => {
       const tenantId = parseTenantIdParam(request.params);
       const status = await oauth.disconnect(tenantId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.INTEGRATION_DISCONNECTED,
+        tenantId,
+        targetType: 'integration',
+        targetId: null,
+      });
       request.log.info(
         { tenantId, actorUserId: request.auth?.userId },
         'conta_azul_oauth_disconnected',

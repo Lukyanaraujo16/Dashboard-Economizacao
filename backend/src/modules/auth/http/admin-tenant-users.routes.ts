@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { loadEnvironment } from '../../../config/env.js';
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { AUDIT_ACTIONS, createAdminAuditRecorder, fieldNamesMetadata } from '../../audit/index.js';
 import { createArgon2idPasswordHasher } from '../crypto/password-hasher.js';
 import { createRequireAuthentication } from './require-authentication.js';
 import { createRequirePlatformRole } from './require-platform-role.js';
@@ -35,6 +36,7 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
   const sessionPrefix = buildSessionKeyPrefix(environment.nodeEnv);
+  const audit = createAdminAuditRecorder(prisma);
   const tenantUsers = createAdminTenantUsersService({
     users,
     credentials,
@@ -64,6 +66,13 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
     const tenantId = parseTenantIdParam(request.params);
     const body = parseCreateAdminUserRequestBody(request.body);
     const user = await tenantUsers.create(tenantId, body);
+    await audit(request, {
+      action: AUDIT_ACTIONS.TENANT_USER_CREATED,
+      tenantId,
+      targetType: 'user',
+      targetId: user.id,
+      metadata: fieldNamesMetadata(body),
+    });
     return reply.status(201).send(toPublicUserResponse(user));
   });
 
@@ -86,6 +95,13 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
       const userId = parseUserIdParam(request.params);
       const body = parseUpdateAdminUserRequestBody(request.body);
       const user = await tenantUsers.update(tenantId, userId, body);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_USER_UPDATED,
+        tenantId,
+        targetType: 'user',
+        targetId: user.id,
+        metadata: fieldNamesMetadata(body),
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -97,6 +113,12 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
       const tenantId = parseTenantIdParam(request.params);
       const userId = parseUserIdParam(request.params);
       const user = await tenantUsers.block(tenantId, userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_USER_BLOCKED,
+        tenantId,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -108,6 +130,12 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
       const tenantId = parseTenantIdParam(request.params);
       const userId = parseUserIdParam(request.params);
       const user = await tenantUsers.unblock(tenantId, userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_USER_UNBLOCKED,
+        tenantId,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -119,6 +147,12 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
       const tenantId = parseTenantIdParam(request.params);
       const userId = parseUserIdParam(request.params);
       const user = await tenantUsers.disable(tenantId, userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_USER_DISABLED,
+        tenantId,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -130,6 +164,12 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
       const tenantId = parseTenantIdParam(request.params);
       const userId = parseUserIdParam(request.params);
       const user = await tenantUsers.enable(tenantId, userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_USER_ENABLED,
+        tenantId,
+        targetType: 'user',
+        targetId: user.id,
+      });
       return reply.status(200).send(toPublicUserResponse(user));
     },
   );
@@ -141,6 +181,12 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
       const tenantId = parseTenantIdParam(request.params);
       const userId = parseUserIdParam(request.params);
       await tenantUsers.remove(tenantId, userId, request.auth!.userId);
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_USER_REMOVED,
+        tenantId,
+        targetType: 'user',
+        targetId: userId,
+      });
       return reply.status(200).send({ status: 'ok' as const });
     },
   );
@@ -154,6 +200,12 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
       const body = parseResetPasswordRequestBody(request.body);
       const user = await tenantUsers.resetPassword(tenantId, userId, {
         password: body.password,
+      });
+      await audit(request, {
+        action: AUDIT_ACTIONS.TENANT_USER_PASSWORD_RESET,
+        tenantId,
+        targetType: 'user',
+        targetId: user.id,
       });
       return reply.status(200).send({
         status: 'ok' as const,
