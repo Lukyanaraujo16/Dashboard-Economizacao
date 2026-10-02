@@ -80,7 +80,9 @@ CASH-6: Relatórios/PDF/XLSX em regime de caixa HOMOLOGADOS (commit `39e2ab3`).
 PRE-F13-CASH-FINAL-AUDIT: PASS — experiência financeira oficial coerente com caixa.
 PRE-F13-HOME-POLISH-1/2/3: FECHADO E HOMOLOGADO LOCALMENTE (27/08/2026).
   Expansão, drill-down e detalhamento analítico da Home em regime de caixa;
-  homologação humana APROVADA. Produção ainda NÃO com esta versão.
+  homologação humana APROVADA. Na data desse fechamento local, produção
+  ainda não tinha esta versão. O commit de produção
+  `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca` já a inclui.
   Sem commit até homologação. F13 NÃO iniciada nesta fase.
 PRE-F13-HOME-POLISH-2: cobertura de expansão + drill-down analítico (local;
   homologado). Até o fim do mês / Inadimplência / Fluxo previsto
@@ -90,28 +92,40 @@ PRE-F13-HOME-POLISH-2: cobertura de expansão + drill-down analítico (local;
   homologado). Rankings `realizedByCategory` em Faturamento/Já recebido/
   Despesas/Entradas×Saídas; composição billing−despesas no Resultado; A receber
   honesto sem categoria expected. Sem commit. F13 NÃO iniciada.
-F13 (Consultor reativo): FECHADO LOCALMENTE em F13.9 — pronto para publicação; produção ainda não publicada.
+F13 (Consultor reativo): FECHADO. O código está no commit de produção
+  `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`.
   Motor único; provider/model por tenant (`OPENAI` | `ANTHROPIC`); secrets
   `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`; sem BYOK; sem fallback cruzado;
   sem retry automático de generate. Rate limit Redis 20 msg/10min
   user+tenant e 60/10min tenant.
-F14 (Consultor proativo): CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY.
-  Implementada e homologada localmente. Ainda não publicada em produção.
-  Migrations da F14 ainda não aplicadas em produção. Próxima fase funcional: F15.
-Produção: AINDA BLOQUEADA (rollout operacional — ver pendências CASH-7/8B abaixo).
-  F13 em produção NÃO homologada.
+F14 (Consultor proativo): CONCLUÍDA / IMPLANTADA EM PRODUÇÃO nesse mesmo
+  commit, inclusive as migrations `20261001183000_proactive_trigger_domain`,
+  `20261001223000_proactive_trigger_bootstrap` e
+  `20261001235000_ai_message_insight_links`.
+  O commit local `75a1cb857d681e919765863491740ba288dd4cf8` está homologado
+  localmente e ainda NÃO está em produção.
+Produção: ambiente real operacional no commit `47c1e9a`. Não está
+  inexistente nem bloqueada de forma genérica. O fechamento da Fase 19 é
+  a reconciliação dos critérios desta fase contra essa infraestrutura.
+  Backfill CASH-7 em produção e CASH-8B não são declarados concluídos
+  por esta decisão; entram nessa reconciliação.
 CASH-7: bootstrap/backfill LOCAL do ledger IMPLEMENTADO (Clínica Life).
   Discovery = AR/AP local `paid > 0` + GET `/baixa` nas não cobertas.
   Idempotente; skip se Σ gross ACTIVE = paid (DELETED não impede skip).
-  Produção NÃO executada. CASH-8A: política R3/R4 no código; flag default false.
+  Execução do backfill em produção: não declarada concluída nesta decisão
+  (item da reconciliação da Fase 19). CASH-8A: política R3/R4 no código;
+  flag default false.
   CASH-8B: aplicar R3 local (e5a3). Sem botão na UI.
-  Home e Relatórios oficiais já em regime de caixa (CASH-4 / CASH-6 homologados).
-  Produção continua bloqueada até backfill + lifecycle controlado.
+  Home e Relatórios oficiais já em regime de caixa (CASH-4 / CASH-6 homologados)
+  e já fazem parte do commit de produção `47c1e9a`.
+  O ambiente de produção existe. Backfill e lifecycle controlado não
+  significam produção inexistente.
 CASH-8A: lifecycle R3/R4 IMPLEMENTADO no código (flag default false).
   R3: lista 200 não vazia + GET baixa 404 + parcela viva QUITADO +
   remaining gross = valor_pago → DELETED (sem delete físico; reativa no upsert).
   R4: `/baixa []` HOLD, mesmo flag true. CASH-8B NÃO iniciado.
-  Não deployar CASH-4B antes do backfill de produção + CASH-8B.
+  A instrução antiga “não deployar CASH-4B antes do backfill” está
+  superada: o commit de produção `47c1e9a` já inclui CASH-4B e a F14.
   Faturamento oficial (Felipe): `realized.inflows + expected.receivables`.
   Despesas oficiais: `realized.outflows + expected.payables`. Vencido AP fora.
   Resultado da Home: `billing − monthlyExpenses`. `realized.result` não substitui.
@@ -125,7 +139,7 @@ CASH-9C: transferências internas IMPLEMENTADAS (código + migration + testes).
   CASH-4C-CAT: donuts = caixa realizado (fecha com realized.inflows/outflows).
   CASH-6 HOMOLOGADA (commit `39e2ab3`): Relatórios/PDF/XLSX = MonthlyCashFlow
   (mesmo motor da Home; regime de caixa).
-  PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local FECHADO em F13.9 — pronto para publicação; produção ainda não publicada.
+  PRE-F13-CASH-FINAL-AUDIT: PASS. F13 está no commit de produção `47c1e9a`.
 Faturamento Gerencial (F1-G): SUPERSEDED na Home (CASH-4B = caixa / MonthlyCashFlow)
   (fórmula de produto SUPERSEDED pela decisão Felipe acima).
 Faturamento Fiscal (NF-e/NFS-e): NÃO IMPLEMENTADO (capacidade futura; F0 fiscal preservado).
@@ -138,7 +152,9 @@ F2 meta de faturamento: CASH-4B migrou `actual = billing` (caixa, company-level)
   `NOT_ACHIEVED`; futuro com meta `PLANNED` (não julga atingimento antecipado).
   IA / sugestão automática de meta: FUTURA / NÃO IMPLEMENTADA.
   Gráfico histórico Meta × Realizado: melhoria futura (fora da F2 homologada).
-D1 drill-down / FV1 fixa×variável: NÃO INICIADOS.
+D1 drill-down: NÃO INICIADO (reserva; não é bloqueio do encerramento).
+FV1 fixa×variável: CONGELADO / FORA DO MVP ATUAL (02/10/2026).
+  Não é pendência de encerramento. Histórico em docs/11 §14.
 E4: ADIADA.
 Histórico de sync (2.5 interna): adiado para Fase 17 (§21).
 
@@ -199,14 +215,32 @@ Fase 10 — Dashboard do Cliente
 Fase 11 — Filtros e Comparações
 Fase 12 — Relatórios
 Fase 13 — Consultor Financeiro Reativo
-Fase 14 — Consultor Proativo e Insights — CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY
-Fase 15 — Notificações Internas — próxima fase funcional
+Fase 14 — Consultor Proativo e Insights — IMPLANTADA EM PRODUÇÃO (`47c1e9a`)
+Fase 15 — Notificações Internas — SUBSTITUÍDA / ENCERRADA POR DECISÃO DE PRODUTO
 Fase 16 — Modo Suporte
-Fase 17 — Logs, Auditoria e Observabilidade
+Fase 17 — Logs, Auditoria e Observabilidade — PARCIALMENTE IMPLEMENTADA / PENDENTE DE CONCLUSÃO
+Refinamento visual final — polish anterior ao Hardening
 Fase 18 — Hardening
-Fase 19 — Preparação para Produção
+Fase 19 — Preparação para Produção — reconciliação contra o ambiente real
 
-A numeração vigente é a das seções detalhadas. A Fase 14 está fechada localmente. A próxima fase funcional é a Fase 15. O projeto inteiro permanece em aberto.
+A numeração vigente é a das seções detalhadas. A Fase 14 está em produção no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. A Fase 15 não é a próxima entrega. A ordem restante de encerramento está na decisão de 02/10/2026, abaixo, e no critério §33.
+
+Decisão de encerramento do MVP (02/10/2026)
+
+Fora do encerramento, sem apagar o histórico:
+
+* DASH-007, DASH-008 e FV1: CONGELADO / FORA DO MVP ATUAL. Não há classificação determinística confiável homologada e não haverá inferência pelo nome da categoria. Pode voltar como evolução comercial, com escopo novo.
+* Fase 15 e NOTIF-001 na forma de central tradicional: SUBSTITUÍDA / ENCERRADA POR DECISÃO DE PRODUTO. A notificação oficial desta versão é a experiência proativa da Lia (Fase 14).
+
+Ordem restante:
+
+A. promover para produção o commit homologado `75a1cb857d681e919765863491740ba288dd4cf8`;
+B. implementar recuperação de senha (AUTH-004);
+C. concluir a Fase 17;
+D. executar o refinamento visual final;
+E. executar a Fase 18 — Hardening;
+F. reconciliar e fechar a Fase 19;
+G. auditoria final do roadmap e encerramento do MVP.
 
 ⸻
 
@@ -268,6 +302,8 @@ Escopo
 * recuperação de senha;
 * usuário ativo/inativo.
 
+AUTH-004 — Recuperação de senha: PENDENTE. Permanece obrigatória neste MVP e será implementada antes do encerramento. Login, logout, sessão e usuário ativo/inativo já estão entregues. Não marcar AUTH-004 como concluída.
+
 Requisitos relacionados
 
 * AUTH-001;
@@ -284,6 +320,8 @@ Critérios de aceite
 * logout invalida sessão;
 * recuperação de senha funciona;
 * rotas privadas não ficam acessíveis sem sessão.
+
+O critério de recuperação de senha ainda não foi atendido.
 
 ⸻
 
@@ -619,7 +657,7 @@ apagar; itens não entregues no Grupo A permanecem backlog):
 * inadimplência;
 * receita por categoria;
 * despesa por categoria;
-* despesas fixas/variáveis quando possível;
+* despesas fixas/variáveis quando possível (desde 02/10/2026: CONGELADO / FORA DO MVP ATUAL; especificação preservada em docs/11 §14);
 * fluxo de caixa realizado;
 * fluxo de caixa previsto;
 * receita x despesa;
@@ -645,10 +683,10 @@ Backlog explícito (não bloqueia Fase 10):
 * rateio valorado (exige GET /parcelas/{id});
 * fluxo de caixa realizado / ledger / baixas;
 * saldo (endpoint não integrado);
-* despesas fixas/variáveis (sem regra determinística);
+* despesas fixas/variáveis (sem regra determinística) — CONGELADO / FORA DO MVP ATUAL (02/10/2026); não bloqueia o encerramento;
 * Receita × Despesa (D7 adiada).
 
-Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; produção NÃO. CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-9C: transferências internas IMPLEMENTADAS (local). CASH-4B: HOMOLOGADA. CASH-4C: HOMOLOGADA. CASH-6: HOMOLOGADA (Reports/PDF/XLSX caixa). PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local IMPLEMENTADA — AGUARDANDO HOMOLOGAÇÃO REAL; produção AINDA BLOQUEADA.
+Fase 11 Home: CONCLUÍDA no recorte mensal (F11-C na Fase 12). Fase 12: F12-A CONGELADA. 10A CONCLUÍDA. 10B CONCLUÍDA / HOMOLOGADA. 10C IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1 Pressão de caixa HOMOLOGADA VISUALMENTE. E2 composição das despesas HOMOLOGADA. Receitas do mês por competência (M1) HOMOLOGADA. E3 leitura executiva IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E4 ADIADA. L0 spike baixas: PARCIAL. L1-A/CASH-2: HEAD. L1-B/CASH-3A: IMPLEMENTADA. CASH-7: backfill LOCAL feito; execução em produção não declarada nesta decisão (reconciliação da Fase 19). CASH-8A: política R3/R4 no código; flag false. CASH-8B: NÃO. CASH-9C: transferências internas IMPLEMENTADAS (local). CASH-4B: HOMOLOGADA. CASH-4C: HOMOLOGADA. CASH-6: HOMOLOGADA (Reports/PDF/XLSX caixa). PRE-F13-CASH-FINAL-AUDIT: PASS. F13 e F14 estão no commit de produção `47c1e9a`. Produção não está bloqueada de forma genérica. Backfill CASH-7 e CASH-8B seguem na reconciliação da Fase 19.
 
 ⸻
 
@@ -919,7 +957,7 @@ Critérios de aceite (V1)
 
 17. Fase 13 — Consultor Financeiro Reativo
 
-Status: FECHADO LOCALMENTE em F13.9 — consultor reativo pronto para publicação. Produção ainda não publicada. A Fase 14 foi fechada depois, em rodada própria.
+Status: FECHADO. O consultor reativo está no commit de produção `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. A Fase 14 foi fechada depois, em rodada própria, e também está nesse commit.
 
 Fechamento: capabilities universais publicadas (29), incluindo cliente/fornecedor com campeão, TOP N, consulta e participação; estado analítico estruturado por conversa; conhecimento documental; gestão de provider; quality gate de identidade. Completude histórica de MONTH/YTD/YEAR permanece UNKNOWN quando a fonte não esgota a data do caixa: a resposta fica parcial, em linguagem de “nos dados disponíveis”. Isso é limitação aceita, não bug bloqueante. O comportamento proativo pertence à Fase 14.
 
@@ -968,9 +1006,9 @@ apenas no Consultor (503), sem derrubar Dashboard/Relatórios.
 
 18. Fase 14 — Consultor Proativo e Insights
 
-Status: CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY.
+Status: CONCLUÍDA / IMPLANTADA EM PRODUÇÃO no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`.
 
-Implementada localmente e homologada localmente em navegador real. Ainda não publicada em produção. As migrations `20261001183000_proactive_trigger_domain`, `20261001223000_proactive_trigger_bootstrap` e `20261001235000_ai_message_insight_links` existem no repositório e ainda não foram aplicadas em produção.
+As migrations `20261001183000_proactive_trigger_domain`, `20261001223000_proactive_trigger_bootstrap` e `20261001235000_ai_message_insight_links` estão aplicadas nesse ambiente. O commit local `75a1cb857d681e919765863491740ba288dd4cf8` ainda não está em produção.
 
 A detecção é determinística. O modelo apenas redige a narração e, no turno seguinte, interpreta a pergunta usando fatos oficiais. O modelo não escolhe gatilho, severidade nem número oficial.
 
@@ -1012,7 +1050,7 @@ Limitações aceitas, sem reabrir a fase:
 * título individual ainda depende da narração obedecer ao contrato do prompt;
 * o navegador pode bloquear o autoplay do áudio;
 * novo tipo de gatilho exige regra determinística certificada;
-* inbox global, sino fora da conversa e histórico de notificações fora da Lia pertencem à Fase 15.
+* inbox global, sino fora da conversa e histórico de notificações fora da Lia não entram neste MVP. A Fase 15 foi substituída por esta experiência (decisão de 02/10/2026).
 
 Objetivo
 
@@ -1051,41 +1089,34 @@ Critérios de aceite atendidos localmente
 
 19. Fase 15 — Notificações Internas
 
-Status: NÃO INICIADA. Próxima fase funcional depois do fechamento local da Fase 14.
+Status: SUBSTITUÍDA / ENCERRADA POR DECISÃO DE PRODUTO (02/10/2026).
 
-A Fase 14 entrega a manifestação dentro da conversa da Lia. A Fase 15 é a Central de Notificações Internas: inbox e listagem global, eventual sino global, histórico de notificações fora da conversa e navegação genérica por notificações. Esta fase não está implementada.
+Não é pendência funcional deste MVP e não bloqueia o encerramento.
 
-Objetivo
+A solução oficial de notificação desta versão é a experiência proativa da Lia, homologada na Fase 14 e implantada em produção no commit `47c1e9a`:
 
-Criar uma central persistente de comunicação interna.
+* contador de não lidos;
+* badge no FAB;
+* balão de manifestação;
+* sinal sonoro;
+* persistência dos insights não lidos;
+* apresentação dentro da conversa;
+* o usuário pode abrir e responder diretamente à Lia.
 
-Escopo
+Não haverá neste MVP:
 
-* notifications;
-* não lidas/lidas;
-* central;
-* mensagens administrativas básicas;
-* integração com insights.
+* sino global separado;
+* inbox ou central paralela;
+* tela independente de histórico de notificações;
+* duplicação do mesmo insight fora da Lia.
 
-Requisitos relacionados
+NOTIF-002 fica atendido por essa manifestação. NOTIF-003 e NOTIF-004 continuam capacidade futura de arquitetura, sem reabrir uma central neste MVP. NOTIF-005 permanece pós-MVP.
 
-* NOTIF-001;
-* NOTIF-002.
+Histórico do escopo original, preservado e não vigente como entrega:
 
-Não incluir
+Objetivo original: criar uma central persistente de comunicação interna.
 
-* OneSignal;
-* push;
-* service worker;
-* e-mail;
-* WhatsApp;
-* SMS.
-
-Critérios de aceite
-
-* notificação permanece após reload;
-* leitura altera estado;
-* tenant é respeitado.
+Escopo original: `notifications`, não lidas e lidas, central, mensagens administrativas básicas e integração com insights. Requisitos então relacionados: NOTIF-001 e NOTIF-002. Fora mesmo daquele desenho: OneSignal, push, service worker, e-mail, WhatsApp e SMS. Critérios então previstos: notificação permanece após reload, leitura altera estado, tenant é respeitado. A persistência, a leitura e o isolamento passaram a valer para o insight da Lia, não para uma inbox separada.
 
 ⸻
 
@@ -1123,6 +1154,12 @@ Critérios de aceite
 
 21. Fase 17 — Logs, Auditoria e Observabilidade
 
+Status: PARCIALMENTE IMPLEMENTADA / PENDENTE DE CONCLUSÃO.
+
+Permanece no MVP. O escopo abaixo continua objetivo e administrativo. Esta decisão não o amplia.
+
+Já existem `SyncRun`, `ai_runs`, o resumo PRE-IA-2 na lista de empresas e a auditoria de entrada e saída do modo suporte. Faltam o histórico administrativo de sincronização, a visão de saúde além desse resumo e a trilha das demais alterações administrativas.
+
 Objetivo
 
 Consolidar capacidade operacional e diagnóstica.
@@ -1156,11 +1193,33 @@ Critérios de aceite
 
 ⸻
 
+21.1 Refinamento visual final
+
+Status: PENDENTE. Etapa de polish anterior à Fase 18. Não é uma fase nova de produto e não é redesign.
+
+Escopo
+
+* refinamento da tela de login;
+* animações de entrada discretas;
+* animações de apresentação dos gráficos e cards da Dashboard;
+* gráficos de linha e de barras desenhando ao entrar;
+* gráficos de pizza e donut aparecendo progressivamente;
+* transições suaves;
+* preservar acessibilidade e `prefers-reduced-motion`.
+
+Não altera cálculos, dados nem semântica financeira. Não pode prejudicar a performance perceptível.
+
+⸻
+
 22. Fase 18 — Hardening
+
+Status: OBRIGATÓRIA. Ainda não executada como fechamento.
+
+Ocorre depois das funcionalidades finais, da recuperação de senha, da conclusão da Fase 17 e do refinamento visual final.
 
 Objetivo
 
-Realizar auditoria completa antes de produção.
+Realizar auditoria completa antes de considerar o MVP encerrado. O ambiente de produção já existe; esta fase não espera a criação desse ambiente.
 
 Escopo
 
@@ -1204,9 +1263,17 @@ Nenhuma vulnerabilidade crítica ou falha conhecida de isolamento permanece aber
 
 23. Fase 19 — Preparação para Produção
 
+Status: AMBIENTE REAL OPERACIONAL / PENDENTE DE RECONCILIAÇÃO.
+
+A aplicação já possui ambiente de produção operacional no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. Esse commit inclui a Fase 14 e as migrations `20261001183000_proactive_trigger_domain`, `20261001223000_proactive_trigger_bootstrap` e `20261001235000_ai_message_insight_links`.
+
+O commit local `75a1cb857d681e919765863491740ba288dd4cf8` ainda não está em produção. Não documentá-lo como implantado.
+
+O fechamento desta fase é a reconciliação dos critérios abaixo contra a infraestrutura real. Esta decisão não declara esses critérios concluídos.
+
 Objetivo
 
-Preparar o sistema para uso real.
+Reconciliar o uso real já existente com os critérios operacionais documentados.
 
 Escopo
 
@@ -1237,7 +1304,7 @@ Critérios de aceite
 * logs acessíveis;
 * aplicação possui health checks quando aplicável.
 
-O **Ambiente Piloto Felipe** (`docs/19-ambiente-piloto.md`, PILOT-INFRA-1) é um recorte operacional desta fase: instalador híbrido numa VPS. Não marca a Fase 19 como concluída nem homologa produção.
+O **Ambiente Piloto Felipe** (`docs/19-ambiente-piloto.md`, PILOT-INFRA-1) é um recorte operacional desta fase: instalador híbrido numa VPS. Não marca a Fase 19 como concluída. A existência do ambiente de produção no commit `47c1e9a` também não fecha os critérios desta seção.
 
 ⸻
 
@@ -1321,15 +1388,17 @@ Fase 13
 ↓
 Fase 14
 ↓
-Fase 15
-↓
 Fase 16
 ↓
 Fase 17
 ↓
+Refinamento visual final
+↓
 Fase 18
 ↓
 Fase 19
+
+A Fase 15 não entra nesta sequência. Foi substituída pela Fase 14 em 02/10/2026. A ordem restante de encerramento é a da decisão no §3 e o critério do §33.
 
 Algumas tarefas poderão ser desenvolvidas paralelamente posteriormente, mas a primeira implementação deverá preferir esta sequência para reduzir retrabalho.
 
@@ -1409,16 +1478,21 @@ Quando existir lacuna relevante:
 
 33. Critério Geral de Conclusão do MVP
 
+Decisão de 02/10/2026. Não bloqueiam este encerramento:
+
+* despesas fixas e variáveis (DASH-007, DASH-008, FV1), congeladas fora do MVP atual;
+* a Central tradicional de notificações (Fase 15 / NOTIF-001), substituída pela experiência proativa da Lia.
+
 O MVP estará pronto quando:
 
-* autenticação estiver segura;
+* autenticação estiver segura, incluindo a recuperação de senha (AUTH-004), ainda pendente;
 * isolamento multiempresa estiver validado;
 * administração estiver funcional;
 * branding estiver funcional;
 * Conta Azul estiver integrada;
 * sincronização automática estiver estável;
 * dados financeiros estiverem normalizados;
-* KPIs principais estiverem implementados;
+* KPIs principais do recorte vigente estiverem implementados, sem despesas fixas e variáveis;
 * dashboard estiver funcional;
 * filtros e comparações estiverem funcionais
   (Home: competência mensal + F11-B situação/categoria;
@@ -1426,12 +1500,14 @@ O MVP estará pronto quando:
   ranges diários FILTER-001/005 continuam fora da V1);
 * relatórios estiverem funcionais;
 * Consultor reativo estiver funcional;
-* ao menos um conjunto inicial de insights proativos estiver funcional;
-* notificações internas estiverem funcionais;
+* o conjunto certificado de insights proativos estiver funcional, e essa experiência for a notificação interna desta versão;
 * modo suporte estiver funcional;
-* auditoria estiver funcional;
+* a Fase 17 estiver concluída no escopo administrativo já definido;
+* o refinamento visual final estiver feito, sem mudar cálculo nem semântica;
 * hardening estiver concluído;
-* ambiente de produção estiver validado.
+* os critérios da Fase 19 estiverem reconciliados com o ambiente de produção já existente.
+
+Ordem restante: promover `75a1cb8`; AUTH-004; Fase 17; refinamento visual; Fase 18; reconciliação da Fase 19; auditoria final do roadmap.
 
 ⸻
 

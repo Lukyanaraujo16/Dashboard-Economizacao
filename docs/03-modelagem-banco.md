@@ -653,7 +653,7 @@ Não apaga ledger. CASH-8A: política R3 (stale confirmado → DELETED)
 e R4 (`[]` / parcela 404 = HOLD). Correção 10-C: flag default **true**
 no sync contínuo. Saneamento histórico pontual (ex.: Life) permanece
 operação controlada (não é backfill automático de produção nesta etapa).
-Produção ainda não executada.
+A execução desse backfill em produção não é declarada concluída nesta decisão e entra na reconciliação da Fase 19. O ambiente de produção existe no commit `47c1e9a`.
 CASH-3A/3B leem esta tabela. Home visual e Relatórios/PDF/XLSX ainda não.
 
 ⸻
@@ -768,7 +768,7 @@ Zero candidatos = UNMATCHED; um inequívoco = MATCHED (analytics exclui o ghost)
 mais de um = AMBIGUOUS (não exclui ninguém). Lifecycle do ghost permanece ACTIVE.
 Não usa descrição, categoria, cliente nem UUID hardcoded.
 
-CASH-4B continua bloqueado até homologação.
+CASH-4B está homologada e faz parte do commit de produção `47c1e9a`. A frase antiga de bloqueio até homologação está superada.
 
 ⸻
 
@@ -928,8 +928,7 @@ Provider e model efetivos são por tenant. Ausência de settings equivale a Cons
 
 `ai_platform_credentials` guarda ciphertext global por provider (AES-256-GCM) e `display_hint` (metadado visual derivado no PUT; nunca o segredo). Sem plaintext.
 
-F13 (F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
-F14: CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Implementada e homologada localmente. Ainda não publicada em produção. Migrations `20261001183000_proactive_trigger_domain`, `20261001223000_proactive_trigger_bootstrap` e `20261001235000_ai_message_insight_links` ainda não aplicadas em produção.
+F13 (F13.1–F13.6) e F14 estão no commit de produção `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. As migrations `20261001183000_proactive_trigger_domain`, `20261001223000_proactive_trigger_bootstrap` e `20261001235000_ai_message_insight_links` estão aplicadas nesse ambiente. O commit local `75a1cb857d681e919765863491740ba288dd4cf8` ainda não está em produção.
 
 ⸻
 
@@ -1162,9 +1161,11 @@ Impressão poderá utilizar visualização própria sem necessidade de arquivo p
 
 12. Notificações
 
+Modelo conceitual da Central tradicional. Decisão de 02/10/2026: a Fase 15 foi substituída pela Lia. Estas entidades não são pendência de schema deste MVP. A persistência vigente dos avisos é `ai_insights` e a leitura em `ai_insight_reads`.
+
 12.1 notifications
 
-Representa notificações internas.
+Representa o desenho histórico de notificações internas.
 
 Campos conceituais:
 

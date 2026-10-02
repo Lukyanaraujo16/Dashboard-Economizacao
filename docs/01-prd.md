@@ -202,6 +202,8 @@ Critérios de aceite
 
 AUTH-004 — Recuperação de senha
 
+Status: PENDENTE. Obrigatória neste MVP. Será implementada antes do encerramento. Não marcar como concluída.
+
 Requisito
 
 O sistema deverá prever fluxo seguro de recuperação de senha.
@@ -700,7 +702,11 @@ Critérios de aceite
 
 DASH-007 — Despesas fixas
 
-Requisito
+Status: CONGELADO / FORA DO MVP ATUAL (02/10/2026).
+
+Não é pendência de encerramento deste MVP. Não há classificação determinística confiável homologada e não se deve inferir pelo nome da categoria. A especificação abaixo permanece como histórico. Pode ser retomada como evolução comercial, com escopo novo. Não implementar nesta versão.
+
+Requisito histórico
 
 O painel deverá apresentar despesas fixas quando houver informação suficiente para classificação confiável.
 
@@ -714,7 +720,11 @@ Critérios de aceite
 
 DASH-008 — Despesas variáveis
 
-Requisito
+Status: CONGELADO / FORA DO MVP ATUAL (02/10/2026), junto com DASH-007 e FV1.
+
+Não é pendência de encerramento deste MVP. A especificação abaixo permanece como histórico. Não implementar nesta versão.
+
+Requisito histórico
 
 O painel deverá apresentar despesas variáveis quando houver informação suficiente para classificação confiável.
 
@@ -878,8 +888,8 @@ não datas D/M/A soltas. Eixo = `competenceDate`. Não misturar com
 
 5.9 CONSULTOR — Consultor Financeiro Inteligente
 
-Status de implementação: F13 reativo (F13.1–F13.6) IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
-F14 (CONSULTOR-006 a CONSULTOR-008 e CONSULTOR-012, no recorte certificado): CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Implementada e homologada localmente. Ainda não publicada em produção. Migrations da F14 ainda não aplicadas em produção.
+Status de implementação: F13 reativo (F13.1–F13.6) está no commit de produção `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`.
+F14 (CONSULTOR-006 a CONSULTOR-008 e CONSULTOR-012, no recorte certificado): CONCLUÍDA / IMPLANTADA EM PRODUÇÃO nesse commit, com as migrations da fase aplicadas. O commit local `75a1cb857d681e919765863491740ba288dd4cf8` ainda não está em produção.
 
 CONSULTOR-001 — Acesso permanente
 
@@ -944,7 +954,7 @@ Precedência:
 2. mês de referência da superfície (`month` no POST = seletor da Home);
 3. mês civil atual em `America/Sao_Paulo`.
 
-Mês citado sem ano: usa o ano do mês de referência; senão o ano civil SP. Expressões relativas (“este mês”, “mês passado”) usam a referência. Dois períodos explícitos distintos: não inventa — cai no default. A Fase 14 está concluída localmente e ainda não publicada em produção.
+Mês citado sem ano: usa o ano do mês de referência; senão o ano civil SP. Expressões relativas (“este mês”, “mês passado”) usam a referência. Dois períodos explícitos distintos: não inventa — cai no default. A Fase 14 está implantada em produção no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. O commit local `75a1cb8` ainda não está em produção.
 
 ⸻
 
@@ -992,11 +1002,9 @@ Critérios de aceite
 
 CONSULTOR-006 — Proatividade
 
-F14 — CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY.
+F14 — CONCLUÍDA / IMPLANTADA EM PRODUÇÃO no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. O commit local `75a1cb8` ainda não está em produção.
 
-Implementada localmente e homologada localmente. Ainda não publicada em produção.
-
-O gatilho ativo gera evento analítico e insight. A narração usa o provider do Consultor e apenas redige. A manifestação aparece no FAB da Lia (badge e balão), materializa uma mensagem na conversa ativa e a leitura é por usuário. A pergunta seguinte permanece na mesma conversa, com os fatos estruturados em `PRESENTED_INSIGHT_FACTS`. A Fase 15 (Central de Notificações) não faz parte deste requisito.
+O gatilho ativo gera evento analítico e insight. A narração usa o provider do Consultor e apenas redige. A manifestação aparece no FAB da Lia (badge e balão), materializa uma mensagem na conversa ativa e a leitura é por usuário. A pergunta seguinte permanece na mesma conversa, com os fatos estruturados em `PRESENTED_INSIGHT_FACTS`. Essa manifestação é a notificação oficial deste MVP. A Central tradicional da Fase 15 foi substituída em 02/10/2026 e não faz parte deste requisito.
 
 Requisito
 
@@ -1440,13 +1448,21 @@ Logs não poderão armazenar:
 
 NOTIF-001 — Notificações internas
 
-Requisito
+Status: SUBSTITUÍDA / ENCERRADA POR DECISÃO DE PRODUTO (02/10/2026).
+
+Não é pendência deste MVP. A estrutura oficial de notificação interna desta versão é a experiência proativa da Lia na Fase 14: contador de não lidos, badge no FAB, balão, sinal sonoro, persistência dos insights não lidos, apresentação dentro da conversa e resposta direta à Lia.
+
+Não haverá neste MVP sino global separado, inbox ou central paralela, tela independente de histórico de notificações, nem duplicação do mesmo insight fora da Lia.
+
+Requisito histórico, preservado e não vigente como entrega separada
 
 A plataforma deverá possuir estrutura para notificações internas.
 
 ⸻
 
 NOTIF-002 — Consultor e notificações
+
+Status: ATENDIDO pela Fase 14. Essa sinalização é a notificação interna oficial deste MVP.
 
 Requisito
 
@@ -1456,6 +1472,8 @@ Insights do Consultor poderão gerar sinalização interna.
 
 NOTIF-003 — Notificações administrativas futuras
 
+Status: capacidade futura. Não reabre a Central da Fase 15 neste MVP.
+
 Requisito
 
 A arquitetura deverá permitir que administradores enviem notificações personalizadas futuramente.
@@ -1463,6 +1481,8 @@ A arquitetura deverá permitir que administradores enviem notificações persona
 ⸻
 
 NOTIF-004 — Regras futuras
+
+Status: capacidade futura. Não reabre a Central da Fase 15 neste MVP.
 
 Requisito
 
@@ -1659,7 +1679,7 @@ Os seguintes pontos permanecem pendentes de verificação oficial:
 * estrutura de contas a pagar;
 * categorias;
 * fluxo de caixa;
-* identificação de despesas fixas e variáveis;
+* identificação de despesas fixas e variáveis (desde 02/10/2026, DASH-007, DASH-008 e FV1 estão CONGELADOS / FORA DO MVP ATUAL; esta lacuna de API não bloqueia o encerramento);
 * paginação;
 * rate limits;
 * OAuth;

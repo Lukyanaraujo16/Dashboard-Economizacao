@@ -151,6 +151,8 @@ O sistema deverá inicialmente trabalhar com informações relacionadas a:
 * despesas variáveis;
 * fluxo de caixa.
 
+Decisão de 02/10/2026: despesas fixas e variáveis (DASH-007, DASH-008, FV1) estão CONGELADAS / FORA DO MVP ATUAL. A lista acima permanece como visão original. Não são pendência de encerramento e não devem ser inferidas pelo nome da categoria.
+
 Outros indicadores poderão ser incorporados quando puderem ser obtidos ou derivados de forma segura a partir dos dados disponibilizados pelo Conta Azul.
 
 ⸻

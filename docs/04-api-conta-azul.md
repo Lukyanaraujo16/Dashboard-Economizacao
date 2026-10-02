@@ -665,6 +665,8 @@ Deverá respeitar rateios quando aplicável.
 
 34. Despesas fixas e variáveis
 
+Status: CONGELADO / FORA DO MVP ATUAL (02/10/2026). A avaliação de alternativas abaixo fica preservada e não é tarefa deste MVP.
+
 Ainda NÃO está confirmado que o Conta Azul forneça uma classificação nativa confiável de:
 
 * despesa fixa;
@@ -1095,11 +1097,11 @@ PENDENTE — necessidade condicional ao recorte de produto:
     GET `/parcelas/baixa/{id}` (CASH-8A) distingue 404 de erro operacional.
     R3: missing + GET-por-id 404 + parcela viva + remaining = valor_pago
     → DELETED no sync padrão (Correção 10-C; flag default true). R4 `[]` = HOLD.
-    Não inventa endpoint de estorno. Produção ainda não executada.
+    Não inventa endpoint de estorno. A execução desse backfill em produção não é declarada concluída; o ambiente existe no commit `47c1e9a`.
     KPI Home visual: CASH-4B.
     CASH-9C: `GET /v1/financeiro/transferencias` persistido em
     `financial_transfers`; ghost ACTIVE excluído do realizado só com
-    match 1:1. Ambíguo não exclui. CASH-4B continua bloqueado.
+    match 1:1. Ambíguo não exclui. CASH-4B está homologada e no commit de produção `47c1e9a`.
 8.  rateios valorados (`categorias` com percentual/valor por parcela)
     — endpoint de detalhe `/parcelas/{id}` documentado; não consumido;
     necessário para KPI de receita/despesa por categoria precisa;

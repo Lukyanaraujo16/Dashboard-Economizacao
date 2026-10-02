@@ -101,7 +101,7 @@ A tela de login deverá conter:
 * campo de e-mail;
 * campo de senha;
 * ação de entrar;
-* ação de recuperação de senha;
+* ação de recuperação de senha (AUTH-004: obrigatória neste MVP e ainda PENDENTE; o controle visível hoje não inicia o fluxo);
 * mensagens de erro;
 * loading durante autenticação.
 
@@ -387,9 +387,9 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   PRE-F13-HOME-POLISH-CLOSE (27/08/2026): homologação humana APROVADA no
   localhost; pacote fechado localmente. Naquele fechamento, F13 ainda
   não havia sido iniciada. F13 reativa (F13.1–F13.6) está hoje
-  IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. F14
-  CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Ainda não
-  publicada em produção.
+  no commit de produção `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. F14
+  CONCLUÍDA / IMPLANTADA EM PRODUÇÃO nesse commit. O commit local
+  `75a1cb8` ainda não está em produção.
 
 CASH-4A (infra Home / caixa): a Home **carrega** `GET /dashboard/monthly-cash-flow`
 (`month`, `costCenter`, `category`). Infra mantida; números oficiais = CASH-4B.
@@ -789,6 +789,8 @@ Onde a empresa está gastando mais?
 
 23. Despesas Fixas e Variáveis
 
+Status: CONGELADO / FORA DO MVP ATUAL (02/10/2026), junto com DASH-007, DASH-008 e FV1. Não é pendência de encerramento. Não implementar nesta versão e não inferir pelo nome da categoria. O texto abaixo fica como especificação histórica.
+
 Quando essa classificação estiver disponível de maneira confiável, deverá existir visualização da relação entre:
 
 * despesas fixas;
@@ -1035,7 +1037,7 @@ Não deverá parecer que a tela travou.
 36. Consultor Financeiro — Botão Flutuante
 
 Status F13.5 (reativo): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
-Badge e balão proativos: F14 — CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Ainda não publicada em produção.
+Badge e balão proativos: F14 — CONCLUÍDA / IMPLANTADA EM PRODUÇÃO no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. O commit local `75a1cb8` ainda não está em produção. Essa experiência é a notificação oficial deste MVP.
 
 O Consultor Financeiro deverá possuir botão flutuante persistente no canto inferior direito.
 
@@ -1122,13 +1124,13 @@ Essas sugestões não deverão limitar a conversa.
 
 42. Consultor Proativo
 
-F14 — CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Implementada e homologada localmente. Ainda não publicada em produção.
+F14 — CONCLUÍDA / IMPLANTADA EM PRODUÇÃO no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. O commit local `75a1cb8` ainda não está em produção.
 
 O FAB mostra o número de situações não lidas. Acima de nove, o badge mostra 9+. O badge fica fora da área que recorta o botão. O balão informa que a Lia encontrou situações relevantes. Clicar no balão ou em “Ver agora” abre a Lia. Fechar o balão não marca leitura. A sessão do balão é por usuário e empresa (`lia-proactive-shown`). O pulso é curto e finito. `prefers-reduced-motion` desliga a animação. O som `lia-message.wav` toca uma vez por lote novo, volume 0,25; se o navegador bloquear o autoplay, a falha é ignorada.
 
 A mensagem da Lia usa Markdown seguro: parágrafos, quebra de linha, lista, negrito e itálico. HTML, script e iframe permanecem texto. Títulos próximos do mesmo tipo podem aparecer numa lista, com o total calculado pela aplicação. A mensagem entra na conversa aberta. A resposta do usuário continua nessa conversa. “Nova conversa” inicia contexto sem os fatos da conversa anterior.
 
-A Central de Notificações, o sino global e o histórico fora da conversa pertencem à Fase 15 e não estão nesta experiência.
+A Central de Notificações, o sino global e o histórico fora da conversa não entram neste MVP. A Fase 15 foi substituída por esta experiência em 02/10/2026.
 
 Quando um insight relevante for detectado:
 
@@ -1192,27 +1194,27 @@ A experiência final será refinada posteriormente.
 
 46. Notificações Internas
 
-A interface deverá possuir mecanismo de notificações.
+Status: SUBSTITUÍDA / ENCERRADA POR DECISÃO DE PRODUTO (02/10/2026), junto com a Fase 15 e NOTIF-001.
 
-Acesso preferencial no cabeçalho.
+O mecanismo vigente é a Lia proativa: contador, badge, balão, som, insights persistidos e conversa. Não há sino global nem inbox paralela.
+
+Texto histórico, não vigente: a interface deveria possuir mecanismo de notificações, com acesso preferencial no cabeçalho.
 
 ⸻
 
 47. Central de Notificações
 
-A central deverá permitir visualizar:
+Status: SUBSTITUÍDA / ENCERRADA POR DECISÃO DE PRODUTO (02/10/2026). Não implementar neste MVP.
 
-* notificações não lidas;
-* notificações lidas;
-* alertas;
-* mensagens administrativas;
-* insights quando apropriado.
+Texto histórico, preservado: a central deveria permitir visualizar notificações não lidas, notificações lidas, alertas, mensagens administrativas e insights quando apropriado.
 
 ⸻
 
 48. Tipos de Notificação
 
-Categorias visuais poderão incluir:
+Texto histórico da central substituída. Não reabre a Fase 15.
+
+Categorias visuais poderiam incluir:
 
 * sistema;
 * financeiro;
@@ -1419,8 +1421,8 @@ Campos iniciais:
 * conhecimento adicional.
 
 Rota administrativa implementada: `/empresas/{companyId}/consultor`.
-Acesso do cliente: FAB nas superfícies de tenant (Dashboard e Relatórios), com badge e balão da F14 homologados localmente.
-F13.5 local: IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. Produção NÃO homologada.
+Acesso do cliente: FAB nas superfícies de tenant (Dashboard e Relatórios), com badge e balão da F14 implantados em produção no commit `47c1e9a`.
+F13.5 está nesse commit. O commit local `75a1cb8` ainda não está em produção.
 
 ⸻
 
@@ -1893,7 +1895,7 @@ UX-006 — Tabelas serão utilizadas principalmente para detalhamento.
 
 UX-007 — Consultor ficará disponível por botão flutuante.
 
-UX-008 — Consultor sinaliza mensagens proativas. Entregue na F14 (badge, balão e abertura da Lia), homologado localmente. A Central de Notificações permanece na Fase 15.
+UX-008 — Consultor sinaliza mensagens proativas. Entregue na F14 (badge, balão, som e abertura da Lia) e implantado em produção no commit `47c1e9a`. Essa sinalização é a notificação oficial deste MVP. A Central de Notificações foi substituída em 02/10/2026 e não é pendência.
 
 UX-009 — Modo suporte terá sinalização persistente.
 

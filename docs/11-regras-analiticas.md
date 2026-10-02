@@ -33,7 +33,9 @@ KPI de caixa / Home: CASH-4B — cards principais = MonthlyCashFlow (caixa).
 CASH-4C — visualizações / leitura / gráficos da Home = caixa (sem competência).
 CASH-4A = infra fetch/view-model. CASH-3A: domínio `MonthlyCashFlow`. CASH-3B:
 `GET /dashboard/monthly-cash-flow`. CASH-7: backfill LOCAL do ledger
-(Clínica Life) executado; produção NÃO. CASH-8A: R3/R4 no código;
+(Clínica Life) executado; a execução em produção não é declarada concluída
+nesta decisão e entra na reconciliação da Fase 19. O ambiente de produção
+existe no commit `47c1e9a`. CASH-8A: R3/R4 no código;
 Correção 10-C: flag default true no sync contínuo; saneamento histórico
 pontual de produção não executado nesta etapa.
 Semântica: `netAmount` / `occurredOn`.
@@ -709,11 +711,12 @@ nem frontend.
 
 14. Despesas fixas e variáveis
 
-Status: FORA DO PRIMEIRO RECORTE.
+Status: CONGELADO / FORA DO MVP ATUAL (02/10/2026).
 
-Não existe classificação upstream confiável confirmada.
+Não é pendência de encerramento deste MVP. Não implementar nesta versão.
+Não existe classificação determinística confiável homologada.
 Não inferir por nome de categoria.
-Só implementar quando a regra determinística estiver neste item.
+A especificação permanece. Pode ser retomada como evolução comercial, com escopo novo e com a regra determinística escrita neste item antes de qualquer implementação.
 
 ⸻
 
@@ -754,7 +757,7 @@ GRUPO D — Adiado / parcialmente desbloqueado:
   15. Faturamento Gerencial — IMPLEMENTADO / AGUARDANDO HOMOLOGAÇÃO (F1-G;
       fonte = receita por competência / monthly-revenue). Faturamento fiscal
       (NF-e/NFS-e) permanece futuro e separado.
-  16. Despesas fixas/variáveis (sem regra determinística) — FV1 NÃO INICIADO
+  16. Despesas fixas/variáveis — FV1 CONGELADO / FORA DO MVP ATUAL (02/10/2026)
   17. Receita × Despesa (D7 — nome genérico não sustentado)
 
 ⸻
@@ -807,7 +810,7 @@ utilizável (Grupo A):
   Meta = billing. Relatórios/PDF/XLSX = CASH-6. Fiscal futuro separado;
 * ledger / data efetiva de baixa (§8) — `paid` acumulado ≠ ledger;
 * saldo de conta (§13);
-* fixas/variáveis (§14);
+* fixas/variáveis (§14) — CONGELADO / FORA DO MVP ATUAL; não bloqueia o encerramento;
 * análise por competência com rótulo próprio (§11);
 * rateio valorado (`GET /parcelas/{id}`);
 * série histórica / as-of / coorte de inadimplência (§4 D2);
@@ -819,7 +822,7 @@ utilizável (Grupo A):
 
 18. Backlog analítico após o Grupo A
 
-Não bloqueia Fase 10. Não apagar do MVP completo.
+Não bloqueia Fase 10. O histórico analítico permanece. Desde 02/10/2026, despesas fixas e variáveis saíram do MVP atual e não bloqueiam o encerramento.
 
 A — Faturamento:
 * Faturamento oficial (§12) — HOMOLOGADO Felipe (CASH-3A): inflows + expected.receivables
@@ -839,7 +842,7 @@ C — Depende de dados adicionais:
 * saldo (§13)
 
 D — Depende de regra futura:
-* despesas fixas/variáveis (§14)
+* despesas fixas/variáveis (§14) — CONGELADO / FORA DO MVP ATUAL (02/10/2026)
 * Receita × Despesa (D7, §11)
 * as-of / coorte histórica (D2)
 
@@ -969,8 +972,7 @@ CASH-9C: transferências internas fora de faturamento/despesas/resultado.
 Ghost ACTIVE pode ser excluído do analytics sem virar DELETED.
 Produção: `--confirm=PRODUCTION`; sem dry-run/report-only no CLI CASH-9C.
 CASH-4B HOMOLOGADA. CASH-4C HOMOLOGADA. CASH-6 HOMOLOGADA.
-PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local IMPLEMENTADA — AGUARDANDO HOMOLOGAÇÃO REAL; produção AINDA BLOQUEADA.
-F14 CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Ainda não publicada em produção. O Consultor reativo e a narração proativa consomem as mesmas fórmulas deste documento. O motor proativo não inventa indicador: meta, teto e título usam os cálculos já certificados, no mês civil corrente de `America/Sao_Paulo`. Ausência ou UNAVAILABLE não vira zero. Inadimplência subiu, faturamento caiu, despesa aumentou e fluxo previsto negativo não são gatilhos certificados.
+PRE-F13-CASH-FINAL-AUDIT: PASS. F13 e F14 estão no commit de produção `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. Produção não está bloqueada de forma genérica. O commit local `75a1cb8` ainda não está em produção. O Consultor reativo e a narração proativa consomem as mesmas fórmulas deste documento. O motor proativo não inventa indicador: meta, teto e título usam os cálculos já certificados, no mês civil corrente de `America/Sao_Paulo`. Ausência ou UNAVAILABLE não vira zero. Inadimplência subiu, faturamento caiu, despesa aumentou e fluxo previsto negativo não são gatilhos certificados.
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
 BACKFILL DE PRODUÇÃO + CASH-8B. Sem as-of.
 

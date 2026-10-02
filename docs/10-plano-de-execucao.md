@@ -18,14 +18,24 @@ Versão atual:
 
 feat(sync): adiciona sincronizacao automatica incremental conta azul
 
-Próxima fase executável:
+Decisão de encerramento do MVP (02/10/2026):
 
-Fase 15 — Notificações Internas (NÃO INICIADA)
+A Fase 15 tradicional está SUBSTITUÍDA / ENCERRADA. DASH-007, DASH-008 e FV1 estão CONGELADOS / FORA DO MVP ATUAL. Nenhum dos dois bloqueia o encerramento.
 
-Fase 14 — Consultor Proativo e Insights: CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Ainda não publicada em produção. Migrations da F14 ainda não aplicadas em produção.
+Ordem restante:
 
-F13 (F13.1–F13.6, reativo): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
-Produção NÃO homologada.
+A. promover para produção o commit `75a1cb857d681e919765863491740ba288dd4cf8`;
+B. implementar AUTH-004;
+C. concluir a Fase 17;
+D. refinamento visual final;
+E. Fase 18 — Hardening;
+F. reconciliar e fechar a Fase 19;
+G. auditoria final do roadmap e encerramento do MVP.
+
+Fase 14 — Consultor Proativo e Insights: CONCLUÍDA / IMPLANTADA EM PRODUÇÃO no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`, com as migrations da fase aplicadas. O commit local `75a1cb8` ainda não está em produção.
+
+F13 (F13.1–F13.6, reativo): está nesse mesmo commit de produção.
+Produção: ambiente real operacional. O fechamento da Fase 19 é reconciliação, não a criação do ambiente.
 
 Estado atual
 
@@ -131,7 +141,7 @@ Estado atual
      emojiPreference. Motor único; provider/model por tenant; secrets de
      plataforma; sem BYOK; sem fallback cruzado; sem retry automático de
      generate; rate limit Redis 20/10min user+tenant e 60/10min tenant.
-     Knowledge Files NÃO implementado. F14 concluída e homologada localmente; ainda não publicada em produção.
+     Knowledge Files NÃO implementado. F14 implantada em produção no commit `47c1e9a`. O commit local `75a1cb8` ainda não está em produção.
 
 ✔ PRE-IA-4D — PDF profissional de Receita e Despesas IMPLEMENTADA (25/08/2026)
      Camada visual compartilhada. Sem alteração de DTO, filtros, XLSX ou motor.
@@ -889,7 +899,7 @@ Status: CONCLUÍDA
 Recorte: necessidade comprovada de produto (docs/06 §12, docs/11).
 8A (read model): CONCLUÍDA.
 8B: DESNECESSÁRIA (auditoria 19/08/2026 — sem lacuna estrutural).
-Próxima fase: Fase 15 — Notificações Internas (NÃO INICIADA). Fase 14 concluída e homologada localmente, aguardando deploy. F13 (F13.1–F13.6) IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. Produção NÃO homologada. F12-D Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-C PDF/Excel da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. Fase 12 recorte V1 (Receita+Despesas+export) entregue; Fase 12 completa: NÃO. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: SUPERSEDED na Home pelo CASH-4C (MonthlyCashFlow).
+Próxima entrega do encerramento: promover `75a1cb8`, depois AUTH-004. Fase 15 SUBSTITUÍDA (02/10/2026). Fase 14 implantada em produção no commit `47c1e9a`. F13 está nesse commit. Produção existe; a Fase 19 segue como reconciliação. F12-D Relatório de Despesas IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-C PDF/Excel da Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F12-B Receita IMPLEMENTADA / HOMOLOGADA TECNICAMENTE. F11 Home CONCLUÍDA. F12-A CONGELADA. Fase 12 recorte V1 (Receita+Despesas+export) entregue; Fase 12 completa: NÃO. 10A: CONCLUÍDA. 10B: CONCLUÍDA / HOMOLOGADA. 10C: IMPLEMENTADA / HOMOLOGADA VISUALMENTE. E1: HOMOLOGADA VISUALMENTE. E2 composição das despesas: HOMOLOGADA. Valores a receber por categoria (D8 AR): IMPLEMENTADA / AGUARDANDO HOMOLOGAÇÃO. E3 leitura executiva: SUPERSEDED na Home pelo CASH-4C (MonthlyCashFlow).
 E4: ADIADA. 9A/9B/9C: CONCLUÍDAS. Grupo A: CONCLUÍDO. Fase 9: CONCLUÍDA NO RECORTE APROVADO.
 2.5: ADIADA PARA FASE 17.
 
@@ -1239,7 +1249,7 @@ L1-B — Semântica oficial do caixa + read model mensal:
      Home CASH-4B+CASH-4C: KPIs e visualizações = MonthlyCashFlow; competência
      só em Relatórios/PDF/XLSX (CASH-6).
      UI / Previsto×Realizado: NÃO.
-Faturamento Fiscal / meta / fixa×variável / D1 drill-down: NÃO IMPLEMENTADOS.
+Faturamento Fiscal: capacidade futura. Meta de faturamento: F2 homologada. Fixa×variável (FV1): CONGELADO / FORA DO MVP ATUAL (02/10/2026). D1 drill-down: reserva, não bloqueio do encerramento.
 E4: ADIADA.
 E3 — Leitura executiva (insights de competência): SUPERSEDED na Home pelo CASH-4C.
 E4: ADIADA
@@ -1248,9 +1258,7 @@ Backlog (não 10B/10C/E1/E2): a mesma Integration CONTA_AZUL do tenant deverá
 poder ser operada pela área administrativa e, no futuro, pela área do
 próprio cliente. Uma conexão; dois contextos de UX. Não implementar agora.
 
-KPIs residuais (meta de faturamento, faturamento fiscal, realizado, saldo,
-fixas×variáveis, Receita × Despesa, D1 drill-down) não bloqueiam este caminho. 2.5/Fase 17 e
-deploy ficam depois.
+KPIs residuais citados neste trecho histórico não bloqueiam o caminho então descrito. Desde 02/10/2026, fixas×variáveis estão fora do MVP atual. A Fase 17 permanece pendente de conclusão. O deploy genérico não é mais “produção inexistente”: o ambiente opera o commit `47c1e9a`; falta promover `75a1cb8` e reconciliar a Fase 19.
 
 ===========================================================
 
@@ -1307,7 +1315,7 @@ GRUPO C/D — Adiados; NÃO bloqueiam Fase 10:
 - Faturamento (docs/11 §12) — fórmula oficial homologada (caixa); Home = CASH-4B
 - Fluxo de caixa realizado / ledger (docs/11 §8)
 - Saldo (docs/11 §13)
-- Despesas fixas/variáveis (docs/11 §14)
+- Despesas fixas/variáveis (docs/11 §14) — CONGELADO / FORA DO MVP ATUAL (02/10/2026)
 - Rateio valorado (`GET /parcelas/{id}`)
 
 Referência normativa: docs/11-regras-analiticas.md
@@ -1330,8 +1338,7 @@ Tipos V1: Receita e Despesas (entregues). Sidebar real em /relatorios (docs/05 �
 Fase 12 completa: NÃO (itens históricos do PRD fora da V1: caixa realizado,
 inadimplência de estoque ranged, listagens AR/AP).
 
-F13 (Consultor reativo F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO
-HOMOLOGAÇÃO REAL. F14 CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Ainda não publicada em produção.
+F13 (Consultor reativo F13.1–F13.6): está no commit de produção `47c1e9a`. F14 CONCLUÍDA / IMPLANTADA EM PRODUÇÃO nesse commit. O commit local `75a1cb8` ainda não está em produção.
 
 ===========================================================
 
@@ -1343,8 +1350,8 @@ Consultor Financeiro IA
 Status:
 
 F13 reativo (F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
-F14 (insights / alertas / IA proativa): CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY.
-Ainda não publicada em produção. Próxima fase funcional: Fase 15 — Notificações Internas.
+F14 (insights / alertas / IA proativa): CONCLUÍDA / IMPLANTADA EM PRODUÇÃO no commit `47c1e9a`.
+O commit local `75a1cb8` ainda não está em produção. A Fase 15 tradicional foi substituída por esta experiência em 02/10/2026.
 
 Fases
 
@@ -1383,11 +1390,11 @@ Workers — Concluída (worker separado HTTP; `pnpm worker` / `worker:start`)
 
 Scheduler — Concluído (Job Scheduler global `conta-azul-plan-syncs`, BullMQ 6.1.2)
 
-Notificações — Pendente
+Notificações internas tradicionais — SUBSTITUÍDAS pela Fase 14 (02/10/2026); não são pendência deste MVP
 
-OneSignal — Pendente
+OneSignal — Pós-MVP
 
-PWA — Pendente
+PWA — Pós-MVP
 
 ===========================================================
 
@@ -1429,7 +1436,9 @@ Concluída
 
 Bloqueada
 
-Nunca utilizar outros status.
+Nunca utilizar outros status para o andamento de uma fase em execução.
+
+Decisão de produto de 02/10/2026 acrescenta, só para item retirado do encerramento: SUBSTITUÍDA / ENCERRADA POR DECISÃO DE PRODUTO e CONGELADO / FORA DO MVP ATUAL. Esses rótulos não são pendência.
 
 ===========================================================
 

@@ -637,9 +637,9 @@ Perguntas que dependam de informações inexistentes na plataforma deverão ser 
 
 28. IA Proativa
 
-Estado F14: CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Implementada e homologada localmente. Ainda não publicada em produção. As migrations da fase ainda não foram aplicadas em produção.
+Estado F14: CONCLUÍDA / IMPLANTADA EM PRODUÇÃO no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`, com as migrations da fase aplicadas. O commit local `75a1cb857d681e919765863491740ba288dd4cf8` ainda não está em produção.
 
-A detecção é determinística e isolada por tenant. O modelo redige a narração e, na conversa seguinte, usa o bloco `PRESENTED_INSIGHT_FACTS` com os `supportingData` oficiais. O modelo não escolhe gatilho, severidade nem número. A manifestação entra na conversa ativa. A resposta do usuário reutiliza o mesmo `conversationId`. Nova conversa explícita não herda os fatos. A Central de Notificações é a Fase 15 e permanece fora desta arquitetura.
+A detecção é determinística e isolada por tenant. O modelo redige a narração e, na conversa seguinte, usa o bloco `PRESENTED_INSIGHT_FACTS` com os `supportingData` oficiais. O modelo não escolhe gatilho, severidade nem número. A manifestação entra na conversa ativa. A resposta do usuário reutiliza o mesmo `conversationId`. Nova conversa explícita não herda os fatos. Essa manifestação é a notificação oficial deste MVP. A Central da Fase 15 foi substituída em 02/10/2026 e não permanece como entrega.
 
 O Consultor Financeiro também produz interações sem pergunta inicial do usuário.
 
@@ -757,7 +757,9 @@ Relatórios mais pesados poderão ser gerados assincronamente.
 
 34. Motor de Notificações
 
-A arquitetura deverá prever um módulo independente para entrega de notificações.
+Decisão de 02/10/2026: neste MVP não há módulo separado de notificações nem central. A notificação interna oficial é a experiência proativa da Lia (Fase 14). O texto abaixo fica como desenho histórico. Push, OneSignal e e-mail continuam pós-MVP. A seção 36 continua capacidade futura e não reabre a Fase 15.
+
+A arquitetura previa um módulo independente para entrega de notificações.
 
 No MVP poderá existir apenas notificação interna.
 
@@ -780,7 +782,9 @@ Regra ou evento
 
 35. Notificação Interna
 
-O sistema deverá permitir persistir notificações internas.
+Texto histórico da central substituída. A persistência vigente é a do insight da Lia, não uma tabela `notifications`.
+
+O desenho original dizia que o sistema deveria permitir persistir notificações internas.
 
 Isso possibilitará comportamentos como:
 

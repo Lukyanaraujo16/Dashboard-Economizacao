@@ -665,7 +665,7 @@ Status
 
 Aprovada para o motor reativo (F13).
 IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL (F13.1–F13.6).
-F14 CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. A narração proativa reutiliza o mesmo `IaProvider`. Ainda não publicada em produção.
+F14 CONCLUÍDA / IMPLANTADA EM PRODUÇÃO no commit `47c1e9adec13e3e307f4ab4ac03fe55e99f5f2ca`. A narração proativa reutiliza o mesmo `IaProvider`. O commit local `75a1cb8` ainda não está em produção.
 
 Decisão
 
