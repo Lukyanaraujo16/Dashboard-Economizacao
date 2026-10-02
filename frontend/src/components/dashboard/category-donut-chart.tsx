@@ -79,7 +79,7 @@ export function CategoryDonutChart({
   size = 'sm',
 }: CategoryDonutChartProps) {
   const [highlighted, setHighlighted] = useState(-1);
-  const presentation = useDashboardPresentation('donut');
+  const presentation = useDashboardPresentation('donut', slices.length > 0);
   const percents = useMemo(() => donutSlicePercentages(slices), [slices]);
   const active = interactive && highlighted >= 0 && highlighted < slices.length;
 

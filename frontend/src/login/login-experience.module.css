@@ -1,6 +1,6 @@
 .shell {
   --login-motion: 160ms;
-  --login-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --login-ease: cubic-bezier(0.16, 0.84, 0.28, 1);
   position: relative;
   isolation: isolate;
   min-height: 100vh;
@@ -135,7 +135,7 @@
 
 .brandColumn,
 .authColumn {
-  animation: loginFade 280ms var(--login-ease) backwards;
+  animation: loginFade 720ms var(--login-ease) backwards;
 }
 
 .logoRow,
@@ -145,52 +145,52 @@
 .authTitle,
 .authSupport,
 .form {
-  animation: loginEnter 340ms var(--login-ease) backwards;
+  animation: loginEnter 560ms var(--login-ease) backwards;
 }
 
 .logoRow {
-  animation-delay: 40ms;
+  animation-delay: 80ms;
 }
 
 .brandAccentRule {
   transform-origin: left center;
-  animation: loginRule 420ms var(--login-ease) 90ms backwards;
+  animation: loginRule 640ms var(--login-ease) 140ms backwards;
 }
 
 .brandHeadline {
-  animation-delay: 110ms;
+  animation-delay: 180ms;
 }
 
 .brandCopy {
-  animation-delay: 160ms;
+  animation-delay: 280ms;
 }
 
 .highlightCard {
-  animation: loginEnter 340ms var(--login-ease) backwards;
+  animation: loginEnter 520ms var(--login-ease) backwards;
 }
 
 .highlightCard:nth-child(1) {
-  animation-delay: 190ms;
+  animation-delay: 360ms;
 }
 
 .highlightCard:nth-child(2) {
-  animation-delay: 240ms;
+  animation-delay: 450ms;
 }
 
 .highlightCard:nth-child(3) {
-  animation-delay: 290ms;
+  animation-delay: 540ms;
 }
 
 .authLogoWrap {
-  animation-delay: 150ms;
+  animation-delay: 200ms;
 }
 
 .authTitle {
-  animation-delay: 190ms;
+  animation-delay: 300ms;
 }
 
 .authSupport {
-  animation-delay: 230ms;
+  animation-delay: 380ms;
 }
 
 .form,
@@ -199,7 +199,7 @@
 }
 
 .form {
-  animation-delay: 260ms;
+  animation-delay: 460ms;
 }
 
 .brandInner {
@@ -329,7 +329,7 @@
   width: min(100%, 26rem);
   padding: var(--space-6);
   pointer-events: auto;
-  animation: loginCard 440ms var(--login-ease) 70ms backwards;
+  animation: loginCard 700ms var(--login-ease) 120ms backwards;
   box-shadow: var(--elevation-md);
 }
 
@@ -437,7 +437,7 @@
 @keyframes loginEnter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(14px);
   }
 
   to {
@@ -461,7 +461,7 @@
 @keyframes loginCard {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(18px);
   }
 
   to {
@@ -473,7 +473,7 @@
 @keyframes loginCardRest {
   from {
     opacity: 0;
-    transform: translateY(calc(-1.75rem + 10px));
+    transform: translateY(calc(-1.75rem + 18px));
   }
 
   to {
@@ -674,20 +674,40 @@
   .authCard {
     width: 100%;
     padding: var(--space-5);
-    animation-duration: 260ms;
+    animation-duration: 620ms;
+    animation-delay: 80ms;
+  }
+
+  .logoRow {
+    animation-duration: 520ms;
     animation-delay: 40ms;
   }
 
-  .logoRow,
   .brandAccentRule,
-  .brandHeadline,
-  .brandCopy,
+  .brandHeadline {
+    animation-duration: 520ms;
+    animation-delay: 100ms;
+  }
+
+  .brandCopy {
+    animation-duration: 520ms;
+    animation-delay: 160ms;
+  }
+
   .authLogoWrap,
-  .authTitle,
-  .authSupport,
+  .authTitle {
+    animation-duration: 520ms;
+    animation-delay: 140ms;
+  }
+
+  .authSupport {
+    animation-duration: 520ms;
+    animation-delay: 200ms;
+  }
+
   .form {
-    animation-duration: 240ms;
-    animation-delay: 20ms;
+    animation-duration: 520ms;
+    animation-delay: 260ms;
   }
 
   .authLogoWrap {

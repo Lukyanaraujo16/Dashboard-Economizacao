@@ -17,7 +17,7 @@ import { dailyBalanceBandGeometry } from './daily-balance-band-geometry';
 import { expandSingleKnownBalanceMark } from './monthly-realized-balance-mark';
 import { anchorRatioFromIndex } from './chart-tooltip-placement';
 import { ChartTooltip } from './chart-tooltip';
-import { useDashboardPresentation } from './dashboard-presentation';
+import { useDashboardPresentation, useRevealDataset } from './dashboard-presentation';
 import styles from './cash-monthly-grouped-bars.module.css';
 
 const PROJECTED_BAND_WIDTH = 100;
@@ -250,6 +250,10 @@ export function CashMonthlyGroupedBars({
 
   const showChart = buckets.length > 0 && !allForecastBucketsZero(forecastBuckets);
   const presentation = useDashboardPresentation('monthly-bars', showChart);
+  const revealBars = useRevealDataset(
+    presentation.present && showChart,
+    buckets.map((bucket) => bucket.monthKey).join('|'),
+  );
 
   if (!showChart) {
     return <p className={cx(styles.empty, className)}>{emptyMessage}</p>;
@@ -341,16 +345,14 @@ export function CashMonthlyGroupedBars({
                             className={cx(
                               styles.bar,
                               styles.inflowBar,
-                              presentation.present && styles.rise,
+                              presentation.present && revealBars && styles.rise,
                             )}
                             style={{
                               height:
                                 decimalAbsScaled(barAmount(bucket.inflows)) === 0n
                                   ? '0%'
                                   : `${visualBarPercent(barAmount(bucket.inflows), scale)}%`,
-                              animationDelay: presentation.present
-                                ? `${Math.min(index, 12) * 22}ms`
-                                : undefined,
+                            animationDelay: revealBars ? `${Math.min(index, 11) * 36}ms` : undefined,
                             }}
                           />
                         </span>
@@ -359,16 +361,14 @@ export function CashMonthlyGroupedBars({
                             className={cx(
                               styles.bar,
                               styles.outflowBar,
-                              presentation.present && styles.rise,
+                              presentation.present && revealBars && styles.rise,
                             )}
                             style={{
                               height:
                                 decimalAbsScaled(barAmount(bucket.outflows)) === 0n
                                   ? '0%'
                                   : `${visualBarPercent(barAmount(bucket.outflows), scale)}%`,
-                              animationDelay: presentation.present
-                                ? `${Math.min(index, 12) * 22}ms`
-                                : undefined,
+                            animationDelay: revealBars ? `${Math.min(index, 11) * 36}ms` : undefined,
                             }}
                           />
                         </span>

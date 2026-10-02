@@ -86,7 +86,7 @@ export function ExecutiveKpiCard({
 }: ExecutiveKpiCardProps) {
   const { colorVar, Icon } = TONE_META[tone];
   const titleId = useId();
-  const presentation = useDashboardPresentation('kpi');
+  const presentation = useDashboardPresentation('kpi', state === 'ready');
   const style = {
     '--kpi-tone': `var(${colorVar})`,
     '--present-index': presentation.index,

@@ -39,7 +39,7 @@
     transparent var(--dashboard-donut-reveal),
     transparent 360deg
   );
-  animation: donutReveal 560ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: donutReveal 960ms cubic-bezier(0.16, 0.84, 0.28, 1) backwards;
 }
 
 @keyframes donutReveal {

@@ -63,6 +63,23 @@ describe('apresentação visual da Dashboard', () => {
     expect(screen.getByText('R$ 12.345,67')).toBeTruthy();
     expect(screen.getByText('R$ 12.345,67').textContent).toBe('R$ 12.345,67');
     expect(screen.queryByText('R$ 0,00')).toBeNull();
+    expect(screen.getByText('R$ 12.345,67').closest('[data-reveal="true"]')).toBeTruthy();
+  });
+
+  it('não apresenta o card durante o loading e anima quando o valor real chega', () => {
+    const view = render(
+      <ExecutiveKpiCard title="Receitas" tone="revenue" state="loading" value="R$ 12.345,67" />,
+    );
+
+    expect(view.container.querySelector('[data-reveal="true"]')).toBeNull();
+    expect(screen.queryByText('R$ 12.345,67')).toBeNull();
+
+    view.rerender(
+      <ExecutiveKpiCard title="Receitas" tone="revenue" state="ready" value="R$ 12.345,67" />,
+    );
+
+    expect(screen.getByText('R$ 12.345,67').textContent).toBe('R$ 12.345,67');
+    expect(view.container.querySelector('[data-reveal="true"]')).toBeTruthy();
   });
 
   it('mantém a geometria completa da série e a interação no primeiro render', () => {
@@ -78,7 +95,7 @@ describe('apresentação visual da Dashboard', () => {
 
     const line = container.querySelector('polyline');
     expect(line?.getAttribute('points')).toBe(expectedSparklinePoints());
-    expect(line?.getAttribute('pathLength')).toBe('1');
+    expect(line?.hasAttribute('pathLength')).toBe(false);
     expect(container.querySelector('[data-reveal="true"]')).toBeTruthy();
 
     const plot = screen.getByRole('img', { name: /Enter ou Espaço/ });

@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -181,8 +182,40 @@ export function Sparkline({
     [selectFromClientX],
   );
 
+  const lineRef = useRef<SVGPolylineElement>(null);
   const flat = isFlatSeries(points);
   const presentation = useDashboardPresentation('sparkline', !flat);
+
+  useLayoutEffect(() => {
+    const line = lineRef.current;
+    if (!line || !presentation.present || typeof line.getTotalLength !== 'function') {
+      return;
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    let length: number;
+    try {
+      length = line.getTotalLength();
+    } catch {
+      return;
+    }
+    if (!Number.isFinite(length) || length <= 0) {
+      return;
+    }
+    const delay = Math.min(presentation.index, 8) * 40;
+    line.style.transition = 'none';
+    line.style.strokeDasharray = `${length}`;
+    line.style.strokeDashoffset = `${length}`;
+    line.getBoundingClientRect();
+    line.style.transition = `stroke-dashoffset 1100ms cubic-bezier(0.16, 0.84, 0.28, 1) ${delay}ms`;
+    line.style.strokeDashoffset = '0';
+    return () => {
+      line.style.transition = 'none';
+      line.style.removeProperty('stroke-dasharray');
+      line.style.removeProperty('stroke-dashoffset');
+    };
+  }, [presentation.index, presentation.present]);
   const style = {
     '--sparkline-color': `var(${colorVar})`,
     '--present-index': presentation.index,
@@ -264,9 +297,9 @@ export function Sparkline({
           />
         ) : null}
         <polyline
+          ref={lineRef}
           className={styles.line}
           points={toPolyline(geometry)}
-          pathLength={1}
           vectorEffect="non-scaling-stroke"
         />
         {selectedPoint ? (
