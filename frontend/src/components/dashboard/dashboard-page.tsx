@@ -91,6 +91,8 @@ import { Badge, Button, Typography } from '../ui';
 import { UI_ICON_STROKE } from '../ui/icons';
 import { CashCategoryDrilldown } from './cash-category-drilldown';
 import { CashRealizedCategoryPanel } from './cash-realized-category-panel';
+import { ExpectedDueDayPanel } from './expected-due-day-panel';
+import { expectedDueDayChartAmount } from './expected-due-day-drilldown';
 import { ExpectedReceivableDetailsPanel } from './expected-receivable-details-panel';
 import expectedReceivableStyles from './expected-receivable-details-panel.module.css';
 import { ExpectedPayableDetailsPanel } from './expected-payable-details-panel';
@@ -1121,9 +1123,15 @@ export function DashboardPage() {
 
   const [billingDaySelection, setBillingDaySelection] = useState<ScopedDaySelection | null>(null);
   const [expenseDaySelection, setExpenseDaySelection] = useState<ScopedDaySelection | null>(null);
+  const [receivableDaySelection, setReceivableDaySelection] = useState<ScopedDaySelection | null>(
+    null,
+  );
+  const [payableDaySelection, setPayableDaySelection] = useState<ScopedDaySelection | null>(null);
   const realizedDayScope = `${selectedMonthKey}|${selectedCostCenterId ?? ''}|${selectedCategoryId ?? ''}`;
   const billingDayDate = visibleScopedDay(billingDaySelection, realizedDayScope);
   const expenseDayDate = visibleScopedDay(expenseDaySelection, realizedDayScope);
+  const receivableDayDate = visibleScopedDay(receivableDaySelection, realizedDayScope);
+  const payableDayDate = visibleScopedDay(payableDaySelection, realizedDayScope);
 
   useEffect(() => {
     if (
@@ -2493,6 +2501,26 @@ export function DashboardPage() {
                 ariaLabel={CASH_RECEIVABLE_SPARKLINE_CAPTION}
                 caption={CASH_RECEIVABLE_SPARKLINE_CAPTION}
                 emptyMessage="Sem movimento"
+                selectedDate={receivableDayDate}
+                onPointSelect={(date) =>
+                  setReceivableDaySelection((current) =>
+                    nextScopedDaySelection(current, realizedDayScope, date),
+                  )
+                }
+              />
+            ) : null}
+            {receivableDayDate ? (
+              <ExpectedDueDayPanel
+                date={receivableDayDate}
+                direction="receivable"
+                chartAmount={expectedDueDayChartAmount(receivableDaily, receivableDayDate)}
+                details={receivableStockDetailsView}
+                renderItems={(items) => (
+                  <ExpectedReceivableDetailsPanel
+                    items={items}
+                    ariaLabel={`Títulos a receber em ${receivableDayDate}`}
+                  />
+                )}
               />
             ) : null}
             <h3 className={expectedReceivableStyles.sectionTitle}>Títulos em aberto</h3>
@@ -2566,6 +2594,26 @@ export function DashboardPage() {
                 ariaLabel={CASH_PAYABLE_SPARKLINE_CAPTION}
                 caption={CASH_PAYABLE_SPARKLINE_CAPTION}
                 emptyMessage="Sem movimento"
+                selectedDate={payableDayDate}
+                onPointSelect={(date) =>
+                  setPayableDaySelection((current) =>
+                    nextScopedDaySelection(current, realizedDayScope, date),
+                  )
+                }
+              />
+            ) : null}
+            {payableDayDate ? (
+              <ExpectedDueDayPanel
+                date={payableDayDate}
+                direction="payable"
+                chartAmount={expectedDueDayChartAmount(payableDaily, payableDayDate)}
+                details={payableStockDetailsView}
+                renderItems={(items) => (
+                  <ExpectedPayableDetailsPanel
+                    items={items}
+                    ariaLabel={`Títulos a pagar em ${payableDayDate}`}
+                  />
+                )}
               />
             ) : null}
             <h3 className={expectedPayableStyles.sectionTitle}>Títulos em aberto</h3>

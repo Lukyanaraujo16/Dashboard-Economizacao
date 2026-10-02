@@ -110,6 +110,15 @@ export function subtractDecimalStrings(minuend: string, subtrahend: string): str
   return fromCents(toCents(minuend) - toCents(subtrahend));
 }
 
+/** Soma em centavos (bigint). Lista vazia é zero, não ausência. */
+export function sumDecimalStrings(amounts: readonly string[]): string {
+  let total = 0n;
+  for (const amount of amounts) {
+    total += toCents(amount);
+  }
+  return fromCents(total);
+}
+
 /**
  * Série de `received` do snapshot como pontos diários.
  * O valor é o quanto já foi liquidado dos títulos com competência no dia,

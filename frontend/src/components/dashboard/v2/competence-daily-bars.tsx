@@ -1,6 +1,15 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  useCallback,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type TouchEvent,
+} from 'react';
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
 import { cx } from '../../ui/utils/cx';
@@ -51,6 +60,10 @@ export type CompetenceDailyBarsProps = {
   readonly balanceLabel?: string;
   /** Copy discreta de cobertura parcial (ex.: disponível a partir de …). */
   readonly balanceCoverageNote?: string | null;
+  /** Dia civil selecionado (YYYY-MM-DD). Ausente = nenhuma seleção. */
+  readonly selectedDate?: string | null;
+  /** Clique, toque ou Enter/Espaço no dia. O chamador decide o toggle. */
+  readonly onPointSelect?: (date: string) => void;
 };
 
 /** Altura da barra em unidades do viewBox; mantém visível qualquer dia com valor. */
@@ -83,10 +96,14 @@ export function CompetenceDailyBars({
   balanceByDate,
   balanceLabel = 'Saldo bancário',
   balanceCoverageNote = null,
+  selectedDate = null,
+  onPointSelect,
 }: CompetenceDailyBarsProps) {
+  const selectionHintId = useId();
   const [activeIndex, setActiveIndex] = useState(-1);
   const plotRef = useRef<HTMLDivElement>(null);
   const barsPlotRef = useRef<HTMLDivElement>(null);
+  const ignoreClickAfterTouchRef = useRef(false);
 
   const series = useMemo(() => {
     const aligned = alignDailySeries(revenueDaily, expenseDaily);
@@ -135,6 +152,59 @@ export function CompetenceDailyBars({
     [series.dates.length],
   );
 
+  const indexFromClientX = useCallback(
+    (clientX: number): number => {
+      const plot = barsPlotRef.current;
+      if (!plot) {
+        return -1;
+      }
+      const rect = plot.getBoundingClientRect();
+      if (rect.width <= 0) {
+        return -1;
+      }
+      const localX = clientX - rect.left;
+      if (localX < 0 || localX > rect.width) {
+        return -1;
+      }
+      return indexFromSlotRatio(localX / rect.width, series.dates.length);
+    },
+    [series.dates.length],
+  );
+
+  const selectIndex = useCallback(
+    (index: number) => {
+      const date = series.dates[index];
+      if (date === undefined || !onPointSelect) {
+        return;
+      }
+      onPointSelect(date);
+    },
+    [onPointSelect, series.dates],
+  );
+
+  const handleClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (ignoreClickAfterTouchRef.current) {
+        ignoreClickAfterTouchRef.current = false;
+        return;
+      }
+      selectIndex(indexFromClientX(event.clientX));
+    },
+    [indexFromClientX, selectIndex],
+  );
+
+  const handleTouchEnd = useCallback(
+    (event: TouchEvent<HTMLDivElement>) => {
+      const touch = event.changedTouches[0];
+      if (!touch) {
+        return;
+      }
+      ignoreClickAfterTouchRef.current = true;
+      selectIndex(indexFromClientX(touch.clientX));
+    },
+    [indexFromClientX, selectIndex],
+  );
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       const last = series.dates.length - 1;
@@ -150,9 +220,17 @@ export function CompetenceDailyBars({
       if (event.key === 'ArrowRight') {
         event.preventDefault();
         setActiveIndex(Math.min(last, current + 1));
+        return;
+      }
+      if ((event.key === 'Enter' || event.key === ' ') && onPointSelect) {
+        event.preventDefault();
+        const date = series.dates[current];
+        if (date !== undefined) {
+          onPointSelect(date);
+        }
       }
     },
-    [activeIndex, series.dates.length],
+    [activeIndex, onPointSelect, series.dates],
   );
 
   const monthLabel = formatMonthKeyPtBr(monthKey);
@@ -180,6 +258,9 @@ export function CompetenceDailyBars({
     showBalanceBand && balance
       ? balance.points.find((point) => point.index === activeIndex)
       : undefined;
+  const selectedIndex =
+    selectedDate === null ? -1 : series.dates.findIndex((date) => date === selectedDate);
+  const emphasized = activeIndex >= 0 || selectedIndex >= 0;
   const firstDate = series.dates[0];
   const lastDate = series.dates[count - 1];
 
@@ -198,15 +279,19 @@ export function CompetenceDailyBars({
 
       <div
         ref={plotRef}
-        className={styles.hitArea}
+        className={cx(styles.hitArea, onPointSelect && styles.selectable)}
         role="img"
         aria-label={ariaLabel ?? `Receitas e despesas por dia de competência em ${monthLabel}`}
+        aria-describedby={onPointSelect && selectedDate === null ? selectionHintId : undefined}
+        data-selected-date={selectedDate ?? undefined}
         tabIndex={0}
         onMouseMove={handleMove}
         onMouseLeave={() => setActiveIndex(-1)}
         onFocus={() => setActiveIndex(count - 1)}
         onBlur={() => setActiveIndex(-1)}
         onKeyDown={handleKeyDown}
+        onClick={onPointSelect ? handleClick : undefined}
+        onTouchEnd={onPointSelect ? handleTouchEnd : undefined}
       >
         <div className={styles.plotArea}>
           <div className={styles.axis} aria-hidden="true">
@@ -227,9 +312,13 @@ export function CompetenceDailyBars({
                 const x = index * slot + (slot - barWidth) / 2;
                 const revenue = barHeight(series.revenueValues[index] ?? 0, series.scale);
                 const expense = barHeight(series.expenseValues[index] ?? 0, series.scale);
-                const active = index === activeIndex;
+                const active = index === activeIndex || index === selectedIndex;
                 return (
-                  <g key={date} opacity={activeIndex < 0 || active ? 1 : 0.45}>
+                  <g
+                    key={date}
+                    opacity={emphasized && !active ? 0.45 : 1}
+                    data-selected={index === selectedIndex ? 'true' : undefined}
+                  >
                     {revenue > 0 ? (
                       <rect
                         className={cx(styles.bar, styles.revenueBar, revealBars && styles.rise)}
@@ -378,6 +467,12 @@ export function CompetenceDailyBars({
       {balanceCoverageNote ? <p className={styles.coverageNote}>{balanceCoverageNote}</p> : null}
 
       <p className={styles.caption}>{caption ?? 'Competência · não é caixa.'}</p>
+
+      {onPointSelect && selectedDate === null ? (
+        <p id={selectionHintId} className={styles.hint} data-expected-due-day-hint="true">
+          Selecione um dia para ver os títulos
+        </p>
+      ) : null}
 
       <span className={styles.liveRegion} aria-live="polite">
         {activeRevenue && activeExpense
