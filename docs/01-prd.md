@@ -879,7 +879,7 @@ não datas D/M/A soltas. Eixo = `competenceDate`. Não misturar com
 5.9 CONSULTOR — Consultor Financeiro Inteligente
 
 Status de implementação: F13 reativo (F13.1–F13.6) IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
-CONSULTOR-006 (proatividade) e F14: NÃO iniciadas. Produção NÃO homologada.
+F14 (CONSULTOR-006 a CONSULTOR-008 e CONSULTOR-012, no recorte certificado): CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Implementada e homologada localmente. Ainda não publicada em produção. Migrations da F14 ainda não aplicadas em produção.
 
 CONSULTOR-001 — Acesso permanente
 
@@ -944,7 +944,7 @@ Precedência:
 2. mês de referência da superfície (`month` no POST = seletor da Home);
 3. mês civil atual em `America/Sao_Paulo`.
 
-Mês citado sem ano: usa o ano do mês de referência; senão o ano civil SP. Expressões relativas (“este mês”, “mês passado”) usam a referência. Dois períodos explícitos distintos: não inventa — cai no default. F14 continua NÃO iniciada. Produção NÃO homologada.
+Mês citado sem ano: usa o ano do mês de referência; senão o ano civil SP. Expressões relativas (“este mês”, “mês passado”) usam a referência. Dois períodos explícitos distintos: não inventa — cai no default. A Fase 14 está concluída localmente e ainda não publicada em produção.
 
 ⸻
 
@@ -992,7 +992,11 @@ Critérios de aceite
 
 CONSULTOR-006 — Proatividade
 
-F14 — NÃO INICIADA.
+F14 — CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY.
+
+Implementada localmente e homologada localmente. Ainda não publicada em produção.
+
+O gatilho ativo gera evento analítico e insight. A narração usa o provider do Consultor e apenas redige. A manifestação aparece no FAB da Lia (badge e balão), materializa uma mensagem na conversa ativa e a leitura é por usuário. A pergunta seguinte permanece na mesma conversa, com os fatos estruturados em `PRESENTED_INSIGHT_FACTS`. A Fase 15 (Central de Notificações) não faz parte deste requisito.
 
 Requisito
 
@@ -1005,9 +1009,13 @@ Critérios de aceite
 * mensagem gerada fica vinculada ao tenant;
 * origem da análise pode ser rastreada.
 
+Atendidos localmente no catálogo certificado. Support Mode não marca a leitura do cliente. Fechar o balão não marca leitura.
+
 ⸻
 
 CONSULTOR-007 — Insights persistidos
+
+Entregue na F14, no mesmo estado local da CONSULTOR-006. A leitura fica em `ai_insight_reads`, por insight e usuário. O fato permanece se a narração falhar.
 
 Requisito
 
@@ -1023,6 +1031,8 @@ Critérios de aceite
 ⸻
 
 CONSULTOR-008 — Severidade do insight
+
+Entregue na F14. A severidade sai da regra: meta INFORMATIVE; teto percentual abaixo de 90 ATTENTION e a partir de 90 IMPORTANT; teto ultrapassado CRITICAL; título próximo ATTENTION. O modelo não classifica.
 
 Requisito
 
@@ -1083,6 +1093,8 @@ Critérios de aceite
 
 CONSULTOR-012 — Estado de nova mensagem
 
+Entregue na F14. O FAB mostra a quantidade de situações não lidas (9+ acima de nove). O balão avisa e abre a Lia. O som é adicional e silencioso se o navegador bloquear o autoplay.
+
 Requisito
 
 Quando o Consultor produzir mensagem proativa, a interface deverá sinalizar que existe conteúdo novo.
@@ -1111,6 +1123,8 @@ Exemplos
 * fluxo de caixa negativo;
 * vencimentos relevantes;
 * comportamento fora do padrão.
+
+Catálogo certificado da F14, homologado localmente: meta de faturamento percentual, teto de despesas percentual, teto ultrapassado e título próximo do vencimento (a pagar e a receber). Inadimplência subiu, faturamento caiu, despesa aumentou e fluxo previsto negativo ficam fora deste catálogo: ainda não há contrato determinístico suficiente para disparo seguro. São extensões futuras, não bugs da F14. A deduplicação entregue é a ocorrência única por tenant. Um cooldown temporal separado dessa ocorrência não foi o mecanismo homologado.
 
 ⸻
 

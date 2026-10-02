@@ -94,7 +94,10 @@ F13 (Consultor reativo): FECHADO LOCALMENTE em F13.9 — pronto para publicaçã
   Motor único; provider/model por tenant (`OPENAI` | `ANTHROPIC`); secrets
   `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`; sem BYOK; sem fallback cruzado;
   sem retry automático de generate. Rate limit Redis 20 msg/10min
-  user+tenant e 60/10min tenant. F14 NÃO iniciada.
+  user+tenant e 60/10min tenant.
+F14 (Consultor proativo): CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY.
+  Implementada e homologada localmente. Ainda não publicada em produção.
+  Migrations da F14 ainda não aplicadas em produção. Próxima fase funcional: F15.
 Produção: AINDA BLOQUEADA (rollout operacional — ver pendências CASH-7/8B abaixo).
   F13 em produção NÃO homologada.
 CASH-7: bootstrap/backfill LOCAL do ledger IMPLEMENTADO (Clínica Life).
@@ -187,20 +190,23 @@ Fase 1 — Autenticação
 Fase 2 — Multiempresa
 Fase 3 — Administração
 Fase 4 — Branding
-Fase 5 — Integração Conta Azul
-Fase 6 — Motor de Sincronização
-Fase 7 — Modelo Financeiro
-Fase 8 — Motor Analítico
-Fase 9 — Dashboard
-Fase 10 — Filtros e Comparações
-Fase 11 — Relatórios
-Fase 12 — Consultor Financeiro
-Fase 13 — Proatividade e Insights
-Fase 14 — Notificações Internas
-Fase 15 — Modo Suporte
-Fase 16 — Logs, Auditoria e Observabilidade
-Fase 17 — Hardening
-Fase 18 — Preparação para Produção
+Fase 5 — Spike Conta Azul
+Fase 6 — Integração Conta Azul
+Fase 7 — Motor de Sincronização
+Fase 8 — Modelo Financeiro Normalizado
+Fase 9 — Motor Analítico
+Fase 10 — Dashboard do Cliente
+Fase 11 — Filtros e Comparações
+Fase 12 — Relatórios
+Fase 13 — Consultor Financeiro Reativo
+Fase 14 — Consultor Proativo e Insights — CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY
+Fase 15 — Notificações Internas — próxima fase funcional
+Fase 16 — Modo Suporte
+Fase 17 — Logs, Auditoria e Observabilidade
+Fase 18 — Hardening
+Fase 19 — Preparação para Produção
+
+A numeração vigente é a das seções detalhadas. A Fase 14 está fechada localmente. A próxima fase funcional é a Fase 15. O projeto inteiro permanece em aberto.
 
 ⸻
 
@@ -913,9 +919,9 @@ Critérios de aceite (V1)
 
 17. Fase 13 — Consultor Financeiro Reativo
 
-Status: FECHADO LOCALMENTE em F13.9 — consultor reativo pronto para publicação. Produção ainda não publicada. F14 não iniciada.
+Status: FECHADO LOCALMENTE em F13.9 — consultor reativo pronto para publicação. Produção ainda não publicada. A Fase 14 foi fechada depois, em rodada própria.
 
-Fechamento: capabilities universais publicadas (29), incluindo cliente/fornecedor com campeão, TOP N, consulta e participação; estado analítico estruturado por conversa; conhecimento documental; gestão de provider; quality gate de identidade. Completude histórica de MONTH/YTD/YEAR permanece UNKNOWN quando a fonte não esgota a data do caixa: a resposta fica parcial, em linguagem de “nos dados disponíveis”. Isso é limitação aceita, não bug bloqueante. F14 proativo está fora deste fechamento.
+Fechamento: capabilities universais publicadas (29), incluindo cliente/fornecedor com campeão, TOP N, consulta e participação; estado analítico estruturado por conversa; conhecimento documental; gestão de provider; quality gate de identidade. Completude histórica de MONTH/YTD/YEAR permanece UNKNOWN quando a fonte não esgota a data do caixa: a resposta fica parcial, em linguagem de “nos dados disponíveis”. Isso é limitação aceita, não bug bloqueante. O comportamento proativo pertence à Fase 14.
 
 Objetivo
 
@@ -962,23 +968,68 @@ apenas no Consultor (503), sem derrubar Dashboard/Relatórios.
 
 18. Fase 14 — Consultor Proativo e Insights
 
-Status: NÃO INICIADA.
+Status: CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY.
+
+Implementada localmente e homologada localmente em navegador real. Ainda não publicada em produção. As migrations `20261001183000_proactive_trigger_domain`, `20261001223000_proactive_trigger_bootstrap` e `20261001235000_ai_message_insight_links` existem no repositório e ainda não foram aplicadas em produção.
+
+A detecção é determinística. O modelo apenas redige a narração e, no turno seguinte, interpreta a pergunta usando fatos oficiais. O modelo não escolhe gatilho, severidade nem número oficial.
+
+Catálogo certificado:
+
+* `REVENUE_GOAL_PERCENTAGE`;
+* `EXPENSE_CEILING_PERCENTAGE`;
+* `EXPENSE_CEILING_EXCEEDED`;
+* `TITLE_DUE_SOON`.
+
+Fora do catálogo certificado, por falta de contrato determinístico suficiente para disparo seguro. São extensões futuras, não bugs e não pendências bloqueantes desta fase:
+
+* inadimplência subiu;
+* faturamento caiu;
+* despesa aumentou;
+* fluxo previsto negativo.
+
+Nove gatilhos padrão, pacote versão 1, provisionados só quando a configuração do Consultor é salva com status ACTIVE, ou pelo script local explícito. Login e render não criam gatilho. O marcador `proactive_trigger_bootstraps` torna o pacote idempotente: configuração manual é preservada, gatilho inativo permanece inativo e exclusão posterior não é recriada.
+
+Os nove defaults:
+
+* meta de faturamento em 80%, 90% e 100%;
+* teto de despesas em 80%, 90% e 100%;
+* teto ultrapassado;
+* título a pagar em 3 dias, mínimo R$ 5.000;
+* título a receber em 3 dias, mínimo R$ 5.000.
+
+Severidade da regra, não do modelo: meta em qualquer percentual é INFORMATIVE; teto percentual abaixo de 90 é ATTENTION e a partir de 90 é IMPORTANT; teto ultrapassado é CRITICAL; título próximo é ATTENTION. O administrador não escolhe severidade.
+
+O motor avalia somente configuração ativa, no mês civil corrente de `America/Sao_Paulo`, com Decimal oficial. Ausência ou UNAVAILABLE não vira zero. Título usa kind, antecedência e valor mínimo. Nome, descrição e categoria não decidem o fato. A deduplicação é a chave única `occurrenceKey` por tenant. Filas `proactive-evaluation` e `proactive-narration`. A avaliação corre depois de sync bem-sucedido e também pode ser enfileirada ao salvar meta ou teto do mês corrente. Falha proativa não transforma o sync em falha. A narração usa o provider já configurado do Consultor, grava `ai_runs` com `PROACTIVE_NARRATION` e não consome a cota de perguntas. Falha da narração mantém o evento e o insight (`NARRATION_FAILED`).
+
+Entrega na Lia: contagem de não lidos no FAB, balão, som curto (`lia-message.wav`, volume 0,25, uma vez por lote, falha de autoplay ignorada), materialização de mensagem SYSTEM na conversa ativa, `related_insight_id`, `ai_message_insight_links` e leitura por usuário em `ai_insight_reads`. Fechar o balão não marca leitura. Support Mode não consome a leitura do cliente. Troca de tenant não vaza insight. Títulos `TITLE_DUE_SOON` do mesmo kind, quando há dois ou mais fatos legíveis, são consolidados só na apresentação; PAYABLE e RECEIVABLE permanecem separados; os fatos individuais permanecem. A mensagem da Lia aceita Markdown seguro (parágrafo, lista, negrito, itálico) sem HTML executável.
+
+Continuidade: a manifestação entra na conversa que o usuário está vendo. A resposta seguinte reutiliza o mesmo `conversationId`. O bloco `PRESENTED_INSIGHT_FACTS` leva os `supportingData` oficiais daquela conversa ao Consultor reativo. Nova conversa explícita não herda esses fatos. Isolamento: tenant, usuário e conversa.
+
+Limitações aceitas, sem reabrir a fase:
+
+* consolidação de marcos diferentes de meta ou teto pode evoluir;
+* título individual ainda depende da narração obedecer ao contrato do prompt;
+* o navegador pode bloquear o autoplay do áudio;
+* novo tipo de gatilho exige regra determinística certificada;
+* inbox global, sino fora da conversa e histórico de notificações fora da Lia pertencem à Fase 15.
 
 Objetivo
 
 Transformar o Consultor em um componente ativo.
 
-Escopo
+Escopo entregue
 
-* analytical_events;
-* motor de regras;
-* regras iniciais do sistema;
-* ai_insights;
-* severidade;
-* deduplicação;
-* cooldown;
-* mensagens proativas;
-* badge.
+* `proactive_trigger_configurations`;
+* `analytical_events`;
+* `ai_insights`;
+* `ai_insight_reads`;
+* `proactive_trigger_bootstraps`;
+* `ai_message_insight_links`;
+* severidade determinística;
+* deduplicação por ocorrência;
+* narração;
+* badge, balão e mensagem na conversa.
 
 Requisitos relacionados
 
@@ -986,29 +1037,23 @@ Requisitos relacionados
 * CONSULTOR-007;
 * CONSULTOR-008;
 * CONSULTOR-012;
-* RULE-001 a RULE-004.
+* RULE-001 a RULE-003 no recorte certificado acima.
 
-Primeiras regras candidatas
-
-Somente após validação analítica:
-
-* inadimplência subiu;
-* faturamento caiu;
-* despesa aumentou;
-* fluxo previsto ficou negativo;
-* título relevante está vencendo.
-
-Critérios de aceite
+Critérios de aceite atendidos localmente
 
 * evento é determinístico;
-* insight fica persistido;
-* não há repetição excessiva;
-* usuário percebe mensagem nova;
-* IA interpreta evento sem inventar dados.
+* insight fica persistido mesmo se a narração falhar;
+* a mesma ocorrência não dispara de novo;
+* o usuário percebe mensagem nova no FAB;
+* a Lia interpreta o evento com os fatos oficiais, sem recalcular o número.
 
 ⸻
 
 19. Fase 15 — Notificações Internas
+
+Status: NÃO INICIADA. Próxima fase funcional depois do fechamento local da Fase 14.
+
+A Fase 14 entrega a manifestação dentro da conversa da Lia. A Fase 15 é a Central de Notificações Internas: inbox e listagem global, eventual sino global, histórico de notificações fora da conversa e navegação genérica por notificações. Esta fase não está implementada.
 
 Objetivo
 
@@ -1031,7 +1076,10 @@ Não incluir
 
 * OneSignal;
 * push;
-* WhatsApp.
+* service worker;
+* e-mail;
+* WhatsApp;
+* SMS.
 
 Critérios de aceite
 

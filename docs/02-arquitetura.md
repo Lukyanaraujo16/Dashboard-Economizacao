@@ -637,20 +637,28 @@ Perguntas que dependam de informações inexistentes na plataforma deverão ser 
 
 28. IA Proativa
 
-O Consultor Financeiro também poderá produzir interações sem pergunta inicial do usuário.
+Estado F14: CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Implementada e homologada localmente. Ainda não publicada em produção. As migrations da fase ainda não foram aplicadas em produção.
 
-A proatividade deverá surgir de eventos ou regras do sistema.
+A detecção é determinística e isolada por tenant. O modelo redige a narração e, na conversa seguinte, usa o bloco `PRESENTED_INSIGHT_FACTS` com os `supportingData` oficiais. O modelo não escolhe gatilho, severidade nem número. A manifestação entra na conversa ativa. A resposta do usuário reutiliza o mesmo `conversationId`. Nova conversa explícita não herda os fatos. A Central de Notificações é a Fase 15 e permanece fora desta arquitetura.
 
-Fluxo conceitual:
+O Consultor Financeiro também produz interações sem pergunta inicial do usuário.
 
-Nova sincronização
-→ Dados atualizados
-→ Motor Analítico
-→ Motor de Regras
-→ Evento relevante identificado
-→ Criação de insight
-→ Consultor Financeiro
-→ Mensagem ou alerta para o usuário
+A proatividade surge de eventos ou regras do sistema.
+
+Fluxo entregue:
+
+Gatilho ativo
+→ Avaliação determinística
+→ analytical_event
+→ ai_insight
+→ Narração pelo provider do Consultor
+→ Não lido no FAB
+→ Balão
+→ Mensagem SYSTEM na conversa
+→ Leitura por usuário
+→ Continuidade na mesma conversa
+
+A avaliação também pode ser enfileirada ao salvar a meta ou o teto do mês civil corrente. Sync com falha não enfileira. Falha da avaliação ou da narração não desfaz o sync nem apaga o fato. Filas: `proactive-evaluation` e `proactive-narration`.
 
 ⸻
 
@@ -676,7 +684,7 @@ Um insight poderá possuir informações como:
 * descartado;
 * resolvido.
 
-A modelagem final será definida no documento de banco de dados.
+A modelagem operacional está em `docs/03-modelagem-banco.md` §9. A leitura é por usuário (`ai_insight_reads`). O vínculo da mensagem com cada insight apresentado é `ai_message_insight_links`.
 
 ⸻
 
@@ -684,12 +692,18 @@ A modelagem final será definida no documento de banco de dados.
 
 O sistema deverá possuir uma abstração para regras que possam gerar eventos.
 
-Exemplos:
+Catálogo certificado da F14:
+
+* meta de faturamento em percentual;
+* teto de despesas em percentual;
+* teto de despesas ultrapassado;
+* título a pagar ou a receber próximo do vencimento.
+
+Inadimplência subiu, faturamento caiu, despesa aumentou e fluxo previsto negativo ficam fora do catálogo: ainda não há contrato determinístico suficiente. São extensões futuras do catálogo, não bugs. Candidatos históricos, sem threshold inventado:
 
 * inadimplência acima de determinado valor;
 * crescimento de despesa;
 * queda de receita;
-* conta relevante próxima do vencimento;
 * projeção negativa de caixa;
 * variação fora de padrão.
 
@@ -701,16 +715,17 @@ A arquitetura, entretanto, deverá permitir que regras existam sem ficarem acopl
 
 31. Proteção contra excesso de alertas
 
-Regras proativas deverão possuir mecanismos para evitar repetição excessiva.
+Regras proativas possuem mecanismos para evitar repetição excessiva.
 
-A plataforma deverá ser preparada para conceitos como:
+Entregue na F14:
 
-* deduplicação;
-* cooldown;
-* prioridade;
-* severidade;
-* janela de tempo;
-* reconhecimento do usuário.
+* deduplicação pela chave única de ocorrência (`occurrenceKey`) por tenant;
+* severidade determinística da regra;
+* janela do mês civil corrente em `America/Sao_Paulo` para meta e teto;
+* antecedência e valor mínimo para título;
+* reconhecimento por usuário em `ai_insight_reads`.
+
+Um cooldown temporal separado da identidade da ocorrência não faz parte do mecanismo homologado. Prioridade entre tipos diferentes também permanece evolução futura. A consolidação de vários títulos do mesmo kind acontece só na apresentação. Marcos diferentes de meta ou teto continuam mensagens separadas.
 
 O objetivo é evitar que o Consultor Financeiro se transforme em uma fonte de notificações repetitivas.
 

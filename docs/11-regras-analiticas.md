@@ -970,7 +970,7 @@ Ghost ACTIVE pode ser excluído do analytics sem virar DELETED.
 Produção: `--confirm=PRODUCTION`; sem dry-run/report-only no CLI CASH-9C.
 CASH-4B HOMOLOGADA. CASH-4C HOMOLOGADA. CASH-6 HOMOLOGADA.
 PRE-F13-CASH-FINAL-AUDIT: PASS. F13 local IMPLEMENTADA — AGUARDANDO HOMOLOGAÇÃO REAL; produção AINDA BLOQUEADA.
-F14 NÃO iniciada. O Consultor reativo consome as mesmas fórmulas deste documento; não calcula indicador.
+F14 CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Ainda não publicada em produção. O Consultor reativo e a narração proativa consomem as mesmas fórmulas deste documento. O motor proativo não inventa indicador: meta, teto e título usam os cálculos já certificados, no mês civil corrente de `America/Sao_Paulo`. Ausência ou UNAVAILABLE não vira zero. Inadimplência subiu, faturamento caiu, despesa aumentou e fluxo previsto negativo não são gatilhos certificados.
 HOME CASH NÃO PODE SER LIBERADA AO FELIPE COM NÚMEROS REAIS ANTES DO
 BACKFILL DE PRODUÇÃO + CASH-8B. Sem as-of.
 

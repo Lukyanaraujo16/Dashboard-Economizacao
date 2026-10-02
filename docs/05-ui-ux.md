@@ -387,8 +387,9 @@ homologação humana do complemento CAT). A Home conta uma única história de c
   PRE-F13-HOME-POLISH-CLOSE (27/08/2026): homologação humana APROVADA no
   localhost; pacote fechado localmente. Naquele fechamento, F13 ainda
   não havia sido iniciada. F13 reativa (F13.1–F13.6) está hoje
-  IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. F14 NÃO
-  iniciada. Produção NÃO homologada.
+  IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. F14
+  CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Ainda não
+  publicada em produção.
 
 CASH-4A (infra Home / caixa): a Home **carrega** `GET /dashboard/monthly-cash-flow`
 (`month`, `costCenter`, `category`). Infra mantida; números oficiais = CASH-4B.
@@ -1034,7 +1035,7 @@ Não deverá parecer que a tela travou.
 36. Consultor Financeiro — Botão Flutuante
 
 Status F13.5 (reativo): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
-Badge/proatividade: F14 — NÃO iniciada. Produção NÃO homologada.
+Badge e balão proativos: F14 — CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Ainda não publicada em produção.
 
 O Consultor Financeiro deverá possuir botão flutuante persistente no canto inferior direito.
 
@@ -1121,8 +1122,13 @@ Essas sugestões não deverão limitar a conversa.
 
 42. Consultor Proativo
 
-F14 — NÃO INICIADA. O recorte F13 é só reativo (FAB + conversa). Sem badge
-proativo, sem insight iniciado pelo sistema.
+F14 — CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Implementada e homologada localmente. Ainda não publicada em produção.
+
+O FAB mostra o número de situações não lidas. Acima de nove, o badge mostra 9+. O badge fica fora da área que recorta o botão. O balão informa que a Lia encontrou situações relevantes. Clicar no balão ou em “Ver agora” abre a Lia. Fechar o balão não marca leitura. A sessão do balão é por usuário e empresa (`lia-proactive-shown`). O pulso é curto e finito. `prefers-reduced-motion` desliga a animação. O som `lia-message.wav` toca uma vez por lote novo, volume 0,25; se o navegador bloquear o autoplay, a falha é ignorada.
+
+A mensagem da Lia usa Markdown seguro: parágrafos, quebra de linha, lista, negrito e itálico. HTML, script e iframe permanecem texto. Títulos próximos do mesmo tipo podem aparecer numa lista, com o total calculado pela aplicação. A mensagem entra na conversa aberta. A resposta do usuário continua nessa conversa. “Nova conversa” inicia contexto sem os fatos da conversa anterior.
+
+A Central de Notificações, o sino global e o histórico fora da conversa pertencem à Fase 15 e não estão nesta experiência.
 
 Quando um insight relevante for detectado:
 
@@ -1413,7 +1419,7 @@ Campos iniciais:
 * conhecimento adicional.
 
 Rota administrativa implementada: `/empresas/{companyId}/consultor`.
-Acesso reativo do cliente: FAB nas superfícies de tenant (Dashboard e Relatórios), sem badge proativo (F14 NÃO iniciada).
+Acesso do cliente: FAB nas superfícies de tenant (Dashboard e Relatórios), com badge e balão da F14 homologados localmente.
 F13.5 local: IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL. Produção NÃO homologada.
 
 ⸻
@@ -1434,11 +1440,7 @@ Evoluções futuras poderão incluir arquivos.
 
 62. Regras do Consultor
 
-A administração deverá possuir local reservado para regras de comportamento proativo.
-
-O MVP poderá começar com regras disponibilizadas pelo sistema.
-
-Editor avançado de regras poderá ser implementado depois.
+A administração possui a tela Gatilhos da Lia, por empresa. O pacote traz nove gatilhos padrão e só é aplicado ao salvar o Consultor ativo. O administrador liga, desliga e ajusta parâmetros certificados. O administrador não escolhe a severidade. Editor livre de regra continua fora desta fase.
 
 ⸻
 
@@ -1891,7 +1893,7 @@ UX-006 — Tabelas serão utilizadas principalmente para detalhamento.
 
 UX-007 — Consultor ficará disponível por botão flutuante.
 
-UX-008 — Consultor poderá sinalizar mensagens proativas.
+UX-008 — Consultor sinaliza mensagens proativas. Entregue na F14 (badge, balão e abertura da Lia), homologado localmente. A Central de Notificações permanece na Fase 15.
 
 UX-009 — Modo suporte terá sinalização persistente.
 

@@ -665,7 +665,7 @@ Status
 
 Aprovada para o motor reativo (F13).
 IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL (F13.1–F13.6).
-F14 NÃO iniciada. Produção NÃO homologada.
+F14 CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. A narração proativa reutiliza o mesmo `IaProvider`. Ainda não publicada em produção.
 
 Decisão
 

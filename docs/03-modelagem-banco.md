@@ -929,8 +929,7 @@ Provider e model efetivos são por tenant. Ausência de settings equivale a Cons
 `ai_platform_credentials` guarda ciphertext global por provider (AES-256-GCM) e `display_hint` (metadado visual derivado no PUT; nunca o segredo). Sem plaintext.
 
 F13 (F13.1–F13.6): IMPLEMENTADA LOCALMENTE — AGUARDANDO HOMOLOGAÇÃO REAL.
-F14 (insights / regras proativas / `ai_insights` operacional): NÃO iniciada.
-Produção NÃO homologada.
+F14: CONCLUÍDA / HOMOLOGADA LOCALMENTE / AGUARDANDO DEPLOY. Implementada e homologada localmente. Ainda não publicada em produção. Migrations `20261001183000_proactive_trigger_domain`, `20261001223000_proactive_trigger_bootstrap` e `20261001235000_ai_message_insight_links` ainda não aplicadas em produção.
 
 ⸻
 
@@ -989,6 +988,8 @@ Campos conceituais:
 * related_insight_id opcional;
 * created_at.
 
+F14: `related_insight_id` aponta o insight primário da manifestação. Cada insight coberto pela mesma mensagem, inclusive o primário, também fica em `ai_message_insight_links` (`message_id`, `insight_id`, `tenant_id`). A mensagem proativa usa `sender_type` SYSTEM. A prosa consolidada não substitui os fatos.
+
 Sender types conceituais:
 
 * user;
@@ -1020,12 +1021,17 @@ Campos conceituais:
 * created_at;
 * updated_at.
 
-Status conceituais:
+Status conceituais de produto (lido, descartado, resolvido) não são uma coluna de status no insight. A F14 persiste a leitura em `ai_insight_reads` (`insight_id`, `tenant_id`, `user_id`, `read_at`), única por insight e usuário. O texto da narração vive em `title` e `content`. O ciclo da narração é `narration_status`: `AWAITING_NARRATION`, `NARRATED`, `NARRATION_FAILED`. `supporting_data` guarda o fato fechado. `severity` vem da regra.
 
-* unread;
-* read;
-* dismissed;
-* resolved.
+Tabelas operacionais da F14, além de `ai_insights`:
+
+* `proactive_trigger_configurations` — gatilho por tenant, tipo certificado, `parameter_key`, parâmetros e `active`;
+* `analytical_events` — fato detectado, com `occurrence_key` única por tenant;
+* `ai_insight_reads` — leitura por usuário;
+* `proactive_trigger_bootstraps` — marcador idempotente do pacote padrão (versão 1, nove gatilhos);
+* `ai_message_insight_links` — insights apresentados numa mensagem.
+
+O catálogo certificado tem quatro tipos: `REVENUE_GOAL_PERCENTAGE`, `EXPENSE_CEILING_PERCENTAGE`, `EXPENSE_CEILING_EXCEEDED` e `TITLE_DUE_SOON`. As seções 10.1 e 10.2 (`rules`, `rule_executions`) permanecem conceituais. A F14 não criou essas tabelas nem uma coluna de cooldown.
 
 ⸻
 
@@ -1057,6 +1063,8 @@ Status de `ai_runs` no recorte F13: `STARTED`, `SUCCEEDED`, `FAILED`,
 `TIMEOUT`, `LIMIT_BLOCKED`. `LIMIT_BLOCKED` é exclusivo do limiter da
 plataforma (429 `RATE_LIMITED`). `RATE_LIMIT` do vendor grava `FAILED`
 e a API devolve 503. Sem retry automático de generate.
+
+F14: `run_type` inclui `PROACTIVE_NARRATION`. `insight_id` liga a execução ao insight. A narração proativa não consome a cota de perguntas do usuário.
 
 Política de armazenamento de prompts completos será definida posteriormente considerando privacidade.
 
