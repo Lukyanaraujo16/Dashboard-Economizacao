@@ -152,18 +152,40 @@ beforeEach(() => {
 
 describe('UI administrativa de Empresas (1.2D)', () => {
   describe('navegação por role', () => {
-    it('ADMIN vê item Empresas e não vê Dashboard/Relatórios', async () => {
+    it('ADMIN vê Operação como primeiro item e não vê Dashboard/Relatórios', async () => {
       stubListFetch([]);
       renderShell('ADMIN');
-      expect(await screen.findByRole('link', { name: 'Empresas' })).toBeTruthy();
+      const navigation = await screen.findByRole('navigation', { name: 'Seções' });
+      const labels = within(navigation)
+        .getAllByRole('link')
+        .map((link) => link.textContent?.trim());
+      expect(labels[0]).toBe('Operação');
+      expect(labels).toEqual([
+        'Operação',
+        'Empresas',
+        'Administradores',
+        'Configurações',
+        'Consultor IA',
+      ]);
       expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
       expect(screen.queryByRole('link', { name: 'Relatórios' })).toBeNull();
     });
 
-    it('SUPER_ADMIN vê item Empresas', async () => {
+    it('SUPER_ADMIN começa o menu por Operação', async () => {
       stubListFetch([]);
       renderShell('SUPER_ADMIN');
-      expect(await screen.findByRole('link', { name: 'Empresas' })).toBeTruthy();
+      const navigation = await screen.findByRole('navigation', { name: 'Seções' });
+      const labels = within(navigation)
+        .getAllByRole('link')
+        .map((link) => link.textContent?.trim());
+      expect(labels[0]).toBe('Operação');
+      expect(labels).toEqual([
+        'Operação',
+        'Empresas',
+        'Administradores',
+        'Configurações',
+        'Consultor IA',
+      ]);
     });
 
     it('USER não vê item Empresas', async () => {

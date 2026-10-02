@@ -35,6 +35,12 @@ const NAV_ITEMS = [
     icon: IconBarChart3,
   },
   {
+    href: '/operacao',
+    label: 'Operação',
+    surface: 'platform',
+    icon: IconList,
+  },
+  {
     href: '/empresas',
     label: 'Empresas',
     surface: 'platform',
@@ -45,12 +51,6 @@ const NAV_ITEMS = [
     label: 'Administradores',
     surface: 'platform',
     icon: IconShieldUser,
-  },
-  {
-    href: '/operacao',
-    label: 'Operação',
-    surface: 'platform',
-    icon: IconList,
   },
   {
     href: '/configuracoes/aparencia',

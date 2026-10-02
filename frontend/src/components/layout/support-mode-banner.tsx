@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import { useAuth } from '../../auth';
+import { PLATFORM_LANDING_PATH, useAuth } from '../../auth';
 import { exitSupportMode } from '../../services/auth/support';
 import { useOptionalRuntimeTheme } from '../../theme';
 import { Button, Typography } from '../ui';
@@ -33,7 +33,7 @@ export function SupportModeBanner() {
       setError(null);
       setPendingExitSessionId(null);
       applySession(session);
-      router.replace('/empresas');
+      router.replace(PLATFORM_LANDING_PATH);
     } catch {
       setError('Não foi possível sair do modo suporte. Tente novamente.');
       setPendingExitSessionId(null);

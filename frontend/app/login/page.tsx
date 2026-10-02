@@ -10,7 +10,7 @@ import type { TenantBrandingInput } from '../../src/theme/types/theme';
 
 /**
  * Rota de produção do login.
- * USER autenticado → `/`. ADMIN/SUPER_ADMIN sem Support Mode → `/empresas`.
+ * USER autenticado → `/`. ADMIN/SUPER_ADMIN sem Support Mode → `/operacao`.
  * Branding vem de GET /branding/platform via RuntimePlatformBrandingProvider.
  */
 export default function LoginPage() {

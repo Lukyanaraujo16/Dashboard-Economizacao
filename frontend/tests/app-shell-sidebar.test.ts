@@ -21,6 +21,6 @@ describe('app-shell sidebar', () => {
   it('mobile empilhado não aplica sticky na sidebar', () => {
     const mobile = css.match(/@media \(max-width: 767px\) \{([\s\S]*?)\n\}\s*$/);
     expect(mobile?.[1]).not.toMatch(/position:\s*sticky/);
-    expect(mobile?.[1]).toMatch(/grid-template-columns:\s*1fr/);
+    expect(mobile?.[1]).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/);
   });
 });

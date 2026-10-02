@@ -31,6 +31,12 @@ function createPlatformBrandingAction() {
   return vi.fn().mockResolvedValue(platformBranding);
 }
 
+function platformLinkLabels(navigation: HTMLElement): string[] {
+  return within(navigation)
+    .getAllByRole('link')
+    .map((link) => link.textContent?.trim() ?? '');
+}
+
 vi.mock('../src/services/dashboard/overview', () => ({
   getDashboardOverview: vi.fn().mockResolvedValue({
     today: '2026-08-19',
@@ -171,7 +177,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     expect(system.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('ADMIN sem Support Mode oculta Dashboard/Relatórios e redireciona /empresas', async () => {
+  it('ADMIN sem Support Mode oculta Dashboard/Relatórios e redireciona /operacao', async () => {
     const admin = {
       ...mockAuthenticatedUser,
       role: 'ADMIN' as const,
@@ -184,16 +190,22 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     });
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     const navigation = await screen.findByRole('navigation', { name: 'Seções' });
     expect(within(navigation).queryByRole('link', { name: 'Dashboard' })).toBeNull();
     expect(within(navigation).queryByRole('link', { name: 'Relatórios' })).toBeNull();
-    expect(within(navigation).getByRole('link', { name: 'Empresas' })).toBeTruthy();
+    expect(platformLinkLabels(navigation)).toEqual([
+      'Operação',
+      'Empresas',
+      'Administradores',
+      'Configurações',
+      'Consultor IA',
+    ]);
     expect(screen.queryByRole('heading', { level: 1, name: 'Dashboard financeiro' })).toBeNull();
   });
 
-  it('SUPER_ADMIN sem Support Mode oculta Dashboard/Relatórios e redireciona /empresas', async () => {
+  it('SUPER_ADMIN sem Support Mode oculta Dashboard/Relatórios e redireciona /operacao', async () => {
     const superAdmin = {
       ...mockAuthenticatedUser,
       role: 'SUPER_ADMIN' as const,
@@ -206,12 +218,18 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     });
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     const navigation = await screen.findByRole('navigation', { name: 'Seções' });
     expect(within(navigation).queryByRole('link', { name: 'Dashboard' })).toBeNull();
     expect(within(navigation).queryByRole('link', { name: 'Relatórios' })).toBeNull();
-    expect(within(navigation).getByRole('link', { name: 'Empresas' })).toBeTruthy();
+    expect(platformLinkLabels(navigation)).toEqual([
+      'Operação',
+      'Empresas',
+      'Administradores',
+      'Configurações',
+      'Consultor IA',
+    ]);
   });
 
   it('ADMIN em Support Mode vê Dashboard e Relatórios e não redireciona', async () => {
@@ -236,7 +254,8 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     const navigation = await screen.findByRole('navigation', { name: 'Seções' });
     expect(within(navigation).getByRole('link', { name: 'Dashboard' })).toBeTruthy();
     expect(within(navigation).getByRole('link', { name: 'Relatórios' })).toBeTruthy();
-    expect(navigation.textContent).not.toMatch(/Empresas|Administradores|Configurações/);
+    expect(navigation.textContent).not.toMatch(/Operação|Empresas|Administradores|Configurações/);
+    expect(replaceMock).not.toHaveBeenCalledWith('/operacao');
     expect(replaceMock).not.toHaveBeenCalledWith('/empresas');
   });
 
@@ -255,7 +274,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     );
     expect(navigation.textContent).not.toMatch(/Consultor|Notificações|Minha Conta/);
     expect(navigation.textContent).not.toMatch(
-      /Empresas|Administradores|Usuários|Integrações|Configurações/,
+      /Operação|Empresas|Administradores|Usuários|Integrações|Configurações/,
     );
   });
 
@@ -302,7 +321,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     const banner = await screen.findByLabelText('Modo suporte');
     expect(banner.textContent).toContain('Empresa Assistida');
     const navigation = screen.getByRole('navigation', { name: 'Seções' });
-    expect(navigation.textContent).not.toMatch(/Empresas|Administradores|Configurações/);
+    expect(navigation.textContent).not.toMatch(/Operação|Empresas|Administradores|Configurações/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Sair do modo suporte' }));
 
@@ -312,7 +331,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
         expect.objectContaining({ method: 'POST', credentials: 'include' }),
       );
       expect(getCurrentUserAction).toHaveBeenCalledTimes(1);
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     expect(screen.queryByLabelText('Modo suporte')).toBeNull();
   });

@@ -390,7 +390,7 @@ describe('página /relatorios', () => {
     vi.mocked(getReportsRevenue).mockReset();
     renderReports({ role: 'ADMIN' });
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     expect(screen.queryByRole('heading', { name: 'Relatórios', level: 1 })).toBeNull();
     expect(vi.mocked(getReportsRevenue)).not.toHaveBeenCalled();
@@ -409,10 +409,10 @@ describe('página /relatorios', () => {
     expect(await screen.findByText('Serviços')).toBeTruthy();
   });
 
-  it('SUPER_ADMIN sem Support Mode em /relatorios redireciona /empresas', async () => {
+  it('SUPER_ADMIN sem Support Mode em /relatorios redireciona /operacao', async () => {
     renderReports({ role: 'SUPER_ADMIN' });
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     expect(vi.mocked(getReportsRevenue)).not.toHaveBeenCalled();
   });
@@ -424,6 +424,7 @@ describe('página /relatorios', () => {
       support: { active: true, tenantId: 'tenant-a', tenantDisplayName: 'Empresa A' },
     });
     expect(await screen.findByRole('heading', { name: 'Relatórios', level: 1 })).toBeTruthy();
+    expect(replaceMock).not.toHaveBeenCalledWith('/operacao');
     expect(replaceMock).not.toHaveBeenCalledWith('/empresas');
   });
 

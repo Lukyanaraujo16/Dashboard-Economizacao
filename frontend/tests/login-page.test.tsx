@@ -73,7 +73,7 @@ describe('rota /login', () => {
     expect(screen.queryByRole('heading', { name: /bem-vindo de volta/i })).toBeNull();
   });
 
-  it('autenticado ADMIN → redirect /empresas', async () => {
+  it('autenticado ADMIN → redirect /operacao', async () => {
     renderLoginPage({
       getCurrentUserAction: createAuthenticatedGetCurrentUser({
         id: 'admin-1',
@@ -86,12 +86,12 @@ describe('rota /login', () => {
     });
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     expect(replaceMock).not.toHaveBeenCalledWith('/');
   });
 
-  it('autenticado SUPER_ADMIN → redirect /empresas', async () => {
+  it('autenticado SUPER_ADMIN → redirect /operacao', async () => {
     renderLoginPage({
       getCurrentUserAction: createAuthenticatedGetCurrentUser({
         id: 'super-1',
@@ -104,7 +104,7 @@ describe('rota /login', () => {
     });
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     expect(replaceMock).not.toHaveBeenCalledWith('/');
   });

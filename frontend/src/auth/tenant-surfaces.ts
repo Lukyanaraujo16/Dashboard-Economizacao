@@ -4,8 +4,8 @@ import type { AuthenticatedUser, SupportState } from './types';
 /** Home financeira do tenant (USER ou operador em Support Mode). */
 export const TENANT_HOME_PATH = '/';
 
-/** Landing operacional da plataforma sem overlay de suporte. */
-export const PLATFORM_LANDING_PATH = '/empresas';
+/** Landing administrativa da plataforma sem overlay de suporte. */
+export const PLATFORM_LANDING_PATH = '/operacao';
 
 /**
  * Superfícies financeiras de tenant (Dashboard / Relatórios).
@@ -26,7 +26,7 @@ export function canUseTenantSurfaces(
 
 /**
  * Destino pós-login e pós-hidratação em `/login`.
- * USER → `/`. Papel de plataforma sem Support Mode → `/empresas`.
+ * USER → `/`. Papel de plataforma sem Support Mode → `/operacao`.
  */
 export function resolveAuthenticatedHomePath(
   user: AuthenticatedUser,

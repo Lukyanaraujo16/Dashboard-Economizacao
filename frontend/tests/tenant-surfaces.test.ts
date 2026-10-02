@@ -66,9 +66,10 @@ describe('resolveAuthenticatedHomePath', () => {
     expect(resolveAuthenticatedHomePath(tenantUser, inactive)).toBe(TENANT_HOME_PATH);
   });
 
-  it('plataforma sem Support Mode cai em /empresas', () => {
-    expect(resolveAuthenticatedHomePath(admin, inactive)).toBe(PLATFORM_LANDING_PATH);
-    expect(resolveAuthenticatedHomePath(superAdmin, inactive)).toBe(PLATFORM_LANDING_PATH);
+  it('plataforma sem Support Mode cai em /operacao', () => {
+    expect(PLATFORM_LANDING_PATH).toBe('/operacao');
+    expect(resolveAuthenticatedHomePath(admin, inactive)).toBe('/operacao');
+    expect(resolveAuthenticatedHomePath(superAdmin, inactive)).toBe('/operacao');
   });
 
   it('plataforma com Support Mode cai na Dashboard do tenant assistido', () => {

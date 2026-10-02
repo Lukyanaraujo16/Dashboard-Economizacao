@@ -395,6 +395,7 @@ describe('LoginExperience (integração funcional)', () => {
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith('/');
     });
+    expect(replaceMock).not.toHaveBeenCalledWith('/operacao');
     expect(replaceMock).not.toHaveBeenCalledWith('/empresas');
 
     expect(localStorage.length).toBe(0);
@@ -403,7 +404,7 @@ describe('LoginExperience (integração funcional)', () => {
     expect(JSON.stringify(sessionStorage)).not.toContain('Password#12345');
   });
 
-  it('ADMIN autenticado é enviado para /empresas', async () => {
+  it('ADMIN autenticado é enviado para /operacao', async () => {
     const admin = {
       ...mockAuthenticatedUser,
       role: 'ADMIN' as const,
@@ -424,12 +425,12 @@ describe('LoginExperience (integração funcional)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }));
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     expect(replaceMock).not.toHaveBeenCalledWith('/');
   });
 
-  it('SUPER_ADMIN autenticado é enviado para /empresas', async () => {
+  it('SUPER_ADMIN autenticado é enviado para /operacao', async () => {
     const superAdmin = {
       ...mockAuthenticatedUser,
       role: 'SUPER_ADMIN' as const,
@@ -450,7 +451,7 @@ describe('LoginExperience (integração funcional)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Entrar' }));
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith('/empresas');
+      expect(replaceMock).toHaveBeenCalledWith('/operacao');
     });
     expect(replaceMock).not.toHaveBeenCalledWith('/');
   });
