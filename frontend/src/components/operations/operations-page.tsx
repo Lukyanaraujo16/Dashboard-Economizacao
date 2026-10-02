@@ -1,22 +1,30 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { listCompanies } from '../../services/admin/companies';
 import {
+  getOperationOverview,
   listOperationAiRuns,
   listOperationAuditLogs,
   listOperationFailures,
-  listOperationHealth,
   listOperationSyncRuns,
   OperationsRequestError,
   type AiRunRow,
   type AuditLogRow,
-  type IntegrationHealthRow,
+  type OperationsOverview,
   type SyncRunRow,
 } from '../../services/admin/operations';
 import { StateWrapper } from '../financial/state-wrapper';
 import { Button, Typography } from '../ui';
+import { OperationsExecutive } from './operations-executive';
+import {
+  failureProgressSummary,
+  primarySyncCountSummary,
+  summarizeAiPage,
+  syncCountDetails,
+  syncErrorLabel,
+} from './operations-display';
 import styles from './operations.module.css';
 
 const PAGE_SIZE = 20;
@@ -158,15 +166,6 @@ function formatDuration(ms: number | null): string {
   return rest === 0 ? `${minutes} min` : `${minutes} min ${rest} s`;
 }
 
-function formatCounts(counts: Record<string, number> | null): string {
-  if (!counts) {
-    return '—';
-  }
-  return Object.entries(counts)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join(' · ');
-}
-
 function formatMetadata(metadata: Record<string, unknown> | null): string {
   if (!metadata) {
     return '—';
@@ -195,10 +194,11 @@ export function OperationsPage() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [syncRows, setSyncRows] = useState<readonly SyncRunRow[]>([]);
-  const [healthRows, setHealthRows] = useState<readonly IntegrationHealthRow[]>([]);
+  const [overview, setOverview] = useState<OperationsOverview | null>(null);
   const [aiRows, setAiRows] = useState<readonly AiRunRow[]>([]);
   const [auditRows, setAuditRows] = useState<readonly AuditLogRow[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
+  const requestId = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,6 +219,7 @@ export function OperationsPage() {
   }, []);
 
   const load = useCallback(async () => {
+    const current = ++requestId.current;
     setState('loading');
     const query = {
       limit: PAGE_SIZE,
@@ -229,16 +230,22 @@ export function OperationsPage() {
     };
     try {
       if (tab === 'health') {
-        const result = await listOperationHealth(query);
-        setHealthRows(result.data);
-        setTotal(result.pagination.total);
-        setHasMore(result.pagination.hasMore);
-        setState(result.data.length === 0 ? 'empty' : 'ready');
+        const result = await getOperationOverview(query);
+        if (current !== requestId.current) {
+          return;
+        }
+        setOverview(result);
+        setTotal(result.companies.pagination.total);
+        setHasMore(result.companies.pagination.hasMore);
+        setState('ready');
         return;
       }
       if (tab === 'sync' || tab === 'failures') {
         const result =
           tab === 'sync' ? await listOperationSyncRuns(query) : await listOperationFailures(query);
+        if (current !== requestId.current) {
+          return;
+        }
         setSyncRows(result.data);
         setTotal(result.pagination.total);
         setHasMore(result.pagination.hasMore);
@@ -247,6 +254,9 @@ export function OperationsPage() {
       }
       if (tab === 'ai') {
         const result = await listOperationAiRuns(query);
+        if (current !== requestId.current) {
+          return;
+        }
         setAiRows(result.data);
         setTotal(result.pagination.total);
         setHasMore(result.pagination.hasMore);
@@ -254,11 +264,17 @@ export function OperationsPage() {
         return;
       }
       const result = await listOperationAuditLogs(query);
+      if (current !== requestId.current) {
+        return;
+      }
       setAuditRows(result.data);
       setTotal(result.pagination.total);
       setHasMore(result.pagination.hasMore);
       setState(result.data.length === 0 ? 'empty' : 'ready');
     } catch (error) {
+      if (current !== requestId.current) {
+        return;
+      }
       setErrorMessage(
         error instanceof OperationsRequestError
           ? error.message
@@ -274,7 +290,7 @@ export function OperationsPage() {
 
   const visibleCount =
     tab === 'health'
-      ? healthRows.length
+      ? (overview?.companies.data.length ?? 0)
       : tab === 'ai'
         ? aiRows.length
         : tab === 'audit'
@@ -289,7 +305,7 @@ export function OperationsPage() {
         : tab === 'ai'
           ? 'Nenhuma execução de IA registrada.'
           : tab === 'audit'
-            ? 'Nenhuma alteração administrativa registrada.'
+            ? 'Ainda não há alterações administrativas registradas. Elas aparecem aqui depois de mudanças feitas na plataforma, como empresas, usuários, aparência e integrações.'
             : 'Nenhuma sincronização registrada.';
 
   return (
@@ -299,8 +315,8 @@ export function OperationsPage() {
           Operação
         </Typography>
         <Typography as="p" variant="body" className={styles.description}>
-          Saúde da integração, histórico de sincronização, falhas, execuções da IA e auditoria
-          administrativa.
+          Visão administrativa da plataforma. As abas seguintes detalham sincronização, falhas,
+          execuções da Lia e auditoria.
         </Typography>
       </header>
 
@@ -317,6 +333,7 @@ export function OperationsPage() {
               setOffset(0);
               setStatus('');
               setAction('');
+              setState('loading');
             }}
           >
             {item.label}
@@ -401,8 +418,11 @@ export function OperationsPage() {
         emptyMessage={emptyMessage}
         onRetry={() => setReloadKey((current) => current + 1)}
       >
-        {tab === 'health' ? <HealthTable rows={healthRows} /> : null}
-        {tab === 'sync' || tab === 'failures' ? <SyncTable rows={syncRows} /> : null}
+        {tab === 'health' && overview ? (
+          <OperationsExecutive overview={overview} formatWhen={formatWhen} labelOf={labelOf} />
+        ) : null}
+        {tab === 'sync' ? <SyncTable rows={syncRows} /> : null}
+        {tab === 'failures' ? <FailureTable rows={syncRows} /> : null}
         {tab === 'ai' ? <AiTable rows={aiRows} /> : null}
         {tab === 'audit' ? <AuditTable rows={auditRows} /> : null}
       </StateWrapper>
@@ -438,42 +458,31 @@ export function OperationsPage() {
   );
 }
 
-function HealthTable({ rows }: { readonly rows: readonly IntegrationHealthRow[] }) {
+function SyncCountsCell({
+  counts,
+  summary = true,
+}: {
+  readonly counts: SyncRunRow['counts'];
+  readonly summary?: boolean;
+}) {
+  const details = syncCountDetails(counts);
   return (
-    <div className={styles.tableWrap}>
-      <table className={styles.table}>
-        <caption className={styles.muted}>Saúde da integração por empresa</caption>
-        <thead>
-          <tr>
-            <th>Empresa</th>
-            <th>Status</th>
-            <th>Última sincronização</th>
-            <th>Último erro</th>
-            <th>Execução corrente</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.tenantId}>
-              <td>{row.tenantDisplayName}</td>
-              <td>{row.integration ? labelOf(row.integration.status) : 'Sem integração'}</td>
-              <td>{formatWhen(row.integration?.lastSuccessfulSyncAt ?? null)}</td>
-              <td>
-                {row.integration?.lastErrorAt
-                  ? `${formatWhen(row.integration.lastErrorAt)}${
-                      row.integration.lastErrorCode ? ` · ${row.integration.lastErrorCode}` : ''
-                    }`
-                  : '—'}
-              </td>
-              <td>
-                {row.integration?.currentRun
-                  ? `${labelOf(row.integration.currentRun.status)} · ${formatWhen(row.integration.currentRun.startedAt)}`
-                  : '—'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className={styles.countsCell}>
+      {summary ? <span>{primarySyncCountSummary(counts)}</span> : null}
+      {details.length > 0 ? (
+        <details className={styles.details}>
+          <summary>Ver detalhes</summary>
+          <ul className={styles.detailList}>
+            {details.map((item) => (
+              <li key={item.key}>
+                <span>{item.label}</span>
+                <span className={styles.detailValue}>{item.value}</span>
+                <span className={styles.detailKey}>{item.key}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -493,7 +502,7 @@ function SyncTable({ rows }: { readonly rows: readonly SyncRunRow[] }) {
             <th>Duração</th>
             <th>Heartbeat</th>
             <th>Erro</th>
-            <th>Contagens</th>
+            <th>Resumo</th>
           </tr>
         </thead>
         <tbody>
@@ -506,8 +515,57 @@ function SyncTable({ rows }: { readonly rows: readonly SyncRunRow[] }) {
               <td>{formatWhen(row.finishedAt)}</td>
               <td>{formatDuration(row.durationMs)}</td>
               <td>{formatWhen(row.heartbeatAt)}</td>
-              <td>{row.errorCode ?? '—'}</td>
-              <td>{formatCounts(row.counts)}</td>
+              <td>{row.errorCode ? syncErrorLabel(row.errorCode) : '—'}</td>
+              <td>
+                <SyncCountsCell counts={row.counts} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FailureTable({ rows }: { readonly rows: readonly SyncRunRow[] }) {
+  return (
+    <div className={styles.tableWrap}>
+      <table className={styles.table}>
+        <caption className={styles.muted}>Falhas de sincronização</caption>
+        <thead>
+          <tr>
+            <th>Empresa</th>
+            <th>Quando</th>
+            <th>Duração</th>
+            <th>Origem</th>
+            <th>Erro</th>
+            <th>Andamento</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td>{row.tenantDisplayName}</td>
+              <td>{formatWhen(row.startedAt)}</td>
+              <td>{formatDuration(row.durationMs)}</td>
+              <td>{labelOf(row.triggerType)}</td>
+              <td>
+                <div className={styles.countsCell}>
+                  <span>{syncErrorLabel(row.errorCode)}</span>
+                  {row.errorCode ? (
+                    <details className={styles.details}>
+                      <summary>Ver código técnico</summary>
+                      <p className={styles.detailKey}>{row.errorCode}</p>
+                    </details>
+                  ) : null}
+                </div>
+              </td>
+              <td>
+                <div className={styles.countsCell}>
+                  <span>{failureProgressSummary(row.counts)}</span>
+                  <SyncCountsCell counts={row.counts} summary={false} />
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -517,8 +575,21 @@ function SyncTable({ rows }: { readonly rows: readonly SyncRunRow[] }) {
 }
 
 function AiTable({ rows }: { readonly rows: readonly AiRunRow[] }) {
+  const summary = summarizeAiPage(rows);
   return (
-    <div className={styles.tableWrap}>
+    <div className={styles.stack}>
+      <div className={styles.aiSummary} data-testid="operations-ai-summary">
+        <Typography as="p" variant="body">
+          Nesta página: {summary.total} execuções, {summary.succeeded} concluídas, {summary.failed}{' '}
+          falhas.
+        </Typography>
+        <Typography as="p" variant="caption" className={styles.muted}>
+          Tempo médio das execuções com duração registrada:{' '}
+          {summary.averageDurationMs === null ? '—' : formatDuration(summary.averageDurationMs)}. Sem
+          estimativa de custo.
+        </Typography>
+      </div>
+      <div className={styles.tableWrap}>
       <table className={styles.table}>
         <caption className={styles.muted}>Execuções da IA</caption>
         <thead>
@@ -556,6 +627,7 @@ function AiTable({ rows }: { readonly rows: readonly AiRunRow[] }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import {
   adminOperationsAuditLogsPath,
   adminOperationsFailuresPath,
   adminOperationsHealthPath,
+  adminOperationsOverviewPath,
   adminOperationsSyncRunsPath,
 } from '../../lib/api-config';
 
@@ -446,4 +447,197 @@ export async function listOperationAiRuns(query: OperationsQuery): Promise<Opera
 
 export async function listOperationAuditLogs(query: OperationsQuery): Promise<OperationsList<AuditLogRow>> {
   return parseList(await getList(adminOperationsAuditLogsPath(), query), mapAuditLog);
+}
+
+export type OperationsMoney = string | null;
+
+export type OperationsCompanyFinancials = {
+  readonly billing: OperationsMoney;
+  readonly result: OperationsMoney;
+  readonly receivables: OperationsMoney;
+  readonly payables: OperationsMoney;
+  readonly overdueReceivables: OperationsMoney;
+  readonly overduePayables: OperationsMoney;
+};
+
+export type OperationsCompanyRow = {
+  readonly tenantId: string;
+  readonly tenantDisplayName: string;
+  readonly tenantStatus: string;
+  readonly integrationState: string;
+  readonly referenceMonthKey: string;
+  readonly integration: IntegrationHealthRow['integration'];
+  readonly financials: OperationsCompanyFinancials;
+};
+
+export type OperationsOverview = {
+  readonly referenceMonthKey: string;
+  readonly windows: {
+    readonly syncFreshnessHours: number;
+    readonly recentDays: number;
+  };
+  readonly kpis: {
+    readonly companies: { readonly total: number };
+    readonly integrations: {
+      readonly connected: number;
+      readonly total: number;
+      readonly withError: number;
+    };
+    readonly synchronization: {
+      readonly syncedCompaniesLast24Hours: number;
+      readonly failuresLast7Days: number;
+    };
+    readonly ai: {
+      readonly runsLast7Days: number;
+      readonly errorsLast7Days: number;
+    };
+    readonly audit: { readonly changesLast7Days: number };
+  };
+  readonly companies: OperationsList<OperationsCompanyRow>;
+  readonly alerts: {
+    readonly failures: readonly SyncRunRow[];
+    readonly aiErrors: readonly AiRunRow[];
+    readonly audit: readonly AuditLogRow[];
+  };
+};
+
+function readCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function readMoney(value: unknown): OperationsMoney | undefined {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) {
+    return value;
+  }
+  return undefined;
+}
+
+function mapFinancials(value: unknown): OperationsCompanyFinancials | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const billing = readMoney(value.billing);
+  const result = readMoney(value.result);
+  const receivables = readMoney(value.receivables);
+  const payables = readMoney(value.payables);
+  const overdueReceivables = readMoney(value.overdueReceivables);
+  const overduePayables = readMoney(value.overduePayables);
+  if (
+    billing === undefined ||
+    result === undefined ||
+    receivables === undefined ||
+    payables === undefined ||
+    overdueReceivables === undefined ||
+    overduePayables === undefined
+  ) {
+    return null;
+  }
+  return { billing, result, receivables, payables, overdueReceivables, overduePayables };
+}
+
+function mapCompany(value: unknown): OperationsCompanyRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const tenantId = readString(value.tenantId);
+  const tenantDisplayName = readString(value.tenantDisplayName);
+  const tenantStatus = readString(value.tenantStatus);
+  const integrationState = readString(value.integrationState);
+  const referenceMonthKey = readString(value.referenceMonthKey);
+  const financials = mapFinancials(value.financials);
+  if (!tenantId || !tenantDisplayName || !tenantStatus || !integrationState || !referenceMonthKey || !financials) {
+    return null;
+  }
+  if (value.integration === null) {
+    return {
+      tenantId,
+      tenantDisplayName,
+      tenantStatus,
+      integrationState,
+      referenceMonthKey,
+      integration: null,
+      financials,
+    };
+  }
+  const health = mapHealth({
+    tenantId,
+    tenantDisplayName,
+    tenantStatus,
+    integration: value.integration,
+  });
+  if (!health?.integration) {
+    return null;
+  }
+  return {
+    tenantId,
+    tenantDisplayName,
+    tenantStatus,
+    integrationState,
+    referenceMonthKey,
+    integration: health.integration,
+    financials,
+  };
+}
+
+export async function getOperationOverview(query: OperationsQuery): Promise<OperationsOverview> {
+  const body = await getList(adminOperationsOverviewPath(), query);
+  if (!isRecord(body) || !isRecord(body.kpis) || !isRecord(body.windows) || !isRecord(body.alerts)) {
+    throw new OperationsRequestError('unknown', 'Resposta administrativa inválida.');
+  }
+  const referenceMonthKey = readString(body.referenceMonthKey);
+  const syncFreshnessHours = readCount(body.windows.syncFreshnessHours);
+  const recentDays = readCount(body.windows.recentDays);
+  const companies = parseList(body.companies, mapCompany);
+  if (!referenceMonthKey || syncFreshnessHours === null || recentDays === null) {
+    throw new OperationsRequestError('unknown', 'Resposta administrativa inválida.');
+  }
+  const companiesKpi = isRecord(body.kpis.companies) ? readCount(body.kpis.companies.total) : null;
+  const integrations = isRecord(body.kpis.integrations) ? body.kpis.integrations : null;
+  const synchronization = isRecord(body.kpis.synchronization) ? body.kpis.synchronization : null;
+  const ai = isRecord(body.kpis.ai) ? body.kpis.ai : null;
+  const audit = isRecord(body.kpis.audit) ? body.kpis.audit : null;
+  const connected = integrations ? readCount(integrations.connected) : null;
+  const integrationTotal = integrations ? readCount(integrations.total) : null;
+  const withError = integrations ? readCount(integrations.withError) : null;
+  const synced = synchronization ? readCount(synchronization.syncedCompaniesLast24Hours) : null;
+  const failures = synchronization ? readCount(synchronization.failuresLast7Days) : null;
+  const runs = ai ? readCount(ai.runsLast7Days) : null;
+  const errors = ai ? readCount(ai.errorsLast7Days) : null;
+  const changes = audit ? readCount(audit.changesLast7Days) : null;
+  if (
+    companiesKpi === null ||
+    connected === null ||
+    integrationTotal === null ||
+    withError === null ||
+    synced === null ||
+    failures === null ||
+    runs === null ||
+    errors === null ||
+    changes === null
+  ) {
+    throw new OperationsRequestError('unknown', 'Resposta administrativa inválida.');
+  }
+  const failureList = parseList({ data: body.alerts.failures, pagination: companies.pagination }, mapSyncRun);
+  const aiList = parseList({ data: body.alerts.aiErrors, pagination: companies.pagination }, mapAiRun);
+  const auditList = parseList({ data: body.alerts.audit, pagination: companies.pagination }, mapAuditLog);
+  return {
+    referenceMonthKey,
+    windows: { syncFreshnessHours, recentDays },
+    kpis: {
+      companies: { total: companiesKpi },
+      integrations: { connected, total: integrationTotal, withError },
+      synchronization: { syncedCompaniesLast24Hours: synced, failuresLast7Days: failures },
+      ai: { runsLast7Days: runs, errorsLast7Days: errors },
+      audit: { changesLast7Days: changes },
+    },
+    companies,
+    alerts: {
+      failures: failureList.data,
+      aiErrors: aiList.data,
+      audit: auditList.data,
+    },
+  };
 }

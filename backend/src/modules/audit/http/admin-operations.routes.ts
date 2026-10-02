@@ -1,9 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 
 import { getPrismaClient } from '../../../infrastructure/database/prisma.js';
+import { createMonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import { createRequireAuthentication } from '../../auth/http/require-authentication.js';
 import { createRequirePlatformRole } from '../../auth/http/require-platform-role.js';
 import { createUserRepository } from '../../auth/repositories/user.repository.js';
+import { createCostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
+import { createFinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
+import { createLedgerReadRepository } from '../../finance/repositories/ledger-read.repository.js';
+import { createPayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
+import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import {
   parseAiRunListQuery,
@@ -33,7 +39,15 @@ export async function registerAdminOperationsRoutes(app: FastifyInstance): Promi
   const requireAuthentication = createRequireAuthentication({ users, tenants });
   const requirePlatformRole = createRequirePlatformRole();
   const adminGuard = [requireAuthentication, requirePlatformRole];
-  const operations = createAdminOperationsService(prisma);
+  const operations = createAdminOperationsService(prisma, {
+    cashFlow: createMonthlyCashFlowService({
+      ledger: createLedgerReadRepository(prisma),
+      receivables: createReceivableReadRepository(prisma),
+      payables: createPayableReadRepository(prisma),
+      categories: createFinancialCategoryReadRepository(prisma),
+      costCenterAllocations: createCostCenterAllocationReadRepository(prisma),
+    }),
+  });
 
   app.get('/admin/operations/sync-runs', { preHandler: adminGuard }, async (request, reply) => {
     const query = parseSyncRunListQuery(request.query);
@@ -45,6 +59,21 @@ export async function registerAdminOperationsRoutes(app: FastifyInstance): Promi
     const query = parseOperationsPageQuery(request.query);
     const result = await operations.listFailures(query);
     return reply.status(200).send({ data: result.items, pagination: paginationOf(result) });
+  });
+
+  app.get('/admin/operations/overview', { preHandler: adminGuard }, async (request, reply) => {
+    const query = parseOperationsPageQuery(request.query);
+    const result = await operations.getOverview(query);
+    return reply.status(200).send({
+      referenceMonthKey: result.referenceMonthKey,
+      windows: result.windows,
+      kpis: result.kpis,
+      companies: {
+        data: result.companies.items,
+        pagination: paginationOf(result.companies),
+      },
+      alerts: result.alerts,
+    });
   });
 
   app.get('/admin/operations/health', { preHandler: adminGuard }, async (request, reply) => {

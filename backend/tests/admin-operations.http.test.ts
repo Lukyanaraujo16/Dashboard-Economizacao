@@ -118,6 +118,7 @@ const ENDPOINTS = [
   '/admin/operations/sync-runs',
   '/admin/operations/failures',
   '/admin/operations/health',
+  '/admin/operations/overview',
   '/admin/operations/ai-runs',
   '/admin/operations/audit-logs',
 ] as const;
@@ -170,6 +171,12 @@ describe('operação administrativa (fase 17)', () => {
       headers: { cookie },
     });
     expect(denied.statusCode).toBe(403);
+    const overviewDenied = await app.inject({
+      method: 'GET',
+      url: '/admin/operations/overview',
+      headers: { cookie },
+    });
+    expect(overviewDenied.statusCode).toBe(403);
 
     expect(await prisma.supportSession.count()).toBe(1);
     expect(await prisma.auditLog.count()).toBe(0);
@@ -525,5 +532,128 @@ describe('operação administrativa (fase 17)', () => {
     expect(serialized).not.toContain('sess-token-secreto');
     expect(serialized).not.toContain(PROMPT_SECRET);
     expect(stored.some((row) => row.result === 'FAILURE' && row.metadata !== null)).toBe(true);
+  });
+
+  it('resume a plataforma, pagina empresas e isola o filtro sem inventar zero', async () => {
+    const admin = await createActiveUser('ops.overview.admin@test.local', 'ADMIN');
+    const superAdmin = await createActiveUser('ops.overview.super@test.local', 'SUPER_ADMIN');
+    const tenantA = await tenants.create({ name: 'ops-overview-a', displayName: 'Visao Alfa' });
+    const tenantB = await tenants.create({ name: 'ops-overview-b', displayName: 'Visao Beta' });
+    await tenants.create({ name: 'ops-overview-c', displayName: 'Visao Gama' });
+    const now = new Date();
+    const integrationA = await prisma.integration.create({
+      data: {
+        tenantId: tenantA.id,
+        provider: 'CONTA_AZUL',
+        status: 'ERROR',
+        lastErrorAt: now,
+        lastErrorCode: 'sync_upstream_unavailable',
+      },
+    });
+    await prisma.integration.create({
+      data: {
+        tenantId: tenantB.id,
+        provider: 'CONTA_AZUL',
+        status: 'CONNECTED',
+        lastSuccessfulSyncAt: now,
+      },
+    });
+    await prisma.syncRun.create({
+      data: {
+        tenantId: tenantA.id,
+        integrationId: integrationA.id,
+        triggerType: 'MANUAL',
+        status: 'FAILED',
+        startedAt: now,
+        finishedAt: new Date(now.getTime() + 1000),
+        errorCode: 'sync_disconnected',
+        counts: { payables: 3, ledgerFetched: 1 },
+      },
+    });
+
+    const app = await buildTestApp();
+    const adminCookie = await login(app, admin.email);
+    const superCookie = await login(app, superAdmin.email);
+
+    const overview = await app.inject({
+      method: 'GET',
+      url: '/admin/operations/overview?limit=1&offset=0',
+      headers: { cookie: adminCookie },
+    });
+    expect(overview.statusCode).toBe(200);
+    const body = overview.json();
+    expect(body.windows).toEqual({ syncFreshnessHours: 24, recentDays: 7 });
+    expect(body.kpis.companies.total).toBeGreaterThanOrEqual(3);
+    expect(body.kpis.integrations.connected).toBeGreaterThanOrEqual(1);
+    expect(body.kpis.integrations.withError).toBeGreaterThanOrEqual(1);
+    expect(body.kpis.synchronization.syncedCompaniesLast24Hours).toBeGreaterThanOrEqual(1);
+    expect(body.kpis.synchronization.failuresLast7Days).toBeGreaterThanOrEqual(1);
+    expect(body.companies.pagination).toMatchObject({ limit: 1, offset: 0, hasMore: true });
+    expect(body.companies.data).toHaveLength(1);
+    expect(body.companies.data[0].financials).toEqual(
+      expect.objectContaining({
+        billing: expect.anything(),
+        result: expect.anything(),
+        receivables: expect.anything(),
+        payables: expect.anything(),
+      }),
+    );
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain('realizedByCategory');
+    expect(serialized).not.toContain('PROMPT');
+    expect(serialized).not.toContain('apiKey');
+
+    const page2 = await app.inject({
+      method: 'GET',
+      url: '/admin/operations/overview?limit=1&offset=1',
+      headers: { cookie: adminCookie },
+    });
+    expect(page2.json().companies.data[0].tenantId).not.toBe(body.companies.data[0].tenantId);
+
+    const filtered = await app.inject({
+      method: 'GET',
+      url: `/admin/operations/overview?tenantId=${tenantA.id}`,
+      headers: { cookie: superCookie },
+    });
+    expect(filtered.statusCode).toBe(200);
+    expect(filtered.json().companies.data).toEqual([
+      expect.objectContaining({
+        tenantId: tenantA.id,
+        tenantDisplayName: 'Visao Alfa',
+        integrationState: 'ERROR',
+        integration: expect.objectContaining({ status: 'ERROR' }),
+      }),
+    ]);
+    expect(filtered.json().kpis.companies.total).toBe(body.kpis.companies.total);
+    expect(JSON.stringify(filtered.json().companies)).not.toContain('Visao Beta');
+    expect(JSON.stringify(filtered.json().companies)).not.toContain('Visao Gama');
+
+    const missing = await app.inject({
+      method: 'GET',
+      url: `/admin/operations/overview?tenantId=${tenantB.id}`,
+      headers: { cookie: adminCookie },
+    });
+    expect(missing.json().companies.data[0].integrationState).toBe('CONNECTED');
+
+    const withoutIntegration = await app.inject({
+      method: 'GET',
+      url: `/admin/operations/overview?tenantId=${
+        (
+          await prisma.tenant.findFirstOrThrow({ where: { displayName: 'Visao Gama' } })
+        ).id
+      }`,
+      headers: { cookie: adminCookie },
+    });
+    expect(withoutIntegration.json().companies.data[0]).toMatchObject({
+      integration: null,
+      integrationState: 'NONE',
+    });
+    const financials = withoutIntegration.json().companies.data[0].financials as {
+      billing: string | null;
+    };
+    expect(financials.billing === null || typeof financials.billing === 'string').toBe(true);
+    if (financials.billing === null) {
+      expect(financials.billing).not.toBe('0');
+    }
   });
 });

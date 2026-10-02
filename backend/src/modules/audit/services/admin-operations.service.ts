@@ -1,8 +1,22 @@
 import type { Prisma, PrismaClient } from '../../../generated/prisma/client.js';
 import { NotFoundError } from '../../../shared/errors/application-error.js';
+import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
+import { civilMonthKey } from '../../analytics/domain/civil-calendar.js';
+import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import { isContaAzulSyncErrorCode } from '../../integrations/conta-azul/domain/conta-azul-sync.js';
 import { toPublicErrorCode } from '../../integrations/conta-azul/domain/types.js';
 import type { AuditAction } from '../domain/audit-actions.js';
+import {
+  OPERATIONS_ALERT_LIMIT,
+  OPERATIONS_COMPANY_PAGE_LIMIT,
+  OPERATIONS_RECENT_DAYS,
+  OPERATIONS_SYNC_FRESHNESS_HOURS,
+  resolveOperationsIntegrationState,
+  toOperationsCompanyFinancials,
+  unavailableOperationsFinancials,
+  type OperationsCompanyFinancials,
+  type OperationsIntegrationState,
+} from '../domain/operations-overview.js';
 import { sanitizeAuditMetadata } from '../domain/sanitize-audit-metadata.js';
 import { sanitizeSyncCounts } from '../domain/sanitize-sync-counts.js';
 
@@ -155,7 +169,74 @@ function toSyncRunView(row: SyncRunRow): SyncRunView {
   };
 }
 
-export function createAdminOperationsService(prisma: PrismaClient) {
+type OperationsOverview = {
+  readonly referenceMonthKey: string;
+  readonly windows: {
+    readonly syncFreshnessHours: number;
+    readonly recentDays: number;
+  };
+  readonly kpis: {
+    readonly companies: { readonly total: number };
+    readonly integrations: {
+      readonly connected: number;
+      readonly total: number;
+      readonly withError: number;
+    };
+    readonly synchronization: {
+      readonly syncedCompaniesLast24Hours: number;
+      readonly failuresLast7Days: number;
+    };
+    readonly ai: {
+      readonly runsLast7Days: number;
+      readonly errorsLast7Days: number;
+    };
+    readonly audit: { readonly changesLast7Days: number };
+  };
+  readonly companies: OperationsPageResult<OperationsCompanyView>;
+  readonly alerts: {
+    readonly failures: readonly SyncRunView[];
+    readonly aiErrors: readonly AiRunView[];
+    readonly audit: readonly AuditLogView[];
+  };
+};
+
+type OperationsCompanyView = {
+  readonly tenantId: string;
+  readonly tenantDisplayName: string;
+  readonly tenantStatus: 'ACTIVE' | 'DISABLED';
+  readonly integrationState: OperationsIntegrationState;
+  readonly referenceMonthKey: string;
+  readonly integration: IntegrationHealthView['integration'];
+  readonly financials: OperationsCompanyFinancials;
+};
+
+const AI_ERROR_STATUSES = ['FAILED', 'TIMEOUT'] as const;
+
+async function mapPool<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  map: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await map(items[index]!);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+export function createAdminOperationsService(
+  prisma: PrismaClient,
+  deps: {
+    readonly cashFlow?: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'>;
+    readonly now?: () => Date;
+  } = {},
+) {
   async function requireTenantIfFiltered(tenantId: string | undefined): Promise<void> {
     if (!tenantId) {
       return;
@@ -407,7 +488,229 @@ export function createAdminOperationsService(prisma: PrismaClient) {
         offset,
       };
     },
+
+    async getOverview(query: OperationsPage): Promise<OperationsOverview> {
+      await requireTenantIfFiltered(query.tenantId);
+      const now = deps.now?.() ?? new Date();
+      const referenceMonthKey = civilMonthKey(civilTodayInSaoPaulo(now));
+      const recentSince = new Date(now.getTime() - OPERATIONS_RECENT_DAYS * 24 * 60 * 60 * 1000);
+      const syncSince = new Date(now.getTime() - OPERATIONS_SYNC_FRESHNESS_HOURS * 60 * 60 * 1000);
+      const page = resolvePagination(query);
+      const limit = Math.min(page.limit, OPERATIONS_COMPANY_PAGE_LIMIT);
+      const offset = page.offset;
+      const companyWhere: Prisma.TenantWhereInput = query.tenantId ? { id: query.tenantId } : {};
+
+      const [
+        companyTotal,
+        integrationTotal,
+        connected,
+        withError,
+        syncedRows,
+        failuresLast7Days,
+        runsLast7Days,
+        errorsLast7Days,
+        changesLast7Days,
+        tenants,
+        filteredTotal,
+        failureRows,
+        aiErrorRows,
+        auditRows,
+      ] = await Promise.all([
+        prisma.tenant.count(),
+        prisma.integration.count({ where: { provider: 'CONTA_AZUL' } }),
+        prisma.integration.count({ where: { provider: 'CONTA_AZUL', status: 'CONNECTED' } }),
+        prisma.integration.count({ where: { provider: 'CONTA_AZUL', status: 'ERROR' } }),
+        prisma.integration.findMany({
+          where: {
+            provider: 'CONTA_AZUL',
+            lastSuccessfulSyncAt: { gte: syncSince },
+          },
+          select: { tenantId: true },
+          distinct: ['tenantId'],
+        }),
+        prisma.syncRun.count({
+          where: { status: 'FAILED', startedAt: { gte: recentSince } },
+        }),
+        prisma.aiRun.count({ where: { createdAt: { gte: recentSince } } }),
+        prisma.aiRun.count({
+          where: { createdAt: { gte: recentSince }, status: { in: [...AI_ERROR_STATUSES] } },
+        }),
+        prisma.auditLog.count({ where: { createdAt: { gte: recentSince } } }),
+        prisma.tenant.findMany({
+          where: companyWhere,
+          orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+          take: limit,
+          skip: offset,
+          select: { id: true, displayName: true, status: true },
+        }),
+        prisma.tenant.count({ where: companyWhere }),
+        prisma.syncRun.findMany({
+          where: { status: 'FAILED', startedAt: { gte: recentSince } },
+          orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+          take: OPERATIONS_ALERT_LIMIT,
+          select: syncRunSelect,
+        }),
+        prisma.aiRun.findMany({
+          where: { createdAt: { gte: recentSince }, status: { in: [...AI_ERROR_STATUSES] } },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: OPERATIONS_ALERT_LIMIT,
+          select: {
+            id: true,
+            tenantId: true,
+            userId: true,
+            runType: true,
+            provider: true,
+            model: true,
+            status: true,
+            inputTokens: true,
+            outputTokens: true,
+            durationMs: true,
+            errorCode: true,
+            createdAt: true,
+            finishedAt: true,
+            tenant: { select: { displayName: true } },
+            user: { select: { name: true } },
+          },
+        }),
+        prisma.auditLog.findMany({
+          where: { createdAt: { gte: recentSince } },
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: OPERATIONS_ALERT_LIMIT,
+          select: {
+            id: true,
+            operatorUserId: true,
+            tenantId: true,
+            action: true,
+            targetType: true,
+            targetId: true,
+            result: true,
+            metadata: true,
+            createdAt: true,
+            operator: { select: { name: true } },
+            tenant: { select: { displayName: true } },
+          },
+        }),
+      ]);
+
+      const tenantIds = tenants.map((tenant) => tenant.id);
+      const integrations =
+        tenantIds.length === 0
+          ? []
+          : await prisma.integration.findMany({
+              where: { tenantId: { in: tenantIds }, provider: 'CONTA_AZUL' },
+              select: {
+                id: true,
+                tenantId: true,
+                status: true,
+                lastSuccessfulSyncAt: true,
+                lastErrorAt: true,
+                lastErrorCode: true,
+              },
+            });
+      const integrationByTenant = new Map(integrations.map((integration) => [integration.tenantId, integration]));
+
+      const companies = await mapPool(tenants, 4, async (tenant) => {
+        const integration = integrationByTenant.get(tenant.id);
+        const financials = await loadCompanyFinancials(
+          deps.cashFlow,
+          tenant.id,
+          referenceMonthKey,
+          now,
+        );
+        return {
+          tenantId: tenant.id,
+          tenantDisplayName: tenant.displayName,
+          tenantStatus: tenant.status,
+          referenceMonthKey,
+          integrationState: resolveOperationsIntegrationState({
+            status: integration?.status ?? null,
+            lastSuccessfulSyncAt: integration?.lastSuccessfulSyncAt ?? null,
+            lastErrorAt: integration?.lastErrorAt ?? null,
+          }),
+          integration: integration
+            ? {
+                id: integration.id,
+                status: integration.status,
+                lastSuccessfulSyncAt: iso(integration.lastSuccessfulSyncAt),
+                lastErrorAt: iso(integration.lastErrorAt),
+                lastErrorCode: toPublicErrorCode(integration.lastErrorCode),
+                currentRun: null,
+              }
+            : null,
+          financials,
+        };
+      });
+
+      return {
+        referenceMonthKey,
+        windows: {
+          syncFreshnessHours: OPERATIONS_SYNC_FRESHNESS_HOURS,
+          recentDays: OPERATIONS_RECENT_DAYS,
+        },
+        kpis: {
+          companies: { total: companyTotal },
+          integrations: { connected, total: integrationTotal, withError },
+          synchronization: {
+            syncedCompaniesLast24Hours: syncedRows.length,
+            failuresLast7Days,
+          },
+          ai: { runsLast7Days, errorsLast7Days },
+          audit: { changesLast7Days },
+        },
+        companies: { items: companies, total: filteredTotal, limit, offset },
+        alerts: {
+          failures: failureRows.map(toSyncRunView),
+          aiErrors: aiErrorRows.map((row) => ({
+            id: row.id,
+            tenantId: row.tenantId,
+            tenantDisplayName: row.tenant.displayName,
+            userId: row.userId,
+            userName: row.user?.name ?? null,
+            runType: row.runType,
+            provider: row.provider,
+            model: row.model,
+            status: row.status,
+            inputTokens: row.inputTokens,
+            outputTokens: row.outputTokens,
+            durationMs: row.durationMs,
+            errorCode: row.errorCode,
+            createdAt: row.createdAt.toISOString(),
+            finishedAt: iso(row.finishedAt),
+          })),
+          audit: auditRows.map((row) => ({
+            id: row.id,
+            operatorUserId: row.operatorUserId,
+            operatorName: row.operator.name,
+            tenantId: row.tenantId,
+            tenantDisplayName: row.tenant?.displayName ?? null,
+            action: row.action,
+            targetType: row.targetType,
+            targetId: row.targetId,
+            result: row.result,
+            metadata: sanitizeAuditMetadata(row.metadata),
+            createdAt: row.createdAt.toISOString(),
+          })),
+        },
+      };
+    },
   };
+}
+
+async function loadCompanyFinancials(
+  cashFlow: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'> | undefined,
+  tenantId: string,
+  monthKey: string,
+  now: Date,
+): Promise<OperationsCompanyFinancials> {
+  if (!cashFlow) {
+    return unavailableOperationsFinancials();
+  }
+  try {
+    const flow = await cashFlow.getMonthlyCashFlow({ tenantId, monthKey, now });
+    return toOperationsCompanyFinancials(flow);
+  } catch {
+    return unavailableOperationsFinancials();
+  }
 }
 
 export type AdminOperationsService = ReturnType<typeof createAdminOperationsService>;

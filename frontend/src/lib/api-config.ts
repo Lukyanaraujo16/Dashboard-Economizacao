@@ -672,6 +672,10 @@ export function adminOperationsHealthPath(): string {
   return `${ADMIN_API_PREFIX}/operations/health`;
 }
 
+export function adminOperationsOverviewPath(): string {
+  return `${ADMIN_API_PREFIX}/operations/overview`;
+}
+
 export function adminOperationsAiRunsPath(): string {
   return `${ADMIN_API_PREFIX}/operations/ai-runs`;
 }

@@ -361,10 +361,11 @@
 
 @media (max-width: 767px) {
   .shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {
+    min-width: 0;
     border-right: none;
     border-bottom: 1px solid var(--color-border);
     padding: var(--space-4);
@@ -374,6 +375,12 @@
   .nav {
     flex-direction: row;
     flex: 0;
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  .main {
+    min-width: 0;
   }
 
   .navItem {
