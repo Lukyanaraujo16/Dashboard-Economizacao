@@ -31,13 +31,13 @@ function toCents(value: string): bigint | null {
   return whole * 100n + cents + round;
 }
 
-function formatCents(cents: bigint): string {
+export function formatPresentedCents(cents: bigint): string {
   const whole = (cents / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   const frac = (cents % 100n).toString().padStart(2, '0');
   return `R$ ${whole},${frac}`;
 }
 
-function formatDay(dueDate: string): string | null {
+export function formatPresentedDay(dueDate: string): string | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueDate);
   if (!match) {
     return null;
@@ -45,17 +45,21 @@ function formatDay(dueDate: string): string | null {
   return `${match[3]}/${match[2]}`;
 }
 
-function readTitleFact(insight: ProactivePresentationSource): TitleFact | null {
-  if (insight.insightType !== 'TITLE_DUE_SOON' || !isRecord(insight.supportingData)) {
+export function readPresentedTitleAmount(supportingData: unknown): {
+  readonly kind: 'PAYABLE' | 'RECEIVABLE';
+  readonly dueDate: string;
+  readonly unpaidCents: bigint;
+} | null {
+  if (!isRecord(supportingData)) {
     return null;
   }
-  const kind = insight.supportingData.titleKind;
-  const dueDate = insight.supportingData.dueDate;
-  const unpaid = insight.supportingData.unpaid;
+  const kind = supportingData.titleKind;
+  const dueDate = supportingData.dueDate;
+  const unpaid = supportingData.unpaid;
   if (kind !== 'PAYABLE' && kind !== 'RECEIVABLE') {
     return null;
   }
-  if (typeof dueDate !== 'string' || formatDay(dueDate) === null) {
+  if (typeof dueDate !== 'string' || formatPresentedDay(dueDate) === null) {
     return null;
   }
   if (typeof unpaid !== 'string' && typeof unpaid !== 'number') {
@@ -65,7 +69,18 @@ function readTitleFact(insight: ProactivePresentationSource): TitleFact | null {
   if (unpaidCents === null) {
     return null;
   }
-  return { insightId: insight.id, kind, dueDate, unpaidCents };
+  return { kind, dueDate, unpaidCents };
+}
+
+function readTitleFact(insight: ProactivePresentationSource): TitleFact | null {
+  if (insight.insightType !== 'TITLE_DUE_SOON') {
+    return null;
+  }
+  const amount = readPresentedTitleAmount(insight.supportingData);
+  if (amount === null) {
+    return null;
+  }
+  return { insightId: insight.id, ...amount };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,16 +98,16 @@ function composeTitleGroup(facts: readonly TitleFact[]): string {
     return left.unpaidCents < right.unpaidCents ? -1 : left.unpaidCents > right.unpaidCents ? 1 : 0;
   });
   const lines = ordered.map((fact) => {
-    const day = formatDay(fact.dueDate) ?? fact.dueDate;
-    return `• ${day} — ${formatCents(fact.unpaidCents)}`;
+    const day = formatPresentedDay(fact.dueDate) ?? fact.dueDate;
+    return `- **${day}** — ${formatPresentedCents(fact.unpaidCents)}`;
   });
   const total = ordered.reduce((sum, fact) => sum + fact.unpaidCents, 0n);
   return [
-    `Identifiquei ${ordered.length} ${label} com vencimento nos próximos dias:`,
+    `Identifiquei **${ordered.length} ${label}** com vencimento nos próximos dias:`,
     '',
     ...lines,
     '',
-    `Total: ${formatCents(total)}.`,
+    `**Total: ${formatPresentedCents(total)}**`,
     '',
     'Vale acompanhar esses vencimentos.',
   ].join('\n');

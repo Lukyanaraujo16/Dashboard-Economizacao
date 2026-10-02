@@ -24,6 +24,7 @@ import { createCashRealizedDetailsService } from '../../analytics/services/cash-
 import { createExpenseCeilingRepository } from '../../dashboard/repositories/expense-ceiling.repository.js';
 import { createRevenueGoalRepository } from '../../dashboard/repositories/revenue-goal.repository.js';
 import { createAdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
+import { createProactiveInsightRepository } from '../repositories/proactive-insight.repository.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import { createAdvisorKnowledgeDocumentRepository } from '../repositories/advisor-knowledge-document.repository.js';
 import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowledge.repository.js';
@@ -222,6 +223,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     analytics,
     cashComparison,
     documentKnowledge,
+    presentedInsights: createProactiveInsightRepository(prisma),
   });
   const providers = createAdvisorIaProviderRegistry(environment, resolveProviderApiKey);
   const rateLimiter =

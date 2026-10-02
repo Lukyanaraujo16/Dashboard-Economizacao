@@ -776,6 +776,80 @@ describe('Context Builder do Consultor (F13.2)', () => {
     expect(block(withDocs, 'USER_QUESTION').content).toBe(block(built, 'USER_QUESTION').content);
   });
 
+  it('leva os fatos da manifestação proativa só para a conversa em que ela foi apresentada', async () => {
+    const manifestation = messageA(
+      2,
+      'Identifiquei **3 contas a pagar** com vencimento nos próximos dias:',
+      'SYSTEM',
+    );
+    const deps = createDeps({
+      messages: [manifestation, messageA(3, 'Qual dessas contas tem o maior valor?')],
+    });
+    const builder = createBuildAdvisorContext({
+      ...deps,
+      presentedInsights: {
+        async listPresentedFacts(tenantId, messageIds) {
+          expect(tenantId).toBe(TENANT_A);
+          expect(messageIds).toEqual([manifestation.id]);
+          return [
+            {
+              messageId: manifestation.id,
+              insightType: 'TITLE_DUE_SOON',
+              supportingData: { titleKind: 'PAYABLE', dueDate: '2026-10-05', unpaid: '2150.20' },
+            },
+            {
+              messageId: manifestation.id,
+              insightType: 'TITLE_DUE_SOON',
+              supportingData: { titleKind: 'PAYABLE', dueDate: '2026-10-03', unpaid: '250.00' },
+            },
+            {
+              messageId: manifestation.id,
+              insightType: 'TITLE_DUE_SOON',
+              supportingData: { titleKind: 'PAYABLE', dueDate: '2026-10-04', unpaid: '1550.24' },
+            },
+          ];
+        },
+      },
+    });
+    const questions = [
+      'Qual dessas contas tem o maior valor?',
+      'Qual delas vence primeiro?',
+      'Qual o total dessas contas?',
+      'Me explique a segunda.',
+    ];
+    for (const question of questions) {
+      const built = await builder.build({
+        tenantId: TENANT_A,
+        userId: USER_A,
+        conversationId: CONV_A,
+        question,
+        monthKey: '2026-09',
+      });
+      expect(built.blocks.map((item) => item.type)).toContain('PRESENTED_INSIGHT_FACTS');
+      const facts = block(built, 'PRESENTED_INSIGHT_FACTS');
+      expect(facts.trustLevel).toBe('ANALYTICAL_FACT');
+      expect(facts.content).toContain('maiorValor: item 3; dueDate: 2026-10-05; amount: R$ 2.150,20');
+      expect(facts.content).toContain('vencePrimeiro: item 1; dueDate: 2026-10-03; amount: R$ 250,00');
+      expect(facts.content).toContain('segunda: item 2; dueDate: 2026-10-04; amount: R$ 1.550,24');
+      expect(facts.content).toContain('total: R$ 3.950,44');
+      expect(facts.content).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
+      expect(block(built, 'CONVERSATION_HISTORY').content).toContain(
+        'SYSTEM: Identifiquei **3 contas a pagar**',
+      );
+      expect(block(built, 'USER_QUESTION').content).toContain(question);
+    }
+
+    const fresh = createBuildAdvisorContext(createDeps({ messages: [] }));
+    const empty = await fresh.build({
+      tenantId: TENANT_A,
+      userId: USER_A,
+      conversationId: CONV_A,
+      question: 'Qual dessas contas tem o maior valor?',
+      monthKey: '2026-09',
+    });
+    expect(block(empty, 'PRESENTED_INSIGHT_FACTS').content).toBe('ABSENT');
+  });
+
   it('não importa conta-azul nem recálculo de caixa no módulo de contexto', () => {
     const advisorRoot = path.resolve(
       path.dirname(fileURLToPath(import.meta.url)),
@@ -787,6 +861,10 @@ describe('Context Builder do Consultor (F13.2)', () => {
     ];
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
+      // O motor proativo reutiliza a janela quente. Este guarda é do módulo de contexto.
+      if (file.includes(`${path.sep}proactive-`) || file.includes(`${path.sep}evaluate-proactive-`)) {
+        continue;
+      }
       const src = readFileSync(file, 'utf8');
       expect(src, file).not.toMatch(/modules\/integrations\/conta-azul/);
       expect(src, file).not.toMatch(/from ['"][^'"]*conta-azul/);

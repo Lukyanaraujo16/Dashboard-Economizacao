@@ -71,10 +71,7 @@ function senderClass(senderType: ConsultantMessage['senderType']): string {
   if (senderType === 'USER') {
     return styles.messageUser ?? '';
   }
-  if (senderType === 'CONSULTANT') {
-    return styles.messageConsultant ?? '';
-  }
-  return styles.messageSystem ?? '';
+  return styles.messageConsultant ?? '';
 }
 
 function emptyGreeting(consultantName: string): string {
@@ -455,18 +452,14 @@ export function ConsultantPanel({
                     data-optimistic={message.id.startsWith('optimistic-') ? 'true' : undefined}
                   >
                     <Typography as="p" variant="caption" className={styles.messageMeta}>
-                      {message.senderType === 'USER'
-                        ? 'Você'
-                        : message.senderType === 'CONSULTANT'
-                          ? consultantName
-                          : 'Sistema'}
+                      {message.senderType === 'USER' ? 'Você' : consultantName}
                     </Typography>
-                    {message.senderType === 'CONSULTANT' ? (
-                      <ConsultantMarkdown text={message.content} className={styles.markdown} />
-                    ) : (
+                    {message.senderType === 'USER' ? (
                       <Typography as="p" variant="body">
                         {message.content}
                       </Typography>
+                    ) : (
+                      <ConsultantMarkdown text={message.content} className={styles.markdown} />
                     )}
                   </div>
                 ))}

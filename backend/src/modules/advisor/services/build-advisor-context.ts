@@ -20,6 +20,7 @@ import {
 import { attachAdvisorDocumentKnowledgeBlock } from '../domain/attach-advisor-document-knowledge.js';
 import { ADVISOR_DOCUMENT_KNOWLEDGE_HISTORY_USER_LIMIT } from '../domain/advisor-document-knowledge-limits.js';
 import { ADVISOR_HISTORY_MESSAGE_LIMIT, type AdvisorBuiltContext } from '../domain/context-blocks.js';
+import { formatPresentedInsightFacts } from '../domain/presented-insight-context.js';
 import {
   applyAdvisorContextCharBudget,
   wrapUntrusted,
@@ -77,6 +78,19 @@ export type BuildAdvisorContextDependencies = {
     listActiveReadyChunksForRetrieval(
       tenantId: string,
     ): Promise<readonly AdvisorDocumentKnowledgeCandidate[]>;
+  };
+  /** Fatos das manifestações proativas ligadas às mensagens desta conversa. */
+  readonly presentedInsights?: {
+    listPresentedFacts(
+      tenantId: string,
+      messageIds: readonly string[],
+    ): Promise<
+      readonly {
+        readonly messageId: string;
+        readonly insightType: string;
+        readonly supportingData: unknown;
+      }[]
+    >;
   };
 };
 
@@ -181,6 +195,14 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
       const knowledgeBlock = wrapUntrusted('TENANT_KNOWLEDGE', formatKnowledge(knowledge));
       const historyBlock = wrapUntrusted('CONVERSATION_HISTORY', formatHistory(history));
       const question = wrapUntrusted('USER_QUESTION', input.question);
+      const presentedMessageIds = history
+        .filter((message) => message.senderType === 'SYSTEM' || message.relatedInsightId)
+        .map((message) => message.id);
+      const presentedSources =
+        deps.presentedInsights === undefined || presentedMessageIds.length === 0
+          ? []
+          : await deps.presentedInsights.listPresentedFacts(tenantId, presentedMessageIds);
+      const presentedFacts = formatPresentedInsightFacts(presentedMessageIds, presentedSources);
 
       const drafts: AdvisorContextBlockDraft[] = [
         {
@@ -233,6 +255,15 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
             monthKey,
             service: 'compareAdvisorCashMonths',
             ...(comparisonMonthKey === undefined ? {} : { comparisonMonthKey }),
+          },
+        },
+        {
+          type: 'PRESENTED_INSIGHT_FACTS',
+          content: presentedFacts,
+          trustLevel: 'ANALYTICAL_FACT',
+          source: {
+            kind: 'conversation-insights',
+            service: 'ai_message_insight_links',
           },
         },
         {

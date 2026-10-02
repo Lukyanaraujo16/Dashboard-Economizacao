@@ -134,6 +134,51 @@ export function createProactiveInsightRepository(prisma: PrismaClient) {
       };
     },
 
+    async listPresentedFacts(tenantId: string, messageIds: readonly string[]) {
+      if (messageIds.length === 0) {
+        return [];
+      }
+      const ids = [...messageIds];
+      const links = await prisma.aiMessageInsightLink.findMany({
+        where: { tenantId, messageId: { in: ids }, insight: { tenantId } },
+        select: {
+          messageId: true,
+          insight: { select: { insightType: true, supportingData: true } },
+        },
+      });
+      const covered = new Set(links.map((link) => link.messageId));
+      const related = await prisma.aiMessage.findMany({
+        where: {
+          tenantId,
+          id: { in: ids.filter((id) => !covered.has(id)) },
+          relatedInsightId: { not: null },
+        },
+        select: {
+          id: true,
+          relatedInsight: { select: { tenantId: true, insightType: true, supportingData: true } },
+        },
+      });
+      return [
+        ...links.map((link) => ({
+          messageId: link.messageId,
+          insightType: link.insight.insightType,
+          supportingData: link.insight.supportingData,
+        })),
+        ...related.flatMap((message) => {
+          if (message.relatedInsight?.tenantId !== tenantId) {
+            return [];
+          }
+          return [
+            {
+              messageId: message.id,
+              insightType: message.relatedInsight.insightType,
+              supportingData: message.relatedInsight.supportingData,
+            },
+          ];
+        }),
+      ];
+    },
+
     async listUnread(tenantId: string, userId: string): Promise<readonly ProactiveInsightSnapshot[]> {
       const rows = await prisma.aiInsight.findMany({
         where: {

@@ -203,20 +203,37 @@ describe('consolidação de TITLE_DUE_SOON na apresentação', () => {
     const receivableText = presented.messages.find((message) =>
       message.content.includes('contas a receber'),
     );
-    expect(payableText?.content).toContain('Identifiquei 3 contas a pagar');
-    expect(payableText?.content).toContain('• 03/10 — R$ 250,00');
-    expect(payableText?.content).toContain('• 04/10 — R$ 1.550,24');
-    expect(payableText?.content).toContain('• 05/10 — R$ 2.150,20');
-    expect(payableText?.content).toContain('Total: R$ 3.950,44.');
+    expect(payableText?.content).toContain('Identifiquei **3 contas a pagar**');
+    expect(payableText?.content).toContain('- **03/10** — R$ 250,00');
+    expect(payableText?.content).toContain('- **04/10** — R$ 1.550,24');
+    expect(payableText?.content).toContain('- **05/10** — R$ 2.150,20');
+    expect(payableText?.content).toContain('**Total: R$ 3.950,44**');
     expect(payableText?.content).not.toContain('Prezado');
     expect(payableText?.content).not.toContain('800,00');
-    expect(receivableText?.content).toContain('Identifiquei 3 contas a receber');
-    expect(receivableText?.content).toContain('Total: R$ 150,50.');
+    expect(receivableText?.content).toContain('Identifiquei **3 contas a receber**');
+    expect(receivableText?.content).toContain('**Total: R$ 150,50**');
 
     const links = await prisma.aiMessageInsightLink.findMany({
       where: { tenantId: tenant.id, messageId: payableText?.id },
     });
     expect(links.map((link) => link.insightId).sort()).toEqual([...payables].sort());
+    const official = await insights.listPresentedFacts(tenant.id, [payableText!.id]);
+    expect(official).toHaveLength(3);
+    expect(official.every((item) => item.messageId === payableText?.id)).toBe(true);
+    const fresh = await conversations.createConversation(
+      tenant.id,
+      userB.id,
+      { title: null },
+      'tenant-member',
+    );
+    expect(await insights.listPresentedFacts(tenant.id, [])).toEqual([]);
+    expect(await prisma.aiMessage.count({ where: { conversationId: fresh.id } })).toBe(0);
+    expect(await prisma.aiConversation.count({ where: { tenantId: tenant.id, userId: userB.id } })).toBe(2);
+    expect(
+      await prisma.aiMessage.count({
+        where: { tenantId: tenant.id, conversationId: { not: fresh.id }, content: { contains: '3 contas a pagar' } },
+      }),
+    ).toBeGreaterThan(0);
     expect(await prisma.aiInsight.count({ where: { tenantId: tenant.id } })).toBe(7);
     expect((await insights.findByTenant(tenant.id, payables[1]!))?.content).toContain('Prezado(a)');
 

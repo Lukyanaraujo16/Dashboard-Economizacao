@@ -11,6 +11,7 @@ const NEVER_TRUNCATE = new Set<AdvisorContextBlockType>([
   'USER_QUESTION',
   'FINANCIAL_FACTS',
   'ANALYTICAL_FACTS',
+  'PRESENTED_INSIGHT_FACTS',
 ]);
 
 export type AdvisorContextBlockDraft = AdvisorContextBlock & {
@@ -43,7 +44,7 @@ function truncateDraft(draft: AdvisorContextBlockDraft, maxLength: number): Advi
 
 /**
  * Se a soma de `content` exceder o orçamento, trunca na ordem inversa de preservação.
- * Nunca altera PLATFORM_INSTRUCTIONS, USER_QUESTION, FINANCIAL_FACTS nem ANALYTICAL_FACTS.
+ * Nunca altera PLATFORM_INSTRUCTIONS, USER_QUESTION, FINANCIAL_FACTS, ANALYTICAL_FACTS nem PRESENTED_INSIGHT_FACTS.
  */
 export function applyAdvisorContextCharBudget(
   drafts: readonly AdvisorContextBlockDraft[],

@@ -42,11 +42,11 @@ describe('apresentação consolidada de títulos', () => {
       title('b', 'PAYABLE', '2026-10-04', '1550.24'),
     ]);
     expect(presentation?.insightIds).toEqual(['c', 'a', 'b']);
-    expect(presentation?.content).toContain('Identifiquei 3 contas a pagar');
-    expect(presentation?.content).toContain('• 03/10 — R$ 250,00');
-    expect(presentation?.content).toContain('• 04/10 — R$ 1.550,24');
-    expect(presentation?.content).toContain('• 05/10 — R$ 2.150,20');
-    expect(presentation?.content).toContain('Total: R$ 3.950,44.');
+    expect(presentation?.content).toContain('Identifiquei **3 contas a pagar**');
+    expect(presentation?.content).toContain('- **03/10** — R$ 250,00');
+    expect(presentation?.content).toContain('- **04/10** — R$ 1.550,24');
+    expect(presentation?.content).toContain('- **05/10** — R$ 2.150,20');
+    expect(presentation?.content).toContain('**Total: R$ 3.950,44**');
     expect(presentation?.content).not.toContain('narrativa individual');
   });
 
@@ -62,13 +62,13 @@ describe('apresentação consolidada de títulos', () => {
     const payable = presentations.find((item) => item.content.includes('contas a pagar'));
     const receivable = presentations.find((item) => item.content.includes('contas a receber'));
     expect(payable?.insightIds).toEqual(['p1', 'p2']);
-    expect(payable?.content).toContain('Total: R$ 350,00.');
+    expect(payable?.content).toContain('**Total: R$ 350,00**');
     expect(receivable?.insightIds).toEqual(['r1', 'r2', 'r3']);
-    expect(receivable?.content).toContain('Identifiquei 3 contas a receber');
-    expect(receivable?.content).toContain('• 03/10 — R$ 100,00');
-    expect(receivable?.content).toContain('• 05/10 — R$ 20,00');
-    expect(receivable?.content).toContain('• 06/10 — R$ 50,50');
-    expect(receivable?.content).toContain('Total: R$ 170,50.');
+    expect(receivable?.content).toContain('Identifiquei **3 contas a receber**');
+    expect(receivable?.content).toContain('- **03/10** — R$ 100,00');
+    expect(receivable?.content).toContain('- **05/10** — R$ 20,00');
+    expect(receivable?.content).toContain('- **06/10** — R$ 50,50');
+    expect(receivable?.content).toContain('**Total: R$ 170,50**');
   });
 
   it('não agrupa meta e teto nem inventa soma', () => {

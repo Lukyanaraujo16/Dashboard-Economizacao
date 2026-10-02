@@ -25,7 +25,7 @@ export type ParsedConversationTurn = {
   readonly text: string;
 };
 
-const CONVERSATION_ROLE_LINE = /^(?:\[)?(USER|CONSULTANT)(?:\])?\s*:\s*(.*)$/;
+const CONVERSATION_ROLE_LINE = /^(?:\[)?(USER|CONSULTANT|SYSTEM)(?:\])?\s*:\s*(.*)$/;
 
 /**
  * Parse simples de CONVERSATION_HISTORY.
@@ -54,7 +54,7 @@ export function tryParseConversationTurns(content: string): ParsedConversationTu
     const match = CONVERSATION_ROLE_LINE.exec(line);
     if (match) {
       flush();
-      currentRole = match[1] === 'CONSULTANT' ? 'assistant' : 'user';
+      currentRole = match[1] === 'USER' ? 'user' : 'assistant';
       currentParts = [match[2] ?? ''];
       continue;
     }
