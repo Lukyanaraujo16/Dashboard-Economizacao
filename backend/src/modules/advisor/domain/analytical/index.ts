@@ -39,6 +39,7 @@ export type {
   AnalyticalComparisonPeriod,
   AnalyticalCurrentPeriod,
   AnalyticalMonthPeriod,
+  AnalyticalMonthWindowPeriod,
   AnalyticalPeriod,
   AnalyticalYearPeriod,
   AnalyticalYtdPeriod,

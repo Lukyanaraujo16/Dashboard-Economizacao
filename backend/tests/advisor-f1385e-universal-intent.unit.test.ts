@@ -55,7 +55,7 @@ function expectNoConvenio(intent: Extract<UniversalAnalyticalIntent, { kind: 'RE
 
 describe('F13.8.5E universal intent', () => {
   it('publica 31 capabilities, incluindo TOPN, lookup, share e planejamento', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(32);
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(33);
   });
 
   it('não injeta convênio sem evidência na pergunta', () => {

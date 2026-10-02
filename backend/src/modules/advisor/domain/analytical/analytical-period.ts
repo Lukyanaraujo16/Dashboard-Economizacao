@@ -14,6 +14,13 @@ export type AnalyticalMonthPeriod = {
   readonly monthKey: string;
 };
 
+/** Janela inclusiva de meses civis terminando em `endMonthKey`. */
+export type AnalyticalMonthWindowPeriod = {
+  readonly kind: 'MONTH_WINDOW';
+  readonly endMonthKey: string;
+  readonly count: number;
+};
+
 export type AnalyticalYtdPeriod = {
   readonly kind: 'YTD';
   readonly year: number;
@@ -53,6 +60,7 @@ export type AnalyticalDayPeriod = {
 
 export type AnalyticalPeriod =
   | AnalyticalMonthPeriod
+  | AnalyticalMonthWindowPeriod
   | AnalyticalYtdPeriod
   | AnalyticalYearPeriod
   | AnalyticalCurrentPeriod

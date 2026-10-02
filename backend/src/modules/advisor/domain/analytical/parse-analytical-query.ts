@@ -17,6 +17,7 @@ import {
   type AnalyticalPeriod,
 } from './analytical-period.js';
 import type { AnalyticalQuery } from './analytical-query.js';
+import { BILLING_SERIES_MAX_MONTHS } from '../billing-month-series.js';
 
 /**
  * Campos proibidos em fronteira futura (LLM/provider/tool args).
@@ -222,6 +223,26 @@ function parsePeriod(value: unknown): ParseStep<AnalyticalPeriod> {
       return fail('INVALID_PERIOD', 'MONTH exige monthKey YYYY-MM.');
     }
     return { ok: true, value: { kind: 'MONTH', monthKey: period.monthKey } };
+  }
+  if (kind === 'MONTH_WINDOW') {
+    if (typeof period.endMonthKey !== 'string' || !isAnalyticalMonthKey(period.endMonthKey)) {
+      return fail('INVALID_PERIOD', 'MONTH_WINDOW exige endMonthKey YYYY-MM.');
+    }
+    if (
+      typeof period.count !== 'number' ||
+      !Number.isInteger(period.count) ||
+      period.count < 1 ||
+      period.count > BILLING_SERIES_MAX_MONTHS
+    ) {
+      return fail(
+        'INVALID_PERIOD',
+        `MONTH_WINDOW exige count inteiro de 1 a ${BILLING_SERIES_MAX_MONTHS}.`,
+      );
+    }
+    return {
+      ok: true,
+      value: { kind: 'MONTH_WINDOW', endMonthKey: period.endMonthKey, count: period.count },
+    };
   }
   if (kind === 'YTD') {
     if (typeof period.year !== 'number' || !Number.isInteger(period.year)) {

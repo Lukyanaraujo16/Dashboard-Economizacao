@@ -29,6 +29,7 @@ import {
 } from '../domain/resolve-universal-analytical-intent.js';
 import { isAdvisorInterpretiveQuestion } from '../domain/classify-advisor-factual-response.js';
 import { runAdvisorMonthlyPlanning } from '../domain/run-advisor-monthly-planning.js';
+import { runAdvisorBillingAnswer } from '../domain/run-advisor-billing-answer.js';
 import { runAdvisorDailyCashMovement } from '../domain/run-advisor-daily-cash-movement.js';
 import { parseDailyCashMovementConversationState } from '../domain/daily-cash-movement-conversation-state.js';
 import type { CashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
@@ -266,6 +267,37 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               providerCalled: false,
               intentKind: 'MONTHLY_PLANNING',
               factKind: 'MONTHLY_PLANNING',
+              identityStatus: null,
+              returnedCount: null,
+              coveragePercent: null,
+              composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+            },
+          };
+        }
+      }
+      if (deps.monthlyPlanning !== undefined && !isAdvisorInterpretiveQuestion(question)) {
+        const billing = await runAdvisorBillingAnswer({
+          content: question,
+          tenantId,
+          monthKey: period.monthKey,
+          now: input.now,
+          cashFlow: deps.monthlyPlanning.cashFlow,
+        });
+        if (billing !== null) {
+          const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+            senderType: 'CONSULTANT',
+            content: billing.answer,
+          });
+          return {
+            conversationId: conversation.id,
+            userMessage,
+            consultantMessage,
+            run: null,
+            factualAnswer: {
+              classification: 'FACTUAL_CLOSED',
+              providerCalled: false,
+              intentKind: billing.intentKind,
+              factKind: billing.factKind,
               identityStatus: null,
               returnedCount: null,
               coveragePercent: null,

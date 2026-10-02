@@ -3,6 +3,7 @@ import type { AnalyticalExecutor } from './analytical-execution-types.js';
 import {
   executeCompareCashMonths,
   executeCurrentSnapshot,
+  executeBillingSeriesMonths,
   executeFinancialFactsMonth,
   executeMonthlyPlanning,
   executeRealizedCashCategoryBreakdown,
@@ -25,6 +26,7 @@ const ANALYTICAL_EXECUTOR_REGISTRY: Record<AnalyticalExecutorKey, AnalyticalExec
   realizedCashCostCenter: executeRealizedCashCostCenter,
   currentSnapshot: executeCurrentSnapshot,
   financialFactsMonth: executeFinancialFactsMonth,
+  billingSeriesMonths: executeBillingSeriesMonths,
   monthlyPlanning: executeMonthlyPlanning,
 };
 

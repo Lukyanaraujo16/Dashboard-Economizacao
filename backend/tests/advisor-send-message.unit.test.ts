@@ -117,6 +117,7 @@ function createHarness(options?: {
   };
   readonly analyticalTools?: SendAdvisorMessageDependencies['analyticalTools'];
   readonly cashComparison?: SendAdvisorMessageDependencies['cashComparison'];
+  readonly monthlyPlanning?: SendAdvisorMessageDependencies['monthlyPlanning'];
 }) {
   const openai = options?.openai ?? createFakeIaProvider({ id: 'OPENAI', text: 'Faturamento oficial: 0' });
   const anthropic = options?.anthropic ?? createFakeIaProvider({ id: 'ANTHROPIC' });
@@ -225,6 +226,7 @@ function createHarness(options?: {
     rateLimiter: options?.rateLimiter ?? createAllowAllConsultantRateLimiter(),
     analyticalTools: options?.analyticalTools,
     cashComparison: options?.cashComparison,
+    monthlyPlanning: options?.monthlyPlanning,
   });
 
   return { send, openai, anthropic, messages, runs };
@@ -1232,4 +1234,124 @@ describe('send-advisor-message (F13.3)', () => {
     expect(docs?.content).toContain('999999');
     expect(platform?.content).toContain('NÃO substitui FINANCIAL_FACTS');
   });
+
+  it('fecha o faturamento do mês sem chamar o provider', async () => {
+    const openai = createFakeIaProvider({ id: 'OPENAI', text: 'R$ 20.126,98' });
+    const contextBuild = vi.fn(async () => {
+      throw new Error('contexto não deveria ser montado');
+    });
+    const { send, runs } = createHarness({
+      openai,
+      context: { build: contextBuild },
+      monthlyPlanning: planningServices({
+        '2026-10': {
+          inflows: '1650',
+          receivables: '199476.98',
+          outflows: '48.75',
+          result: '1601.25',
+        },
+      }),
+    });
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Como está meu faturamento este mês?',
+      monthKey: '2026-10',
+      now: new Date('2026-10-02T15:00:00.000Z'),
+    });
+    expect(result.factualAnswer?.providerCalled).toBe(false);
+    expect(result.factualAnswer?.intentKind).toBe('BILLING_MONTH');
+    expect(result.run).toBeNull();
+    expect(runs).toHaveLength(0);
+    expect(openai.lastInput).toBeNull();
+    expect(contextBuild).not.toHaveBeenCalled();
+    expect(result.consultantMessage.content).toContain('R$ 201.126,98');
+    expect(result.consultantMessage.content).not.toContain('R$ 20.126,98');
+  });
+
+  it('calcula a média dos últimos meses sem chamar o provider', async () => {
+    const openai = createFakeIaProvider({
+      id: 'OPENAI',
+      text: 'comparação oficial não está disponível',
+    });
+    const { send } = createHarness({
+      openai,
+      monthlyPlanning: planningServices({
+        '2026-08': { inflows: '100', receivables: '0', outflows: '0', result: '100' },
+        '2026-09': { inflows: '200', receivables: '0', outflows: '0', result: '200' },
+        '2026-10': { inflows: '300', receivables: '0', outflows: '0', result: '300' },
+      }),
+    });
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'qual minha média de faturamento pensando nos últimos 3 meses?',
+      monthKey: '2026-10',
+      now: new Date('2026-10-02T15:00:00.000Z'),
+    });
+    expect(result.factualAnswer?.providerCalled).toBe(false);
+    expect(result.factualAnswer?.intentKind).toBe('BILLING_SERIES');
+    expect(openai.lastInput).toBeNull();
+    expect(result.consultantMessage.content).toContain('R$ 100,00');
+    expect(result.consultantMessage.content).toContain('R$ 200,00');
+    expect(result.consultantMessage.content).toContain('R$ 300,00');
+    expect(result.consultantMessage.content).toContain('Média dos 3 meses: R$ 200,00.');
+    expect(result.consultantMessage.content).not.toContain('comparação oficial não está disponível');
+  });
 });
+
+function planningServices(
+  byMonth: Record<
+    string,
+    { inflows: string; receivables: string; outflows: string; result: string }
+  >,
+): SendAdvisorMessageDependencies['monthlyPlanning'] {
+  return {
+    cashFlow: {
+      async getMonthlyCashFlow(input: { tenantId: string; monthKey?: string }) {
+        const row = byMonth[input.monthKey ?? ''];
+        if (row === undefined || input.tenantId !== 'tenant-a') {
+          return {
+            monthKey: input.monthKey,
+            realized: { inflows: null, outflows: null, result: null },
+            expected: { receivables: null, payables: null, result: null },
+          } as MonthlyCashFlow;
+        }
+        return {
+          monthKey: input.monthKey,
+          realized: {
+            inflows: new Prisma.Decimal(row.inflows),
+            outflows: new Prisma.Decimal(row.outflows),
+            result: new Prisma.Decimal(row.result),
+          },
+          expected: {
+            receivables: new Prisma.Decimal(row.receivables),
+            payables: new Prisma.Decimal('0'),
+            result: new Prisma.Decimal('0'),
+          },
+        } as MonthlyCashFlow;
+      },
+    },
+    revenueGoals: {
+      async findByTenantMonth() {
+        return null;
+      },
+      async listByTenantMonths() {
+        return [];
+      },
+      async upsert() {
+        throw new Error('upsert não usado neste teste');
+      },
+    },
+    expenseCeilings: {
+      async findByTenantMonth() {
+        return null;
+      },
+      async upsert() {
+        throw new Error('upsert não usado neste teste');
+      },
+    },
+  };
+}

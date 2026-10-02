@@ -11,7 +11,14 @@ import type { AdvisorCivilRangeKind } from '../resolve-advisor-civil-range.js';
 import { assessOfficialCounterpartyWinner } from '../load-counterparty-identity-population.js';
 import { loadMonthlyPlanningFact } from '../load-monthly-planning-fact.js';
 import type { AdvisorPlanningSubject } from '../resolve-advisor-planning-intent.js';
+import { Prisma } from '../../../../generated/prisma/client.js';
+import { monthlyBilling } from '../../../analytics/domain/monthly-cash-flow.js';
 import { formatCivilDateKey } from '../../../analytics/domain/civil-calendar.js';
+import {
+  BILLING_SERIES_FACT_KIND,
+  listBillingSeriesMonthKeys,
+  officialBillingAverage,
+} from '../billing-month-series.js';
 import { ADVISOR_DAILY_CASH_MOVEMENT_FACT_KIND } from '../compose-advisor-daily-cash-movement-answer.js';
 import { resolveCatalogCostCenter } from '../resolve-advisor-daily-cash-movement.js';
 
@@ -370,6 +377,52 @@ export const executeFinancialFactsMonth: AnalyticalExecutor = async ({
       surface: 'FINANCIAL_FACTS',
       monthKey,
       content,
+    },
+  });
+};
+
+export const executeBillingSeriesMonths: AnalyticalExecutor = async ({
+  validated,
+  runtime,
+}) => {
+  if (runtime.planningCashFlow === undefined) {
+    throw new Error('EXECUTOR_DEPENDENCY_MISSING:planningCashFlow');
+  }
+  if (validated.query.period.kind !== 'MONTH_WINDOW') {
+    throw new Error('billingSeriesMonths exige MONTH_WINDOW.');
+  }
+  const { endMonthKey, count } = validated.query.period;
+  const monthKeys = listBillingSeriesMonthKeys(endMonthKey, count);
+  const months = [];
+  for (const monthKey of monthKeys) {
+    const flow = await runtime.planningCashFlow.getMonthlyCashFlow({
+      tenantId: runtime.tenantId,
+      monthKey,
+      now: runtime.now,
+    });
+    const billing = monthlyBilling(flow);
+    months.push({
+      monthKey,
+      billing: billing === null ? null : billing.toString(),
+      available: billing !== null,
+    });
+  }
+  const availableValues = months.flatMap((month) =>
+    month.billing === null ? [] : [new Prisma.Decimal(month.billing)],
+  );
+  const complete = availableValues.length === months.length;
+  return success({
+    validated,
+    executorKey: 'billingSeriesMonths',
+    legacyFact: {
+      factKind: BILLING_SERIES_FACT_KIND,
+      status: 'OK',
+      endMonthKey,
+      requestedCount: count,
+      validCount: availableValues.length,
+      complete,
+      average: complete ? officialBillingAverage(availableValues).toString() : null,
+      months,
     },
   });
 };

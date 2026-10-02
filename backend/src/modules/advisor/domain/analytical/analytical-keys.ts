@@ -44,6 +44,7 @@ export type AnalyticalDirection = (typeof ANALYTICAL_DIRECTIONS)[number];
 
 export const ANALYTICAL_PERIOD_KINDS = [
   'MONTH',
+  'MONTH_WINDOW',
   'YTD',
   'YEAR',
   'CURRENT',
@@ -86,6 +87,7 @@ export const ANALYTICAL_EXECUTOR_KEYS = [
   'realizedCashCostCenter',
   'currentSnapshot',
   'financialFactsMonth',
+  'billingSeriesMonths',
   'monthlyPlanning',
 ] as const;
 export type AnalyticalExecutorKey = (typeof ANALYTICAL_EXECUTOR_KEYS)[number];
