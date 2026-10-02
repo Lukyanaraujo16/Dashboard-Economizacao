@@ -9,9 +9,9 @@ import {
   deleteConsultantConversation,
   getConsultantConversation,
   getConsultantStatus,
+  getProactiveUnreadCount,
   listConsultantConversations,
   presentProactiveInsights,
-  getProactiveUnreadCount,
   sendConsultantMessage,
   ConsultantRequestError,
   type ConsultantConversation,
@@ -26,6 +26,12 @@ import {
   writeActiveConversationId,
 } from './consultant-active-conversation';
 import { ConsultantFab } from './consultant-fab';
+import {
+  liaProactiveShownKey,
+  playLiaMessageSound,
+  proactiveBatchSignature,
+  shouldManifestProactiveBatch,
+} from './consultant-proactive-manifest';
 import { ConsultantPanel } from './consultant-panel';
 import {
   resolveConsultantReferenceMonth,
@@ -92,6 +98,9 @@ export function ConsultantHost() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [retryContent, setRetryContent] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [insightIds, setInsightIds] = useState<readonly string[]>([]);
+  const [balloonOpen, setBalloonOpen] = useState(false);
+  const [pulse, setPulse] = useState(false);
   const panelGenRef = useRef(0);
   const fabRef = useRef<HTMLButtonElement | null>(null);
   const returnFocusToFabRef = useRef(false);
@@ -127,6 +136,9 @@ export function ConsultantHost() {
     setSendError(null);
     setRetryContent(null);
     setUnreadCount(0);
+    setInsightIds([]);
+    setBalloonOpen(false);
+    setPulse(false);
   }, []);
 
   useEffect(() => {
@@ -167,20 +179,43 @@ export function ConsultantHost() {
     }
     let cancelled = false;
     void getProactiveUnreadCount()
-      .then((count) => {
+      .then((next) => {
         if (!cancelled) {
-          setUnreadCount(count);
+          setUnreadCount(next.count);
+          setInsightIds(next.insightIds);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setUnreadCount(0);
+          setInsightIds([]);
         }
       });
     return () => {
       cancelled = true;
     };
   }, [operationalTenantId, sessionKey, visible]);
+
+  useEffect(() => {
+    if (!visible || !userId || !operationalTenantId || unreadCount === 0) {
+      setBalloonOpen(false);
+      setPulse(false);
+      return;
+    }
+    const signature = proactiveBatchSignature(insightIds);
+    const storageKey = liaProactiveShownKey(userId, operationalTenantId);
+    const alreadyShown = window.sessionStorage.getItem(storageKey);
+    if (!shouldManifestProactiveBatch({ count: unreadCount, signature, alreadyShown })) {
+      return;
+    }
+    window.sessionStorage.setItem(storageKey, signature);
+    setBalloonOpen(true);
+    const reduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setPulse(!reduced);
+    playLiaMessageSound();
+  }, [insightIds, operationalTenantId, unreadCount, userId, visible]);
 
   const month = resolveConsultantReferenceMonth(searchParams);
 
@@ -221,6 +256,8 @@ export function ConsultantHost() {
   );
 
   const openPanel = useCallback(async () => {
+    setBalloonOpen(false);
+    setPulse(false);
     const requestId = ++panelGenRef.current;
     setHistoryOpen(false);
     setSendError(null);
@@ -476,6 +513,12 @@ export function ConsultantHost() {
           available={availability.status === 'ACTIVE'}
           consultantName={availability.consultantName}
           unreadCount={unreadCount}
+          showBalloon={balloonOpen}
+          pulse={pulse}
+          onDismissBalloon={() => {
+            setBalloonOpen(false);
+            setPulse(false);
+          }}
         />
       ) : null}
       {uiState !== 'CLOSED' ? (

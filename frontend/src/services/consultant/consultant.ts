@@ -248,18 +248,30 @@ export async function getConsultantStatus(): Promise<ConsultantUserStatus> {
   return toConsultantUserStatus(body);
 }
 
-export async function getProactiveUnreadCount(): Promise<number> {
+export type ProactiveUnreadState = {
+  readonly count: number;
+  readonly insightIds: readonly string[];
+};
+
+export async function getProactiveUnreadCount(): Promise<ProactiveUnreadState> {
   const response = await consultantFetch(consultantProactiveUnreadPath(), { method: 'GET' });
   const body = await readJsonBody(response);
   if (!response.ok) {
     throw toConsultantFailure(response, body);
   }
-  if (!isRecord(body) || typeof body.count !== 'number' || !Number.isInteger(body.count) || body.count < 0) {
+  if (
+    !isRecord(body) ||
+    typeof body.count !== 'number' ||
+    !Number.isInteger(body.count) ||
+    body.count < 0 ||
+    !Array.isArray(body.insightIds) ||
+    !body.insightIds.every((item) => typeof item === 'string')
+  ) {
     throw new ConsultantRequestError('unavailable', UNAVAILABLE_MESSAGE, {
       httpStatus: response.status,
     });
   }
-  return body.count;
+  return { count: body.count, insightIds: body.insightIds };
 }
 
 export async function presentProactiveInsights(

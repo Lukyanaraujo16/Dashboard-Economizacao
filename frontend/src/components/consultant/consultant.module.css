@@ -1,8 +1,23 @@
-.fab {
+.fabCluster {
   position: fixed;
-  right: calc(var(--space-5) + env(safe-area-inset-right, 0px));
-  bottom: calc(var(--space-8) + env(safe-area-inset-bottom, 0px) + 3.5rem);
   z-index: var(--z-overlay);
+  right: max(1.25rem, env(safe-area-inset-right, 0px));
+  bottom: calc(max(0.75rem, env(safe-area-inset-bottom, 0px)) + 4.75rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.75rem;
+  max-width: min(20.5rem, calc(100vw - 2.5rem));
+  overflow: visible;
+}
+
+.fabAnchor {
+  position: relative;
+  overflow: visible;
+}
+
+.fab {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -60,18 +75,87 @@
 
 .fabBadge {
   position: absolute;
-  top: -0.2rem;
-  left: -0.2rem;
-  min-width: 1.15rem;
-  height: 1.15rem;
-  padding: 0 0.28rem;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  transform: translate(30%, -30%);
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.32rem;
+  border: 2px solid var(--color-surface);
   border-radius: 999px;
   background: var(--color-danger);
   color: var(--color-on-danger);
   font-size: 0.6875rem;
   font-weight: 700;
-  line-height: 1.15rem;
+  line-height: 1.05rem;
   text-align: center;
+  pointer-events: none;
+}
+
+.fabPulse {
+  animation: liaManifestPulse 700ms ease-in-out 3;
+}
+
+.liaBalloon {
+  position: relative;
+  width: min(20.5rem, calc(100vw - 2.5rem));
+  margin: 0;
+  padding: 0.85rem 2.15rem 0.85rem 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: 1rem 1rem 0.35rem 1rem;
+  background: var(--color-surface-elevated);
+  box-shadow: var(--elevation-lg);
+  color: var(--color-text-primary);
+}
+
+.liaBalloonTitle {
+  margin: 0 0 0.2rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.liaBalloonCopy {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.liaBalloonActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.65rem;
+}
+
+.liaBalloonOpen,
+.liaBalloonClose {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.liaBalloonOpen {
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.liaBalloonClose {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+}
+
+.liaBalloonOpen:focus-visible,
+.liaBalloonClose:focus-visible,
+.fab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
 }
 
 .presence {
@@ -621,9 +705,9 @@
 }
 
 @media (min-width: 768px) {
-  .fab {
-    right: calc(var(--space-6) + env(safe-area-inset-right, 0px));
-    bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+  .fabCluster {
+    right: max(1.5rem, env(safe-area-inset-right, 0px));
+    bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
   }
 
   .fab:hover,
@@ -655,9 +739,21 @@
   }
 }
 
+@keyframes liaManifestPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.06);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fab,
   .fabLabel,
+  .fabPulse,
   .presenceHalo,
   .thinkingDot,
   .historyPanel {

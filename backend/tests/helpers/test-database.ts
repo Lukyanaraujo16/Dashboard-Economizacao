@@ -5,6 +5,7 @@ type TestDatabaseCleaner = {
   readonly proactiveTriggerConfiguration: { deleteMany: () => Promise<unknown> };
   readonly proactiveTriggerBootstrap: { deleteMany: () => Promise<unknown> };
   readonly aiRun: { deleteMany: () => Promise<unknown> };
+  readonly aiMessageInsightLink: { deleteMany: () => Promise<unknown> };
   readonly aiMessage: { deleteMany: () => Promise<unknown> };
   readonly aiConversation: { deleteMany: () => Promise<unknown> };
   readonly aiKnowledgeDocumentChunk: { deleteMany: () => Promise<unknown> };
@@ -101,6 +102,7 @@ export async function cleanTestDatabase(
 
   await prisma.aiInsightRead.deleteMany();
   await prisma.aiRun.deleteMany();
+  await prisma.aiMessageInsightLink.deleteMany();
   await prisma.aiMessage.deleteMany();
   await prisma.aiInsight.deleteMany();
   await prisma.analyticalEvent.deleteMany();

@@ -191,12 +191,18 @@ export async function registerConsultantRoutes(
         throw new UnauthenticatedError();
       }
       const { tenantId, userId } = requireOperationalTenant(request);
-      const count = await delivery.unreadCount({
-        tenantId,
-        userId,
-        actor: resolveConversationActor(auth, tenantId),
+      const actor = resolveConversationActor(auth, tenantId);
+      if (actor === 'support-operator') {
+        return reply
+          .status(200)
+          .header('Cache-Control', 'private, no-store')
+          .send({ count: 0, insightIds: [] });
+      }
+      const items = await delivery.listEligible({ tenantId, userId });
+      return reply.status(200).header('Cache-Control', 'private, no-store').send({
+        count: items.length,
+        insightIds: items.map((item) => item.id),
       });
-      return reply.status(200).header('Cache-Control', 'private, no-store').send({ count });
     },
   );
 

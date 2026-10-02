@@ -93,12 +93,29 @@ export function createProactiveInsightRepository(prisma: PrismaClient) {
       });
     },
 
+    async linkMessageInsights(
+      tenantId: string,
+      messageId: string,
+      insightIds: readonly string[],
+    ): Promise<void> {
+      if (insightIds.length === 0) {
+        return;
+      }
+      await prisma.aiMessageInsightLink.createMany({
+        data: insightIds.map((insightId) => ({ messageId, insightId, tenantId })),
+        skipDuplicates: true,
+      });
+    },
+
     async findUserMessage(tenantId: string, userId: string, insightId: string) {
       const row = await prisma.aiMessage.findFirst({
         where: {
           tenantId,
-          relatedInsightId: insightId,
           conversation: { userId, tenantId },
+          OR: [
+            { relatedInsightId: insightId },
+            { insightLinks: { some: { insightId, tenantId } } },
+          ],
         },
         orderBy: { createdAt: 'asc' },
       });

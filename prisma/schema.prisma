@@ -74,6 +74,7 @@ model Tenant {
   analyticalEvents           AnalyticalEvent[]
   aiInsights                 AiInsight[]
   aiInsightReads             AiInsightRead[]
+  aiMessageInsightLinks      AiMessageInsightLink[]
 
   @@unique([name], map: "uq_tenants_name")
   @@map("tenants")
@@ -1054,6 +1055,7 @@ model AiMessage {
   conversation     AiConversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   relatedInsight   AiInsight?          @relation(fields: [relatedInsightId], references: [id], onDelete: SetNull)
+  insightLinks     AiMessageInsightLink[]
   runs             AiRun[]
 
   @@index([tenantId], map: "idx_ai_messages_tenant_id")
@@ -1209,6 +1211,7 @@ model AiInsight {
   analyticalEvent    AnalyticalEvent          @relation(fields: [analyticalEventId], references: [id], onDelete: Restrict)
   reads              AiInsightRead[]
   messages           AiMessage[]
+  messageLinks       AiMessageInsightLink[]
   runs               AiRun[]
 
   @@index([tenantId, narrationStatus], map: "idx_ai_insights_tenant_narration_status")
@@ -1242,4 +1245,20 @@ model ProactiveTriggerBootstrap {
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   @@map("proactive_trigger_bootstraps")
+}
+
+/// Insights cobertos por uma mensagem apresentada ao usuário. Não funde os fatos.
+model AiMessageInsightLink {
+  messageId String   @map("message_id") @db.Uuid
+  insightId String   @map("insight_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  message   AiMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  insight   AiInsight @relation(fields: [insightId], references: [id], onDelete: Restrict)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@id([messageId, insightId])
+  @@index([insightId], map: "idx_ai_message_insight_links_insight_id")
+  @@index([tenantId], map: "idx_ai_message_insight_links_tenant_id")
+  @@map("ai_message_insight_links")
 }

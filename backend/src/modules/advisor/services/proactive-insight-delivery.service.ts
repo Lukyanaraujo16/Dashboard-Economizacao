@@ -1,4 +1,5 @@
 import type { AdvisorConversationActor, AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
+import { composeProactivePresentations } from '../domain/compose-proactive-presentation.js';
 import type { AiConversationRecord, AiMessageRecord } from '../domain/types.js';
 import { assertCanMarkInsightRead, type ProactiveActor } from '../domain/proactive-trigger-access.js';
 import type { ProactiveInsightRepository } from '../repositories/proactive-insight.repository.js';
@@ -84,27 +85,38 @@ export function createProactiveInsightDelivery(deps: {
           input.actor,
         ));
 
-      const messages: AiMessageRecord[] = [];
-      let materialized = 0;
+      const pending = [];
       for (const insight of eligible) {
         const content = insight.content?.trim();
         if (!content) {
           continue;
         }
         const already = await deps.insights.findUserMessage(input.tenantId, input.userId, insight.id);
-        const message =
-          already ??
-          (await deps.conversations.createMessage(input.tenantId, conversation.id, {
-            senderType: 'SYSTEM',
-            content,
-            relatedInsightId: insight.id,
-          }));
         if (!already) {
-          materialized += 1;
+          pending.push({ ...insight, content });
         }
+      }
+
+      const messages: AiMessageRecord[] = [];
+      let materialized = 0;
+      for (const presentation of composeProactivePresentations(pending)) {
+        const message = await deps.conversations.createMessage(input.tenantId, conversation.id, {
+          senderType: 'SYSTEM',
+          content: presentation.content,
+          relatedInsightId: presentation.primaryInsightId,
+        });
+        await deps.insights.linkMessageInsights(
+          input.tenantId,
+          message.id,
+          presentation.insightIds,
+        );
+        materialized += 1;
         messages.push(message);
-        if (input.actor === 'tenant-member') {
-          assertCanMarkInsightRead(readActor(input.actor));
+      }
+
+      if (input.actor === 'tenant-member') {
+        assertCanMarkInsightRead(readActor(input.actor));
+        for (const insight of eligible) {
           await deps.reads.markRead({
             insightId: insight.id,
             tenantId: input.tenantId,
