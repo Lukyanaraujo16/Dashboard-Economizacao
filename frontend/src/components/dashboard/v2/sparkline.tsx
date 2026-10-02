@@ -29,6 +29,15 @@ import {
 import { anchorRatioFromSvgX } from './chart-tooltip-placement';
 import { ChartTooltip } from './chart-tooltip';
 import { useDashboardPresentation } from './dashboard-presentation';
+import {
+  SPARKLINE_DRAW_DURATION_MS,
+  applySparklineDrawPlay,
+  applySparklineDrawStart,
+  clearSparklineDraw,
+  isSparklineStrokeTransitionEnd,
+  readSparklinePathLength,
+  sparklineDrawDelayMs,
+} from './sparkline-draw';
 import styles from './sparkline.module.css';
 
 const VIEW_WIDTH = 120;
@@ -188,32 +197,49 @@ export function Sparkline({
 
   useLayoutEffect(() => {
     const line = lineRef.current;
-    if (!line || !presentation.present || typeof line.getTotalLength !== 'function') {
+    if (!line || !presentation.present) {
       return;
     }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const reduceMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      clearSparklineDraw(line);
       return;
     }
-    let length: number;
-    try {
-      length = line.getTotalLength();
-    } catch {
+    const length = readSparklinePathLength(line);
+    if (length === null) {
       return;
     }
-    if (!Number.isFinite(length) || length <= 0) {
-      return;
-    }
-    const delay = Math.min(presentation.index, 8) * 40;
-    line.style.transition = 'none';
-    line.style.strokeDasharray = `${length}`;
-    line.style.strokeDashoffset = `${length}`;
+    const delay = sparklineDrawDelayMs(presentation.index);
+    applySparklineDrawStart(line, length);
     line.getBoundingClientRect();
-    line.style.transition = `stroke-dashoffset 1100ms cubic-bezier(0.16, 0.84, 0.28, 1) ${delay}ms`;
-    line.style.strokeDashoffset = '0';
+    applySparklineDrawPlay(line, delay);
+
+    let settled = false;
+    let timer = 0;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      window.clearTimeout(timer);
+      line.removeEventListener('transitionend', onTransitionEnd);
+      clearSparklineDraw(line);
+    };
+    const onTransitionEnd = (event: TransitionEvent) => {
+      if (!isSparklineStrokeTransitionEnd(event, line)) {
+        return;
+      }
+      finish();
+    };
+    line.addEventListener('transitionend', onTransitionEnd);
+    timer = window.setTimeout(finish, SPARKLINE_DRAW_DURATION_MS + delay);
     return () => {
-      line.style.transition = 'none';
-      line.style.removeProperty('stroke-dasharray');
-      line.style.removeProperty('stroke-dashoffset');
+      settled = true;
+      window.clearTimeout(timer);
+      line.removeEventListener('transitionend', onTransitionEnd);
+      clearSparklineDraw(line);
     };
   }, [presentation.index, presentation.present]);
   const style = {
