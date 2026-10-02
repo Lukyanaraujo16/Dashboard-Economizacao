@@ -1,6 +1,8 @@
 import type { LucideIcon, LucideProps } from 'lucide-react';
 import {
+  Activity,
   BarChart3,
+  Bot,
   Building2,
   CircleCheckBig,
   CircleOff,
@@ -10,6 +12,7 @@ import {
   Headphones,
   KeyRound,
   LayoutDashboard,
+  Link2,
   List,
   Lock,
   LockOpen,
@@ -17,6 +20,8 @@ import {
   Monitor,
   Moon,
   PencilLine,
+  RefreshCw,
+  ScrollText,
   Settings2,
   Shield,
   ShieldUser,
@@ -116,6 +121,21 @@ export function IconShield(props: UiIconProps = {}) {
 }
 export function IconZap(props: UiIconProps = {}) {
   return withDefaults(Zap, props);
+}
+export function IconActivity(props: UiIconProps = {}) {
+  return withDefaults(Activity, props);
+}
+export function IconBot(props: UiIconProps = {}) {
+  return withDefaults(Bot, props);
+}
+export function IconLink2(props: UiIconProps = {}) {
+  return withDefaults(Link2, props);
+}
+export function IconRefreshCw(props: UiIconProps = {}) {
+  return withDefaults(RefreshCw, props);
+}
+export function IconScrollText(props: UiIconProps = {}) {
+  return withDefaults(ScrollText, props);
 }
 
 /* ——— Tema da interface ——— */

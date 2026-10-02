@@ -16,7 +16,9 @@ import {
   type SyncRunRow,
 } from '../../services/admin/operations';
 import { StateWrapper } from '../financial/state-wrapper';
-import { Button, Typography } from '../ui';
+import { Badge, Button, Typography } from '../ui';
+import type { BadgeVariant } from '../ui';
+import { IconRefreshCw } from '../ui/icons';
 import { OperationsExecutive } from './operations-executive';
 import {
   failureProgressSummary,
@@ -139,6 +141,22 @@ function labelOf(value: string): string {
   return STATUS_LABELS[value] ?? ACTION_LABELS[value] ?? value;
 }
 
+function statusVariant(value: string): BadgeVariant {
+  if (value === 'SUCCESS' || value === 'SUCCEEDED' || value === 'CONNECTED') {
+    return 'success';
+  }
+  if (value === 'FAILED' || value === 'TIMEOUT' || value === 'ERROR' || value === 'FAILURE') {
+    return 'danger';
+  }
+  if (value === 'RUNNING' || value === 'STARTED') {
+    return 'info';
+  }
+  if (value === 'PENDING' || value === 'LIMIT_BLOCKED') {
+    return 'warning';
+  }
+  return 'neutral';
+}
+
 function formatWhen(iso: string | null): string {
   if (!iso) {
     return '—';
@@ -147,7 +165,11 @@ function formatWhen(iso: string | null): string {
   if (Number.isNaN(date.getTime())) {
     return '—';
   }
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: 'America/Sao_Paulo',
+  }).format(date);
 }
 
 function formatDuration(ms: number | null): string {
@@ -308,19 +330,82 @@ export function OperationsPage() {
             ? 'Ainda não há alterações administrativas registradas. Elas aparecem aqui depois de mudanças feitas na plataforma, como empresas, usuários, aparência e integrações.'
             : 'Nenhuma sincronização registrada.';
 
+  const pagination =
+    state === 'ready' || state === 'empty' ? (
+      <div className={styles.pagination}>
+        <Typography as="p" variant="caption" className={styles.muted}>
+          {rangeLabel(offset, visibleCount, total)}
+        </Typography>
+        <div className={styles.paginationActions}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={offset === 0}
+            onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}
+          >
+            Anterior
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={!hasMore}
+            onClick={() => setOffset((current) => current + PAGE_SIZE)}
+          >
+            Próxima
+          </Button>
+        </div>
+      </div>
+    ) : null;
+
   return (
     <section className={styles.page} data-testid="operations-page">
-      <header className={styles.intro}>
-        <Typography as="h1" variant="heading">
-          Operação
-        </Typography>
-        <Typography as="p" variant="body" className={styles.description}>
-          Visão administrativa da plataforma. As abas seguintes detalham sincronização, falhas,
-          execuções da Lia e auditoria.
-        </Typography>
+      <header className={styles.pageHead}>
+        <div className={styles.intro}>
+          <Typography as="h1" variant="heading">
+            Operação
+          </Typography>
+          <Typography as="p" variant="body" className={styles.description}>
+            Visão administrativa da plataforma.
+          </Typography>
+        </div>
+        <div className={styles.controls}>
+          <label className={`${styles.field} ${styles.fieldCompact}`}>
+            <Typography as="span" variant="caption" className={styles.fieldLabel}>
+              Empresa
+            </Typography>
+            <select
+              className={styles.select}
+              value={tenantId}
+              aria-label="Filtrar por empresa"
+              onChange={(event) => {
+                setTenantId(event.target.value);
+                setOffset(0);
+              }}
+            >
+              <option value="">Todas</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={state === 'loading'}
+            leftIcon={<IconRefreshCw size={14} />}
+            onClick={() => setReloadKey((current) => current + 1)}
+          >
+            Atualizar
+          </Button>
+        </div>
       </header>
 
-      <div className={styles.tabs} role="tablist" aria-label="Visões operacionais">
+      <div className={styles.tabBar} role="tablist" aria-label="Visões operacionais">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -341,119 +426,83 @@ export function OperationsPage() {
         ))}
       </div>
 
-      <div className={styles.toolbar}>
-        <label className={styles.field}>
-          <Typography as="span" variant="caption" className={styles.fieldLabel}>
-            Empresa
-          </Typography>
-          <select
-            className={styles.select}
-            value={tenantId}
-            aria-label="Filtrar por empresa"
-            onChange={(event) => {
-              setTenantId(event.target.value);
-              setOffset(0);
-            }}
-          >
-            <option value="">Todas</option>
-            {companies.map((company) => (
-              <option key={company.id} value={company.id}>
-                {company.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
+      {tab === 'sync' || tab === 'ai' || tab === 'audit' ? (
+        <div className={styles.toolbar}>
+          {tab === 'sync' || tab === 'ai' ? (
+            <label className={styles.field}>
+              <Typography as="span" variant="caption" className={styles.fieldLabel}>
+                Status
+              </Typography>
+              <select
+                className={styles.select}
+                value={status}
+                aria-label="Filtrar por status"
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setOffset(0);
+                }}
+              >
+                {(tab === 'sync' ? SYNC_STATUS_OPTIONS : AI_STATUS_OPTIONS).map((option) => (
+                  <option key={option.value || 'all'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
-        {tab === 'sync' || tab === 'ai' ? (
-          <label className={styles.field}>
-            <Typography as="span" variant="caption" className={styles.fieldLabel}>
-              Status
-            </Typography>
-            <select
-              className={styles.select}
-              value={status}
-              aria-label="Filtrar por status"
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setOffset(0);
-              }}
-            >
-              {(tab === 'sync' ? SYNC_STATUS_OPTIONS : AI_STATUS_OPTIONS).map((option) => (
-                <option key={option.value || 'all'} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
-        {tab === 'audit' ? (
-          <label className={styles.field}>
-            <Typography as="span" variant="caption" className={styles.fieldLabel}>
-              Ação
-            </Typography>
-            <select
-              className={styles.select}
-              value={action}
-              aria-label="Filtrar por ação"
-              onChange={(event) => {
-                setAction(event.target.value);
-                setOffset(0);
-              }}
-            >
-              {AUDIT_ACTION_OPTIONS.map((option) => (
-                <option key={option.value || 'all'} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-      </div>
+          {tab === 'audit' ? (
+            <label className={styles.field}>
+              <Typography as="span" variant="caption" className={styles.fieldLabel}>
+                Ação
+              </Typography>
+              <select
+                className={styles.select}
+                value={action}
+                aria-label="Filtrar por ação"
+                onChange={(event) => {
+                  setAction(event.target.value);
+                  setOffset(0);
+                }}
+              >
+                {AUDIT_ACTION_OPTIONS.map((option) => (
+                  <option key={option.value || 'all'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
+      ) : null}
 
       <StateWrapper
         state={state}
+        className={tab === 'health' ? undefined : styles.technical}
         loadingLabel="Carregando operação"
         errorMessage={errorMessage}
         emptyMessage={emptyMessage}
         onRetry={() => setReloadKey((current) => current + 1)}
       >
         {tab === 'health' && overview ? (
-          <OperationsExecutive overview={overview} formatWhen={formatWhen} labelOf={labelOf} />
+          <OperationsExecutive
+            overview={overview}
+            formatWhen={formatWhen}
+            labelOf={labelOf}
+            companiesFooter={pagination}
+          />
         ) : null}
-        {tab === 'sync' ? <SyncTable rows={syncRows} /> : null}
-        {tab === 'failures' ? <FailureTable rows={syncRows} /> : null}
-        {tab === 'ai' ? <AiTable rows={aiRows} /> : null}
-        {tab === 'audit' ? <AuditTable rows={auditRows} /> : null}
-      </StateWrapper>
-
-      {state === 'ready' || state === 'empty' ? (
-        <div className={styles.pagination}>
-          <Typography as="p" variant="caption" className={styles.muted}>
-            {rangeLabel(offset, visibleCount, total)}
-          </Typography>
-          <div className={styles.paginationActions}>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={offset === 0}
-              onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}
-            >
-              Anterior
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={!hasMore}
-              onClick={() => setOffset((current) => current + PAGE_SIZE)}
-            >
-              Próxima
-            </Button>
+        {tab === 'sync' || tab === 'failures' || tab === 'ai' || tab === 'audit' ? (
+          <div className={styles.technical}>
+            {tab === 'sync' ? <SyncTable rows={syncRows} /> : null}
+            {tab === 'failures' ? <FailureTable rows={syncRows} /> : null}
+            {tab === 'ai' ? <AiTable rows={aiRows} /> : null}
+            {tab === 'audit' ? <AuditTable rows={auditRows} /> : null}
+            {pagination}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </StateWrapper>
+      {tab !== 'health' && state === 'empty' ? pagination : null}
     </section>
   );
 }
@@ -509,7 +558,9 @@ function SyncTable({ rows }: { readonly rows: readonly SyncRunRow[] }) {
           {rows.map((row) => (
             <tr key={row.id}>
               <td>{row.tenantDisplayName}</td>
-              <td>{labelOf(row.status)}</td>
+              <td>
+                <Badge variant={statusVariant(row.status)}>{labelOf(row.status)}</Badge>
+              </td>
               <td>{labelOf(row.triggerType)}</td>
               <td>{formatWhen(row.startedAt)}</td>
               <td>{formatWhen(row.finishedAt)}</td>
@@ -614,7 +665,9 @@ function AiTable({ rows }: { readonly rows: readonly AiRunRow[] }) {
               <td>{labelOf(row.runType)}</td>
               <td>{row.provider}</td>
               <td>{row.model}</td>
-              <td>{labelOf(row.status)}</td>
+              <td>
+                <Badge variant={statusVariant(row.status)}>{labelOf(row.status)}</Badge>
+              </td>
               <td>
                 {row.inputTokens === null && row.outputTokens === null
                   ? '—'
@@ -659,7 +712,11 @@ function AuditTable({ rows }: { readonly rows: readonly AuditLogRow[] }) {
                 {row.targetType}
                 {row.targetId ? ` · ${row.targetId}` : ''}
               </td>
-              <td>{row.result === 'SUCCESS' ? 'Sucesso' : row.result === 'FAILURE' ? 'Falha' : row.result}</td>
+              <td>
+                <Badge variant={statusVariant(row.result)}>
+                  {row.result === 'SUCCESS' ? 'Sucesso' : row.result === 'FAILURE' ? 'Falha' : row.result}
+                </Badge>
+              </td>
               <td>{formatMetadata(row.metadata)}</td>
             </tr>
           ))}

@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { formatMoneyBrl } from '../../lib/format-money-brl';
 import type {
   OperationsCompanyRow,
@@ -5,8 +7,18 @@ import type {
   OperationsOverview,
 } from '../../services/admin/operations';
 import { Badge, Card, Typography } from '../ui';
+import {
+  IconActivity,
+  IconBot,
+  IconBuilding2,
+  IconLink2,
+  IconScrollText,
+  IconTriangleAlert,
+} from '../ui/icons';
 import { formatOperationsMonth, syncErrorLabel } from './operations-display';
 import styles from './operations.module.css';
+
+type Tone = 'calm' | 'attention' | 'alert';
 
 function moneyOrDash(value: OperationsMoney): string {
   if (value === null) {
@@ -15,7 +27,10 @@ function moneyOrDash(value: OperationsMoney): string {
   return formatMoneyBrl(value);
 }
 
-function integrationLabel(state: string): { readonly label: string; readonly variant: 'success' | 'warning' | 'danger' | 'neutral' } {
+function integrationLabel(state: string): {
+  readonly label: string;
+  readonly variant: 'success' | 'warning' | 'danger' | 'neutral';
+} {
   if (state === 'CONNECTED') {
     return { label: 'Conectada', variant: 'success' };
   }
@@ -31,83 +46,83 @@ function integrationLabel(state: string): { readonly label: string; readonly var
   return { label: 'Sem integração', variant: 'neutral' };
 }
 
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 export function OperationsExecutive({
   overview,
   formatWhen,
   labelOf,
+  companiesFooter,
 }: {
   readonly overview: OperationsOverview;
   readonly formatWhen: (iso: string | null) => string;
   readonly labelOf: (value: string) => string;
+  readonly companiesFooter?: ReactNode;
 }) {
   const { kpis, windows } = overview;
   const month = formatOperationsMonth(overview.referenceMonthKey);
-  const alertsEmpty =
-    overview.alerts.failures.length === 0 &&
-    overview.alerts.aiErrors.length === 0 &&
-    overview.alerts.audit.length === 0;
+  const integrationTone: Tone = kpis.integrations.withError > 0 ? 'alert' : 'calm';
+  const syncTone: Tone = kpis.synchronization.failuresLast7Days > 0 ? 'alert' : 'calm';
+  const aiTone: Tone = kpis.ai.errorsLast7Days > 0 ? 'alert' : 'calm';
+  const disconnected = Math.max(0, kpis.integrations.total - kpis.integrations.connected);
 
   return (
     <div className={styles.executive} data-testid="operations-executive">
       <div className={styles.kpiGrid}>
-        <Card className={styles.kpi}>
-          <Typography as="p" variant="caption" className={styles.kpiLabel}>
-            Empresas
-          </Typography>
-          <p className={styles.kpiValue}>{kpis.companies.total}</p>
-          <Typography as="p" variant="caption" className={styles.muted}>
-            Cadastradas na plataforma
-          </Typography>
-        </Card>
-        <Card className={styles.kpi}>
-          <Typography as="p" variant="caption" className={styles.kpiLabel}>
-            Integrações
-          </Typography>
-          <p className={styles.kpiValue}>
-            {kpis.integrations.connected}
-            <span className={styles.kpiUnit}> de {kpis.integrations.total}</span>
-          </p>
-          {kpis.integrations.withError > 0 ? (
-            <Badge variant="danger">{kpis.integrations.withError} com erro</Badge>
-          ) : (
-            <Typography as="p" variant="caption" className={styles.muted}>
-              Nenhuma com erro
-            </Typography>
+        <KpiCard
+          label="Empresas"
+          tone="calm"
+          icon={<IconBuilding2 size={16} />}
+          value={String(kpis.companies.total)}
+          context="Cadastradas na plataforma"
+        />
+        <KpiCard
+          label="Integrações"
+          tone={integrationTone}
+          icon={<IconLink2 size={16} />}
+          value={String(kpis.integrations.connected)}
+          valueSuffix={`/ ${kpis.integrations.total}`}
+          context="conectadas"
+          note={
+            kpis.integrations.withError > 0
+              ? plural(kpis.integrations.withError, 'com erro', 'com erro')
+              : disconnected > 0
+                ? plural(disconnected, 'sem conexão', 'sem conexão')
+                : null
+          }
+          noteTone={kpis.integrations.withError > 0 ? 'alert' : 'calm'}
+        />
+        <KpiCard
+          label="Sincronização"
+          tone={syncTone}
+          icon={<IconActivity size={16} />}
+          value={String(kpis.synchronization.syncedCompaniesLast24Hours)}
+          context={`nas últimas ${windows.syncFreshnessHours} horas`}
+          note={plural(
+            kpis.synchronization.failuresLast7Days,
+            `falha em ${windows.recentDays} dias`,
+            `falhas em ${windows.recentDays} dias`,
           )}
-        </Card>
-        <Card className={styles.kpi}>
-          <Typography as="p" variant="caption" className={styles.kpiLabel}>
-            Sincronização
-          </Typography>
-          <p className={styles.kpiValue}>{kpis.synchronization.syncedCompaniesLast24Hours}</p>
-          <Typography as="p" variant="caption" className={styles.muted}>
-            Empresas sincronizadas nas últimas {windows.syncFreshnessHours} horas
-          </Typography>
-          <Typography as="p" variant="caption" className={styles.muted}>
-            {kpis.synchronization.failuresLast7Days} falhas nos últimos {windows.recentDays} dias
-          </Typography>
-        </Card>
-        <Card className={styles.kpi}>
-          <Typography as="p" variant="caption" className={styles.kpiLabel}>
-            Lia
-          </Typography>
-          <p className={styles.kpiValue}>{kpis.ai.runsLast7Days}</p>
-          <Typography as="p" variant="caption" className={styles.muted}>
-            Execuções nos últimos {windows.recentDays} dias
-          </Typography>
-          <Typography as="p" variant="caption" className={styles.muted}>
-            {kpis.ai.errorsLast7Days} erros no mesmo período
-          </Typography>
-        </Card>
-        <Card className={styles.kpi}>
-          <Typography as="p" variant="caption" className={styles.kpiLabel}>
-            Auditoria
-          </Typography>
-          <p className={styles.kpiValue}>{kpis.audit.changesLast7Days}</p>
-          <Typography as="p" variant="caption" className={styles.muted}>
-            Alterações administrativas nos últimos {windows.recentDays} dias
-          </Typography>
-        </Card>
+          noteTone={syncTone}
+        />
+        <KpiCard
+          label="Lia"
+          tone={aiTone}
+          icon={<IconBot size={16} />}
+          value={String(kpis.ai.runsLast7Days)}
+          context={`execuções em ${windows.recentDays} dias`}
+          note={plural(kpis.ai.errorsLast7Days, 'erro no período', 'erros no período')}
+          noteTone={aiTone}
+        />
+        <KpiCard
+          label="Auditoria"
+          tone="calm"
+          icon={<IconScrollText size={16} />}
+          value={String(kpis.audit.changesLast7Days)}
+          context={`alterações em ${windows.recentDays} dias`}
+        />
       </div>
 
       <section className={styles.section} aria-labelledby="operations-companies-title">
@@ -121,128 +136,220 @@ export function OperationsExecutive({
           </Typography>
         </div>
         {overview.companies.data.length === 0 ? (
-          <Typography as="p" variant="body">
-            Nenhuma empresa para exibir.
-          </Typography>
+          <Card className={styles.emptyPanel}>
+            <Typography as="p" variant="body">
+              Nenhuma empresa para exibir.
+            </Typography>
+          </Card>
         ) : (
-          <div className={styles.tableWrap}>
-            <table className={styles.table} data-testid="operations-companies">
-              <thead>
-                <tr>
-                  <th>Empresa</th>
-                  <th>Integração</th>
-                  <th>Última sincronização</th>
-                  <th>Faturamento</th>
-                  <th>Resultado</th>
-                  <th>A receber</th>
-                  <th>Contas a pagar</th>
-                  <th>Vencidos</th>
-                </tr>
-              </thead>
-              <tbody>
-                {overview.companies.data.map((row) => (
-                  <CompanyRow key={row.tenantId} row={row} formatWhen={formatWhen} />
-                ))}
-              </tbody>
-            </table>
+          <div className={styles.companyList} data-testid="operations-companies">
+            {overview.companies.data.map((row) => (
+              <CompanyCard key={row.tenantId} row={row} formatWhen={formatWhen} month={month} />
+            ))}
           </div>
         )}
+        {companiesFooter}
       </section>
 
-      <section className={styles.section} aria-labelledby="operations-alerts-title">
-        <Typography as="h2" variant="heading" id="operations-alerts-title">
-          Atividade dos últimos {windows.recentDays} dias
-        </Typography>
-        {alertsEmpty ? (
-          <Typography as="p" variant="body" className={styles.muted}>
-            Nenhuma falha de sincronização, erro da Lia ou alteração administrativa nesse período.
-          </Typography>
-        ) : (
-          <div className={styles.alertGrid}>
-            <AlertList
-              title="Falhas de sincronização"
-              empty="Nenhuma falha de sincronização."
-              items={overview.alerts.failures.map((row) => ({
-                id: row.id,
-                text: `${row.tenantDisplayName} · ${formatWhen(row.startedAt)} · ${syncErrorLabel(row.errorCode)}`,
-              }))}
-            />
-            <AlertList
-              title="Erros da Lia"
-              empty="Nenhum erro de execução."
-              items={overview.alerts.aiErrors.map((row) => ({
-                id: row.id,
-                text: `${row.tenantDisplayName} · ${formatWhen(row.createdAt)} · ${row.status}`,
-              }))}
-            />
-            <AlertList
-              title="Alterações administrativas"
-              empty="Nenhuma alteração administrativa."
-              items={overview.alerts.audit.map((row) => ({
-                id: row.id,
-                text: `${formatWhen(row.createdAt)} · ${row.operatorName} · ${labelOf(row.action)}`,
-              }))}
-            />
-          </div>
-        )}
-      </section>
+      <ActivityPanel overview={overview} formatWhen={formatWhen} labelOf={labelOf} />
     </div>
   );
 }
 
-function CompanyRow({
-  row,
-  formatWhen,
+function KpiCard({
+  label,
+  tone,
+  icon,
+  value,
+  valueSuffix,
+  context,
+  note,
+  noteTone = 'calm',
 }: {
-  readonly row: OperationsCompanyRow;
-  readonly formatWhen: (iso: string | null) => string;
+  readonly label: string;
+  readonly tone: Tone;
+  readonly icon: ReactNode;
+  readonly value: string;
+  readonly valueSuffix?: string;
+  readonly context: string;
+  readonly note?: string | null;
+  readonly noteTone?: Tone;
 }) {
-  const integration = integrationLabel(row.integrationState);
-  const overdue =
-    row.financials.overdueReceivables === null && row.financials.overduePayables === null
-      ? '—'
-      : `A receber ${moneyOrDash(row.financials.overdueReceivables)} · A pagar ${moneyOrDash(row.financials.overduePayables)}`;
   return (
-    <tr>
-      <td>{row.tenantDisplayName}</td>
-      <td>
-        <Badge variant={integration.variant}>{integration.label}</Badge>
-      </td>
-      <td>{formatWhen(row.integration?.lastSuccessfulSyncAt ?? null)}</td>
-      <td>{moneyOrDash(row.financials.billing)}</td>
-      <td>{moneyOrDash(row.financials.result)}</td>
-      <td>{moneyOrDash(row.financials.receivables)}</td>
-      <td>{moneyOrDash(row.financials.payables)}</td>
-      <td>{overdue}</td>
-    </tr>
+    <Card className={styles.kpi} data-tone={tone}>
+      <div className={styles.kpiHead}>
+        <span className={styles.kpiIcon} data-tone={tone}>
+          {icon}
+        </span>
+        <Typography as="p" variant="caption" className={styles.kpiLabel}>
+          {label}
+        </Typography>
+      </div>
+      <p className={styles.kpiValue}>
+        {value}
+        {valueSuffix ? <span className={styles.kpiUnit}>{valueSuffix}</span> : null}
+      </p>
+      <Typography as="p" variant="caption" className={styles.kpiContext}>
+        {context}
+      </Typography>
+      {note ? (
+        <p className={styles.statusNote} data-tone={noteTone}>
+          <span className={styles.statusDot} aria-hidden="true" />
+          {note}
+        </p>
+      ) : (
+        <p className={styles.statusNoteSpacer} aria-hidden="true" />
+      )}
+    </Card>
   );
 }
 
-function AlertList({
-  title,
-  empty,
-  items,
+function CompanyCard({
+  row,
+  formatWhen,
+  month,
 }: {
-  readonly title: string;
-  readonly empty: string;
-  readonly items: readonly { readonly id: string; readonly text: string }[];
+  readonly row: OperationsCompanyRow;
+  readonly formatWhen: (iso: string | null) => string;
+  readonly month: string;
+}) {
+  const integration = integrationLabel(row.integrationState);
+  return (
+    <article className={styles.companyCard} data-state={row.integrationState}>
+      <header className={styles.companyHead}>
+        <div className={styles.companyIdentity}>
+          <Typography as="h3" variant="body" className={styles.companyName}>
+            {row.tenantDisplayName}
+          </Typography>
+          <p className={styles.companyMeta}>
+            Última sincronização: {formatWhen(row.integration?.lastSuccessfulSyncAt ?? null)}
+            <span aria-hidden="true"> · </span>
+            Competência {month}
+          </p>
+        </div>
+        <Badge variant={integration.variant}>{integration.label}</Badge>
+      </header>
+      <div className={styles.metricGrid}>
+        <Metric label="Faturamento" value={moneyOrDash(row.financials.billing)} emphasis />
+        <Metric label="Resultado" value={moneyOrDash(row.financials.result)} emphasis />
+        <Metric label="A receber" value={moneyOrDash(row.financials.receivables)} />
+        <Metric label="Contas a pagar" value={moneyOrDash(row.financials.payables)} />
+        <Metric label="Vencidos a receber" value={moneyOrDash(row.financials.overdueReceivables)} />
+        <Metric label="Vencidos a pagar" value={moneyOrDash(row.financials.overduePayables)} />
+      </div>
+    </article>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  emphasis = false,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly emphasis?: boolean;
 }) {
   return (
-    <Card className={styles.alertCard}>
-      <Typography as="h3" variant="body">
-        {title}
-      </Typography>
-      {items.length === 0 ? (
-        <Typography as="p" variant="caption" className={styles.muted}>
-          {empty}
+    <div className={emphasis ? styles.metricPrimary : styles.metric}>
+      <p className={styles.metricValue}>{value}</p>
+      <p className={styles.metricLabel}>{label}</p>
+    </div>
+  );
+}
+
+type ActivityItem = {
+  readonly id: string;
+  readonly at: number;
+  readonly kind: 'failure' | 'ai' | 'audit';
+  readonly title: string;
+  readonly context: string;
+  readonly when: string;
+};
+
+function ActivityPanel({
+  overview,
+  formatWhen,
+  labelOf,
+}: {
+  readonly overview: OperationsOverview;
+  readonly formatWhen: (iso: string | null) => string;
+  readonly labelOf: (value: string) => string;
+}) {
+  const items: ActivityItem[] = [
+    ...overview.alerts.failures.map((row) => ({
+      id: `failure-${row.id}`,
+      at: Date.parse(row.startedAt),
+      kind: 'failure' as const,
+      title: 'Falha de sincronização',
+      context: `${row.tenantDisplayName} · ${syncErrorLabel(row.errorCode)}`,
+      when: formatWhen(row.startedAt),
+    })),
+    ...overview.alerts.aiErrors.map((row) => ({
+      id: `ai-${row.id}`,
+      at: Date.parse(row.createdAt),
+      kind: 'ai' as const,
+      title: 'Erro da Lia',
+      context: `${row.tenantDisplayName} · ${labelOf(row.status)}`,
+      when: formatWhen(row.createdAt),
+    })),
+    ...overview.alerts.audit.map((row) => ({
+      id: `audit-${row.id}`,
+      at: Date.parse(row.createdAt),
+      kind: 'audit' as const,
+      title: 'Alteração administrativa',
+      context: `${row.operatorName} · ${labelOf(row.action)}`,
+      when: formatWhen(row.createdAt),
+    })),
+  ].sort((left, right) => {
+    const leftAt = Number.isNaN(left.at) ? 0 : left.at;
+    const rightAt = Number.isNaN(right.at) ? 0 : right.at;
+    return rightAt - leftAt;
+  });
+
+  return (
+    <section className={styles.section} aria-labelledby="operations-alerts-title">
+      <Card className={styles.activityCard} data-testid="operations-activity">
+        <Typography as="h2" variant="heading" id="operations-alerts-title">
+          Atividade dos últimos {overview.windows.recentDays} dias
         </Typography>
-      ) : (
-        <ul className={styles.alertList}>
-          {items.map((item) => (
-            <li key={item.id}>{item.text}</li>
-          ))}
-        </ul>
-      )}
-    </Card>
+        {items.length === 0 ? (
+          <div className={styles.activityEmpty}>
+            <span className={styles.activityEmptyIcon} aria-hidden="true">
+              <IconTriangleAlert size={16} />
+            </span>
+            <div>
+              <Typography as="p" variant="body">
+                Nenhuma atividade nesse período.
+              </Typography>
+              <Typography as="p" variant="caption" className={styles.muted}>
+                Falhas de sincronização, erros da Lia e alterações administrativas aparecem aqui.
+              </Typography>
+            </div>
+          </div>
+        ) : (
+          <ol className={styles.timeline}>
+            {items.map((item) => (
+              <li key={item.id} className={styles.timelineItem}>
+                <span className={styles.timelineIcon} data-kind={item.kind} aria-hidden="true">
+                  {item.kind === 'failure' ? (
+                    <IconActivity size={14} />
+                  ) : item.kind === 'ai' ? (
+                    <IconBot size={14} />
+                  ) : (
+                    <IconScrollText size={14} />
+                  )}
+                </span>
+                <div className={styles.timelineBody}>
+                  <p className={styles.timelineTitle}>{item.title}</p>
+                  <p className={styles.timelineMeta}>{item.context}</p>
+                </div>
+                <time className={styles.timelineWhen}>{item.when}</time>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Card>
+    </section>
   );
 }
