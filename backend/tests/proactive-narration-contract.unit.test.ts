@@ -40,4 +40,26 @@ describe('contrato da narração proativa', () => {
     expect(blocks[1]?.content).toContain('"unpaid":"2150.20"');
     expect(blocks.map((block) => block.content).join('\n')).toContain('NÃO recalcula');
   });
+
+  it('entrega o nome oficial do título e omite identificador interno', () => {
+    const blocks = buildProactiveNarrationBlocks({
+      insightType: 'TITLE_DUE_SOON',
+      severity: 'ATTENTION',
+      periodStart: '2026-10-05',
+      periodEnd: '2026-10-05',
+      supportingData: {
+        titleKind: 'PAYABLE',
+        unpaid: '2150.20',
+        dueDate: '2026-10-05',
+        externalId: 'conta-azul-id',
+        counterpartyName: 'João da Silva',
+        description: 'Salário',
+      },
+    });
+    const facts = blocks[1]?.content ?? '';
+    expect(facts).toContain('João da Silva');
+    expect(facts).toContain('Salário');
+    expect(facts).not.toContain('conta-azul-id');
+    expect(facts).not.toContain('externalId');
+  });
 });

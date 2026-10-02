@@ -16,6 +16,7 @@ import {
   DisableManagedUserIcon,
   EditManagedUserIcon,
   EnableManagedUserIcon,
+  RemoveManagedUserIcon,
   ResetPasswordManagedUserIcon,
   UnblockManagedUserIcon,
 } from './managed-user-action-icons';
@@ -52,6 +53,7 @@ export type ManagedUsersListApi = {
     userId: string,
     input: { readonly password: string; readonly passwordConfirmation: string },
   ) => Promise<ManagedUser>;
+  readonly remove?: (userId: string) => Promise<void>;
 };
 
 export type ManagedUsersListPageProps = {
@@ -90,7 +92,7 @@ export function ManagedUsersListPage({
   titleHeadingLevel = 1,
 }: ManagedUsersListPageProps) {
   const router = useRouter();
-  const { refreshSession } = useAuth();
+  const { refreshSession, user: currentUser } = useAuth();
   const [statusFilter, setStatusFilter] = useState<ManagedUserStatusFilter>('ALL');
   const [offset, setOffset] = useState(0);
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -99,6 +101,7 @@ export function ManagedUsersListPage({
   const [listState, setListState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [listError, setListError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<ManagedUser | null>(null);
   const [pendingResetUser, setPendingResetUser] = useState<ManagedUser | null>(null);
   const [resetPassword, setResetPassword] = useState('');
   const [resetPasswordConfirmation, setResetPasswordConfirmation] = useState('');
@@ -237,6 +240,35 @@ export function ManagedUsersListPage({
     }
   }
 
+  async function handleDeleteUser() {
+    if (!pendingDeleteUser || !api.remove) {
+      return;
+    }
+    const removed = pendingDeleteUser;
+    setActionLoadingId(removed.id);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await api.remove(removed.id);
+      setPendingDeleteUser(null);
+      setActionSuccess(`Usuário “${removed.name}” excluído.`);
+      await loadUsers();
+    } catch (error) {
+      if (error instanceof ManagedUsersRequestError && error.kind === 'unauthenticated') {
+        await refreshSession().catch(() => undefined);
+        router.replace('/login');
+        return;
+      }
+      setActionError(
+        error instanceof ManagedUsersRequestError
+          ? error.message
+          : 'Não foi possível excluir o usuário.',
+      );
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
   const isEmpty = listState === 'ready' && users.length === 0;
 
   return (
@@ -354,6 +386,38 @@ export function ManagedUsersListPage({
         </div>
       ) : null}
 
+      {pendingDeleteUser ? (
+        <div className={styles.confirmPanel} role="alertdialog" aria-labelledby="delete-user-title">
+          <Typography as="h3" variant="label" className={styles.confirmTitle} id="delete-user-title">
+            Excluir usuário?
+          </Typography>
+          <Typography as="p" variant="body" className={styles.confirmMessage}>
+            Você está prestes a excluir “{pendingDeleteUser.name}”. Essa ação removerá o acesso
+            desse usuário à empresa.
+          </Typography>
+          <div className={styles.confirmActions}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={actionLoadingId === pendingDeleteUser.id}
+              onClick={() => setPendingDeleteUser(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              loading={actionLoadingId === pendingDeleteUser.id}
+              onClick={() => void handleDeleteUser()}
+            >
+              Excluir usuário
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {pendingAction ? (
         <div className={styles.confirmPanel} role="alertdialog" aria-labelledby="user-action-title">
           <Typography
@@ -461,6 +525,15 @@ export function ManagedUsersListPage({
                           void runAction(user, api.enable, 'Não foi possível ativar.')
                         }
                         onResetPassword={() => openResetPassword(user)}
+                        onRemove={
+                          api.remove && currentUser?.id !== user.id
+                            ? () => {
+                                setPendingAction(null);
+                                setPendingResetUser(null);
+                                setPendingDeleteUser(user);
+                              }
+                            : undefined
+                        }
                       />
                     </td>
                   </tr>
@@ -506,6 +579,15 @@ export function ManagedUsersListPage({
                   onDisable={() => setPendingAction({ kind: 'disable', user })}
                   onEnable={() => void runAction(user, api.enable, 'Não foi possível ativar.')}
                   onResetPassword={() => openResetPassword(user)}
+                  onRemove={
+                    api.remove && currentUser?.id !== user.id
+                      ? () => {
+                          setPendingAction(null);
+                          setPendingResetUser(null);
+                          setPendingDeleteUser(user);
+                        }
+                      : undefined
+                  }
                 />
               </article>
             ))}
@@ -552,6 +634,7 @@ type ManagedUserRowActionsProps = {
   readonly onDisable: () => void;
   readonly onEnable: () => void;
   readonly onResetPassword: () => void;
+  readonly onRemove?: () => void;
 };
 
 function ManagedUserRowActions({
@@ -564,6 +647,7 @@ function ManagedUserRowActions({
   onDisable,
   onEnable,
   onResetPassword,
+  onRemove,
 }: ManagedUserRowActionsProps) {
   const router = useRouter();
   const isLoading = actionLoadingId === user.id;
@@ -645,6 +729,19 @@ function ManagedUserRowActions({
           >
             <EnableManagedUserIcon />
             <span>Ativar</span>
+          </Button>
+        ) : null}
+        {onRemove ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            loading={isLoading}
+            className={styles.actionToneDanger}
+            onClick={onRemove}
+          >
+            <RemoveManagedUserIcon />
+            <span>Excluir usuário</span>
           </Button>
         ) : null}
       </div>
@@ -729,6 +826,20 @@ function ManagedUserRowActions({
           onClick={onEnable}
         >
           <EnableManagedUserIcon />
+        </IconButton>
+      ) : null}
+      {onRemove ? (
+        <IconButton
+          type="button"
+          variant="ghost"
+          tone="danger"
+          size="sm"
+          aria-label={`Excluir usuário ${user.name}`}
+          title="Excluir usuário"
+          loading={isLoading}
+          onClick={onRemove}
+        >
+          <RemoveManagedUserIcon />
         </IconButton>
       ) : null}
     </div>

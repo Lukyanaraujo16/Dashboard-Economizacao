@@ -3,6 +3,11 @@ import {
   formatPresentedDay,
   readPresentedTitleAmount,
 } from './compose-proactive-presentation.js';
+import {
+  officialTitleIdentityClause,
+  readOfficialTitleIdentity,
+  type OfficialTitleIdentity,
+} from './title-official-identity.js';
 
 export type PresentedInsightFactSource = {
   readonly messageId: string;
@@ -14,6 +19,7 @@ type TitleLine = {
   readonly kind: 'PAYABLE' | 'RECEIVABLE';
   readonly dueDate: string;
   readonly unpaidCents: bigint;
+  readonly identity: OfficialTitleIdentity;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,7 +37,7 @@ function describeTitleGroup(lines: readonly TitleLine[]): string {
   const kind = ordered[0]?.kind === 'RECEIVABLE' ? 'RECEIVABLE' : 'PAYABLE';
   const items = ordered.map((line, index) => {
     const day = formatPresentedDay(line.dueDate) ?? line.dueDate;
-    return `${index + 1}. dueDate: ${line.dueDate}; displayDate: ${day}; amount: ${formatPresentedCents(line.unpaidCents)}`;
+    return `${index + 1}. dueDate: ${line.dueDate}; displayDate: ${day}; amount: ${formatPresentedCents(line.unpaidCents)}; ${officialTitleIdentityClause(line.identity, line.dueDate)}`;
   });
   const largest = ordered.reduce((best, line) => (line.unpaidCents > best.unpaidCents ? line : best));
   const earliest = ordered[0]!;
@@ -42,13 +48,13 @@ function describeTitleGroup(lines: readonly TitleLine[]): string {
     `quantidade: ${ordered.length}`,
     'itens em ordem de vencimento:',
     ...items,
-    `maiorValor: item ${largestIndex}; dueDate: ${largest.dueDate}; amount: ${formatPresentedCents(largest.unpaidCents)}`,
-    `vencePrimeiro: item 1; dueDate: ${earliest.dueDate}; amount: ${formatPresentedCents(earliest.unpaidCents)}`,
+    `maiorValor: item ${largestIndex}; dueDate: ${largest.dueDate}; amount: ${formatPresentedCents(largest.unpaidCents)}; ${officialTitleIdentityClause(largest.identity, largest.dueDate)}`,
+    `vencePrimeiro: item 1; dueDate: ${earliest.dueDate}; amount: ${formatPresentedCents(earliest.unpaidCents)}; ${officialTitleIdentityClause(earliest.identity, earliest.dueDate)}`,
   ];
   const second = ordered[1];
   if (second) {
     parts.push(
-      `segunda: item 2; dueDate: ${second.dueDate}; amount: ${formatPresentedCents(second.unpaidCents)}`,
+      `segunda: item 2; dueDate: ${second.dueDate}; amount: ${formatPresentedCents(second.unpaidCents)}; ${officialTitleIdentityClause(second.identity, second.dueDate)}`,
     );
   }
   parts.push(`total: ${formatPresentedCents(total)}`);
@@ -98,7 +104,9 @@ export function formatPresentedInsightFacts(
         return [];
       }
       const amount = readPresentedTitleAmount(row.supportingData);
-      return amount === null ? [] : [amount];
+      return amount === null
+        ? []
+        : [{ ...amount, identity: readOfficialTitleIdentity(row.supportingData) }];
     });
     const body =
       titles.length === rows.length && titles.length > 0
@@ -111,7 +119,7 @@ export function formatPresentedInsightFacts(
     return 'ABSENT';
   }
   return [
-    'Fatos oficiais das manifestações já apresentadas nesta conversa. Não recalcule quantidade, datas, valores nem total.',
+    'Fatos oficiais das manifestações já apresentadas nesta conversa. Não recalcule quantidade, datas, valores, identificação nem total. Não invente nome, fornecedor, salário ou natureza ausentes.',
     ...sections,
   ].join('\n\n');
 }

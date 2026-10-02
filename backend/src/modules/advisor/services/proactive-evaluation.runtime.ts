@@ -7,6 +7,7 @@ import { createCostCenterAllocationReadRepository } from '../../finance/reposito
 import { createFinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import { createLedgerReadRepository } from '../../finance/repositories/ledger-read.repository.js';
 import { createPayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
+import { createPartyReadRepository } from '../../finance/repositories/party-read.repository.js';
 import { createReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { createAdvisorPlatformCredentialRepository } from '../repositories/advisor-platform-credential.repository.js';
 import { createAdvisorRunRepository } from '../repositories/advisor-run.repository.js';
@@ -41,6 +42,8 @@ export function createProactiveEvaluationRuntime(prisma: PrismaClient, environme
     expenseCeilings: createExpenseCeilingRepository(prisma),
     receivables,
     payables,
+    parties: createPartyReadRepository(prisma),
+    categories,
   });
   const insights = createProactiveInsightRepository(prisma);
   const platformCredentials = createAdvisorPlatformCredentialRepository(prisma);

@@ -1,4 +1,5 @@
 import type { PrismaClient } from '../../../generated/prisma/client.js';
+import { enrichPresentedTitleSupportingData } from './enrich-presented-title-identity.js';
 
 const ELIGIBLE_NARRATION = ['AWAITING_NARRATION', 'NARRATION_FAILED'] as const;
 
@@ -158,7 +159,7 @@ export function createProactiveInsightRepository(prisma: PrismaClient) {
           relatedInsight: { select: { tenantId: true, insightType: true, supportingData: true } },
         },
       });
-      return [
+      const rows = [
         ...links.map((link) => ({
           messageId: link.messageId,
           insightType: link.insight.insightType,
@@ -177,6 +178,16 @@ export function createProactiveInsightRepository(prisma: PrismaClient) {
           ];
         }),
       ];
+      return Promise.all(
+        rows.map(async (row) => ({
+          ...row,
+          supportingData: await enrichPresentedTitleSupportingData(
+            prisma,
+            tenantId,
+            row.supportingData,
+          ),
+        })),
+      );
     },
 
     async listUnread(tenantId: string, userId: string): Promise<readonly ProactiveInsightSnapshot[]> {

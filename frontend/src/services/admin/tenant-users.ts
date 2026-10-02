@@ -146,6 +146,16 @@ export async function enableTenantUser(tenantId: string, userId: string): Promis
   return parseManagedUserOrThrow(body, response);
 }
 
+export async function deleteTenantUser(tenantId: string, userId: string): Promise<void> {
+  const response = await managedUsersFetch(adminTenantUserPath(tenantId, userId), {
+    method: 'DELETE',
+  });
+  const body = await readManagedUserJsonBody(response);
+  if (!response.ok) {
+    throw toManagedUsersFailure(response, body, notFoundMessage(body));
+  }
+}
+
 export async function resetTenantUserPassword(
   tenantId: string,
   userId: string,

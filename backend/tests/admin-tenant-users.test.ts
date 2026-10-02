@@ -546,4 +546,188 @@ describe('API administrativa /admin/tenants/:tenantId/users (1.4C)', () => {
       expect(mismatch.statusCode).toBe(422);
     });
   });
+
+  describe('DELETE .../users/:userId', () => {
+    it('exclui USER sem histórico, libera o e-mail e não autentica mais', async () => {
+      const tenant = await tenants.create({ name: 'delete-tu', displayName: 'Delete TU' });
+      await createPlatformUser({ email: 'admin-delete-tu@api.test', role: 'ADMIN' });
+      const target = await createPlatformUser({
+        email: 'user-delete-tu@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      const adminsBefore = await users.countActiveAdmins();
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-delete-tu@api.test');
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}`,
+        headers: { cookie },
+      });
+      expect(removed.statusCode).toBe(200);
+      expect(removed.json().status).toBe('ok');
+      expect(await users.findById(target.id)).toBeNull();
+      expect(await credentials.findByUserId(target.id)).toBeNull();
+      expect(await users.countActiveAdmins()).toBe(adminsBefore);
+
+      const list = await app.inject({
+        method: 'GET',
+        url: `/admin/tenants/${tenant.id}/users`,
+        headers: { cookie },
+      });
+      expect(list.json().data).toEqual([]);
+
+      const login = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: 'user-delete-tu@api.test', password: VALID_PASSWORD },
+      });
+      expect(login.statusCode).toBe(401);
+
+      const recreated = await app.inject({
+        method: 'POST',
+        url: `/admin/tenants/${tenant.id}/users`,
+        headers: { cookie },
+        payload: {
+          name: 'User Recriado',
+          email: 'user-delete-tu@api.test',
+          password: VALID_PASSWORD,
+        },
+      });
+      expect(recreated.statusCode).toBe(201);
+    });
+
+    it('preserva conversa da Lia e remove o acesso quando há histórico', async () => {
+      const tenant = await tenants.create({ name: 'delete-history', displayName: 'Delete History' });
+      await createPlatformUser({ email: 'admin-delete-history@api.test', role: 'ADMIN' });
+      const target = await createPlatformUser({
+        email: 'user-delete-history@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      const now = new Date();
+      const conversation = await prisma.aiConversation.create({
+        data: {
+          tenantId: tenant.id,
+          userId: target.id,
+          startedAt: now,
+          lastMessageAt: now,
+        },
+      });
+      const app = await buildTestApp();
+      const cookie = await loginAs(app, 'admin-delete-history@api.test');
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}`,
+        headers: { cookie },
+      });
+      expect(removed.statusCode).toBe(200);
+
+      const storedConversation = await prisma.aiConversation.findUnique({
+        where: { id: conversation.id },
+      });
+      expect(storedConversation?.userId).toBe(target.id);
+      const storedUser = await users.findById(target.id);
+      expect(storedUser?.name).toBe('user-delete-history@api.test');
+      expect(storedUser?.status).toBe('DISABLED');
+      expect(storedUser?.email).not.toBe('user-delete-history@api.test');
+      expect(await credentials.findByUserId(target.id)).toBeNull();
+
+      const list = await app.inject({
+        method: 'GET',
+        url: `/admin/tenants/${tenant.id}/users`,
+        headers: { cookie },
+      });
+      expect(list.json().data).toEqual([]);
+      const hidden = await app.inject({
+        method: 'GET',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}`,
+        headers: { cookie },
+      });
+      expect(hidden.statusCode).toBe(404);
+
+      const login = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: 'user-delete-history@api.test', password: VALID_PASSWORD },
+      });
+      expect(login.statusCode).toBe(401);
+    });
+
+    it('nega USER, outro tenant, modo suporte e a própria conta', async () => {
+      const tenant = await tenants.create({ name: 'delete-guard', displayName: 'Delete Guard' });
+      const other = await tenants.create({ name: 'delete-other', displayName: 'Delete Other' });
+      const admin = await createPlatformUser({ email: 'admin-delete-guard@api.test', role: 'ADMIN' });
+      const actor = await createPlatformUser({
+        email: 'user-delete-actor@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      const target = await createPlatformUser({
+        email: 'user-delete-target@api.test',
+        role: 'USER',
+        tenantId: tenant.id,
+      });
+      const foreign = await createPlatformUser({
+        email: 'user-delete-foreign@api.test',
+        role: 'USER',
+        tenantId: other.id,
+      });
+      const app = await buildTestApp();
+
+      const userCookie = await loginAs(app, 'user-delete-actor@api.test');
+      const forbidden = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}`,
+        headers: { cookie: userCookie },
+      });
+      expect(forbidden.statusCode).toBe(403);
+
+      const adminCookie = await loginAs(app, 'admin-delete-guard@api.test');
+      const wrongTenant = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${other.id}/users/${target.id}`,
+        headers: { cookie: adminCookie },
+      });
+      expect(wrongTenant.statusCode).toBe(404);
+      const foreignOnThisTenant = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}/users/${foreign.id}`,
+        headers: { cookie: adminCookie },
+      });
+      expect(foreignOnThisTenant.statusCode).toBe(404);
+
+      const enter = await app.inject({
+        method: 'POST',
+        url: '/auth/support/enter',
+        headers: { cookie: adminCookie, 'user-agent': 'delete-user-support' },
+        payload: { tenantId: tenant.id },
+      });
+      expect(enter.statusCode).toBe(200);
+      const support = await app.inject({
+        method: 'DELETE',
+        url: `/admin/tenants/${tenant.id}/users/${target.id}`,
+        headers: { cookie: adminCookie },
+      });
+      expect(support.statusCode).toBe(403);
+      expect(await users.findById(target.id)).toBeTruthy();
+
+      const { createAdminTenantUsersService } = await import(
+        '../src/modules/auth/services/admin-tenant-users.service.js'
+      );
+      const service = createAdminTenantUsersService({
+        users,
+        credentials,
+        tenants,
+        passwordHasher,
+        sessions: { async destroyForUser() { return 0; } },
+      });
+      await expect(service.remove(tenant.id, actor.id, actor.id)).rejects.toThrow(
+        'Não é possível excluir a própria conta.',
+      );
+      expect(admin.id).not.toBe(target.id);
+    });
+  });
 });

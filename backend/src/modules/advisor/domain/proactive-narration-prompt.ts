@@ -1,4 +1,5 @@
 import type { AdvisorContextBlock } from './context-blocks.js';
+import { publicTitleSupportingData } from './title-official-identity.js';
 
 export const PROACTIVE_NARRATION_INSTRUCTIONS = [
   'Você está redigindo uma comunicação sobre um fato financeiro JÁ DETERMINADO pelo sistema.',
@@ -22,6 +23,8 @@ export const PROACTIVE_NARRATION_INSTRUCTIONS = [
   'Você NÃO usa saudação formal, assinatura ou despedida.',
   'Não escreva Prezado, Atenciosamente, Caro cliente, Gostaríamos de informar ou Estamos à disposição.',
   'Use somente os fatos fornecidos.',
+  'Se counterpartyName, description ou categoryName estiverem nos fatos, use exatamente esses textos para dizer qual é o título.',
+  'Não invente fornecedor, funcionário, salário, beneficiário ou natureza quando esses campos não existirem.',
   'A mensagem deve ser curta, natural, profissional, direta, amigável e em pt-BR, sem jargão técnico e sem alarmismo.',
 ].join('\n');
 
@@ -46,7 +49,7 @@ export function buildProactiveNarrationBlocks(input: {
         severity: input.severity,
         periodStart: input.periodStart,
         periodEnd: input.periodEnd,
-        supportingData: input.supportingData,
+        supportingData: publicTitleSupportingData(input.supportingData),
       }),
     },
   ];

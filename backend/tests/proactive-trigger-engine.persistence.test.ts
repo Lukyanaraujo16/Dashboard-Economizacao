@@ -526,9 +526,10 @@ describe('motor determinístico de gatilhos proativos', () => {
       minimumAmount: '5000.0000',
       daysAhead: 3,
       status: 'OPEN',
+      description: 'segredo-descricao',
     });
-    expect(JSON.stringify(equal?.payload)).not.toContain('segredo-descricao');
     expect(JSON.stringify(equal?.payload)).not.toContain('pessoa-x');
+    expect(JSON.stringify(equal?.payload)).not.toContain('categoria-x');
 
     const sameId = events.find((event) => event.subjectKey === 'RECEIVABLE:titulo-a');
     expect(sameId?.triggerConfigurationId).toBe(receivable.id);

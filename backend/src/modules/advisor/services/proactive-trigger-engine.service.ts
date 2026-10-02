@@ -19,7 +19,9 @@ import {
 } from '../../dashboard/domain/revenue-goal-math.js';
 import type { ExpenseCeilingRepository } from '../../dashboard/repositories/expense-ceiling.repository.js';
 import type { RevenueGoalRepository } from '../../dashboard/repositories/revenue-goal.repository.js';
+import type { FinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import type { PayableReadRepository } from '../../finance/repositories/payable-read.repository.js';
+import type { PartyReadRepository } from '../../finance/repositories/party-read.repository.js';
 import type { ReceivableReadRepository } from '../../finance/repositories/receivable-read.repository.js';
 import { AdvisorDomainError } from '../domain/advisor-domain-error.js';
 import {
@@ -73,6 +75,8 @@ export type ProactiveTriggerEngineDependencies = {
   readonly expenseCeilings: Pick<ExpenseCeilingRepository, 'findByTenantMonth'>;
   readonly receivables: Pick<ReceivableReadRepository, 'findActiveByDueDateRange'>;
   readonly payables: Pick<PayableReadRepository, 'findActiveByDueDateRange'>;
+  readonly parties?: Pick<PartyReadRepository, 'findOfficialLabelsByIds'>;
+  readonly categories?: Pick<FinancialCategoryReadRepository, 'findByTenantAndExternalIds'>;
 };
 
 type MonthPeriod = {
@@ -230,6 +234,19 @@ export function createProactiveTriggerEngine(
             ? await deps.receivables.findActiveByDueDateRange(query)
             : await deps.payables.findActiveByDueDateRange(query);
         const byId = new Map(records.map((row) => [row.id, row]));
+        const partyIds = records.flatMap((row) => (row.partyId ? [row.partyId] : []));
+        const labels = deps.parties
+          ? await deps.parties.findOfficialLabelsByIds({ tenantId: input.tenantId }, partyIds)
+          : new Map();
+        const categoryRows = deps.categories
+          ? await deps.categories.findByTenantAndExternalIds({
+              tenantId: input.tenantId,
+              externalIds: records.flatMap((row) => [...row.categoryExternalIds]),
+            })
+          : [];
+        const categoryNames = new Map(
+          categoryRows.map((row) => [row.externalId, row.name.trim()] as const),
+        );
         for (const item of mapUpcomingInstallments(records)) {
           const source = byId.get(item.id);
           if (!source || !titleQualifies(item.unpaid, minimumAmount, item.dueDate, window)) {
@@ -244,6 +261,14 @@ export function createProactiveTriggerEngine(
           if (dueDay === null) {
             continue;
           }
+          const description = source.description?.trim() ?? '';
+          const label = source.partyId ? labels.get(source.partyId) : undefined;
+          const counterpartyName = label?.name.trim() ?? '';
+          const documentNumber = label?.document?.trim() ?? '';
+          const categoryName =
+            source.categoryExternalIds
+              .map((externalId) => categoryNames.get(externalId) ?? '')
+              .find((name) => name.length > 0) ?? '';
           await record(
             configuration,
             {
@@ -261,6 +286,10 @@ export function createProactiveTriggerEngine(
               minimumAmount,
               daysAhead,
               status: item.status,
+              ...(description.length > 0 ? { description } : {}),
+              ...(counterpartyName.length > 0 ? { counterpartyName } : {}),
+              ...(documentNumber.length > 0 ? { documentNumber } : {}),
+              ...(categoryName.length > 0 ? { categoryName } : {}),
             },
           );
         }

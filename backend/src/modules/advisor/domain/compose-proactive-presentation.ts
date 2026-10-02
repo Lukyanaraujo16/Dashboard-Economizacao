@@ -1,3 +1,10 @@
+import {
+  isFallbackTitleIdentification,
+  officialTitleIdentification,
+  readOfficialTitleIdentity,
+  type OfficialTitleIdentity,
+} from './title-official-identity.js';
+
 export type ProactivePresentationSource = {
   readonly id: string;
   readonly insightType: string;
@@ -16,6 +23,7 @@ type TitleFact = {
   readonly kind: 'PAYABLE' | 'RECEIVABLE';
   readonly dueDate: string;
   readonly unpaidCents: bigint;
+  readonly identity: OfficialTitleIdentity;
 };
 
 function toCents(value: string): bigint | null {
@@ -80,7 +88,11 @@ function readTitleFact(insight: ProactivePresentationSource): TitleFact | null {
   if (amount === null) {
     return null;
   }
-  return { insightId: insight.id, ...amount };
+  return {
+    insightId: insight.id,
+    ...amount,
+    identity: readOfficialTitleIdentity(insight.supportingData),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -99,7 +111,12 @@ function composeTitleGroup(facts: readonly TitleFact[]): string {
   });
   const lines = ordered.map((fact) => {
     const day = formatPresentedDay(fact.dueDate) ?? fact.dueDate;
-    return `- **${day}** — ${formatPresentedCents(fact.unpaidCents)}`;
+    const amount = formatPresentedCents(fact.unpaidCents);
+    const identification = officialTitleIdentification(fact.identity, fact.dueDate);
+    if (isFallbackTitleIdentification(identification)) {
+      return `- **${day}** — ${amount}`;
+    }
+    return `- **${day}** — ${identification} — ${amount}`;
   });
   const total = ordered.reduce((sum, fact) => sum + fact.unpaidCents, 0n);
   return [

@@ -28,6 +28,7 @@ import type {
   UpdateUserInput,
   UserRecord,
 } from '../domain/types.js';
+import { REMOVED_COMPANY_USER_EMAIL_FILTER, isRemovedCompanyUserEmail, removedCompanyUserEmail } from '../domain/removed-company-user.js';
 import { mapUserRecord } from './mappers.js';
 
 const DEFAULT_LIST_LIMIT = 50;
@@ -65,6 +66,10 @@ function buildListWhere(filter: ListUsersFilter): Prisma.UserWhereInput {
     where.email = { contains: normalizeEmail(filter.email), mode: 'insensitive' };
   }
 
+  where.NOT = {
+    email: { endsWith: REMOVED_COMPANY_USER_EMAIL_FILTER },
+  };
+
   return where;
 }
 
@@ -93,6 +98,11 @@ export type UserRepository = {
   registerFailedPasswordAttempt(userId: string, now: Date): Promise<UserRecord>;
   /** Após login bem-sucedido: zera lockout e atualiza lastLoginAt. */
   registerSuccessfulLogin(userId: string, now: Date): Promise<UserRecord>;
+  /**
+   * Remove o acesso operacional do USER.
+   * Apaga a linha quando não há histórico restrito; caso contrário preserva a linha e o histórico.
+   */
+  removeCompanyUserAccess(userId: string, at?: Date): Promise<'deleted' | 'revoked'>;
 };
 
 async function lockUserRow(tx: Prisma.TransactionClient, userId: string): Promise<void> {
@@ -368,6 +378,50 @@ export function createUserRepository(prisma: PrismaClient): UserRepository {
         });
 
         return mapUserRecord(updated);
+      });
+    },
+
+    async removeCompanyUserAccess(userId, at = new Date()) {
+      return prisma.$transaction(async (tx) => {
+        await lockUserRow(tx, userId);
+        const row = await tx.user.findUnique({ where: { id: userId } });
+        if (!row) {
+          throw new AuthDomainError('USER_NOT_FOUND', 'Usuário não encontrado.');
+        }
+        if (isRemovedCompanyUserEmail(row.email)) {
+          throw new AuthDomainError('USER_NOT_FOUND', 'Usuário não encontrado.');
+        }
+
+        const [conversations, reads, knowledgeEntries, knowledgeDocuments, supportSessions] =
+          await Promise.all([
+            tx.aiConversation.count({ where: { userId } }),
+            tx.aiInsightRead.count({ where: { userId } }),
+            tx.aiKnowledgeEntry.count({ where: { createdById: userId } }),
+            tx.aiKnowledgeDocument.count({ where: { createdById: userId } }),
+            tx.supportSession.count({ where: { operatorUserId: userId } }),
+          ]);
+        const preservesHistory =
+          conversations + reads + knowledgeEntries + knowledgeDocuments + supportSessions > 0;
+
+        await tx.userCredential.deleteMany({ where: { userId } });
+
+        if (!preservesHistory) {
+          await tx.user.delete({ where: { id: userId } });
+          return 'deleted' as const;
+        }
+
+        const updated = await tx.user.update({
+          where: { id: userId },
+          data: {
+            email: removedCompanyUserEmail(userId),
+            status: 'DISABLED',
+            deactivatedAt: at,
+            lockedUntil: null,
+            failedLoginAttempts: 0,
+          },
+        });
+        assertUserStatusDeactivatedAtConsistency(updated.status, updated.deactivatedAt);
+        return 'revoked' as const;
       });
     },
 

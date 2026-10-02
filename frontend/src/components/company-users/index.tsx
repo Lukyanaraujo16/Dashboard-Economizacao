@@ -6,6 +6,7 @@ import { getCompany } from '../../services/admin/companies';
 import {
   blockTenantUser,
   createTenantUser,
+  deleteTenantUser,
   disableTenantUser,
   enableTenantUser,
   getTenantUser,
@@ -50,6 +51,7 @@ export function CompanyUsersPage({ companyId }: CompanyUsersPageProps) {
       unblock: (userId: string) => unblockTenantUser(companyId, userId),
       disable: (userId: string) => disableTenantUser(companyId, userId),
       enable: (userId: string) => enableTenantUser(companyId, userId),
+      remove: (userId: string) => deleteTenantUser(companyId, userId),
       resetPassword: (
         userId: string,
         input: { readonly password: string; readonly passwordConfirmation: string },

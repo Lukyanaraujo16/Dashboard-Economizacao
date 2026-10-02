@@ -134,6 +134,17 @@ export async function registerAdminTenantUsersRoutes(app: FastifyInstance): Prom
     },
   );
 
+  app.delete(
+    '/admin/tenants/:tenantId/users/:userId',
+    { preHandler: adminGuard },
+    async (request, reply) => {
+      const tenantId = parseTenantIdParam(request.params);
+      const userId = parseUserIdParam(request.params);
+      await tenantUsers.remove(tenantId, userId, request.auth!.userId);
+      return reply.status(200).send({ status: 'ok' as const });
+    },
+  );
+
   app.post(
     '/admin/tenants/:tenantId/users/:userId/reset-password',
     { preHandler: adminGuard },

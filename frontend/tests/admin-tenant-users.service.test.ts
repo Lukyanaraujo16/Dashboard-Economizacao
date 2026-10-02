@@ -9,6 +9,7 @@ import {
   createTenantUser,
   getTenantUser,
   listTenantUsers,
+  deleteTenantUser,
   resetTenantUserPassword,
 } from '../src/services/admin/tenant-users';
 
@@ -124,5 +125,23 @@ describe('admin tenant-users service', () => {
       password: 'Password#12345',
       passwordConfirmation: 'Password#12345',
     });
+  });
+
+  it('deleteTenantUser envia DELETE na rota do usuário da empresa', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ status: 'ok' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    );
+
+    await deleteTenantUser(tenantId, sampleUser.id);
+
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(url).toBe(adminTenantUserPath(tenantId, sampleUser.id));
+    expect(init?.method).toBe('DELETE');
   });
 });

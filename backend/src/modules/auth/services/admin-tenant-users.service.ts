@@ -1,4 +1,5 @@
-import { NotFoundError } from '../../../shared/errors/application-error.js';
+import { ConflictError, NotFoundError } from '../../../shared/errors/application-error.js';
+import { isRemovedCompanyUserEmail } from '../domain/removed-company-user.js';
 import type { PasswordHasher } from '../crypto/password-hasher.js';
 import type { ListUsersResult, UpdateUserInput, UserRecord } from '../domain/types.js';
 import type { TenantRepository } from '../../tenant/repositories/tenant.repository.js';
@@ -48,7 +49,12 @@ export function createAdminTenantUsersService(deps: {
 
   async function requireTenantUser(tenantId: string, userId: string): Promise<UserRecord> {
     const user = await deps.users.findById(userId);
-    if (!user || user.role !== 'USER' || user.tenantId !== tenantId) {
+    if (
+      !user ||
+      user.role !== 'USER' ||
+      user.tenantId !== tenantId ||
+      isRemovedCompanyUserEmail(user.email)
+    ) {
       throw new NotFoundError('Usuário não encontrado.');
     }
     return user;
@@ -126,6 +132,18 @@ export function createAdminTenantUsersService(deps: {
         await requireTenant(tenantId);
         await requireTenantUser(tenantId, userId);
         return deps.users.enable(userId);
+      });
+    },
+
+    async remove(tenantId: string, userId: string, actorUserId: string): Promise<void> {
+      return withAuthDomainError(async () => {
+        if (actorUserId === userId) {
+          throw new ConflictError('Não é possível excluir a própria conta.');
+        }
+        await requireTenant(tenantId);
+        await requireTenantUser(tenantId, userId);
+        await deps.sessions.destroyForUser(userId);
+        await deps.users.removeCompanyUserAccess(userId);
       });
     },
 

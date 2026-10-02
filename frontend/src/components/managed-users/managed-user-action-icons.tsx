@@ -7,6 +7,7 @@ import {
   IconLock,
   IconLockOpen,
   IconPencilLine,
+  IconTrash2,
   type UiIconProps,
 } from '../ui/icons';
 
@@ -32,6 +33,10 @@ export function UnblockManagedUserIcon({ className }: IconProps): ReactNode {
 
 export function DisableManagedUserIcon({ className }: IconProps): ReactNode {
   return <IconCircleOff {...toProps({ className })} />;
+}
+
+export function RemoveManagedUserIcon({ className }: IconProps): ReactNode {
+  return <IconTrash2 {...toProps({ className })} />;
 }
 
 export function EnableManagedUserIcon({ className }: IconProps): ReactNode {
