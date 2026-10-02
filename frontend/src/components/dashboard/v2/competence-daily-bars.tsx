@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type MouseEvent,
-} from 'react';
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
 import { cx } from '../../ui/utils/cx';
@@ -24,6 +17,7 @@ import {
 } from './chart-math';
 import { anchorRatioFromIndex } from './chart-tooltip-placement';
 import { ChartTooltip } from './chart-tooltip';
+import { useDashboardPresentation } from './dashboard-presentation';
 import {
   BALANCE_BAND_HEIGHT,
   BALANCE_BAND_WIDTH,
@@ -162,8 +156,10 @@ export function CompetenceDailyBars({
   );
 
   const monthLabel = formatMonthKeyPtBr(monthKey);
+  const flat = isFlatSeries(revenueDaily) && isFlatSeries(expenseDaily);
+  const presentation = useDashboardPresentation('daily-bars', !flat);
 
-  if (isFlatSeries(revenueDaily) && isFlatSeries(expenseDaily)) {
+  if (flat) {
     return (
       <div className={cx(styles.root, className)}>
         <p className={styles.empty}>
@@ -235,20 +231,38 @@ export function CompetenceDailyBars({
                   <g key={date} opacity={activeIndex < 0 || active ? 1 : 0.45}>
                     {revenue > 0 ? (
                       <rect
-                        className={cx(styles.bar, styles.revenueBar)}
+                        className={cx(
+                          styles.bar,
+                          styles.revenueBar,
+                          presentation.present && styles.rise,
+                        )}
                         x={x}
                         y={HALF_HEIGHT - revenue}
                         width={barWidth}
                         height={revenue}
+                        style={
+                          presentation.present
+                            ? { animationDelay: `${Math.min(index, 16) * 8}ms` }
+                            : undefined
+                        }
                       />
                     ) : null}
                     {expense > 0 ? (
                       <rect
-                        className={cx(styles.bar, styles.expenseBar)}
+                        className={cx(
+                          styles.bar,
+                          styles.expenseBar,
+                          presentation.present && styles.rise,
+                        )}
                         x={x}
                         y={HALF_HEIGHT}
                         width={barWidth}
                         height={expense}
+                        style={
+                          presentation.present
+                            ? { animationDelay: `${Math.min(index, 16) * 8}ms` }
+                            : undefined
+                        }
                       />
                     ) : null}
                   </g>

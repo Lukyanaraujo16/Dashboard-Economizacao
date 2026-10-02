@@ -1195,7 +1195,7 @@ Critérios de aceite
 
 21.1 Refinamento visual final
 
-Status: PENDENTE. Etapa de polish anterior à Fase 18. Não é uma fase nova de produto e não é redesign.
+Status: ENTREGUE na branch `final/ui-polish` (baseline `d3d7fee`). Etapa de polish anterior à Fase 18. Não é uma fase nova de produto e não é redesign. A Fase 18 e a Fase 19 continuam pendentes. O escopo desta seção não mudou.
 
 Escopo
 
@@ -1208,6 +1208,14 @@ Escopo
 * preservar acessibilidade e `prefers-reduced-motion`.
 
 Não altera cálculos, dados nem semântica financeira. Não pode prejudicar a performance perceptível.
+
+Entrega
+
+* Login: entrada só em `login-experience.module.css` (stagger curto de marca, card e formulário; o envio não espera a animação; `login-experience.tsx` intacto).
+* Home: cards, sparkline (traço e área), barras diárias e mensais e donut entram uma vez por visita à página. Mês, categoria, centro de custo, refresh e modal não repetem o movimento enquanto a Dashboard permanece montada.
+* O valor, a geometria, os percentuais e os tooltips estão no DOM desde o primeiro render. Não há contador numérico.
+* `prefers-reduced-motion: reduce` remove o movimento novo e mostra gráfico e dados completos.
+* Sem biblioteca de animação e sem mudança de fórmula, API ou schema.
 
 ⸻
 

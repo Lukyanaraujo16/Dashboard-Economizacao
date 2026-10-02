@@ -27,6 +27,7 @@ import {
 } from './chart-math';
 import { anchorRatioFromSvgX } from './chart-tooltip-placement';
 import { ChartTooltip } from './chart-tooltip';
+import { useDashboardPresentation } from './dashboard-presentation';
 import styles from './sparkline.module.css';
 
 const VIEW_WIDTH = 120;
@@ -180,9 +181,14 @@ export function Sparkline({
     [selectFromClientX],
   );
 
-  const style = { '--sparkline-color': `var(${colorVar})` } as CSSProperties;
+  const flat = isFlatSeries(points);
+  const presentation = useDashboardPresentation('sparkline', !flat);
+  const style = {
+    '--sparkline-color': `var(${colorVar})`,
+    '--present-index': presentation.index,
+  } as CSSProperties;
 
-  if (isFlatSeries(points)) {
+  if (flat) {
     return (
       <div className={cx(styles.root, styles.flat, className)} style={style}>
         <svg
@@ -223,6 +229,7 @@ export function Sparkline({
         className,
       )}
       style={style}
+      data-reveal={presentation.present ? 'true' : undefined}
       role="img"
       aria-label={
         onPointSelect
@@ -259,6 +266,7 @@ export function Sparkline({
         <polyline
           className={styles.line}
           points={toPolyline(geometry)}
+          pathLength={1}
           vectorEffect="non-scaling-stroke"
         />
         {selectedPoint ? (
@@ -318,9 +326,7 @@ export function Sparkline({
         >
           <span className={styles.tooltipDay}>{formatDayPt(activeDaily.date)}</span>
           <span className={styles.tooltipValue}>{formatMoneyBrl(activeDaily.amount)}</span>
-          {valueCaption ? (
-            <span className={styles.tooltipCaption}>{valueCaption}</span>
-          ) : null}
+          {valueCaption ? <span className={styles.tooltipCaption}>{valueCaption}</span> : null}
         </ChartTooltip>
       ) : null}
 

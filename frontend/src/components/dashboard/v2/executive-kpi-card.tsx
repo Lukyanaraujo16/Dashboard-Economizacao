@@ -21,9 +21,10 @@ import {
 import { IconButton } from '../../ui';
 import { UI_ICON_STROKE } from '../../ui/icons';
 import { cx } from '../../ui/utils/cx';
+import type { DailyPoint } from './chart-math';
+import { useDashboardPresentation } from './dashboard-presentation';
 import { RatioMeter } from './ratio-meter';
 import { Sparkline } from './sparkline';
-import type { DailyPoint } from './chart-math';
 import styles from './executive-kpi-card.module.css';
 
 export type ExecutiveKpiTone = 'revenue' | 'received' | 'receivable' | 'expense' | 'result';
@@ -85,7 +86,11 @@ export function ExecutiveKpiCard({
 }: ExecutiveKpiCardProps) {
   const { colorVar, Icon } = TONE_META[tone];
   const titleId = useId();
-  const style = { '--kpi-tone': `var(${colorVar})` } as CSSProperties;
+  const presentation = useDashboardPresentation('kpi');
+  const style = {
+    '--kpi-tone': `var(${colorVar})`,
+    '--present-index': presentation.index,
+  } as CSSProperties;
   const canExpand = expandable && Boolean(onExpand);
   const showSparkline = state === 'ready' && sparklinePoints !== undefined;
   const showRatio = state === 'ready' && !showSparkline && ratioValue !== undefined;
@@ -122,6 +127,7 @@ export function ExecutiveKpiCard({
       style={style}
       data-tone={tone}
       data-state={state}
+      data-reveal={presentation.present ? 'true' : undefined}
       role={canExpand ? 'button' : undefined}
       tabIndex={canExpand ? 0 : undefined}
       aria-labelledby={canExpand ? titleId : undefined}

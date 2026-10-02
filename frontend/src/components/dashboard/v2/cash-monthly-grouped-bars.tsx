@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type MouseEvent,
-} from 'react';
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
 import { monthShortLabelPtBr } from '../../../lib/dashboard-month';
@@ -24,6 +17,7 @@ import { dailyBalanceBandGeometry } from './daily-balance-band-geometry';
 import { expandSingleKnownBalanceMark } from './monthly-realized-balance-mark';
 import { anchorRatioFromIndex } from './chart-tooltip-placement';
 import { ChartTooltip } from './chart-tooltip';
+import { useDashboardPresentation } from './dashboard-presentation';
 import styles from './cash-monthly-grouped-bars.module.css';
 
 const PROJECTED_BAND_WIDTH = 100;
@@ -89,7 +83,11 @@ function toForecastShape(buckets: readonly CashMonthlyGroupedBarsBucket[]) {
 }
 
 type BalanceGeom = {
-  readonly points: readonly { readonly index: number; readonly xPct: number; readonly yPct: number }[];
+  readonly points: readonly {
+    readonly index: number;
+    readonly xPct: number;
+    readonly yPct: number;
+  }[];
   readonly segments: readonly string[];
 };
 
@@ -250,16 +248,17 @@ export function CashMonthlyGroupedBars({
     [activeIndex, count],
   );
 
-  if (buckets.length === 0 || allForecastBucketsZero(forecastBuckets)) {
+  const showChart = buckets.length > 0 && !allForecastBucketsZero(forecastBuckets);
+  const presentation = useDashboardPresentation('monthly-bars', showChart);
+
+  if (!showChart) {
     return <p className={cx(styles.empty, className)}>{emptyMessage}</p>;
   }
 
   const scale = maxInflowOutflowScale(forecastBuckets);
   const active = activeIndex >= 0 ? buckets[activeIndex] : undefined;
   const activeBalance =
-    showBalance && active && balanceByMonthKey
-      ? balanceByMonthKey.get(active.monthKey)
-      : undefined;
+    showBalance && active && balanceByMonthKey ? balanceByMonthKey.get(active.monthKey) : undefined;
   const showOverlayTooltip = showBalanceOverlay && showBalance;
   const showBandBalanceTooltip = showBalanceBand && hoverZone === 'balance';
   const showBandBarsTooltip = !showBalanceBand || hoverZone === 'bars';
@@ -303,99 +302,113 @@ export function CashMonthlyGroupedBars({
       >
         <div className={styles.scroll}>
           <div className={styles.alignedStack}>
-          <div
-            className={styles.chartFrame}
-            data-monthly-bars-plot=""
-            onMouseMove={(event) => {
-              setHoverZone('bars');
-              handleMove(event);
-            }}
-          >
-            <ul className={styles.chart}>
-              {buckets.map((bucket, index) => {
-                const activeBucket = index === activeIndex;
-                return (
-                  <li
-                    key={bucket.monthKey}
-                    className={styles.bucket}
-                    data-active={activeBucket ? 'true' : undefined}
-                    data-dimmed={activeIndex >= 0 && !activeBucket ? 'true' : undefined}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    onFocus={() => setActiveIndex(index)}
-                    aria-label={`${formatMonthKeyPtBr(bucket.monthKey)}: ${inflowLabel.toLowerCase()} ${moneyOrDash(
-                      bucket.inflows,
-                    )}, ${outflowLabel.toLowerCase()} ${moneyOrDash(bucket.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(
-                      bucket.result,
-                    )}${
-                      showBalanceOverlay
-                        ? `, ${balanceTooltipLabel.toLowerCase()} ${
-                            balanceByMonthKey?.get(bucket.monthKey) !== undefined
-                              ? formatMoneyBrl(balanceByMonthKey.get(bucket.monthKey)!)
-                              : '—'
-                          }`
-                        : ''
-                    }`}
-                  >
-                    <div className={styles.bars}>
-                      <span className={styles.barTrack}>
-                        <span
-                          className={cx(styles.bar, styles.inflowBar)}
-                          style={{
-                            height:
-                              decimalAbsScaled(barAmount(bucket.inflows)) === 0n
-                                ? '0%'
-                                : `${visualBarPercent(barAmount(bucket.inflows), scale)}%`,
-                          }}
-                        />
-                      </span>
-                      <span className={styles.barTrack}>
-                        <span
-                          className={cx(styles.bar, styles.outflowBar)}
-                          style={{
-                            height:
-                              decimalAbsScaled(barAmount(bucket.outflows)) === 0n
-                                ? '0%'
-                                : `${visualBarPercent(barAmount(bucket.outflows), scale)}%`,
-                          }}
-                        />
-                      </span>
-                    </div>
-                    <p className={styles.month}>{axisMonthLabel(bucket.monthKey)}</p>
-                  </li>
-                );
-              })}
-            </ul>
+            <div
+              className={styles.chartFrame}
+              data-monthly-bars-plot=""
+              onMouseMove={(event) => {
+                setHoverZone('bars');
+                handleMove(event);
+              }}
+            >
+              <ul className={styles.chart}>
+                {buckets.map((bucket, index) => {
+                  const activeBucket = index === activeIndex;
+                  return (
+                    <li
+                      key={bucket.monthKey}
+                      className={styles.bucket}
+                      data-active={activeBucket ? 'true' : undefined}
+                      data-dimmed={activeIndex >= 0 && !activeBucket ? 'true' : undefined}
+                      onMouseEnter={() => setActiveIndex(index)}
+                      onFocus={() => setActiveIndex(index)}
+                      aria-label={`${formatMonthKeyPtBr(bucket.monthKey)}: ${inflowLabel.toLowerCase()} ${moneyOrDash(
+                        bucket.inflows,
+                      )}, ${outflowLabel.toLowerCase()} ${moneyOrDash(bucket.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(
+                        bucket.result,
+                      )}${
+                        showBalanceOverlay
+                          ? `, ${balanceTooltipLabel.toLowerCase()} ${
+                              balanceByMonthKey?.get(bucket.monthKey) !== undefined
+                                ? formatMoneyBrl(balanceByMonthKey.get(bucket.monthKey)!)
+                                : '—'
+                            }`
+                          : ''
+                      }`}
+                    >
+                      <div className={styles.bars}>
+                        <span className={styles.barTrack}>
+                          <span
+                            className={cx(
+                              styles.bar,
+                              styles.inflowBar,
+                              presentation.present && styles.rise,
+                            )}
+                            style={{
+                              height:
+                                decimalAbsScaled(barAmount(bucket.inflows)) === 0n
+                                  ? '0%'
+                                  : `${visualBarPercent(barAmount(bucket.inflows), scale)}%`,
+                              animationDelay: presentation.present
+                                ? `${Math.min(index, 12) * 22}ms`
+                                : undefined,
+                            }}
+                          />
+                        </span>
+                        <span className={styles.barTrack}>
+                          <span
+                            className={cx(
+                              styles.bar,
+                              styles.outflowBar,
+                              presentation.present && styles.rise,
+                            )}
+                            style={{
+                              height:
+                                decimalAbsScaled(barAmount(bucket.outflows)) === 0n
+                                  ? '0%'
+                                  : `${visualBarPercent(barAmount(bucket.outflows), scale)}%`,
+                              animationDelay: presentation.present
+                                ? `${Math.min(index, 12) * 22}ms`
+                                : undefined,
+                            }}
+                          />
+                        </span>
+                      </div>
+                      <p className={styles.month}>{axisMonthLabel(bucket.monthKey)}</p>
+                    </li>
+                  );
+                })}
+              </ul>
 
-            {showBalanceOverlay && balanceGeom ? (
-              <svg
-                className={styles.balanceOverlay}
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-                focusable="false"
-              >
-                {balanceGeom.segments.map((points) => (
-                  <polyline
-                    key={points}
-                    className={styles.balanceLine}
-                    points={points}
-                    fill="none"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))}
-                {balanceGeom.points.map((point) => (
-                  <circle
-                    key={`mb-${point.index}`}
-                    className={styles.balanceDot}
-                    cx={point.xPct}
-                    cy={point.yPct}
-                    r={balanceGeom.points.length === 1 ? 1.8 : 1.2}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                ))}
-              </svg>
-            ) : null}
-          </div>
+              {showBalanceOverlay && balanceGeom ? (
+                <svg
+                  className={styles.balanceOverlay}
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  {balanceGeom.segments.map((points) => (
+                    <polyline
+                      key={points}
+                      className={styles.balanceLine}
+                      points={points}
+                      fill="none"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                  {balanceGeom.points.map((point) => (
+                    <circle
+                      key={`mb-${point.index}`}
+                      className={styles.balanceDot}
+                      cx={point.xPct}
+                      cy={point.yPct}
+                      r={balanceGeom.points.length === 1 ? 1.8 : 1.2}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </svg>
+              ) : null}
+            </div>
 
             {showBalanceBand && projectedBand ? (
               <div className={styles.balanceBand} data-projected-balance-band="">

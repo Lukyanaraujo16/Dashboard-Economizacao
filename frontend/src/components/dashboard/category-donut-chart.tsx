@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } fr
 
 import { formatDelinquencyRate, formatMoneyBrl } from '../../lib/format-money-brl';
 import { cx } from '../ui/utils/cx';
+import { useDashboardPresentation } from './v2/dashboard-presentation';
 import {
   CATEGORY_DONUT_COLORS,
   donutSlicePercentages,
@@ -78,6 +79,7 @@ export function CategoryDonutChart({
   size = 'sm',
 }: CategoryDonutChartProps) {
   const [highlighted, setHighlighted] = useState(-1);
+  const presentation = useDashboardPresentation('donut');
   const percents = useMemo(() => donutSlicePercentages(slices), [slices]);
   const active = interactive && highlighted >= 0 && highlighted < slices.length;
 
@@ -121,13 +123,13 @@ export function CategoryDonutChart({
         <div
           className={styles.donut}
           style={{ background: buildConicGradient(percents) }}
+          data-reveal={presentation.present ? 'true' : undefined}
           role="img"
           aria-label={ariaLabel}
-        >
-          <div className={styles.hole} aria-hidden="true">
-            {centerLabel ? <span className={styles.centerLabel}>{centerLabel}</span> : null}
-            {centerCaption ? <span className={styles.centerCaption}>{centerCaption}</span> : null}
-          </div>
+        />
+        <div className={styles.hole} aria-hidden="true">
+          {centerLabel ? <span className={styles.centerLabel}>{centerLabel}</span> : null}
+          {centerCaption ? <span className={styles.centerCaption}>{centerCaption}</span> : null}
         </div>
       </div>
       <ul className={cx(styles.legend, active && styles.legendDimmed)}>

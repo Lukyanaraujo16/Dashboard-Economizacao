@@ -92,16 +92,14 @@ describe('LoginExperience (visual freeze)', () => {
   });
 
   it('usa placeholder de marca preparado para asset futuro', () => {
-    const { container, getCurrentUserAction, logoutAction } = renderWithAuth(
-      <LoginExperience />,
-    );
+    const { container, getCurrentUserAction, logoutAction } = renderWithAuth(<LoginExperience />);
     expect(container.querySelector('[data-brand-placeholder="true"]')).toBeTruthy();
 
     cleanup();
-    const withLogo = renderWithAuth(
-      <LoginExperience brandLogoUrl="/brand/future-logo.svg" />,
-      { getCurrentUserAction, logoutAction },
-    );
+    const withLogo = renderWithAuth(<LoginExperience brandLogoUrl="/brand/future-logo.svg" />, {
+      getCurrentUserAction,
+      logoutAction,
+    });
     expect(withLogo.container.querySelector('[data-brand-role="logo"]')).toBeTruthy();
     expect(withLogo.container.querySelector('img[src="/brand/future-logo.svg"]')).toBeTruthy();
     expect(
@@ -146,13 +144,36 @@ describe('LoginExperience (visual freeze)', () => {
     });
 
     expect(container.querySelectorAll('img')).toHaveLength(0);
-    expect(container.querySelectorAll('[data-brand-placeholder="true"]').length).toBeGreaterThanOrEqual(
-      2,
-    );
+    expect(
+      container.querySelectorAll('[data-brand-placeholder="true"]').length,
+    ).toBeGreaterThanOrEqual(2);
   });
 });
 
 describe('LoginExperience (integração funcional)', () => {
+  it('envia o formulário no clique, sem esperar animação de entrada', () => {
+    const loginAction = vi.fn().mockResolvedValue({ status: 'ok' });
+
+    renderWithAuth(<LoginExperience loginAction={loginAction} />);
+
+    const submit = screen.getByRole('button', { name: 'Entrar' });
+    expect((submit as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.change(screen.getByLabelText(/e-mail/i), {
+      target: { value: 'user@empresa.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/^senha/i), {
+      target: { value: 'Password#12345' },
+    });
+    fireEvent.click(submit);
+
+    expect(loginAction).toHaveBeenCalledTimes(1);
+    expect(loginAction).toHaveBeenCalledWith({
+      email: 'user@empresa.com',
+      password: 'Password#12345',
+    });
+  });
+
   it('submit válido chama serviço, hidrata /me e redireciona', async () => {
     const loginAction = vi.fn().mockResolvedValue({ status: 'ok' });
     const getCurrentUserAction = createAuthenticatedGetCurrentUser();
