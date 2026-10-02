@@ -327,8 +327,8 @@ describe('Dashboard V2.3 fidelidade', () => {
 
     const widgets: readonly (readonly [string, string])[] = [
       ['movimentacao-financeira', 'Movimentação financeira'],
-      ['despesas-categoria', 'Despesas por categoria'],
       ['receitas-categoria', 'Receitas por categoria'],
+      ['despesas-categoria', 'Despesas por categoria'],
       ['meta-faturamento', 'Meta de faturamento'],
       ['inadimplencia', 'Inadimplência'],
     ];
@@ -338,6 +338,10 @@ describe('Dashboard V2.3 fidelidade', () => {
       expect(card.tagName).toBe('ARTICLE');
       expect(within(card).getByRole('heading', { level: 3, name: title })).toBeTruthy();
     }
+    expect(
+      widget('receitas-categoria').compareDocumentPosition(widget('despesas-categoria')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Fluxo previsto' })).toBeNull();
     expect(document.querySelector('[data-financial-section="fluxo-previsto"]')).toBeNull();
 

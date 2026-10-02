@@ -2189,42 +2189,6 @@ export function DashboardPage() {
 
       <div className={styles.categoryGrid}>
         <WidgetShell
-          id="despesas-categoria"
-          sectionId="despesas-categoria"
-          title="Despesas por categoria"
-          subtitle={`Pagamentos realizados em ${monthLabel}`}
-          expandable={canExpandCategoriesExpense}
-          onExpand={
-            canExpandCategoriesExpense ? () => setExpandKind('categories-expense') : undefined
-          }
-        >
-          <WidgetBody
-            gate={gate}
-            loadingLabel="Carregando despesas por categoria"
-            error={cashFlowError}
-            onRetry={retryCashFlow}
-            pending={cashFlowPending}
-          >
-            {!cashHasSplit ? (
-              <StateWrapper
-                state="empty"
-                emptyMessage={CASH_CATEGORY_UNAVAILABLE}
-                align="start"
-              />
-            ) : cashFlowModel?.realizedOutflowsByCategory &&
-              cashFlowModel.realizedOutflowsByCategory.items.length > 0 ? (
-              <CashRealizedCategoryPanel
-                composition={cashFlowModel.realizedOutflowsByCategory}
-                ariaLabel={`Despesas de caixa realizadas por categoria em ${monthLabel}`}
-                centerCaption="Pago"
-              />
-            ) : (
-              <StateWrapper state="empty" emptyMessage={CASH_CATEGORY_EMPTY} align="start" />
-            )}
-          </WidgetBody>
-        </WidgetShell>
-
-        <WidgetShell
           id="receitas-categoria"
           sectionId="receitas-categoria"
           title="Receitas por categoria"
@@ -2253,6 +2217,42 @@ export function DashboardPage() {
                 composition={cashFlowModel.realizedInflowsByCategory}
                 ariaLabel={`Receitas de caixa realizadas por categoria em ${monthLabel}`}
                 centerCaption="Recebido"
+              />
+            ) : (
+              <StateWrapper state="empty" emptyMessage={CASH_CATEGORY_EMPTY} align="start" />
+            )}
+          </WidgetBody>
+        </WidgetShell>
+
+        <WidgetShell
+          id="despesas-categoria"
+          sectionId="despesas-categoria"
+          title="Despesas por categoria"
+          subtitle={`Pagamentos realizados em ${monthLabel}`}
+          expandable={canExpandCategoriesExpense}
+          onExpand={
+            canExpandCategoriesExpense ? () => setExpandKind('categories-expense') : undefined
+          }
+        >
+          <WidgetBody
+            gate={gate}
+            loadingLabel="Carregando despesas por categoria"
+            error={cashFlowError}
+            onRetry={retryCashFlow}
+            pending={cashFlowPending}
+          >
+            {!cashHasSplit ? (
+              <StateWrapper
+                state="empty"
+                emptyMessage={CASH_CATEGORY_UNAVAILABLE}
+                align="start"
+              />
+            ) : cashFlowModel?.realizedOutflowsByCategory &&
+              cashFlowModel.realizedOutflowsByCategory.items.length > 0 ? (
+              <CashRealizedCategoryPanel
+                composition={cashFlowModel.realizedOutflowsByCategory}
+                ariaLabel={`Despesas de caixa realizadas por categoria em ${monthLabel}`}
+                centerCaption="Pago"
               />
             ) : (
               <StateWrapper state="empty" emptyMessage={CASH_CATEGORY_EMPTY} align="start" />
