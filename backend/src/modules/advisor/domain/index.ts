@@ -221,6 +221,23 @@ export {
   tokenizeAdvisorNominalText,
 } from './advisor-nominal-text.js';
 export { resolveAdvisorOfficialCategory } from './advisor-nominal-category-resolver.js';
+export { loadAnalyticalCostCenterCatalog } from './load-analytical-cost-center-catalog.js';
+export {
+  ANALYTICAL_ENTITY_DIMENSIONS,
+  ANALYTICAL_ENTITY_MATCHES,
+  ANALYTICAL_ENTITY_RESOLUTIONS,
+  analyticalEntityFailureSignal,
+  resolveAnalyticalEntitiesInText,
+  resolveAnalyticalEntity,
+} from './resolve-analytical-entity.js';
+export type {
+  AnalyticalEntityDimension,
+  AnalyticalEntityMatch,
+  AnalyticalEntityRecord,
+  AnalyticalEntityRef,
+  AnalyticalEntityResolution,
+  AnalyticalEntityResolutionStatus,
+} from './resolve-analytical-entity.js';
 export {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,

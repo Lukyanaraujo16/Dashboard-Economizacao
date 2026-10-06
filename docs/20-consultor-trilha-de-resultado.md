@@ -36,6 +36,14 @@ Cada tool executada no loop, e o preload que alimenta o composer, gera uma linha
 
 `UNAVAILABLE` deixa de ser um motivo único. Quando o JSON já emitido pela tool permite distinguir, o motivo é um destes: `UNKNOWN_TOOL`, `INVALID_ARGUMENTS`, `CAPABILITY_DENIED`, `ENTITY_NOT_FOUND`, `ENTITY_AMBIGUOUS`, `NO_DATA`, `TOOL_TIMEOUT`, `TOOL_EXECUTION_ERROR`, `UNSUPPORTED_OPERATION`. Se a camada inferior não distingue, o motivo é `UNKNOWN`.
 
+## Resolução de entidades
+
+O resolvedor em `resolve-analytical-entity` compara uma menção com um catálogo já limitado ao tenant. Ele não escolhe tenant, não lê a prosa do modelo e não calcula valor financeiro. O catálogo inicial é o de centros de custo ativos (`loadAnalyticalCostCenterCatalog`). O mesmo contrato aceita categoria, contraparte e conta financeira quando houver um carregador do runtime.
+
+A correspondência é determinística: nome ou código normalizado exato, nome oficial contido na menção e, por último, tokens que identificam uma única entidade. Acento, caixa, pontuação e espaços são normalizados. Vários candidatos plausíveis ficam `AMBIGUOUS`. Nenhuma correspondência fica `NOT_FOUND`, com a menção preservada.
+
+`RESOLVED` devolve id, dimensão, nome oficial e código. Falha vira sinal `ENTITY_NOT_FOUND` ou `ENTITY_AMBIGUOUS` para a trilha já existente. Isso não altera `ai_runs.status` e ainda não escolhe capability nem compara períodos. Uma pergunta que só teve as entidades resolvidas pode continuar `UNSUPPORTED` até existir planner.
+
 ## Vínculo e consulta
 
 Cada pergunta persistida tem no máximo uma trilha. A linha aponta para a mensagem do usuário, a resposta do consultor quando ela existe, a conversa, o tenant e o `ai_run` quando o provider foi chamado. A pergunta e a resposta continuam nas mensagens; a trilha não duplica o texto.
