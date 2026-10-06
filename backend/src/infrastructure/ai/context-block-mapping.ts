@@ -5,7 +5,11 @@ export function formatDelimitedBlock(block: AdvisorContextBlock): string {
 }
 
 export function isSystemContextBlock(block: AdvisorContextBlock): boolean {
-  return block.type === 'PLATFORM_INSTRUCTIONS' || block.type === 'TENANT_PROFILE';
+  return (
+    block.type === 'PLATFORM_INSTRUCTIONS' ||
+    block.type === 'TENANT_PROFILE' ||
+    block.type === 'UI_CONTEXT'
+  );
 }
 
 export function composeSystemText(blocks: readonly AdvisorContextBlock[]): string {
@@ -13,7 +17,7 @@ export function composeSystemText(blocks: readonly AdvisorContextBlock[]): strin
   for (const block of blocks) {
     if (block.type === 'PLATFORM_INSTRUCTIONS') {
       parts.push(block.content);
-    } else if (block.type === 'TENANT_PROFILE') {
+    } else if (block.type === 'TENANT_PROFILE' || block.type === 'UI_CONTEXT') {
       parts.push(formatDelimitedBlock(block));
     }
   }

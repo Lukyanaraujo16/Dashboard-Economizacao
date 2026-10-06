@@ -121,15 +121,18 @@ export function listAdvisorCostCenterMovementLines(input: {
 export function serializeAdvisorCostCenterMovementLines(
   value: AdvisorCostCenterMovementWindow,
 ): Record<string, unknown> {
+  const entityScope = value.costCenter == null ? 'TENANT' : 'COST_CENTER';
   return {
     status: value.status,
     monthKey: value.monthKey,
     scope: 'PERIOD',
+    entityScope,
     direction: value.direction,
     realizedMeaning:
       value.direction === 'INFLOW' ? ADVISOR_CASH_INFLOW_MEANING : ADVISOR_CASH_OUTFLOW_MEANING,
     ...advisorCostCenterMovementFactContract(),
     costCenter: value.costCenter,
+    resolvedCostCenter: value.costCenter?.name ?? 'NONE',
     costCenterAmount: formatAdvisorFinancialAmount(value.costCenterAmount),
     populationAmount: formatAdvisorFinancialAmount(value.populationAmount),
     identifiedAmount: formatAdvisorFinancialAmount(value.identifiedAmount),

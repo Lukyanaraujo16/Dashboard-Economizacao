@@ -99,6 +99,29 @@ import {
 } from '../domain/derive-analytical-tool-trace.js';
 import { advisorTextLooksLikeLatexMath } from '../domain/advisor-formula-presentation.js';
 import {
+  applyAdvisorEvidenceBoundRewrite,
+  gateAdvisorEvidenceBoundAnswer,
+  inferEvidenceEntityScope,
+  normalizeAdvisorToolCallFingerprint,
+  type AdvisorEvidenceItem,
+} from '../domain/advisor-evidence-bound-answer.js';
+import {
+  buildAnalyticalCompletionFeedback,
+  buildAnalyticalPartialLimitationText,
+  deriveAnalyticalObligations,
+  evaluateAnalyticalCompletion,
+  type AnalyticalCompletionState,
+  type AnalyticalObligation,
+  type AnalyticalToolEvidence,
+} from '../domain/advisor-analytical-completion.js';
+import {
+  canDeterministicPathFullyAnswer,
+  deriveQuestionAnalyticalDemand,
+  deterministicPathCapabilityFromComposer,
+  type AdvisorQuestionAnalyticalDemand,
+  type ExplicitCostCenterScope,
+} from '../domain/advisor-question-scope.js';
+import {
   CONSULTANT_PLATFORM_LIMIT_MESSAGE,
   CONSULTANT_UNAVAILABLE_MESSAGE,
   type ConsultantRateLimiter,
@@ -292,6 +315,22 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         now: input.now,
         priorUserContents,
       });
+      const scopeCatalog =
+        deps.dailyCashMovements === undefined
+          ? []
+          : (
+              await loadAnalyticalCostCenterCatalog(tenantId, deps.dailyCashMovements.costCenters)
+            ).map((row) => ({
+              id: row.id,
+              name: row.name,
+              code: row.code,
+            }));
+      const questionDemand = deriveQuestionAnalyticalDemand({
+        content: question,
+        comparison: period.comparison,
+        catalog: scopeCatalog,
+      });
+      const questionToolScope = toQuestionToolScope(questionDemand.explicitCostCenter);
       console.info(
         JSON.stringify({
           event: 'advisor_period_resolved',
@@ -301,6 +340,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           source: period.source,
           comparison: period.comparison,
           comparisonMonthKey: period.comparisonMonthKey ?? null,
+          explicitCostCenterStatus: questionDemand.explicitCostCenter.status,
         }),
       );
 
@@ -703,6 +743,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           tenantId,
           resolvedMonthKey: rankingPeriod.monthKey,
           now: input.now,
+          ...(questionToolScope === undefined ? {} : { questionScope: questionToolScope }),
           call: {
             id: 'preload-cost-center-winner',
             name: CASH_COST_CENTER_RANKING_TOOL_NAME,
@@ -739,7 +780,8 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         period.comparison &&
         period.comparisonMonthKey !== undefined &&
         deps.cashComparison !== undefined &&
-        !hasCostCenterFollowUp
+        !hasCostCenterFollowUp &&
+        questionDemand.explicitCostCenter.status === 'ABSENT'
           ? await deps.cashComparison.compare({
               tenantId,
               monthKey: period.monthKey,
@@ -845,6 +887,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
                 tenantId,
                 resolvedMonthKey: period.monthKey,
                 now: input.now,
+                ...(questionToolScope === undefined ? {} : { questionScope: questionToolScope }),
                 call: {
                   id: 'preload-cost-center',
                   name: costCenterIntent.toolName,
@@ -866,6 +909,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
                 tenantId,
                 resolvedMonthKey: period.monthKey,
                 now: input.now,
+                ...(questionToolScope === undefined ? {} : { questionScope: questionToolScope }),
                 call: {
                   id: 'preload-nominal',
                   name: nominalIntent.toolName,
@@ -898,6 +942,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
                   tenantId,
                   resolvedMonthKey: period.monthKey,
                   now: input.now,
+                  ...(questionToolScope === undefined ? {} : { questionScope: questionToolScope }),
                   call: {
                     id: 'preload-drilldown',
                     name: drilldownIntent.toolName,
@@ -989,7 +1034,27 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               ? JSON.stringify(monthlyComparisonFacts)
               : (drilldown?.content ?? null),
       });
-      if (composed.answer !== null && composed.meta !== null) {
+      const composedFullyCovers =
+        composed.answer !== null &&
+        composed.meta !== null &&
+        canDeterministicPathFullyAnswer({
+          demand: questionDemand,
+          path: deterministicPathCapabilityFromComposer({
+            intentKind: composed.meta.intentKind,
+            toolName:
+              snapshotIntent !== null
+                ? ADVISOR_CURRENT_SNAPSHOT_FACT_NAME
+                : monthlyComparisonFacts !== null
+                  ? COMPARE_CASH_MONTHS_TOOL_NAME
+                  : (drilldown?.name ?? null),
+            hasCostCenterInFacts: toolContentHasCostCenterScope(
+              monthlyComparisonFacts !== null
+                ? JSON.stringify(monthlyComparisonFacts)
+                : (drilldown?.content ?? null),
+            ),
+          }),
+        });
+      if (composed.answer !== null && composed.meta !== null && composedFullyCovers) {
         const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
           senderType: 'CONSULTANT',
           content: composed.answer,
@@ -1097,6 +1162,19 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           analyticalTools: deps.analyticalTools,
           now: input.now,
           observed,
+          questionScope: questionToolScope,
+          explicitCostCenter: questionDemand.explicitCostCenter,
+          questionDemand,
+          initialToolEvidence:
+            drilldown !== null && drilldown.ok
+              ? [
+                  {
+                    toolName: drilldown.name,
+                    content: drilldown.content,
+                    ok: drilldown.ok,
+                  },
+                ]
+              : [],
         });
         const text = sanitizeConsultantText(generated.text);
         if (advisorTextLooksLikeLatexMath(text)) {
@@ -1272,13 +1350,30 @@ async function runAdvisorGeneration(input: {
   readonly analyticalTools?: AdvisorAnalyticalToolExecutor;
   readonly now?: Date;
   readonly observed: { traces: AnalyticalToolTraceDraft[]; rounds: number };
+  readonly questionScope?: { readonly costCenterQuery?: string; readonly resolvedCostCenterName?: string };
+  readonly explicitCostCenter?: ExplicitCostCenterScope;
+  readonly questionDemand: AdvisorQuestionAnalyticalDemand;
+  readonly initialToolEvidence?: readonly AnalyticalToolEvidence[];
 }): Promise<GenerationOutput> {
   const tools = input.analyticalTools?.tools ?? [];
   const toolRounds: IaToolRound[] = [];
+  const seenToolFingerprints = new Set<string>();
   let usage: GenerationUsage = { inputTokens: null, outputTokens: null };
+  let executedToolCount = 0;
+  const requiredObligations = deriveAnalyticalObligations(input.questionDemand);
+  const availableToolNames = tools.map((tool) => tool.name);
+  const preloadFactScopes = collectPreloadFactScopes(input.blocks);
+  const seededToolEvidence = [...(input.initialToolEvidence ?? [])];
+  let completionFeedbackSeq = 0;
 
   for (let round = 0; round <= ADVISOR_MAX_TOOL_ROUNDS; round += 1) {
     const allowTools = tools.length > 0 && round < ADVISOR_MAX_TOOL_ROUNDS;
+    // Orçamento restante para nova tentativa COM tools após este generate.
+    // Feedback CONTINUE consome 1 iteração do mesmo teto ADVISOR_MAX_TOOL_ROUNDS.
+    const toolRoundsRemainingAfterThis = allowTools
+      ? ADVISOR_MAX_TOOL_ROUNDS - round - 1
+      : 0;
+
     const generated = await input.generate({
       tenantId: input.tenantId,
       provider: input.providerId,
@@ -1289,19 +1384,148 @@ async function runAdvisorGeneration(input: {
     });
     usage = addUsage(usage, generated.usage);
     const toolCalls = generated.toolCalls ?? [];
+
     if (toolCalls.length === 0 || input.analyticalTools === undefined || !allowTools) {
-      return { text: generated.text, usage };
+      // Modelo pediu tools após o orçamento: comportamento pré-A.2 (erro de limite).
+      if (!allowTools && toolCalls.length > 0 && input.analyticalTools !== undefined) {
+        throw new IaProviderError(
+          'PROVIDER_ERROR',
+          'O provedor excedeu o limite de tool rounds.',
+        );
+      }
+
+      const completion = evaluateAgentCompletion({
+        demand: input.questionDemand,
+        requiredObligations,
+        toolRounds,
+        seededToolEvidence,
+        preloadFactScopes,
+        availableToolNames,
+        roundsRemaining: toolRoundsRemainingAfterThis,
+      });
+      logCompletionDecision(input.tenantId, completion, {
+        round,
+        allowTools,
+        zeroToolAttempt: executedToolCount === 0 && seededToolEvidence.length === 0,
+      });
+
+      if (completion.decision === 'CONTINUE' && allowTools && input.analyticalTools !== undefined) {
+        completionFeedbackSeq += 1;
+        const feedback = buildAnalyticalCompletionFeedback({
+          state: completion,
+          zeroToolAttempt: executedToolCount === 0 && seededToolEvidence.length === 0,
+        });
+        const feedbackId = `completion-gate-${completionFeedbackSeq}`;
+        toolRounds.push({
+          calls: [
+            {
+              id: feedbackId,
+              name: 'analytical_completion_gate',
+              arguments: {
+                decision: 'CONTINUE',
+                missingObligations: [...completion.missingObligations],
+              },
+            },
+          ],
+          results: [
+            {
+              id: feedbackId,
+              name: 'analytical_completion_gate',
+              ok: false,
+              content: JSON.stringify(feedback),
+              resultCardinality: 0,
+            },
+          ],
+        });
+        // Feedback consome 1 iteração do loop (mesmo teto ADVISOR_MAX_TOOL_ROUNDS).
+        input.observed.rounds += 1;
+        continue;
+      }
+
+      if (completion.decision === 'PARTIAL_LIMITATION' && completion.missingObligations.length > 0) {
+        return {
+          text: buildAnalyticalPartialLimitationText(completion),
+          usage,
+        };
+      }
+
+      return finalizeAdvisorAgentAnswer({
+        text: generated.text,
+        usage,
+        blocks: input.blocks,
+        toolRounds,
+        executedToolCount: executedToolCount + seededToolEvidence.length,
+        generate: input.generate,
+        tenantId: input.tenantId,
+        providerId: input.providerId,
+        model: input.model,
+        explicitCostCenter: input.explicitCostCenter ?? { status: 'ABSENT' },
+      });
     }
+
     const results = [];
     const roundNumber = input.observed.rounds + 1;
     for (const call of toolCalls) {
       const toolStartedAt = Date.now();
+      const fingerprint = normalizeAdvisorToolCallFingerprint(call.name, call.arguments);
+      if (seenToolFingerprints.has(fingerprint)) {
+        const repeated = {
+          id: call.id,
+          name: call.name,
+          ok: false,
+          content: JSON.stringify({
+            status: 'REPEATED_IDENTICAL_CALL',
+            code: 'IDENTICAL_TOOL_CALL',
+            message:
+              'Esta chamada idêntica já foi executada neste turno. Use o resultado anterior ou escolha outra estratégia.',
+          }),
+          resultCardinality: 0,
+        };
+        console.info(
+          JSON.stringify({
+            event: 'advisor_agent_tool_repeated',
+            tenantId: input.tenantId,
+            toolName: call.name,
+            status: 'REPEATED_IDENTICAL_CALL',
+            reason: 'IDENTICAL_TOOL_CALL',
+            round: roundNumber,
+          }),
+        );
+        const trace = traceFromToolResult(
+          repeated,
+          roundNumber,
+          Date.now() - toolStartedAt,
+          call.arguments,
+        );
+        if (trace !== null) {
+          input.observed.traces.push(trace);
+        }
+        results.push(repeated);
+        continue;
+      }
+      seenToolFingerprints.add(fingerprint);
       const result = await input.analyticalTools.execute({
         tenantId: input.tenantId,
         resolvedMonthKey: input.resolvedMonthKey,
         call,
         now: input.now,
+        ...(input.questionScope === undefined ? {} : { questionScope: input.questionScope }),
       });
+      executedToolCount += 1;
+      console.info(
+        JSON.stringify({
+          event: 'advisor_agent_tool_executed',
+          tenantId: input.tenantId,
+          mode: 'AGENT_TOOL',
+          toolName: call.name,
+          status: result.ok ? 'OK' : 'ERROR',
+          reason: result.ok ? null : readStructuredStatus(result.content),
+          resultCardinality: result.resultCardinality ?? null,
+          round: roundNumber,
+          evidenceSource: 'TOOL_RESULT',
+          argShape: safeToolArgShape(call.arguments),
+        }),
+      );
       const trace = traceFromToolResult(
         result,
         roundNumber,
@@ -1318,6 +1542,284 @@ async function runAdvisorGeneration(input: {
   }
 
   throw new IaProviderError('PROVIDER_ERROR', 'O provedor excedeu o limite de tool rounds.');
+}
+
+function evaluateAgentCompletion(input: {
+  readonly demand: AdvisorQuestionAnalyticalDemand;
+  readonly requiredObligations: readonly AnalyticalObligation[];
+  readonly toolRounds: readonly IaToolRound[];
+  readonly seededToolEvidence: readonly AnalyticalToolEvidence[];
+  readonly preloadFactScopes: readonly ('TENANT' | 'COST_CENTER' | 'UNKNOWN')[];
+  readonly availableToolNames: readonly string[];
+  readonly roundsRemaining: number;
+}): AnalyticalCompletionState {
+  const toolEvidence: AnalyticalToolEvidence[] = [...input.seededToolEvidence];
+  for (const round of input.toolRounds) {
+    for (const result of round.results) {
+      if (result.name === 'analytical_completion_gate') {
+        continue;
+      }
+      toolEvidence.push({
+        toolName: result.name,
+        content: result.content,
+        ok: result.ok,
+      });
+    }
+  }
+  return evaluateAnalyticalCompletion({
+    demand: input.demand,
+    requiredObligations: input.requiredObligations,
+    toolEvidence,
+    preloadFactScopes: input.preloadFactScopes,
+    availableToolNames: input.availableToolNames,
+    roundsRemaining: input.roundsRemaining,
+  });
+}
+
+function collectPreloadFactScopes(
+  blocks: GenerationInput['blocks'],
+): Array<'TENANT' | 'COST_CENTER' | 'UNKNOWN'> {
+  const scopes: Array<'TENANT' | 'COST_CENTER' | 'UNKNOWN'> = [];
+  for (const block of blocks) {
+    if (block.type === 'FINANCIAL_FACTS' || block.type === 'ANALYTICAL_FACTS') {
+      scopes.push(inferEvidenceEntityScope(block.content));
+    }
+  }
+  return scopes;
+}
+
+function logCompletionDecision(
+  tenantId: string,
+  state: AnalyticalCompletionState,
+  meta: {
+    readonly round: number;
+    readonly allowTools: boolean;
+    readonly zeroToolAttempt: boolean;
+  },
+): void {
+  console.info(
+    JSON.stringify({
+      event: 'advisor_agent_completion_gate',
+      tenantId,
+      mode: 'AGENT_TOOL',
+      completionDecision: state.decision,
+      requiredObligations: [...state.requiredObligations],
+      satisfiedObligations: [...state.satisfiedObligations],
+      missingObligations: [...state.missingObligations],
+      impossibleObligations: [...state.impossibleObligations],
+      attemptedTools: [...state.attemptedTools],
+      round: meta.round,
+      allowTools: meta.allowTools,
+      zeroToolAttempt: meta.zeroToolAttempt,
+    }),
+  );
+}
+
+async function finalizeAdvisorAgentAnswer(input: {
+  readonly text: string;
+  readonly usage: GenerationUsage;
+  readonly blocks: GenerationInput['blocks'];
+  readonly toolRounds: readonly IaToolRound[];
+  readonly executedToolCount: number;
+  readonly generate: (payload: GenerationInput) => Promise<GenerationOutput>;
+  readonly tenantId: string;
+  readonly providerId: GenerationInput['provider'];
+  readonly model: string;
+  readonly explicitCostCenter: ExplicitCostCenterScope;
+}): Promise<GenerationOutput> {
+  const agentToolPath = input.executedToolCount > 0;
+  const evidenceItems = collectEvidenceItems(input.blocks, input.toolRounds);
+  const requiredEntityScope =
+    input.explicitCostCenter.status === 'FOUND' || input.explicitCostCenter.status === 'AMBIGUOUS'
+      ? 'COST_CENTER'
+      : 'UNKNOWN';
+  const requiredCostCenterName =
+    input.explicitCostCenter.status === 'FOUND'
+      ? input.explicitCostCenter.resolvedName
+      : input.explicitCostCenter.status === 'AMBIGUOUS'
+        ? input.explicitCostCenter.query
+        : null;
+  const gated = gateAdvisorEvidenceBoundAnswer({
+    answerText: input.text,
+    evidenceItems,
+    agentToolPath,
+    requiredEntityScope,
+    requiredCostCenterName,
+  });
+  if (gated.ok) {
+    return { text: gated.text, usage: input.usage };
+  }
+
+  console.info(
+    JSON.stringify({
+      event: 'advisor_agent_evidence_gate',
+      tenantId: input.tenantId,
+      mode: 'AGENT_TOOL',
+      status: gated.reason,
+      reason: gated.reason,
+      unsupportedCount: gated.unsupportedClaims.length,
+      outcome: 'REWRITE_ATTEMPT',
+      requiredEntityScope,
+    }),
+  );
+
+  let usage = input.usage;
+  try {
+    const rewrite = await input.generate({
+      tenantId: input.tenantId,
+      provider: input.providerId,
+      model: input.model,
+      blocks: [
+        ...input.blocks,
+        {
+          type: 'PLATFORM_INSTRUCTIONS',
+          content: [
+            'REWRITE_EVIDENCE_BOUND:',
+            'Reescreva a resposta anterior usando APENAS valores presentes nos FINANCIAL_FACTS/ANALYTICAL_FACTS/tool results deste contexto.',
+            'Respeite entityScope: fatos TENANT não autorizam afirmações de COST_CENTER.',
+            'Não invente números. Se não houver cifra oficial compatível com o escopo, declare a limitação.',
+            `Resposta anterior rejeitada: ${input.text.slice(0, 2_000)}`,
+          ].join('\n'),
+          trustLevel: 'PLATFORM',
+        },
+      ],
+      toolRounds: input.toolRounds,
+    });
+    usage = addUsage(usage, rewrite.usage);
+    const afterRewrite = applyAdvisorEvidenceBoundRewrite({
+      original: gated,
+      rewriteText: rewrite.text,
+      evidenceItems,
+      requiredEntityScope,
+      requiredCostCenterName,
+    });
+    console.info(
+      JSON.stringify({
+        event: 'advisor_agent_evidence_gate',
+        tenantId: input.tenantId,
+        mode: 'AGENT_TOOL',
+        status: afterRewrite.ok ? 'OK' : afterRewrite.reason,
+        reason: afterRewrite.reason,
+        outcome: afterRewrite.ok ? 'REWRITE_ACCEPTED' : 'DETERMINISTIC_LIMITATION',
+      }),
+    );
+    return { text: afterRewrite.text, usage };
+  } catch {
+    console.info(
+      JSON.stringify({
+        event: 'advisor_agent_evidence_gate',
+        tenantId: input.tenantId,
+        mode: 'AGENT_TOOL',
+        status: gated.reason,
+        reason: gated.reason,
+        outcome: 'DETERMINISTIC_LIMITATION',
+      }),
+    );
+    return { text: gated.text, usage };
+  }
+}
+
+function collectEvidenceItems(
+  blocks: GenerationInput['blocks'],
+  toolRounds: readonly IaToolRound[],
+): AdvisorEvidenceItem[] {
+  const items: AdvisorEvidenceItem[] = [];
+  for (const block of blocks) {
+    if (block.type === 'FINANCIAL_FACTS') {
+      items.push({
+        text: block.content,
+        entityScope: inferEvidenceEntityScope(block.content),
+        source: 'FINANCIAL_FACTS',
+        resolvedCostCenter: 'NONE',
+      });
+    } else if (block.type === 'ANALYTICAL_FACTS' || block.type === 'PRESENTED_INSIGHT_FACTS') {
+      items.push({
+        text: block.content,
+        entityScope: inferEvidenceEntityScope(block.content),
+        source: block.type === 'ANALYTICAL_FACTS' ? 'ANALYTICAL_FACTS' : 'PRESENTED_INSIGHT_FACTS',
+      });
+    }
+  }
+  for (const round of toolRounds) {
+    for (const result of round.results) {
+      items.push({
+        text: result.content,
+        entityScope: inferEvidenceEntityScope(result.content),
+        source: 'TOOL_RESULT',
+        resolvedCostCenter: readResolvedCostCenterName(result.content),
+      });
+    }
+  }
+  return items;
+}
+
+function toQuestionToolScope(
+  scope: ExplicitCostCenterScope,
+): { readonly costCenterQuery?: string; readonly resolvedCostCenterName?: string } | undefined {
+  if (scope.status === 'FOUND') {
+    return {
+      costCenterQuery: scope.query,
+      resolvedCostCenterName: scope.resolvedName,
+    };
+  }
+  if (scope.status === 'AMBIGUOUS') {
+    return { costCenterQuery: scope.query };
+  }
+  return undefined;
+}
+
+function toolContentHasCostCenterScope(content: string | null): boolean {
+  if (content === null) {
+    return false;
+  }
+  return inferEvidenceEntityScope(content) === 'COST_CENTER';
+}
+
+function readResolvedCostCenterName(content: string): string | null {
+  try {
+    const parsed = JSON.parse(content) as {
+      status?: string;
+      resolvedCostCenter?: unknown;
+      costCenter?: { name?: unknown } | null;
+    };
+    if (typeof parsed.resolvedCostCenter === 'string' && parsed.resolvedCostCenter !== 'NONE') {
+      return parsed.resolvedCostCenter.trim() || null;
+    }
+    const name = parsed.costCenter?.name;
+    if (typeof name !== 'string' || name.trim() === '') {
+      return null;
+    }
+    if (
+      parsed.status !== undefined &&
+      parsed.status !== 'OK' &&
+      parsed.status !== 'EMPTY_RESULT' &&
+      parsed.status !== 'PARTIAL'
+    ) {
+      return null;
+    }
+    return name.trim();
+  } catch {
+    return null;
+  }
+}
+
+function safeToolArgShape(args: Record<string, unknown>): Record<string, string> {
+  const shape: Record<string, string> = {};
+  for (const key of Object.keys(args).sort((a, b) => a.localeCompare(b))) {
+    const value = args[key];
+    if (typeof value === 'string') {
+      shape[key] = value.length > 80 ? 'string:>80' : 'string';
+    } else if (typeof value === 'number') {
+      shape[key] = 'number';
+    } else if (typeof value === 'boolean') {
+      shape[key] = 'boolean';
+    } else if (value === null) {
+      shape[key] = 'null';
+    } else {
+      shape[key] = Array.isArray(value) ? 'array' : typeof value;
+    }
+  }
+  return shape;
 }
 
 function addUsage(left: GenerationUsage, right: GenerationUsage): GenerationUsage {
@@ -1668,22 +2170,6 @@ async function answerCostCenterOutflowMovementsPlan(input: {
     factualAnswer: composed.meta,
     analyticalOutcome,
   };
-}
-
-function readResolvedCostCenterName(toolContent: string): string | null {
-  try {
-    const parsed = JSON.parse(toolContent) as {
-      status?: string;
-      costCenter?: { name?: string };
-    };
-    if (parsed.status !== 'OK' && parsed.status !== 'EMPTY_RESULT') {
-      return null;
-    }
-    const name = parsed.costCenter?.name;
-    return typeof name === 'string' && name.trim() !== '' ? name.trim() : null;
-  } catch {
-    return null;
-  }
 }
 
 function readCostCenterWinnerFromToolContent(

@@ -460,6 +460,7 @@ export function serializeAdvisorCostCenterLookup(input: {
     status: input.status,
     monthKey: aggregation.monthKey,
     scope: 'PERIOD',
+    entityScope: input.match === null ? 'TENANT' : 'COST_CENTER',
     direction: aggregation.direction,
     realizedMeaning:
       aggregation.direction === 'INFLOW' ? ADVISOR_CASH_INFLOW_MEANING : ADVISOR_CASH_OUTFLOW_MEANING,
@@ -480,6 +481,7 @@ export function serializeAdvisorCostCenterLookup(input: {
             shareOfPopulation: formatAdvisorPercent(input.match.shareOfPopulation),
             shareOfIdentified: formatAdvisorPercent(input.match.shareOfIdentified),
           },
+    resolvedCostCenter: input.match === null ? 'NONE' : input.match.name,
     candidates:
       input.candidates?.map((row) => ({
         costCenterId: row.id,

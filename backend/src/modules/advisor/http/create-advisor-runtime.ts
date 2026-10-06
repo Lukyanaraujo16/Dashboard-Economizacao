@@ -169,7 +169,10 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     costCenterAllocations,
   });
   const cashComparison = createAdvisorCashComparisonService({ cashFlow });
-  const cashBreakdown = createAdvisorCashBreakdownService({ cashFlow });
+  const cashBreakdown = createAdvisorCashBreakdownService({
+    cashFlow,
+    costCenters,
+  });
   const cashMovements = createAdvisorCashMovementLinesService({
     reportCashDetails: createReportCashDetailsService({
       ledger,

@@ -8,6 +8,7 @@ import type { AdvisorCurrentSnapshotFacts } from './advisor-current-snapshot-fac
 export const ADVISOR_CONTEXT_BLOCK_TYPES = [
   'PLATFORM_INSTRUCTIONS',
   'TENANT_PROFILE',
+  'UI_CONTEXT',
   'ADMIN_CONTEXT',
   'TENANT_KNOWLEDGE',
   'DOCUMENT_KNOWLEDGE',
@@ -68,8 +69,24 @@ export const ADVISOR_CONTEXT_PRESERVATION_ORDER = [
   'ANALYTICAL_FACTS',
   'PRESENTED_INSIGHT_FACTS',
   'TENANT_PROFILE',
+  'UI_CONTEXT',
   'ADMIN_CONTEXT',
   'CONVERSATION_HISTORY',
   'TENANT_KNOWLEDGE',
   'DOCUMENT_KNOWLEDGE',
 ] as const satisfies readonly AdvisorContextBlockType[];
+
+/**
+ * Contexto interpretativo da UI (não é filtro obrigatório automático).
+ * Precedência: pergunta explícita > conversa factual válida > UI_CONTEXT > CURRENT.
+ */
+export function formatAdvisorUiContextBlock(input: {
+  readonly selectedMonth: string;
+}): string {
+  return [
+    'UI_CONTEXT é contexto interpretativo. Não é automaticamente um filtro obrigatório.',
+    `selectedMonth / referenceMonthKey: ${input.selectedMonth}`,
+    'Precedência de período: (1) explícito na pergunta do usuário; (2) contexto conversacional factual válido, quando aplicável; (3) UI_CONTEXT; (4) política CURRENT do sistema.',
+    'Se o usuário pedir um mês diferente do selectedMonth da UI, o mês da pergunta vence.',
+  ].join('\n');
+}

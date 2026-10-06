@@ -137,6 +137,12 @@ function mapContentStatus(status: string | null, code: string | null, message: s
   if (status === 'UNRESOLVED' || status === 'INSUFFICIENT') {
     return { status: 'UNAVAILABLE', reason: 'UNSUPPORTED_OPERATION' };
   }
+  if (status === 'REPEATED_IDENTICAL_CALL' || code === 'IDENTICAL_TOOL_CALL') {
+    return { status: 'UNAVAILABLE', reason: 'UNSUPPORTED_OPERATION' };
+  }
+  if (status === 'MISSING_REQUIRED_SCOPE' || code === 'IDENTICAL_SCOPE_OMITTED' || code === 'SCOPE_REQUIRES_ENTITY_TOOL') {
+    return { status: 'UNAVAILABLE', reason: 'INVALID_ARGUMENTS' };
+  }
   return { status: 'UNAVAILABLE', reason: reasonFromUnavailable(code, message) };
 }
 

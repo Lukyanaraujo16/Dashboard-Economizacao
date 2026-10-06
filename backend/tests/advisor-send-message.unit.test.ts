@@ -841,8 +841,12 @@ describe('send-advisor-message (F13.3)', () => {
         question: 'Compare julho e agosto',
       }),
     ).rejects.toMatchObject({ code: 'PROVIDER_ERROR' });
-    expect(executions).toBe(3);
+    // 1ª execução canônica; rounds 2–3 são dedupe (REPEATED_IDENTICAL_CALL) sem reexecutar.
+    expect(executions).toBe(1);
     expect(openai.generateCalls).toHaveLength(4);
+    expect(openai.generateCalls[2]?.toolRounds?.[1]?.results[0]?.content).toContain(
+      'REPEATED_IDENTICAL_CALL',
+    );
     expect(openai.generateCalls[3]?.tools).toBeUndefined();
   });
 

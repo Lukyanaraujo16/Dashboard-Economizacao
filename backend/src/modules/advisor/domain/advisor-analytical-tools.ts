@@ -3,6 +3,7 @@ import { isValidMonthKey } from '../../analytics/domain/civil-calendar.js';
 import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
 import type { MonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
 import type { ReportCashDetailsService } from '../../reports/services/report-cash-details.service.js';
+import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import { assertAdvisorTenantId } from '../repositories/assert-tenant-id.js';
 import {
   CASH_MOVEMENT_LINES_TOOL_NAME,
@@ -14,11 +15,14 @@ import {
   ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
   ADVISOR_DRILLDOWN_MAX_LIMIT,
   CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+  buildAdvisorCashBreakdownEntityMiss,
   clampAdvisorDrilldownLimit,
   isAdvisorCashDirection,
   rankAdvisorCashRealizedBreakdown,
   type AdvisorCashDirection,
+  type AdvisorCashRealizedBreakdown,
 } from './advisor-cash-realized-breakdown.js';
+import { resolveAdvisorCostCenterQuery } from './advisor-cost-center-dimension.js';
 import { AdvisorDomainError } from './advisor-domain-error.js';
 import {
   ADVISOR_CASH_CATEGORY_TOP_N,
@@ -72,6 +76,7 @@ import {
   CASH_COST_CENTER_RANKING_TOOL_NAME,
   COMPARE_CASH_COST_CENTER_TOOL_NAME,
 } from './advisor-cost-center-dimension.js';
+import { toolsSupportingCostCenterQuery } from './advisor-question-scope.js';
 
 export const ADVISOR_MAX_TOOL_ROUNDS = 3;
 export const ADVISOR_ANALYTICAL_TOOL_TIMEOUT_MS = 10_000;
@@ -87,6 +92,11 @@ export type AdvisorAnalyticalToolCall = {
   readonly id: string;
   readonly name: string;
   readonly arguments: Record<string, unknown>;
+};
+
+export type AdvisorQuestionToolScope = {
+  readonly costCenterQuery?: string;
+  readonly resolvedCostCenterName?: string;
 };
 
 export type AdvisorAnalyticalToolResult = {
@@ -115,13 +125,12 @@ export type AdvisorCashBreakdownRequest = {
   readonly monthKey: string;
   readonly direction: AdvisorCashDirection;
   readonly limit?: number;
+  readonly costCenterQuery?: string;
   readonly now?: Date;
 };
 
 export type AdvisorCashBreakdownService = {
-  breakdown(input: AdvisorCashBreakdownRequest): Promise<
-    ReturnType<typeof rankAdvisorCashRealizedBreakdown>
-  >;
+  breakdown(input: AdvisorCashBreakdownRequest): Promise<AdvisorCashRealizedBreakdown>;
 };
 
 export type AdvisorCashMovementLinesRequest = {
@@ -188,7 +197,7 @@ const LIMIT_SCHEMA = {
 export const COMPARE_CASH_MONTHS_TOOL: AdvisorAnalyticalToolDefinition = {
   name: COMPARE_CASH_MONTHS_TOOL_NAME,
   description:
-    'Compara dois meses civis de caixa oficial (faturamento CASH, realizado e categorias). Não recebe tenant.',
+    'Compares official company-level cash between two civil months (billing, realized totals and category deltas). Use for month-over-month totals/result, not for a single month category mix or individual movements. Does not accept tenant.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -208,10 +217,17 @@ export const COMPARE_CASH_MONTHS_TOOL: AdvisorAnalyticalToolDefinition = {
   },
 };
 
+const COST_CENTER_QUERY_SCHEMA = {
+  type: 'string',
+  description:
+    'Nome ou código textual do centro de custo. Match conservador no catálogo do tenant. Nunca envie id.',
+  maxLength: 80,
+};
+
 export const CASH_REALIZED_BREAKDOWN_TOOL: AdvisorAnalyticalToolDefinition = {
   name: CASH_REALIZED_BREAKDOWN_TOOL_NAME,
   description:
-    'Ranking oficial das categorias de entradas ou saídas realizadas de caixa (realizedByCategory). Não ranqueia convênio/cliente individual. Não recebe tenant.',
+    'Breaks realized cash inflows/outflows down by official category for a civil month (composition/ranking). Optional costCenterQuery scopes the same composition to one tenant-resolved cost center. Use for category mix, dominant category, top categories and outflow/inflow composition. Not for individual movements, named counterparty ranking, or inventing cost-center ids. Does not accept tenant.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -219,6 +235,7 @@ export const CASH_REALIZED_BREAKDOWN_TOOL: AdvisorAnalyticalToolDefinition = {
     properties: {
       monthKey: MONTH_KEY_SCHEMA,
       direction: DIRECTION_SCHEMA,
+      costCenterQuery: COST_CENTER_QUERY_SCHEMA,
       limit: LIMIT_SCHEMA,
     },
   },
@@ -227,7 +244,7 @@ export const CASH_REALIZED_BREAKDOWN_TOOL: AdvisorAnalyticalToolDefinition = {
 export const CASH_MOVEMENT_LINES_TOOL: AdvisorAnalyticalToolDefinition = {
   name: CASH_MOVEMENT_LINES_TOOL_NAME,
   description:
-    'Janela limitada das maiores movimentações individuais realizadas de caixa. Não é ranking de clientes, fornecedores ou convênios. Não recebe tenant.',
+    'Returns a limited window of individual realized cash movements (largest or most recent). Useful after identifying an area of interest when the question needs the biggest/smallest transactions, not the category total. Does not prove aggregated ranking of clients, suppliers or insurance plans. Does not accept tenant.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -299,16 +316,72 @@ export function createAdvisorCashComparisonService(deps: {
 
 export function createAdvisorCashBreakdownService(deps: {
   readonly cashFlow: Pick<MonthlyCashFlowService, 'getMonthlyCashFlow'>;
+  readonly costCenters?: Pick<CostCenterReadRepository, 'listByTenant'>;
 }): AdvisorCashBreakdownService {
   return {
     async breakdown(input) {
       const tenantId = requireRuntimeTenantId(input.tenantId);
       const monthKey = requireMonthKey(input.monthKey, 'monthKey');
       const limits = clampAdvisorDrilldownLimit(input.limit);
+      const requestedLimit = limits.requestedLimit ?? limits.effectiveLimit;
+      const costCenterQuery = input.costCenterQuery?.trim();
+
+      let resolvedCostCenter: {
+        readonly costCenterId: string;
+        readonly name: string;
+        readonly code: string | null;
+      } | null = null;
+
+      if (costCenterQuery !== undefined && costCenterQuery !== '') {
+        if (deps.costCenters === undefined) {
+          throw new AdvisorDomainError(
+            'ANALYTICAL_TOOL_FAILED',
+            'Não consegui resolver centro de custo para o breakdown agora.',
+          );
+        }
+        const catalog = (await deps.costCenters.listByTenant(tenantId))
+          .filter((row) => row.active)
+          .map((row) => ({ id: row.id, name: row.name, code: row.code }));
+        const resolved = resolveAdvisorCostCenterQuery(catalog, costCenterQuery);
+        if (resolved.status === 'NOT_FOUND') {
+          return buildAdvisorCashBreakdownEntityMiss({
+            tenantId,
+            monthKey,
+            direction: input.direction,
+            status: 'NOT_FOUND',
+            requestedLimit,
+            effectiveLimit: limits.effectiveLimit,
+          });
+        }
+        if (resolved.status === 'AMBIGUOUS') {
+          return buildAdvisorCashBreakdownEntityMiss({
+            tenantId,
+            monthKey,
+            direction: input.direction,
+            status: 'AMBIGUOUS',
+            requestedLimit,
+            effectiveLimit: limits.effectiveLimit,
+            candidates: resolved.candidates.map((row) => ({
+              costCenterId: row.id,
+              name: row.name,
+              code: row.code,
+            })),
+          });
+        }
+        resolvedCostCenter = {
+          costCenterId: resolved.center.costCenterId,
+          name: resolved.center.name,
+          code: resolved.center.code,
+        };
+      }
+
       const flow = await deps.cashFlow.getMonthlyCashFlow({
         tenantId,
         monthKey,
         now: input.now,
+        ...(resolvedCostCenter === null
+          ? {}
+          : { costCenterId: resolvedCostCenter.costCenterId }),
       });
       if (flow.tenantId !== tenantId) {
         throw new AdvisorDomainError(
@@ -316,12 +389,16 @@ export function createAdvisorCashBreakdownService(deps: {
           'Breakdown de caixa recusou fluxo de outro tenant.',
         );
       }
-      return rankAdvisorCashRealizedBreakdown({
+      const ranked = rankAdvisorCashRealizedBreakdown({
         flow,
         direction: input.direction,
         requestedLimit: limits.requestedLimit,
         effectiveLimit: limits.effectiveLimit,
       });
+      return {
+        ...ranked,
+        costCenter: resolvedCostCenter,
+      };
     },
   };
 }
@@ -372,6 +449,7 @@ export type AdvisorAnalyticalToolExecutor = {
     readonly call: AdvisorAnalyticalToolCall;
     readonly resolvedMonthKey?: string;
     readonly now?: Date;
+    readonly questionScope?: AdvisorQuestionToolScope;
   }): Promise<AdvisorAnalyticalToolResult>;
 };
 
@@ -396,6 +474,27 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
             'ANALYTICAL_TOOL_UNKNOWN',
             'Tool analítica desconhecida.',
           );
+        }
+        const scopeGuard = guardExplicitCostCenterScope(call, input.questionScope);
+        if (scopeGuard !== null) {
+          logToolExecution({
+            toolName: call.name,
+            durationMs: Date.now() - startedAt,
+            ok: false,
+            resultCardinality: 0,
+            monthKey: readOptionalMonth(call.arguments.monthKey),
+            comparisonMonthKey: readOptionalMonth(call.arguments.comparisonMonthKey),
+            direction: readOptionalDirection(call.arguments.direction),
+            requestedLimit: readOptionalLimit(call.arguments.limit),
+            effectiveLimit: null,
+          });
+          return {
+            id: call.id,
+            name: call.name,
+            ok: false,
+            content: JSON.stringify(scopeGuard),
+            resultCardinality: 0,
+          };
         }
         if (call.name === COMPARE_CASH_MONTHS_TOOL_NAME) {
           return await executeCompare(deps.cashComparison, tenantId, call, input.now, startedAt);
@@ -532,15 +631,20 @@ export function assertCashRealizedBreakdownArgs(raw: Record<string, unknown>): {
   readonly monthKey: string;
   readonly direction: AdvisorCashDirection;
   readonly limit?: number;
+  readonly costCenterQuery?: string;
 } {
   assertNoForbiddenArgs(raw);
   const extra = Object.keys(raw).filter(
-    (key) => key !== 'monthKey' && key !== 'direction' && key !== 'limit',
+    (key) =>
+      key !== 'monthKey' &&
+      key !== 'direction' &&
+      key !== 'limit' &&
+      key !== 'costCenterQuery',
   );
   if (extra.length > 0) {
     throw new AdvisorDomainError(
       'ANALYTICAL_TOOL_INVALID_INPUT',
-      'cash_realized_breakdown aceita apenas monthKey, direction e limit.',
+      'cash_realized_breakdown aceita apenas monthKey, direction, limit e costCenterQuery.',
     );
   }
   if (typeof raw.monthKey !== 'string' || typeof raw.direction !== 'string') {
@@ -555,11 +659,33 @@ export function assertCashRealizedBreakdownArgs(raw: Record<string, unknown>): {
       'direction deve ser INFLOW ou OUTFLOW.',
     );
   }
+  const costCenterQuery =
+    raw.costCenterQuery === undefined
+      ? undefined
+      : requireBreakdownCostCenterQuery(raw.costCenterQuery);
   return {
     monthKey: requireMonthKey(raw.monthKey, 'monthKey'),
     direction: raw.direction,
     ...(raw.limit === undefined ? {} : { limit: requireLimit(raw.limit) }),
+    ...(costCenterQuery === undefined ? {} : { costCenterQuery }),
   };
+}
+
+function requireBreakdownCostCenterQuery(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'costCenterQuery deve ser texto.',
+    );
+  }
+  const trimmed = value.trim();
+  if (trimmed === '' || trimmed.length > 80) {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'costCenterQuery textual inválido.',
+    );
+  }
+  return trimmed;
 }
 
 export function assertCashMovementLinesArgs(raw: Record<string, unknown>): {
@@ -656,16 +782,19 @@ async function executeBreakdown(
     monthKey,
     direction: args.direction,
     limit: args.limit,
+    ...(args.costCenterQuery === undefined ? {} : { costCenterQuery: args.costCenterQuery }),
   });
   const serialized = await runUniversalToolQuery({
     query,
     runtime: { tenantId, now, cashBreakdown },
   });
   const categories = Array.isArray(serialized.categories) ? serialized.categories : [];
+  const status = typeof serialized.status === 'string' ? serialized.status : 'OK';
+  const entityMiss = status === 'NOT_FOUND' || status === 'AMBIGUOUS';
   logToolExecution({
     toolName: call.name,
     durationMs: Date.now() - startedAt,
-    ok: true,
+    ok: !entityMiss,
     resultCardinality: categories.length,
     monthKey,
     comparisonMonthKey: null,
@@ -676,7 +805,7 @@ async function executeBreakdown(
   return {
     id: call.id,
     name: call.name,
-    ok: true,
+    ok: !entityMiss,
     content: JSON.stringify(serialized),
     resultCardinality: categories.length,
     monthKey,
@@ -1057,6 +1186,59 @@ function assertNoForbiddenArgs(raw: Record<string, unknown>): void {
       'tenantId/userId não são aceitos no input da tool.',
     );
   }
+}
+
+/**
+ * Se a pergunta tem escopo explícito de centro e a tool suporta costCenterQuery,
+ * não executar silenciosamente como tenant-wide.
+ */
+function guardExplicitCostCenterScope(
+  call: AdvisorAnalyticalToolCall,
+  questionScope: AdvisorQuestionToolScope | undefined,
+): Record<string, unknown> | null {
+  const requiredQuery = questionScope?.costCenterQuery?.trim();
+  if (requiredQuery === undefined || requiredQuery === '') {
+    return null;
+  }
+  if (call.name === COMPARE_CASH_MONTHS_TOOL_NAME || call.name === CASH_MOVEMENT_LINES_TOOL_NAME) {
+    return {
+      status: 'MISSING_REQUIRED_SCOPE',
+      code: 'SCOPE_REQUIRES_ENTITY_TOOL',
+      message:
+        call.name === COMPARE_CASH_MONTHS_TOOL_NAME
+          ? 'A pergunta restringe a um centro de custo. compare_cash_months é tenant-wide. Use compare_cash_cost_center ou cash_realized_breakdown com costCenterQuery.'
+          : 'A pergunta restringe a um centro de custo. cash_movement_lines é tenant-wide. Use cash_cost_center_movement_lines ou cash_realized_breakdown com costCenterQuery.',
+      requiredFilter: 'costCenterQuery',
+      suggestedCostCenterQuery: requiredQuery,
+      ...(questionScope?.resolvedCostCenterName !== undefined
+        ? { resolvedCostCenterName: questionScope.resolvedCostCenterName }
+        : {}),
+      supportedAlternatives: [
+        COMPARE_CASH_COST_CENTER_TOOL_NAME,
+        CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
+        CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+        CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+      ],
+    };
+  }
+  if (!toolsSupportingCostCenterQuery().has(call.name)) {
+    return null;
+  }
+  const provided = call.arguments.costCenterQuery;
+  if (typeof provided === 'string' && provided.trim() !== '') {
+    return null;
+  }
+  return {
+    status: 'MISSING_REQUIRED_SCOPE',
+    code: 'IDENTICAL_SCOPE_OMITTED',
+    message:
+      'A pergunta referencia explicitamente um centro de custo e esta tool aceita costCenterQuery. Inclua a referência textual do centro; não execute tenant-wide.',
+    requiredFilter: 'costCenterQuery',
+    suggestedCostCenterQuery: requiredQuery,
+    ...(questionScope?.resolvedCostCenterName !== undefined
+      ? { resolvedCostCenterName: questionScope.resolvedCostCenterName }
+      : {}),
+  };
 }
 
 function requireRuntimeTenantId(tenantId: string): string {

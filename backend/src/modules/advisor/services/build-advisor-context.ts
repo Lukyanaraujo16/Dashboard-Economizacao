@@ -19,7 +19,11 @@ import {
 } from '../domain/analytical/preload-analytical-parity.js';
 import { attachAdvisorDocumentKnowledgeBlock } from '../domain/attach-advisor-document-knowledge.js';
 import { ADVISOR_DOCUMENT_KNOWLEDGE_HISTORY_USER_LIMIT } from '../domain/advisor-document-knowledge-limits.js';
-import { ADVISOR_HISTORY_MESSAGE_LIMIT, type AdvisorBuiltContext } from '../domain/context-blocks.js';
+import {
+  ADVISOR_HISTORY_MESSAGE_LIMIT,
+  formatAdvisorUiContextBlock,
+  type AdvisorBuiltContext,
+} from '../domain/context-blocks.js';
 import { formatPresentedInsightFacts } from '../domain/presented-insight-context.js';
 import {
   applyAdvisorContextCharBudget,
@@ -214,6 +218,16 @@ export function createBuildAdvisorContext(deps: BuildAdvisorContextDependencies)
           type: 'TENANT_PROFILE',
           content: formatTenantProfile(settings),
           trustLevel: 'TENANT_CONFIG',
+        },
+        {
+          type: 'UI_CONTEXT',
+          content: formatAdvisorUiContextBlock({ selectedMonth: monthKey }),
+          trustLevel: 'TENANT_CONFIG',
+          source: {
+            kind: 'ui',
+            monthKey,
+            service: 'selectedMonth',
+          },
         },
         {
           type: 'ADMIN_CONTEXT',

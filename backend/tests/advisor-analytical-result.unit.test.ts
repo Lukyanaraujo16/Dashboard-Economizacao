@@ -25,6 +25,9 @@ const NOW = new Date('2026-10-02T15:00:00.000Z');
 const PROVIDER_TOOL_QUESTION = 'qual o maior gasto?';
 const FELIPE_QUESTION = 'qual o maior gasto em laranjeiras e em jacaraipe?';
 const UNAVAILABLE_PROSE = 'Não consegui obter esse detalhamento agora.';
+/** Prosa determinística do completion gate (A.2) quando VALUE fica impossível sem tools. */
+const PARTIAL_LIMITATION_PROSE =
+  'Não consegui completar toda a análise solicitada com as evidências oficiais disponíveis nesta consulta. Parte não determinada com as tools/fatos disponíveis: VALUE. Não inventei valores para a parte faltante.';
 
 function money(value: string): Prisma.Decimal {
   return new Prisma.Decimal(value);
@@ -263,7 +266,7 @@ describe('trilha de resultado no envio do consultor', () => {
     expect(result.run?.status).toBe('SUCCEEDED');
     expect(result.factualAnswer).toBeNull();
     expect(result.analyticalOutcome).toBe('UNSUPPORTED');
-    expect(result.consultantMessage.content).toBe(UNAVAILABLE_PROSE);
+    expect(result.consultantMessage.content).toBe(PARTIAL_LIMITATION_PROSE);
     expect(harness.openai.generateCalls.length).toBeGreaterThan(0);
     expect(harness.recorded[0]).toMatchObject({
       tenantId: 'tenant-a',
@@ -274,7 +277,7 @@ describe('trilha de resultado no envio do consultor', () => {
       consultantMessageId: result.consultantMessage.id,
       runId: result.run?.id,
     });
-    expect(JSON.stringify(harness.recorded[0])).not.toContain(UNAVAILABLE_PROSE);
+    expect(JSON.stringify(harness.recorded[0])).not.toContain(PARTIAL_LIMITATION_PROSE);
   });
 
   it('maior gasto em dois centros na mesma frase clarifica sem provider', async () => {

@@ -24,6 +24,7 @@ export function buildCashRealizedBreakdownQuery(input: {
   readonly monthKey: string;
   readonly direction: AdvisorCashDirection;
   readonly limit?: number;
+  readonly costCenterQuery?: string;
 }): AnalyticalQuery {
   return {
     semanticFamily: 'FLOW',
@@ -32,6 +33,9 @@ export function buildCashRealizedBreakdownQuery(input: {
     period: { kind: 'MONTH', monthKey: input.monthKey },
     dimension: 'CATEGORY',
     operation: 'BREAKDOWN',
+    ...(input.costCenterQuery !== undefined && input.costCenterQuery.trim() !== ''
+      ? { filters: { costCenterQuery: input.costCenterQuery.trim() } }
+      : {}),
     ...(input.limit !== undefined ? { limit: input.limit } : {}),
   };
 }

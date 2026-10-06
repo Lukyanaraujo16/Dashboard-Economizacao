@@ -242,7 +242,7 @@ export const ANALYTICAL_CAPABILITY_REGISTRY: readonly AnalyticalCapability[] = [
     periodKinds: ['MONTH'],
     comparisonChildKinds: null,
     operations: ['BREAKDOWN'],
-    allowedFilters: [],
+    allowedFilters: ['costCenterQuery'],
     requiredFilters: [],
     identityRequired: false,
     maxLimit: DRILL_MAX,

@@ -97,11 +97,13 @@ export function compareAdvisorCostCenterDimension(input: {
 export function serializeAdvisorCostCenterComparison(
   value: AdvisorCostCenterComparison,
 ): Record<string, unknown> {
+  const entityScope = value.costCenter === null ? 'TENANT' : 'COST_CENTER';
   return {
     status: value.status,
     monthKey: value.monthKey,
     comparisonMonthKey: value.comparisonMonthKey,
     scope: 'PERIOD_COMPARISON',
+    entityScope,
     direction: value.direction,
     realizedMeaning:
       value.direction === 'INFLOW' ? ADVISOR_CASH_INFLOW_MEANING : ADVISOR_CASH_OUTFLOW_MEANING,
@@ -115,6 +117,7 @@ export function serializeAdvisorCostCenterComparison(
             name: value.costCenter.name,
             code: value.costCenter.code,
           },
+    resolvedCostCenter: value.costCenter === null ? 'NONE' : value.costCenter.name,
     base: value.base === null ? null : serializePeriodFacts(value.base),
     target: value.target === null ? null : serializePeriodFacts(value.target),
     absoluteDelta: formatNullableAmount(value.absoluteDelta),

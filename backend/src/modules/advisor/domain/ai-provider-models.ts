@@ -6,14 +6,14 @@ import { AI_PROVIDER_IDS, type AiProviderId } from './types.js';
  * Modelos dos vendors evoluem sem migration — esta lista é atualizada em código.
  * Defaults técnicos, não contrato de produto.
  *
- * Fontes oficiais (2026-09-24):
- * - OpenAI: https://developers.openai.com/api/docs/models/gpt-4o-mini → gpt-4o-mini
+ * Fontes oficiais (2026-09-24; OpenAI atualizado 2026-10-06):
+ * - OpenAI: gpt-4o-mini; gpt-5.4-mini (agente analítico controlado)
  * - Anthropic: https://docs.anthropic.com/en/docs/about-claude/models
  *   → claude-sonnet-5 (atual); claude-sonnet-4-5 permanece legado na allowlist
  */
 export const AI_PROVIDER_MODEL_CATALOG = {
   OPENAI: {
-    models: ['gpt-4o-mini'] as const,
+    models: ['gpt-4o-mini', 'gpt-5.4-mini'] as const,
     defaultModel: 'gpt-4o-mini',
   },
   ANTHROPIC: {

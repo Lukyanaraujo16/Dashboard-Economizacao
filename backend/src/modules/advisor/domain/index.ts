@@ -22,6 +22,7 @@ export {
   ADVISOR_CONTEXT_PRESERVATION_ORDER,
   ADVISOR_CONTEXT_TRUST_LEVELS,
   ADVISOR_HISTORY_MESSAGE_LIMIT,
+  formatAdvisorUiContextBlock,
 } from './context-blocks.js';
 export type {
   AdvisorBuiltContext,
@@ -73,11 +74,55 @@ export {
   ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
   ADVISOR_DRILLDOWN_MAX_LIMIT,
   CASH_REALIZED_BREAKDOWN_TOOL_NAME,
+  buildAdvisorCashBreakdownEntityMiss,
   clampAdvisorDrilldownLimit,
   isAdvisorCashDirection,
   rankAdvisorCashRealizedBreakdown,
   serializeAdvisorCashRealizedBreakdown,
 } from './advisor-cash-realized-breakdown.js';
+export {
+  ADVISOR_EVIDENCE_GATE_LIMITATION_TEXT,
+  ADVISOR_EVIDENCE_SCOPE_LIMITATION_TEXT,
+  applyAdvisorEvidenceBoundRewrite,
+  collectAuthorizedFinancialClaimTokens,
+  gateAdvisorEvidenceBoundAnswer,
+  inferEvidenceEntityScope,
+  normalizeAdvisorToolCallFingerprint,
+} from './advisor-evidence-bound-answer.js';
+export {
+  canDeterministicPathFullyAnswer,
+  deriveQuestionAnalyticalDemand,
+  detectExplicitCostCenterScope,
+  deterministicPathCapabilityFromComposer,
+  toolsSupportingCostCenterQuery,
+} from './advisor-question-scope.js';
+export type {
+  AdvisorQuestionAnalyticalDemand,
+  DeterministicPathCapability,
+  ExplicitCostCenterScope,
+} from './advisor-question-scope.js';
+export {
+  ANALYTICAL_COMPLETION_DECISIONS,
+  ANALYTICAL_OBLIGATIONS,
+  analyzeToolEvidence,
+  buildAnalyticalCompletionFeedback,
+  buildAnalyticalPartialLimitationText,
+  deriveAnalyticalObligations,
+  evaluateAnalyticalCompletion,
+} from './advisor-analytical-completion.js';
+export type {
+  AnalyticalCompletionDecision,
+  AnalyticalCompletionState,
+  AnalyticalEvidenceRef,
+  AnalyticalObligation,
+  AnalyticalToolEvidence,
+} from './advisor-analytical-completion.js';
+export type {
+  AdvisorEvidenceBoundGateInput,
+  AdvisorEvidenceBoundGateResult,
+  AdvisorEvidenceEntityScope,
+  AdvisorEvidenceItem,
+} from './advisor-evidence-bound-answer.js';
 export type {
   AdvisorBreakdownStatus,
   AdvisorCashCategoryRank,

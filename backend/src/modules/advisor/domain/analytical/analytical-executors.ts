@@ -104,12 +104,16 @@ export const executeRealizedCashCategoryBreakdown: AnalyticalExecutor = async ({
     throw new Error('direction obrigatória para breakdown.');
   }
   const monthKey = requireMonthKey(validated.query.period, 'self');
+  const costCenterQuery = validated.query.filters?.costCenterQuery?.trim();
   const breakdown = await runtime.cashBreakdown.breakdown({
     tenantId: runtime.tenantId,
     monthKey,
     direction: validated.query.direction,
     limit: validated.query.limit,
     now: runtime.now,
+    ...(costCenterQuery !== undefined && costCenterQuery !== ''
+      ? { costCenterQuery }
+      : {}),
   });
   return success({
     validated,

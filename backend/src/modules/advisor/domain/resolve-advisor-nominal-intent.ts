@@ -180,6 +180,10 @@ export function extractShortNominalEntityProbe(content: string): string | null {
   if (cleaned === '' || cleaned.length < 2 || isPeriodOnlyQuery(cleaned) || isDimensionOnlyQuery(cleaned)) {
     return null;
   }
+  // "O que …" / "A que …" são interrogativos, não entidade nominal curta.
+  if (/^que\b/i.test(cleaned)) {
+    return null;
+  }
   if (/\b(quanto|quais|mostre|ranking|entrada|caixa|ano|mes)\b/i.test(cleaned)) {
     return null;
   }

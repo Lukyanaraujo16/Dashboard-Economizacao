@@ -24,7 +24,13 @@ export const ADVISOR_DRILLDOWN_MAX_LIMIT = 20;
 export const ADVISOR_CASH_DIRECTIONS = ['INFLOW', 'OUTFLOW'] as const;
 export type AdvisorCashDirection = (typeof ADVISOR_CASH_DIRECTIONS)[number];
 
-export const ADVISOR_BREAKDOWN_STATUSES = ['OK', 'ABSENT', 'EMPTY_RESULT'] as const;
+export const ADVISOR_BREAKDOWN_STATUSES = [
+  'OK',
+  'ABSENT',
+  'EMPTY_RESULT',
+  'NOT_FOUND',
+  'AMBIGUOUS',
+] as const;
 export type AdvisorBreakdownStatus = (typeof ADVISOR_BREAKDOWN_STATUSES)[number];
 
 export type AdvisorCashCategoryRank = {
@@ -34,6 +40,12 @@ export type AdvisorCashCategoryRank = {
   readonly amount: Prisma.Decimal;
   readonly sharePercent: Prisma.Decimal | null;
   readonly rank: number;
+};
+
+export type AdvisorBreakdownCostCenter = {
+  readonly costCenterId: string;
+  readonly name: string;
+  readonly code: string | null;
 };
 
 export type AdvisorCashRealizedBreakdown = {
@@ -48,6 +60,8 @@ export type AdvisorCashRealizedBreakdown = {
   readonly effectiveLimit: number;
   readonly hasMore: boolean;
   readonly categories: readonly AdvisorCashCategoryRank[];
+  readonly costCenter: AdvisorBreakdownCostCenter | null;
+  readonly candidates?: readonly AdvisorBreakdownCostCenter[];
 };
 
 export function isAdvisorCashDirection(value: string): value is AdvisorCashDirection {
@@ -106,6 +120,7 @@ export function rankAdvisorCashRealizedBreakdown(input: {
       effectiveLimit: input.effectiveLimit,
       hasMore: false,
       categories: [],
+      costCenter: null,
     };
   }
 
@@ -124,16 +139,19 @@ export function rankAdvisorCashRealizedBreakdown(input: {
     effectiveLimit: input.effectiveLimit,
     hasMore: ranked.length > window.length,
     categories: window,
+    costCenter: null,
   };
 }
 
 export function serializeAdvisorCashRealizedBreakdown(
   value: AdvisorCashRealizedBreakdown,
 ): Record<string, unknown> {
+  const entityScope = value.costCenter == null ? 'TENANT' : 'COST_CENTER';
   return {
     status: value.status,
     monthKey: value.monthKey,
     scope: value.scope,
+    entityScope,
     direction: value.direction,
     coverage: value.coverage ?? ADVISOR_FINANCIAL_ABSENT,
     realizedMeaning:
@@ -146,6 +164,24 @@ export function serializeAdvisorCashRealizedBreakdown(
     effectiveLimit: value.effectiveLimit,
     returnedCount: value.categories.length,
     hasMore: value.hasMore,
+    costCenter:
+      value.costCenter == null
+        ? null
+        : {
+            costCenterId: value.costCenter.costCenterId,
+            name: value.costCenter.name,
+            code: value.costCenter.code,
+          },
+    resolvedCostCenter: value.costCenter == null ? 'NONE' : value.costCenter.name,
+    ...(value.candidates !== undefined && value.candidates.length > 0
+      ? {
+          candidates: value.candidates.map((item) => ({
+            costCenterId: item.costCenterId,
+            name: item.name,
+            code: item.code,
+          })),
+        }
+      : {}),
     categories: value.categories.map((item) => ({
       key: item.key,
       label: item.label,
@@ -155,6 +191,33 @@ export function serializeAdvisorCashRealizedBreakdown(
         item.sharePercent === null ? 'NOT_APPLICABLE' : item.sharePercent.toString(),
       rank: item.rank,
     })),
+  };
+}
+
+/** Resultado estruturado quando a resolução textual do centro falha. */
+export function buildAdvisorCashBreakdownEntityMiss(input: {
+  readonly tenantId: string;
+  readonly monthKey: string;
+  readonly direction: AdvisorCashDirection;
+  readonly status: 'NOT_FOUND' | 'AMBIGUOUS';
+  readonly requestedLimit: number;
+  readonly effectiveLimit: number;
+  readonly candidates?: readonly AdvisorBreakdownCostCenter[];
+}): AdvisorCashRealizedBreakdown {
+  return {
+    tenantId: input.tenantId,
+    monthKey: input.monthKey,
+    scope: 'PERIOD',
+    direction: input.direction,
+    coverage: null,
+    status: input.status,
+    totalRealized: null,
+    requestedLimit: input.requestedLimit,
+    effectiveLimit: input.effectiveLimit,
+    hasMore: false,
+    categories: [],
+    costCenter: null,
+    ...(input.candidates !== undefined ? { candidates: input.candidates } : {}),
   };
 }
 

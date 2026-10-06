@@ -72,6 +72,9 @@ export function buildFinancialFactsContent(input: {
 
   return [
     `scope: PERIOD`,
+    `entityScope: TENANT`,
+    `costCenter: NONE`,
+    'provenance: fatos oficiais da empresa (tenant-wide). NÃO são evidência de um centro de custo, categoria-filtro ou entidade específica.',
     `monthKey: ${input.monthKey}`,
     'temporalScope: fatos deste bloco PERIOD pertencem exclusivamente ao monthKey',
     `billing: ${formatAdvisorFinancialAmount(billing)}`,
@@ -94,8 +97,11 @@ export function buildFinancialFactsContent(input: {
     `note: cash.realized.result é ${ADVISOR_CASH_RESULT_MEANING}. Não é lucro líquido, lucro contábil, lucro operacional, EBITDA nem margem.`,
     'note: cash.realized.outflows são saídas/pagamentos realizados de caixa. Não é despesa contábil do mês.',
     'note: cash.overdue.ofMonth é o vencido com dueDate no monthKey, classificado na data civil atual.',
+    'note: se a pergunta restringe a um centro de custo/entidade, NÃO use estes totais TENANT como valor daquela entidade; chame a tool com o escopo.',
     '',
     `scope: CURRENT_SNAPSHOT`,
+    `entityScope: TENANT`,
+    `costCenter: NONE`,
     `asOf: ${asOf}`,
     'asOfTimeZone: America/Sao_Paulo',
     'temporalScope: posição atual do Dashboard; NÃO pertence ao monthKey PERIOD',
