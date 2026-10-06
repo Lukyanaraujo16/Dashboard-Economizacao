@@ -28,6 +28,7 @@ import { createProactiveInsightRepository } from '../repositories/proactive-insi
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import { createAdvisorKnowledgeDocumentRepository } from '../repositories/advisor-knowledge-document.repository.js';
 import { createAdvisorKnowledgeRepository } from '../repositories/advisor-knowledge.repository.js';
+import { createAdvisorAnalyticalResultRepository } from '../repositories/advisor-analytical-result.repository.js';
 import { createAdvisorRunRepository } from '../repositories/advisor-run.repository.js';
 import { createAdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
 import type { AdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
@@ -242,6 +243,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
       settings,
       conversations,
       runs,
+      analyticalResults: createAdvisorAnalyticalResultRepository(prisma),
       context,
       providers,
       rateLimiter,

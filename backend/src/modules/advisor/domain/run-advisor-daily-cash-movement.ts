@@ -17,10 +17,21 @@ import {
   resolveAdvisorDailyMovementDirection,
 } from './resolve-advisor-daily-cash-movement.js';
 
+export type DailyAnalyticalStatus =
+  | 'COMPLETE'
+  | 'PARTIAL'
+  | 'UNAVAILABLE'
+  | 'NOT_FOUND'
+  | 'AMBIGUOUS'
+  | 'CLARIFICATION'
+  | 'UNSUPPORTED';
+
 export type RunAdvisorDailyCashMovementResult = {
   readonly answer: string;
   /** null = não persistir. Objeto = substituir o estado desta conversa. */
   readonly state: DailyCashMovementConversationState | null;
+  /** Sinal estruturado da trilha. Não altera o texto da resposta. */
+  readonly analyticalStatus: DailyAnalyticalStatus;
 };
 
 function isFact(value: unknown): value is AdvisorDailyCashMovementFact {
@@ -31,8 +42,11 @@ function isFact(value: unknown): value is AdvisorDailyCashMovementFact {
   return fact.kind === 'DAILY_CASH_MOVEMENTS' && typeof fact.status === 'string';
 }
 
-function limitation(message: string): RunAdvisorDailyCashMovementResult {
-  return { answer: message, state: null };
+function limitation(
+  message: string,
+  analyticalStatus: Extract<DailyAnalyticalStatus, 'CLARIFICATION' | 'UNSUPPORTED' | 'UNAVAILABLE'>,
+): RunAdvisorDailyCashMovementResult {
+  return { answer: message, state: null, analyticalStatus };
 }
 
 function resolveDailyIntent(input: {
@@ -42,7 +56,11 @@ function resolveDailyIntent(input: {
   readonly priorState: DailyCashMovementConversationState | null;
 }):
   | { readonly kind: 'ignore' }
-  | { readonly kind: 'limitation'; readonly message: string }
+  | {
+      readonly kind: 'limitation';
+      readonly message: string;
+      readonly analyticalStatus: Extract<DailyAnalyticalStatus, 'CLARIFICATION' | 'UNSUPPORTED'>;
+    }
   | {
       readonly kind: 'ready';
       readonly direction: 'INFLOW' | 'OUTFLOW';
@@ -68,16 +86,25 @@ function resolveDailyIntent(input: {
     return { kind: 'ignore' };
   }
   if (day.status === 'INVALID') {
-    return { kind: 'limitation', message: 'Essa data não existe. Não vou buscar os lançamentos.' };
+    return {
+      kind: 'limitation',
+      message: 'Essa data não existe. Não vou buscar os lançamentos.',
+      analyticalStatus: 'UNSUPPORTED',
+    };
   }
   if (day.status === 'AMBIGUOUS') {
-    return { kind: 'limitation', message: 'A pergunta cita mais de um dia. Preciso de uma data só.' };
+    return {
+      kind: 'limitation',
+      message: 'A pergunta cita mais de um dia. Preciso de uma data só.',
+      analyticalStatus: 'CLARIFICATION',
+    };
   }
   const center = resolveAdvisorDailyMovementCenter(input.content);
   if (center.status === 'AMBIGUOUS') {
     return {
       kind: 'limitation',
       message: 'Há mais de um centro de custo na pergunta. Preciso que você indique qual.',
+      analyticalStatus: 'CLARIFICATION',
     };
   }
   return {
@@ -108,7 +135,7 @@ export async function runAdvisorDailyCashMovement(input: {
     return null;
   }
   if (resolved.kind === 'limitation') {
-    return limitation(resolved.message);
+    return limitation(resolved.message, resolved.analyticalStatus);
   }
   const { direction, date, costCenterQuery } = resolved;
 
@@ -130,12 +157,13 @@ export async function runAdvisorDailyCashMovement(input: {
     },
   });
   if (!outcome.ok || !isFact(outcome.legacyFact)) {
-    return limitation('Não consigo detalhar os lançamentos desse dia com segurança.');
+    return limitation('Não consigo detalhar os lançamentos desse dia com segurança.', 'UNAVAILABLE');
   }
   const fact = outcome.legacyFact;
   const answer = composeAdvisorDailyCashMovementAnswer(fact);
+  const analyticalStatus = fact.status;
   if (fact.status === 'NOT_FOUND' || fact.status === 'AMBIGUOUS') {
-    return { answer, state: null };
+    return { answer, state: null, analyticalStatus };
   }
   return {
     answer,
@@ -144,5 +172,6 @@ export async function runAdvisorDailyCashMovement(input: {
       date,
       costCenterQuery,
     }),
+    analyticalStatus,
   };
 }

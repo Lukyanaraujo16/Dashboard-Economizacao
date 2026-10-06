@@ -120,6 +120,7 @@ const ENDPOINTS = [
   '/admin/operations/health',
   '/admin/operations/overview',
   '/admin/operations/ai-runs',
+  '/admin/operations/analytical-results',
   '/admin/operations/audit-logs',
 ] as const;
 

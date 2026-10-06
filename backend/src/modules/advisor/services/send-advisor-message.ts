@@ -72,6 +72,21 @@ import {
   readAdvisorNominalRankingWinner,
 } from '../domain/advisor-nominal-dimension.js';
 import { assertAllowedAiModel } from '../domain/ai-provider-models.js';
+import {
+  answerSourceFromIntent,
+  classifyAnalyticalOutcome,
+  signalFromCounterparty,
+  signalFromDailyStatus,
+  unresolvedFromTraces,
+  type AnalyticalAnswerSource,
+  type AnalyticalOutcome,
+  type AnalyticalTrailFacts,
+} from '../domain/classify-analytical-outcome.js';
+import {
+  deriveAnalyticalToolTrace,
+  readStructuredStatus,
+  type AnalyticalToolTraceDraft,
+} from '../domain/derive-analytical-tool-trace.js';
 import { advisorTextLooksLikeLatexMath } from '../domain/advisor-formula-presentation.js';
 import {
   CONSULTANT_PLATFORM_LIMIT_MESSAGE,
@@ -87,6 +102,7 @@ import type {
 } from '../domain/types.js';
 import { assertAdvisorTenantId } from '../repositories/assert-tenant-id.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
+import type { AdvisorAnalyticalResultRepository } from '../repositories/advisor-analytical-result.repository.js';
 import type { AdvisorRunRepository } from '../repositories/advisor-run.repository.js';
 import type { AdvisorSettingsRepository } from '../repositories/advisor-settings.repository.js';
 import type { AdvisorContextBuilder } from './build-advisor-context.js';
@@ -108,6 +124,7 @@ export type SendAdvisorMessageResult = {
   readonly consultantMessage: AiMessageRecord;
   readonly run: AiRunRecord | null;
   readonly factualAnswer: AdvisorFactualAnswerMeta | null;
+  readonly analyticalOutcome: AnalyticalOutcome;
 };
 
 export class AdvisorExecutionError extends AdvisorDomainError {
@@ -133,6 +150,7 @@ export type SendAdvisorMessageDependencies = {
     | 'saveAnalyticalContext'
   >;
   readonly runs: Pick<AdvisorRunRepository, 'createRun' | 'updateRun'>;
+  readonly analyticalResults?: Pick<AdvisorAnalyticalResultRepository, 'record'>;
   readonly context: AdvisorContextBuilder;
   readonly providers: IaProviderRegistry;
   readonly rateLimiter: ConsultantRateLimiter;
@@ -202,6 +220,43 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         senderType: 'USER',
         content: question,
       });
+      const trailStartedAt = Date.now();
+      const recordTrail = async (input: {
+        readonly consultantMessageId: string | null;
+        readonly runId: string | null;
+        readonly answerSource: AnalyticalAnswerSource;
+        readonly toolRoundCount: number;
+        readonly traces: readonly AnalyticalToolTraceDraft[];
+        readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+      }): Promise<AnalyticalOutcome> => {
+        const outcome = classifyAnalyticalOutcome({ ...input.facts, traces: input.traces });
+        const unresolved = unresolvedFromTraces(input.traces);
+        if (deps.analyticalResults) {
+          await deps.analyticalResults.record(tenantId, {
+            conversationId: conversation.id,
+            userMessageId: userMessage.id,
+            consultantMessageId: input.consultantMessageId,
+            runId: input.runId,
+            outcome,
+            answerSource: input.answerSource,
+            toolCallCount: input.traces.length,
+            toolRoundCount: input.toolRoundCount,
+            unresolvedDimension: unresolved?.dimension ?? null,
+            unresolvedEntity: unresolved?.entity ?? null,
+            durationMs: Date.now() - trailStartedAt,
+            traces: input.traces.map((trace) => ({
+              round: trace.round,
+              toolName: trace.toolName,
+              known: trace.known,
+              status: trace.status,
+              reason: trace.reason,
+              durationMs: trace.durationMs,
+              resultCardinality: trace.resultCardinality,
+            })),
+          });
+        }
+        return outcome;
+      };
 
       if (conversation.title === null) {
         await deps.conversations.updateConversationTitle(
@@ -257,6 +312,14 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             senderType: 'CONSULTANT',
             content: planned.answer,
           });
+          const analyticalOutcome = await recordTrail({
+            consultantMessageId: consultantMessage.id,
+            runId: null,
+            answerSource: 'PLANNING',
+            toolRoundCount: 0,
+            traces: [],
+            facts: closedTrailFacts('OK'),
+          });
           return {
             conversationId: conversation.id,
             userMessage,
@@ -272,6 +335,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               coveragePercent: null,
               composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
             },
+            analyticalOutcome,
           };
         }
       }
@@ -288,6 +352,14 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             senderType: 'CONSULTANT',
             content: billing.answer,
           });
+          const analyticalOutcome = await recordTrail({
+            consultantMessageId: consultantMessage.id,
+            runId: null,
+            answerSource: billing.intentKind === 'BILLING_SERIES' ? 'BILLING_SERIES' : 'BILLING',
+            toolRoundCount: 0,
+            traces: [],
+            facts: closedTrailFacts('OK'),
+          });
           return {
             conversationId: conversation.id,
             userMessage,
@@ -303,6 +375,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               coveragePercent: null,
               composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
             },
+            analyticalOutcome,
           };
         }
       }
@@ -324,6 +397,19 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             senderType: 'CONSULTANT',
             content: daily.answer,
           });
+          const dailyFacts = signalFromDailyStatus(daily.analyticalStatus);
+          const analyticalOutcome = await recordTrail({
+            consultantMessageId: consultantMessage.id,
+            runId: null,
+            answerSource: 'DAILY_CASH_MOVEMENT',
+            toolRoundCount: 0,
+            traces: [],
+            facts: {
+              providerFailed: false,
+              capabilityDenied: false,
+              ...dailyFacts,
+            },
+          });
           return {
             conversationId: conversation.id,
             userMessage,
@@ -339,6 +425,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               coveragePercent: null,
               composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
             },
+            analyticalOutcome,
           };
         }
       }
@@ -360,6 +447,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           userMessage,
           query: universalIntent.query,
           now: input.now,
+          recordTrail,
         });
       }
       if (!isAdvisorInterpretiveQuestion(question)) {
@@ -382,12 +470,19 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             senderType: 'CONSULTANT',
             content: ordinal.answer,
           });
-          return closedCounterparty(
-            conversation.id,
-            userMessage,
-            consultantMessage,
-            priorState.decision,
-          );
+          const rankFound = priorState.rows.some((row) => row.rank === followUp.rank);
+          const analyticalOutcome = await recordTrail({
+            consultantMessageId: consultantMessage.id,
+            runId: null,
+            answerSource: 'COUNTERPARTY',
+            toolRoundCount: 0,
+            traces: [],
+            facts: closedTrailFacts(rankFound ? 'OK' : 'EMPTY_RESULT'),
+          });
+          return {
+            ...closedCounterparty(conversation.id, userMessage, consultantMessage, priorState.decision),
+            analyticalOutcome,
+          };
         }
         if (followUp.kind === 'QUERY') {
           const validation = validatePartyQuery(followUp.query);
@@ -399,6 +494,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               userMessage,
               query: followUp.query,
               now: input.now,
+              recordTrail,
             });
           }
         }
@@ -427,6 +523,21 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             direction: universalIntent.query.direction ?? null,
           }),
         );
+        const analyticalOutcome = await recordTrail({
+          consultantMessageId: consultantMessage.id,
+          runId: null,
+          answerSource: 'CAPABILITY_DENIED',
+          toolRoundCount: 0,
+          traces: [],
+          facts: {
+            providerFailed: false,
+            capabilityDenied: true,
+            clarificationRequired: false,
+            factualClosed: true,
+            factualPartial: false,
+            structuredStatus: null,
+          },
+        });
         return {
           conversationId: conversation.id,
           userMessage,
@@ -442,6 +553,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             coveragePercent: null,
             composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
           },
+          analyticalOutcome,
         };
       }
 
@@ -787,12 +899,45 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
           }),
         );
+        const sourceTool =
+          snapshotIntent !== null
+            ? ADVISOR_CURRENT_SNAPSHOT_FACT_NAME
+            : monthlyComparisonFacts !== null
+              ? COMPARE_CASH_MONTHS_TOOL_NAME
+              : (drilldown?.name ?? null);
+        const contentStatus = readStructuredStatus(
+          snapshotIntent !== null && built.currentSnapshot !== null && built.currentSnapshot !== undefined
+            ? JSON.stringify(built.currentSnapshot)
+            : monthlyComparisonFacts !== null
+              ? JSON.stringify(monthlyComparisonFacts)
+              : (drilldown?.content ?? null),
+        );
+        const structuredStatus =
+          composed.meta.intentKind === 'FACTUAL_LIMITATION'
+            ? (contentStatus ?? 'UNRESOLVED')
+            : (contentStatus ?? 'OK');
+        const composerTrace = drilldown === null ? null : traceFromToolResult(drilldown, 1);
+        const composerTraces = composerTrace === null ? [] : [composerTrace];
+        const analyticalOutcome = await recordTrail({
+          consultantMessageId: consultantMessage.id,
+          runId: null,
+          answerSource: answerSourceFromIntent(
+            composed.meta.intentKind === 'FACTUAL_LIMITATION' ? null : composed.meta.intentKind,
+            sourceTool,
+          ),
+          toolRoundCount: composerTraces.length > 0 ? 1 : 0,
+          traces: composerTraces,
+          facts: {
+            ...closedTrailFacts(structuredStatus, composed.meta.identityStatus === 'PARTIAL'),
+          },
+        });
         return {
           conversationId: conversation.id,
           userMessage,
           consultantMessage,
           run: null,
           factualAnswer: composed.meta,
+          analyticalOutcome,
         };
       }
 
@@ -814,6 +959,11 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         status: 'STARTED',
       });
 
+      const preloadTrace = drilldown === null ? null : traceFromToolResult(drilldown, 1);
+      const observed: { traces: AnalyticalToolTraceDraft[]; rounds: number } = {
+        traces: preloadTrace === null ? [] : [preloadTrace],
+        rounds: preloadTrace === null ? 0 : 1,
+      };
       const startedAt = Date.now();
       try {
         const provider = deps.providers.resolve(ready.provider);
@@ -830,6 +980,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           generate: (payload) => provider.generate(payload),
           analyticalTools: deps.analyticalTools,
           now: input.now,
+          observed,
         });
         const text = sanitizeConsultantText(generated.text);
         if (advisorTextLooksLikeLatexMath(text)) {
@@ -856,12 +1007,21 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           messageId: consultantMessage.id,
         });
 
+        const analyticalOutcome = await recordTrail({
+          consultantMessageId: consultantMessage.id,
+          runId: run.id,
+          answerSource: 'PROVIDER',
+          toolRoundCount: observed.rounds,
+          traces: observed.traces,
+          facts: openProviderFacts(false),
+        });
         return {
           conversationId: conversation.id,
           userMessage,
           consultantMessage,
           run,
           factualAnswer: null,
+          analyticalOutcome,
         };
       } catch (error) {
         const { status, errorCode, message } = normalizeExecutionFailure(error);
@@ -870,6 +1030,14 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           errorCode,
           durationMs: Date.now() - startedAt,
           finishedAt: new Date(),
+        });
+        await recordTrail({
+          consultantMessageId: null,
+          runId: run.id,
+          answerSource: 'PROVIDER',
+          toolRoundCount: observed.rounds,
+          traces: observed.traces,
+          facts: openProviderFacts(true),
         });
         throw new AdvisorExecutionError(errorCode, message, run, userMessage);
       }
@@ -987,6 +1155,7 @@ async function runAdvisorGeneration(input: {
   readonly generate: (payload: GenerationInput) => Promise<GenerationOutput>;
   readonly analyticalTools?: AdvisorAnalyticalToolExecutor;
   readonly now?: Date;
+  readonly observed: { traces: AnalyticalToolTraceDraft[]; rounds: number };
 }): Promise<GenerationOutput> {
   const tools = input.analyticalTools?.tools ?? [];
   const toolRounds: IaToolRound[] = [];
@@ -1008,16 +1177,27 @@ async function runAdvisorGeneration(input: {
       return { text: generated.text, usage };
     }
     const results = [];
+    const roundNumber = input.observed.rounds + 1;
     for (const call of toolCalls) {
-      results.push(
-        await input.analyticalTools.execute({
-          tenantId: input.tenantId,
-          resolvedMonthKey: input.resolvedMonthKey,
-          call,
-          now: input.now,
-        }),
+      const toolStartedAt = Date.now();
+      const result = await input.analyticalTools.execute({
+        tenantId: input.tenantId,
+        resolvedMonthKey: input.resolvedMonthKey,
+        call,
+        now: input.now,
+      });
+      const trace = traceFromToolResult(
+        result,
+        roundNumber,
+        Date.now() - toolStartedAt,
+        call.arguments,
       );
+      if (trace !== null) {
+        input.observed.traces.push(trace);
+      }
+      results.push(result);
     }
+    input.observed.rounds = roundNumber;
     toolRounds.push({ calls: toolCalls, results });
   }
 
@@ -1202,7 +1382,15 @@ async function answerCounterpartyQuery(input: {
   readonly userMessage: AiMessageRecord;
   readonly query: AnalyticalQuery;
   readonly now?: Date;
-}) {
+  readonly recordTrail: (input: {
+    readonly consultantMessageId: string | null;
+    readonly runId: string | null;
+    readonly answerSource: AnalyticalAnswerSource;
+    readonly toolRoundCount: number;
+    readonly traces: readonly AnalyticalToolTraceDraft[];
+    readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+  }) => Promise<AnalyticalOutcome>;
+}): Promise<SendAdvisorMessageResult> {
   const outcome = await executeAnalyticalQuery({
     query: input.query,
     runtime: {
@@ -1240,12 +1428,30 @@ async function answerCounterpartyQuery(input: {
       operation: input.query.operation,
     }),
   );
-  return closedCounterparty(
-    input.conversationId,
-    input.userMessage,
-    consultantMessage,
-    outcome.ok === true ? String(outcome.legacyFact.decision ?? 'PARTIAL') : 'UNAVAILABLE',
-  );
+  const decision = outcome.ok === true ? String(outcome.legacyFact.decision ?? 'PARTIAL') : 'UNAVAILABLE';
+  const reasonCode =
+    outcome.ok === true
+      ? typeof outcome.legacyFact.reasonCode === 'string'
+        ? outcome.legacyFact.reasonCode
+        : null
+      : null;
+  const counterpartyFacts = signalFromCounterparty(decision, reasonCode);
+  const analyticalOutcome = await input.recordTrail({
+    consultantMessageId: consultantMessage.id,
+    runId: null,
+    answerSource: 'COUNTERPARTY',
+    toolRoundCount: 0,
+    traces: [],
+    facts: {
+      providerFailed: false,
+      capabilityDenied: false,
+      ...counterpartyFacts,
+    },
+  });
+  return {
+    ...closedCounterparty(input.conversationId, input.userMessage, consultantMessage, decision),
+    analyticalOutcome,
+  };
 }
 
 function stateFromLegacy(
@@ -1320,12 +1526,60 @@ async function saveCounterpartyState(
   await deps.conversations.saveAnalyticalContext(tenantId, conversationId, payload);
 }
 
+function traceFromToolResult(
+  result: {
+    readonly name?: string;
+    readonly content?: string;
+    readonly resultCardinality?: number;
+  },
+  round: number,
+  durationMs?: number | null,
+  args?: Record<string, unknown>,
+): AnalyticalToolTraceDraft | null {
+  if (typeof result.name !== 'string' || typeof result.content !== 'string') {
+    return null;
+  }
+  return deriveAnalyticalToolTrace({
+    name: result.name,
+    content: result.content,
+    durationMs,
+    round,
+    resultCardinality: result.resultCardinality,
+    arguments: args,
+  });
+}
+
+function closedTrailFacts(
+  structuredStatus: string | null,
+  factualPartial = false,
+): Omit<AnalyticalTrailFacts, 'traces'> {
+  return {
+    providerFailed: false,
+    capabilityDenied: false,
+    clarificationRequired: false,
+    factualClosed: true,
+    factualPartial,
+    structuredStatus,
+  };
+}
+
+function openProviderFacts(providerFailed: boolean): Omit<AnalyticalTrailFacts, 'traces'> {
+  return {
+    providerFailed,
+    capabilityDenied: false,
+    clarificationRequired: false,
+    factualClosed: false,
+    factualPartial: false,
+    structuredStatus: null,
+  };
+}
+
 function closedCounterparty(
   conversationId: string,
   userMessage: AiMessageRecord,
   consultantMessage: AiMessageRecord,
   decision: string,
-): SendAdvisorMessageResult {
+): Omit<SendAdvisorMessageResult, 'analyticalOutcome'> {
   return {
     conversationId,
     userMessage,

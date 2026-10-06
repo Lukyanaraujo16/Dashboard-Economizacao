@@ -17,6 +17,11 @@ import {
   type OperationsCompanyFinancials,
   type OperationsIntegrationState,
 } from '../domain/operations-overview.js';
+import {
+  ANALYTICAL_OUTCOMES,
+  type AnalyticalOutcome,
+} from '../../advisor/domain/classify-analytical-outcome.js';
+import { createAdvisorAnalyticalResultRepository } from '../../advisor/repositories/advisor-analytical-result.repository.js';
 import { sanitizeAuditMetadata } from '../domain/sanitize-audit-metadata.js';
 import { sanitizeSyncCounts } from '../domain/sanitize-sync-counts.js';
 
@@ -237,6 +242,8 @@ export function createAdminOperationsService(
     readonly now?: () => Date;
   } = {},
 ) {
+  const analyticalResults = createAdvisorAnalyticalResultRepository(prisma);
+
   async function requireTenantIfFiltered(tenantId: string | undefined): Promise<void> {
     if (!tenantId) {
       return;
@@ -691,6 +698,77 @@ export function createAdminOperationsService(
             createdAt: row.createdAt.toISOString(),
           })),
         },
+      };
+    },
+
+    async listAnalyticalResults(query: OperationsPage): Promise<
+      OperationsPageResult<{
+        readonly id: string;
+        readonly tenantId: string;
+        readonly conversationId: string;
+        readonly userMessageId: string;
+        readonly consultantMessageId: string | null;
+        readonly runId: string | null;
+        readonly outcome: string;
+        readonly answerSource: string;
+        readonly toolCallCount: number;
+        readonly toolRoundCount: number;
+        readonly unresolvedDimension: string | null;
+        readonly unresolvedEntity: string | null;
+        readonly durationMs: number | null;
+        readonly createdAt: string;
+        readonly run: {
+          readonly provider: string;
+          readonly model: string;
+          readonly status: string;
+          readonly inputTokens: number | null;
+          readonly outputTokens: number | null;
+          readonly errorCode: string | null;
+        } | null;
+        readonly toolTraces: readonly {
+          readonly round: number;
+          readonly toolName: string;
+          readonly known: boolean;
+          readonly status: string;
+          readonly reason: string | null;
+          readonly durationMs: number | null;
+          readonly resultCardinality: number | null;
+        }[];
+      }>
+    > {
+      await requireTenantIfFiltered(query.tenantId);
+      const { limit, offset } = resolvePagination(query);
+      const outcome = (ANALYTICAL_OUTCOMES as readonly string[]).includes(query.status ?? '')
+        ? (query.status as AnalyticalOutcome)
+        : undefined;
+      const page = await analyticalResults.list({
+        tenantId: query.tenantId,
+        outcome,
+        limit,
+        offset,
+      });
+      return {
+        items: page.items.map((row) => ({
+          id: row.id,
+          tenantId: row.tenantId,
+          conversationId: row.conversationId,
+          userMessageId: row.userMessageId,
+          consultantMessageId: row.consultantMessageId,
+          runId: row.runId,
+          outcome: row.outcome,
+          answerSource: row.answerSource,
+          toolCallCount: row.toolCallCount,
+          toolRoundCount: row.toolRoundCount,
+          unresolvedDimension: row.unresolvedDimension,
+          unresolvedEntity: row.unresolvedEntity,
+          durationMs: row.durationMs,
+          createdAt: row.createdAt.toISOString(),
+          run: row.run,
+          toolTraces: row.toolTraces,
+        })),
+        total: page.total,
+        limit,
+        offset,
       };
     },
   };

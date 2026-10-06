@@ -13,6 +13,7 @@ import { createReceivableReadRepository } from '../../finance/repositories/recei
 import { createTenantRepository } from '../../tenant/repositories/tenant.repository.js';
 import {
   parseAiRunListQuery,
+  parseAnalyticalResultListQuery,
   parseAuditLogListQuery,
   parseOperationsPageQuery,
   parseSyncRunListQuery,
@@ -85,6 +86,12 @@ export async function registerAdminOperationsRoutes(app: FastifyInstance): Promi
   app.get('/admin/operations/ai-runs', { preHandler: adminGuard }, async (request, reply) => {
     const query = parseAiRunListQuery(request.query);
     const result = await operations.listAiRuns(query);
+    return reply.status(200).send({ data: result.items, pagination: paginationOf(result) });
+  });
+
+  app.get('/admin/operations/analytical-results', { preHandler: adminGuard }, async (request, reply) => {
+    const query = parseAnalyticalResultListQuery(request.query);
+    const result = await operations.listAnalyticalResults(query);
     return reply.status(200).send({ data: result.items, pagination: paginationOf(result) });
   });
 

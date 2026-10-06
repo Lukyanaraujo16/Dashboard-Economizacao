@@ -1065,6 +1065,8 @@ e a API devolve 503. Sem retry automático de generate.
 
 F14: `run_type` inclui `PROACTIVE_NARRATION`. `insight_id` liga a execução ao insight. A narração proativa não consome a cota de perguntas do usuário.
 
+F17.2: `ai_analytical_results` e `ai_analytical_tool_traces` registram o resultado analítico da pergunta e o rastro das tools. Não substituem `ai_runs` e não guardam prompt, SQL nem payload financeiro. O contrato está em `docs/20-consultor-trilha-de-resultado.md`.
+
 Política de armazenamento de prompts completos será definida posteriormente considerando privacidade.
 
 ⸻

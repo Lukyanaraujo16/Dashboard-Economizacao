@@ -70,6 +70,8 @@ model Tenant {
   aiConversations            AiConversation[]
   aiMessages                 AiMessage[]
   aiRuns                     AiRun[]
+  aiAnalyticalResults        AiAnalyticalResult[]
+  aiAnalyticalToolTraces     AiAnalyticalToolTrace[]
   proactiveTriggerConfigurations ProactiveTriggerConfiguration[]
   proactiveTriggerBootstrap  ProactiveTriggerBootstrap?
   analyticalEvents           AnalyticalEvent[]
@@ -1065,6 +1067,7 @@ model AiConversation {
   user          User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   messages      AiMessage[]
   runs          AiRun[]
+  analyticalResults AiAnalyticalResult[]
 
   @@index([tenantId], map: "idx_ai_conversations_tenant_id")
   @@index([tenantId, userId], map: "idx_ai_conversations_tenant_user")
@@ -1087,6 +1090,8 @@ model AiMessage {
   relatedInsight   AiInsight?          @relation(fields: [relatedInsightId], references: [id], onDelete: SetNull)
   insightLinks     AiMessageInsightLink[]
   runs             AiRun[]
+  analyticalResultsAsUser       AiAnalyticalResult[] @relation("AnalyticalResultUserMessage")
+  analyticalResultsAsConsultant AiAnalyticalResult[] @relation("AnalyticalResultConsultantMessage")
 
   @@index([tenantId], map: "idx_ai_messages_tenant_id")
   @@index([conversationId, createdAt], map: "idx_ai_messages_conversation_created_at")
@@ -1117,10 +1122,124 @@ model AiRun {
   conversation   AiConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   message        AiMessage?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
   insight        AiInsight?      @relation(fields: [insightId], references: [id], onDelete: SetNull)
+  analyticalResult AiAnalyticalResult?
 
   @@index([tenantId, createdAt], map: "idx_ai_runs_tenant_created_at")
   @@index([insightId], map: "idx_ai_runs_insight_id")
   @@map("ai_runs")
+}
+
+/// Resultado analítico de uma pergunta. Não substitui o status técnico de ai_runs.
+model AiAnalyticalResult {
+  id                  String                         @id @default(uuid()) @db.Uuid
+  tenantId            String                         @map("tenant_id") @db.Uuid
+  conversationId      String                         @map("conversation_id") @db.Uuid
+  userMessageId       String                         @map("user_message_id") @db.Uuid
+  consultantMessageId String?                        @map("consultant_message_id") @db.Uuid
+  runId               String?                        @unique @map("run_id") @db.Uuid
+  outcome             AnalyticalOutcome
+  answerSource        AnalyticalAnswerSource         @map("answer_source")
+  toolCallCount       Int                            @map("tool_call_count")
+  toolRoundCount      Int                            @map("tool_round_count")
+  unresolvedDimension AnalyticalUnresolvedDimension? @map("unresolved_dimension")
+  unresolvedEntity    String?                        @map("unresolved_entity") @db.VarChar(80)
+  durationMs          Int?                           @map("duration_ms")
+  createdAt           DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant              Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  conversation        AiConversation                 @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userMessage         AiMessage                      @relation("AnalyticalResultUserMessage", fields: [userMessageId], references: [id], onDelete: Cascade)
+  consultantMessage   AiMessage?                     @relation("AnalyticalResultConsultantMessage", fields: [consultantMessageId], references: [id], onDelete: SetNull)
+  run                 AiRun?                         @relation(fields: [runId], references: [id], onDelete: SetNull)
+  toolTraces          AiAnalyticalToolTrace[]
+
+  @@unique([tenantId, userMessageId], map: "uq_ai_analytical_results_tenant_user_message")
+  @@index([tenantId, createdAt], map: "idx_ai_analytical_results_tenant_created_at")
+  @@index([tenantId, outcome, createdAt], map: "idx_ai_analytical_results_tenant_outcome_created_at")
+  @@index([conversationId], map: "idx_ai_analytical_results_conversation_id")
+  @@map("ai_analytical_results")
+}
+
+/// Execução estruturada de tool. Sem payload financeiro, SQL ou prompt.
+model AiAnalyticalToolTrace {
+  id                String                       @id @default(uuid()) @db.Uuid
+  tenantId          String                       @map("tenant_id") @db.Uuid
+  resultId          String                       @map("result_id") @db.Uuid
+  round             Int
+  toolName          String                       @map("tool_name") @db.VarChar(80)
+  known             Boolean
+  status            AnalyticalToolTraceStatus
+  reason            AnalyticalToolFailureReason?
+  durationMs        Int?                         @map("duration_ms")
+  resultCardinality Int?                         @map("result_cardinality")
+  createdAt         DateTime                     @default(now()) @map("created_at") @db.Timestamptz(3)
+  tenant            Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  result            AiAnalyticalResult           @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, resultId], map: "idx_ai_analytical_tool_traces_tenant_result")
+  @@map("ai_analytical_tool_traces")
+}
+
+enum AnalyticalOutcome {
+  ANSWERED
+  PARTIAL
+  CLARIFICATION_REQUIRED
+  UNSUPPORTED
+  NO_DATA
+  TOOL_ERROR
+  PROVIDER_ERROR
+
+  @@map("analytical_outcome")
+}
+
+enum AnalyticalAnswerSource {
+  BILLING
+  BILLING_SERIES
+  PLANNING
+  DAILY_CASH_MOVEMENT
+  COUNTERPARTY
+  COST_CENTER
+  NOMINAL
+  COMPARISON
+  SNAPSHOT
+  CATEGORY_BREAKDOWN
+  MOVEMENT_LINES
+  CAPABILITY_DENIED
+  PROVIDER
+
+  @@map("analytical_answer_source")
+}
+
+enum AnalyticalUnresolvedDimension {
+  CATEGORY
+  COST_CENTER
+  COUNTERPARTY
+
+  @@map("analytical_unresolved_dimension")
+}
+
+enum AnalyticalToolTraceStatus {
+  SUCCESS
+  EMPTY
+  NOT_FOUND
+  AMBIGUOUS
+  UNAVAILABLE
+
+  @@map("analytical_tool_trace_status")
+}
+
+enum AnalyticalToolFailureReason {
+  UNKNOWN_TOOL
+  INVALID_ARGUMENTS
+  CAPABILITY_DENIED
+  ENTITY_NOT_FOUND
+  ENTITY_AMBIGUOUS
+  NO_DATA
+  TOOL_TIMEOUT
+  TOOL_EXECUTION_ERROR
+  UNSUPPORTED_OPERATION
+  UNKNOWN
+
+  @@map("analytical_tool_failure_reason")
 }
 
 /// Tipos certificados. Novo tipo exige enum + catálogo no código, não fórmula livre.

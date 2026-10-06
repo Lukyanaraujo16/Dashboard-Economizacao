@@ -1,3 +1,4 @@
+import { ANALYTICAL_OUTCOMES } from '../../advisor/domain/classify-analytical-outcome.js';
 import { ValidationError } from '../../../shared/errors/application-error.js';
 import { isAuditAction, type AuditAction } from '../domain/audit-actions.js';
 
@@ -131,6 +132,10 @@ export function parseSyncRunListQuery(query: unknown): OperationsListQuery {
 
 export function parseAiRunListQuery(query: unknown): OperationsListQuery {
   return parseOperationsListQuery(query, { statusValues: AI_RUN_STATUSES });
+}
+
+export function parseAnalyticalResultListQuery(query: unknown): OperationsListQuery {
+  return parseOperationsListQuery(query, { statusValues: ANALYTICAL_OUTCOMES });
 }
 
 export function parseAuditLogListQuery(query: unknown): OperationsListQuery {

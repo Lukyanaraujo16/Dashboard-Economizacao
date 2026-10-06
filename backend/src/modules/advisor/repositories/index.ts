@@ -8,5 +8,10 @@ export { createAdvisorKnowledgeDocumentRepository } from './advisor-knowledge-do
 export type { AdvisorKnowledgeDocumentRepository } from './advisor-knowledge-document.repository.js';
 export { createAdvisorRunRepository } from './advisor-run.repository.js';
 export type { AdvisorRunRepository } from './advisor-run.repository.js';
+export { createAdvisorAnalyticalResultRepository } from './advisor-analytical-result.repository.js';
+export type {
+  AdvisorAnalyticalResultRepository,
+  RecordAnalyticalResultInput,
+} from './advisor-analytical-result.repository.js';
 export { createAdvisorSettingsRepository } from './advisor-settings.repository.js';
 export type { AdvisorSettingsRepository } from './advisor-settings.repository.js';
