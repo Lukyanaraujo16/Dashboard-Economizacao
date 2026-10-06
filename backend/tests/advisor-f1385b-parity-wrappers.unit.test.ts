@@ -88,7 +88,12 @@ describe('F13.8.5B executor registry', () => {
   });
 
   it('publica 31 capabilities, com TOPN, lookup, share e planejamento mensal', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(33);
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(34);
+    expect(
+      ANALYTICAL_CAPABILITY_REGISTRY.some(
+        (capability) => capability.key === 'cash_result.cost_center.month.lookup',
+      ),
+    ).toBe(true);
     expect(
       ANALYTICAL_CAPABILITY_REGISTRY.some((capability) => capability.key === 'billing.series.months'),
     ).toBe(true);

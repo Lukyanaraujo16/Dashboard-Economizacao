@@ -56,6 +56,7 @@ describe('Analytical Tools do Consultor (F13.8.1D1)', () => {
       'compare_cash_nominal_dimension',
       'cash_cost_center_ranking',
       'cash_cost_center_lookup',
+      'cash_result_cost_center_lookup',
       'compare_cash_cost_center',
       'cash_cost_center_movement_lines',
     ]);

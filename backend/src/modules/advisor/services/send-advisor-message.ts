@@ -58,6 +58,11 @@ import {
 import { resolveAdvisorCurrentSnapshotIntent } from '../domain/resolve-advisor-current-snapshot-intent.js';
 import { resolveAdvisorCostCenterIntent } from '../domain/resolve-advisor-cost-center-intent.js';
 import { resolveAdvisorConversationalCostCenter } from '../domain/resolve-advisor-conversational-cost-center.js';
+import { loadAnalyticalCostCenterCatalog } from '../domain/load-analytical-cost-center-catalog.js';
+import {
+  answerCostCenterEntityComparison,
+  isCostCenterEntityComparisonQuestion,
+} from '../domain/plan-cost-center-entity-comparison.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
@@ -555,6 +560,79 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           },
           analyticalOutcome,
         };
+      }
+
+      if (
+        deps.dailyCashMovements !== undefined &&
+        deps.analyticalTools !== undefined &&
+        !isAdvisorInterpretiveQuestion(question) &&
+        isCostCenterEntityComparisonQuestion(question)
+      ) {
+        const catalog = await loadAnalyticalCostCenterCatalog(
+          tenantId,
+          deps.dailyCashMovements.costCenters,
+        );
+        const analyticalTools = deps.analyticalTools;
+        const compared = await answerCostCenterEntityComparison({
+          content: question,
+          period: { monthKey: period.monthKey, comparison: period.comparison },
+          catalog,
+          lookup: async (request) => {
+            const result = await analyticalTools.execute({
+              tenantId,
+              resolvedMonthKey: period.monthKey,
+              now: input.now,
+              call: {
+                id: `cc-entity-${request.costCenterId}`,
+                name: request.toolName,
+                arguments: {
+                  monthKey: request.monthKey,
+                  direction: request.direction,
+                  costCenterQuery: request.costCenterQuery,
+                },
+              },
+            });
+            return {
+              ok: result.ok,
+              name: result.name,
+              content: result.content,
+              ...(result.resultCardinality === undefined
+                ? {}
+                : { resultCardinality: result.resultCardinality }),
+            };
+          },
+        });
+        if (compared !== null) {
+          const entityAnswer = composeAdvisorFactualAnswer({
+            content: question,
+            anaphora: 'NONE',
+            toolName: compared.plan.toolName,
+            toolOk: compared.facts.status === 'OK',
+            toolContent: JSON.stringify(compared.facts),
+          });
+          if (entityAnswer.answer !== null && entityAnswer.meta !== null) {
+            const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+              senderType: 'CONSULTANT',
+              content: entityAnswer.answer,
+            });
+            const analyticalOutcome = await recordTrail({
+              consultantMessageId: consultantMessage.id,
+              runId: null,
+              answerSource: 'COST_CENTER',
+              toolRoundCount: compared.traces.length > 0 ? 1 : 0,
+              traces: compared.traces,
+              facts: compared.trail,
+            });
+            return {
+              conversationId: conversation.id,
+              userMessage,
+              consultantMessage,
+              run: null,
+              factualAnswer: entityAnswer.meta,
+              analyticalOutcome,
+            };
+          }
+        }
       }
 
       const conversationalCostCenter = resolveAdvisorConversationalCostCenter({

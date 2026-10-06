@@ -101,7 +101,7 @@ async function ask(
 
 describe('Lia — movimentos do dia', () => {
   it('publica uma capability DAY e o registry continua deny-by-default', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(33);
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(34);
     expect(
       ANALYTICAL_CAPABILITY_REGISTRY.filter((item) => item.periodKinds.includes('DAY')).map(
         (item) => item.key,

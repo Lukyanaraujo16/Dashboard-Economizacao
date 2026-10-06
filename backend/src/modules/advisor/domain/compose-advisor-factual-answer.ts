@@ -20,6 +20,10 @@ import {
   ADVISOR_BREAKDOWN_FACT_KIND,
   ADVISOR_MOVEMENT_FACT_KIND,
 } from './advisor-drilldown-fact-contract.js';
+import {
+  COST_CENTER_ENTITY_COMPARISON_FACT_KIND,
+  COST_CENTER_ENTITY_COMPARISON_MEANING,
+} from './plan-cost-center-entity-comparison.js';
 
 export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3.3-1';
 
@@ -62,6 +66,9 @@ export function composeAdvisorFactualAnswer(
   input: ComposeAdvisorFactualAnswerInput,
 ): ComposeAdvisorFactualAnswerResult {
   const facts = parseFacts(input.toolContent);
+  if (facts?.factKind === COST_CENTER_ENTITY_COMPARISON_FACT_KIND) {
+    return composeCostCenterEntityComparison(facts);
+  }
   const classification = classifyAdvisorFactualResponse({
     content: input.content,
     anaphora: input.anaphora,
@@ -515,6 +522,164 @@ function composeCostCenter(
     return `O centro ${name} teve ${amount} em ${direction}, equivalente a ${share} do total de ${direction} do mês.${coverageSentence}`;
   }
   return `Em ${month}, o centro ${name} teve ${amount} em ${direction}, equivalente a ${share} do total de ${direction}.${coverageSentence}`;
+}
+
+function composeCostCenterEntityComparison(
+  facts: Record<string, unknown>,
+): ComposeAdvisorFactualAnswerResult {
+  const text = renderCostCenterEntityComparison(facts);
+  if (text === null) {
+    return {
+      classification: { kind: 'UNRESOLVED', intentKind: 'COST_CENTER_ENTITY_COMPARISON', factKind: null },
+      answer: null,
+      meta: null,
+    };
+  }
+  const status = asString(facts.status);
+  const intentKind =
+    status === 'OK' ? 'COST_CENTER_ENTITY_COMPARISON' : 'FACTUAL_LIMITATION';
+  return {
+    classification: {
+      kind: 'FACTUAL_CLOSED',
+      intentKind,
+      factKind: COST_CENTER_ENTITY_COMPARISON_FACT_KIND,
+    },
+    answer: text,
+    meta: {
+      classification: 'FACTUAL_CLOSED',
+      providerCalled: false,
+      intentKind,
+      factKind: COST_CENTER_ENTITY_COMPARISON_FACT_KIND,
+      identityStatus: null,
+      returnedCount: Array.isArray(facts.rows) ? facts.rows.length : null,
+      coveragePercent: null,
+      composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+    },
+  };
+}
+
+function renderCostCenterEntityComparison(facts: Record<string, unknown>): string | null {
+  const status = asString(facts.status);
+  const metric = asString(facts.metric);
+  if (status === 'UNSUPPORTED') {
+    return metric === 'CASH_RESULT'
+      ? `O resultado de caixa (${COST_CENTER_ENTITY_COMPARISON_MEANING}) não possui consulta publicada por centro de custo, então essa comparação não foi feita.`
+      : 'Não há capability publicada para comparar essa métrica por centro de custo.';
+  }
+  if (status === 'CLARIFICATION_REQUIRED') {
+    return asString(facts.reason) === 'PERIOD_REQUIRED'
+      ? 'Para comparar esses centros de custo, preciso do mês.'
+      : 'Para comparar esses centros de custo, preciso da métrica: entradas realizadas ou saídas realizadas.';
+  }
+  if (status === 'NOT_FOUND') {
+    return 'Não encontrei um dos centros de custo citados.';
+  }
+  if (status === 'AMBIGUOUS') {
+    return 'Há mais de um centro de custo correspondente. Especifique o nome ou o código.';
+  }
+  if (status === 'EMPTY_RESULT') {
+    return 'Não há valores identificados para comparar esses centros de custo neste mês.';
+  }
+  if (status === 'PARTIAL' || status === 'UNAVAILABLE') {
+    return 'Não há valores identificados suficientes para dizer qual centro de custo ficou à frente.';
+  }
+  if (status !== 'OK') {
+    return null;
+  }
+  const month = formatAdvisorFactualMonth(asString(facts.monthKey) ?? '');
+  const direction = comparisonDirectionLabel(asString(facts.direction));
+  const strategy = asString(facts.comparisonStrategy);
+  const rows = comparisonRows(facts.rows);
+  if (month === null || direction === null || rows === null || rows.length < 2) {
+    return null;
+  }
+  const ranked = rankComparisonRows(rows, strategy);
+  if (ranked === null) {
+    return null;
+  }
+  const listed = rows
+    .map((row) => {
+      const amount = formatAdvisorFactualBrl(row.amount);
+      return amount === null ? null : `${row.name} (${amount})`;
+    })
+    .filter((item): item is string => item !== null);
+  if (listed.length !== rows.length) {
+    return null;
+  }
+  if (ranked.tie) {
+    const amount = formatAdvisorFactualBrl(rows[0]?.amount ?? '');
+    const names = rows.map((row) => row.name).join(' e ');
+    return amount === null
+      ? null
+      : `Em ${month}, ${names} tiveram o mesmo valor em ${direction}: ${amount}.`;
+  }
+  const winner = rows.find((row) => row.costCenterId === ranked.winnerCostCenterId);
+  if (winner === undefined) {
+    return null;
+  }
+  const pole = strategy === 'LOWER_AMOUNT' ? 'menor' : 'maior';
+  return `Em ${month}, ${winner.name} teve o ${pole} valor em ${direction} entre os centros comparados: ${listed.join('; ')}.`;
+}
+
+function comparisonDirectionLabel(direction: string | null): string | null {
+  if (direction === 'INFLOW') {
+    return 'entradas realizadas';
+  }
+  if (direction === 'OUTFLOW') {
+    return 'saídas realizadas';
+  }
+  if (direction === 'NET') {
+    return 'resultado de caixa';
+  }
+  return null;
+}
+
+function comparisonRows(
+  value: unknown,
+): readonly { costCenterId: string; name: string; amount: string }[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const rows: { costCenterId: string; name: string; amount: string }[] = [];
+  for (const item of value) {
+    const row = asRecord(item);
+    const costCenterId = asString(row?.costCenterId);
+    const name = asString(row?.name);
+    const amount = asString(row?.amount);
+    if (costCenterId === null || name === null || amount === null) {
+      return null;
+    }
+    rows.push({ costCenterId, name, amount });
+  }
+  return rows;
+}
+
+function rankComparisonRows(
+  rows: readonly { costCenterId: string; name: string; amount: string }[],
+  strategy: string | null,
+): { winnerCostCenterId: string | null; tie: boolean } | null {
+  if (strategy !== 'HIGHER_AMOUNT' && strategy !== 'LOWER_AMOUNT') {
+    return null;
+  }
+  const first = rows[0];
+  const second = rows[1];
+  if (first === undefined || second === undefined) {
+    return null;
+  }
+  const left = Number(first.amount);
+  const right = Number(second.amount);
+  if (!Number.isFinite(left) || !Number.isFinite(right)) {
+    return null;
+  }
+  if (left === right) {
+    return { winnerCostCenterId: null, tie: true };
+  }
+  const higher = left > right ? first : second;
+  const lower = left > right ? second : first;
+  return {
+    winnerCostCenterId: (strategy === 'LOWER_AMOUNT' ? lower : higher).costCenterId,
+    tie: false,
+  };
 }
 
 function composeCostCenterCompare(facts: Record<string, unknown>): string | null {

@@ -27,6 +27,7 @@ const HUNDRED = new Prisma.Decimal(100);
 
 export const CASH_COST_CENTER_RANKING_TOOL_NAME = 'cash_cost_center_ranking';
 export const CASH_COST_CENTER_LOOKUP_TOOL_NAME = 'cash_cost_center_lookup';
+export const CASH_RESULT_COST_CENTER_LOOKUP_TOOL_NAME = 'cash_result_cost_center_lookup';
 export const COMPARE_CASH_COST_CENTER_TOOL_NAME = 'compare_cash_cost_center';
 export const CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME = 'cash_cost_center_movement_lines';
 

@@ -223,6 +223,20 @@ export {
 export { resolveAdvisorOfficialCategory } from './advisor-nominal-category-resolver.js';
 export { loadAnalyticalCostCenterCatalog } from './load-analytical-cost-center-catalog.js';
 export {
+  COST_CENTER_ENTITY_COMPARISON_FACT_KIND,
+  COST_CENTER_ENTITY_COMPARISON_MEANING,
+  answerCostCenterEntityComparison,
+  isCostCenterEntityComparisonQuestion,
+  planCostCenterEntityComparison,
+} from './plan-cost-center-entity-comparison.js';
+export type {
+  CostCenterEntityComparisonAnswer,
+  CostCenterEntityComparisonPeriod,
+  CostCenterEntityComparisonPlan,
+  CostCenterEntityLookupRequest,
+  CostCenterEntityLookupResponse,
+} from './plan-cost-center-entity-comparison.js';
+export {
   ANALYTICAL_ENTITY_DIMENSIONS,
   ANALYTICAL_ENTITY_MATCHES,
   ANALYTICAL_ENTITY_RESOLUTIONS,

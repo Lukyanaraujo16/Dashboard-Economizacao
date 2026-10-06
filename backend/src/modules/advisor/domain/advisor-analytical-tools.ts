@@ -30,6 +30,7 @@ import {
   buildCashRealizedBreakdownQuery,
   buildCompareCashMonthsQuery,
   buildCostCenterCompareQuery,
+  buildCashResultCostCenterLookupQuery,
   buildCostCenterLookupQuery,
   buildCostCenterMovementsQuery,
   buildCostCenterRankingQuery,
@@ -57,6 +58,7 @@ import {
 } from './advisor-nominal-dimension.js';
 import {
   assertCashCostCenterLookupArgs,
+  assertCashResultCostCenterLookupArgs,
   assertCashCostCenterMovementLinesArgs,
   assertCashCostCenterRankingArgs,
   assertCompareCashCostCenterArgs,
@@ -65,6 +67,7 @@ import {
 } from './advisor-cost-center-tools.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_RESULT_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
   COMPARE_CASH_COST_CENTER_TOOL_NAME,
@@ -452,6 +455,7 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
         if (
           call.name === CASH_COST_CENTER_RANKING_TOOL_NAME ||
           call.name === CASH_COST_CENTER_LOOKUP_TOOL_NAME ||
+          call.name === CASH_RESULT_COST_CENTER_LOOKUP_TOOL_NAME ||
           call.name === COMPARE_CASH_COST_CENTER_TOOL_NAME ||
           call.name === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME
         ) {
@@ -862,6 +866,19 @@ async function executeCostCenter(
     });
     return finishCostCenter(call, startedAt, serialized, monthKey, args.direction, args.limit);
   }
+  if (call.name === CASH_RESULT_COST_CENTER_LOOKUP_TOOL_NAME) {
+    const args = assertCashResultCostCenterLookupArgs(call.arguments);
+    const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+    const query = buildCashResultCostCenterLookupQuery({
+      monthKey,
+      costCenterQuery: args.costCenterQuery,
+    });
+    const serialized = await runUniversalToolQuery({
+      query,
+      runtime: { tenantId, now, cashCostCenter },
+    });
+    return finishCostCenter(call, startedAt, serialized, monthKey, null, null);
+  }
   const args = assertCashCostCenterLookupArgs(call.arguments);
   const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
   const query = buildCostCenterLookupQuery({
@@ -936,7 +953,7 @@ function finishCostCenter(
   startedAt: number,
   serialized: Record<string, unknown>,
   monthKey: string,
-  direction: AdvisorCashDirection,
+  direction: AdvisorCashDirection | null,
   limit: number | null | undefined,
 ): AdvisorAnalyticalToolResult {
   const limits = clampAdvisorDrilldownLimit(limit ?? undefined);
@@ -1155,6 +1172,7 @@ function normalizeToolFailure(
   if (
     toolName === CASH_COST_CENTER_RANKING_TOOL_NAME ||
     toolName === CASH_COST_CENTER_LOOKUP_TOOL_NAME ||
+    toolName === CASH_RESULT_COST_CENTER_LOOKUP_TOOL_NAME ||
     toolName === COMPARE_CASH_COST_CENTER_TOOL_NAME ||
     toolName === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME
   ) {

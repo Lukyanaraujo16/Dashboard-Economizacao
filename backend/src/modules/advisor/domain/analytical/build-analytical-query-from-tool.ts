@@ -143,6 +143,21 @@ export function buildCostCenterRankingQuery(input: {
   };
 }
 
+export function buildCashResultCostCenterLookupQuery(input: {
+  readonly monthKey: string;
+  readonly costCenterQuery: string;
+}): AnalyticalQuery {
+  return {
+    semanticFamily: 'FLOW',
+    metric: 'CASH_RESULT',
+    direction: 'NET',
+    period: { kind: 'MONTH', monthKey: input.monthKey },
+    dimension: 'COST_CENTER',
+    operation: 'LOOKUP',
+    filters: { costCenterQuery: input.costCenterQuery },
+  };
+}
+
 export function buildCostCenterLookupQuery(input: {
   readonly monthKey: string;
   readonly direction: AdvisorCashDirection;

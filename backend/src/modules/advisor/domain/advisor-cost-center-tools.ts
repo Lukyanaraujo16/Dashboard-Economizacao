@@ -10,6 +10,7 @@ import type { CostCenterReadRepository } from '../../finance/repositories/cost-c
 import type { CostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
 import type { FinancialInstallmentReadRecord } from '../../finance/domain/types.js';
 import { AdvisorDomainError } from './advisor-domain-error.js';
+import { ADVISOR_CASH_RESULT_MEANING } from './financial-facts-text.js';
 import { assertAdvisorTenantId } from '../repositories/assert-tenant-id.js';
 import {
   ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
@@ -22,6 +23,7 @@ import type { PartyReadRepository } from '../../finance/repositories/party-read.
 import type { FinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+  CASH_RESULT_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
   COMPARE_CASH_COST_CENTER_TOOL_NAME,
@@ -109,6 +111,22 @@ export const CASH_COST_CENTER_LOOKUP_TOOL: AdvisorAnalyticalToolDefinition = {
   },
 };
 
+export const CASH_RESULT_COST_CENTER_LOOKUP_TOOL: AdvisorAnalyticalToolDefinition = {
+  name: CASH_RESULT_COST_CENTER_LOOKUP_TOOL_NAME,
+  description:
+    'Resultado de caixa mensal de um centro de custo. Usa realized.result do fluxo mensal filtrado pelo id resolvido. Não recebe tenant e não recalcula entradas menos saídas.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['monthKey', 'costCenterQuery', 'direction'],
+    properties: {
+      monthKey: MONTH_KEY_SCHEMA,
+      direction: { type: 'string', enum: ['NET'] },
+      costCenterQuery: COST_CENTER_QUERY_SCHEMA,
+    },
+  },
+};
+
 export const COMPARE_CASH_COST_CENTER_TOOL: AdvisorAnalyticalToolDefinition = {
   name: COMPARE_CASH_COST_CENTER_TOOL_NAME,
   description:
@@ -150,6 +168,7 @@ export function listAdvisorCostCenterTools(): readonly AdvisorAnalyticalToolDefi
   return [
     CASH_COST_CENTER_RANKING_TOOL,
     CASH_COST_CENTER_LOOKUP_TOOL,
+    CASH_RESULT_COST_CENTER_LOOKUP_TOOL,
     COMPARE_CASH_COST_CENTER_TOOL,
     CASH_COST_CENTER_MOVEMENT_LINES_TOOL,
   ];
@@ -167,6 +186,12 @@ export type AdvisorCostCenterDimensionService = {
     readonly tenantId: string;
     readonly monthKey: string;
     readonly direction: AdvisorCashDirection;
+    readonly costCenterQuery: string;
+    readonly now?: Date;
+  }): Promise<Record<string, unknown>>;
+  cashResult(input: {
+    readonly tenantId: string;
+    readonly monthKey: string;
     readonly costCenterQuery: string;
     readonly now?: Date;
   }): Promise<Record<string, unknown>>;
@@ -251,6 +276,64 @@ export function createAdvisorCostCenterDimensionService(
         costCenterQuery: input.costCenterQuery,
         match: found.center,
       });
+    },
+
+    async cashResult(input) {
+      const tenantId = requireTenant(input.tenantId);
+      const monthKey = requireMonth(input.monthKey, 'monthKey');
+      const catalog = (await deps.costCenters.listByTenant(tenantId)).filter((row) => row.active);
+      const resolved = resolveAdvisorCostCenterQuery(catalog, input.costCenterQuery);
+      if (resolved.status === 'NOT_FOUND') {
+        return {
+          status: 'NOT_FOUND',
+          monthKey,
+          direction: 'NET',
+          realizedMeaning: ADVISOR_CASH_RESULT_MEANING,
+          costCenterQuery: input.costCenterQuery,
+          costCenter: null,
+        };
+      }
+      if (resolved.status === 'AMBIGUOUS') {
+        return {
+          status: 'AMBIGUOUS',
+          monthKey,
+          direction: 'NET',
+          realizedMeaning: ADVISOR_CASH_RESULT_MEANING,
+          costCenterQuery: input.costCenterQuery,
+          costCenter: null,
+          candidates: resolved.candidates.map((row) => ({
+            costCenterId: row.id,
+            name: row.name,
+            code: row.code,
+          })),
+        };
+      }
+      const flow = await deps.cashFlow.getMonthlyCashFlow({
+        tenantId,
+        monthKey,
+        costCenterId: resolved.center.costCenterId,
+        now: input.now,
+      });
+      if (flow.tenantId !== tenantId) {
+        throw new AdvisorDomainError(
+          'ANALYTICAL_TOOL_FORBIDDEN',
+          'Resultado de caixa do centro recusou fluxo de outro tenant.',
+        );
+      }
+      const result = flow.realized.result;
+      return {
+        status: result === null ? 'ABSENT' : 'OK',
+        monthKey,
+        direction: 'NET',
+        realizedMeaning: ADVISOR_CASH_RESULT_MEANING,
+        costCenterQuery: input.costCenterQuery,
+        costCenter: {
+          costCenterId: resolved.center.costCenterId,
+          name: resolved.center.name,
+          code: resolved.center.code,
+          amount: result === null ? 'ABSENT' : result.toString(),
+        },
+      };
     },
 
     async compare(input) {
@@ -450,6 +533,29 @@ export function assertCashCostCenterMovementLinesArgs(raw: Record<string, unknow
     direction: raw.direction,
     costCenterQuery: requireQuery(raw.costCenterQuery),
     ...(raw.limit === undefined ? {} : { limit: requireLimit(raw.limit) }),
+  };
+}
+
+export function assertCashResultCostCenterLookupArgs(raw: Record<string, unknown>): {
+  readonly monthKey: string;
+  readonly costCenterQuery: string;
+} {
+  assertCostCenterArgs(raw, ['monthKey', 'direction', 'costCenterQuery']);
+  if (typeof raw.monthKey !== 'string' || typeof raw.costCenterQuery !== 'string') {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'monthKey e costCenterQuery são obrigatórios.',
+    );
+  }
+  if (raw.direction !== 'NET') {
+    throw new AdvisorDomainError(
+      'ANALYTICAL_TOOL_INVALID_INPUT',
+      'direction de resultado de caixa deve ser NET.',
+    );
+  }
+  return {
+    monthKey: requireMonth(raw.monthKey, 'monthKey'),
+    costCenterQuery: requireQuery(raw.costCenterQuery),
   };
 }
 

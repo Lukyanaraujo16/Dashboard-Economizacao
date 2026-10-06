@@ -242,6 +242,22 @@ export const executeRealizedCashCostCenter: AnalyticalExecutor = async ({
   if (runtime.cashCostCenter === undefined) {
     throw new Error('EXECUTOR_DEPENDENCY_MISSING:cashCostCenter');
   }
+  if (validated.query.metric === 'CASH_RESULT') {
+    if (validated.query.direction !== 'NET' || validated.query.operation !== 'LOOKUP') {
+      throw new Error('cash result de centro exige LOOKUP NET.');
+    }
+    const legacyFact = await runtime.cashCostCenter.cashResult({
+      tenantId: runtime.tenantId,
+      monthKey: requireMonthKey(validated.query.period, 'self'),
+      costCenterQuery: validated.query.filters?.costCenterQuery ?? '',
+      now: runtime.now,
+    });
+    return success({
+      validated,
+      executorKey: 'realizedCashCostCenter',
+      legacyFact,
+    });
+  }
   if (validated.query.direction !== 'INFLOW' && validated.query.direction !== 'OUTFLOW') {
     throw new Error('direction obrigatória para cost center.');
   }

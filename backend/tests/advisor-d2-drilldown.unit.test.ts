@@ -93,6 +93,7 @@ describe('F13.8.1D2 drill-down analítico', () => {
       'compare_cash_nominal_dimension',
       'cash_cost_center_ranking',
       'cash_cost_center_lookup',
+      'cash_result_cost_center_lookup',
       'compare_cash_cost_center',
       'cash_cost_center_movement_lines',
     ]);
