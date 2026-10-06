@@ -237,6 +237,23 @@ export type {
   CostCenterEntityLookupResponse,
 } from './plan-cost-center-entity-comparison.js';
 export {
+  assembleCostCenterOutflowMovementsPlan,
+  extractCostCenterEntityFollowUp,
+  extractOutflowMovementsCostCenterMention,
+  matchesCostCenterOutflowMovementsFamily,
+} from './assemble-cost-center-outflow-movements-plan.js';
+export type {
+  AssembleCostCenterOutflowMovementsPlanResult,
+  CostCenterOutflowMovementsPlanSlots,
+} from './assemble-cost-center-outflow-movements-plan.js';
+export {
+  COST_CENTER_OUTFLOW_MOVEMENTS_STATE_KIND,
+  COST_CENTER_OUTFLOW_MOVEMENTS_STATE_VERSION,
+  costCenterOutflowMovementsState,
+  parseCostCenterOutflowMovementsConversationState,
+} from './cost-center-outflow-movements-conversation-state.js';
+export type { CostCenterOutflowMovementsConversationState } from './cost-center-outflow-movements-conversation-state.js';
+export {
   ANALYTICAL_ENTITY_DIMENSIONS,
   ANALYTICAL_ENTITY_MATCHES,
   ANALYTICAL_ENTITY_RESOLUTIONS,

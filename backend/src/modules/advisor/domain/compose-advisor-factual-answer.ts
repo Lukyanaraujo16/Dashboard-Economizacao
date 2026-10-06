@@ -25,7 +25,7 @@ import {
   COST_CENTER_ENTITY_COMPARISON_MEANING,
 } from './plan-cost-center-entity-comparison.js';
 
-export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3.3-1';
+export const ADVISOR_FACTUAL_COMPOSER_VERSION = 'd4.3.4-1';
 
 export type AdvisorFactualAnswerMeta = {
   readonly classification: 'FACTUAL_CLOSED';
@@ -726,12 +726,34 @@ function composeCostCenterMovements(facts: Record<string, unknown>): string | nu
   const total = formatAdvisorFactualBrl(asString(facts.costCenterAmount) ?? '');
   const direction = asString(facts.direction) === 'INFLOW' ? 'entradas realizadas' : 'saídas realizadas';
   const singular = asString(facts.direction) === 'INFLOW' ? 'entrada realizada' : 'saída realizada';
+  const gastoLabel = asString(facts.direction) === 'INFLOW' ? 'recebimento' : 'gasto';
   if (month === null || name === null || total === null) {
     return null;
   }
   const lines = Array.isArray(facts.lines) ? facts.lines : [];
   if (lines.length === 0) {
     return `Em ${month}, o centro ${name} teve ${total} em ${direction}. Não há lançamentos atribuídos a esse centro neste recorte.`;
+  }
+  const requestedLimit =
+    typeof facts.requestedLimit === 'number' && Number.isInteger(facts.requestedLimit)
+      ? facts.requestedLimit
+      : null;
+  if (requestedLimit === 1 && lines.length >= 1) {
+    const item = asRecord(lines[0]);
+    const amount = formatAdvisorFactualBrl(asString(item?.attributedAmount) ?? '');
+    if (amount === null) {
+      return null;
+    }
+    const date = asString(item?.occurredOn);
+    const description = asString(item?.description);
+    const party = asString(item?.partyName);
+    const referentParts = [description, party].filter((part) => part !== null);
+    const referent =
+      referentParts.length === 0 ? null : `referente a ${referentParts.join(' — ')}`;
+    const when = date === null ? null : `em ${date}`;
+    const extras = [referent, when].filter((part) => part !== null);
+    const suffix = extras.length === 0 ? '.' : `, ${extras.join(', ')}.`;
+    return `O maior ${gastoLabel} de ${name} em ${month} foi ${amount}${suffix}`;
   }
   const listed = lines.map((row, index) => {
     const item = asRecord(row);

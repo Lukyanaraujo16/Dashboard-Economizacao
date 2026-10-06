@@ -21,6 +21,8 @@ import type {
 } from '../src/modules/advisor/domain/types.js';
 
 const NOW = new Date('2026-10-02T15:00:00.000Z');
+/** Pergunta que ainda cai no provider+tools (fora do assembler composável da Fase 1). */
+const PROVIDER_TOOL_QUESTION = 'qual o maior gasto?';
 const FELIPE_QUESTION = 'qual o maior gasto em laranjeiras e em jacaraipe?';
 const UNAVAILABLE_PROSE = 'Não consegui obter esse detalhamento agora.';
 
@@ -252,12 +254,12 @@ function toolBox(
 
 describe('trilha de resultado no envio do consultor', () => {
   it('pergunta sem capability fica SUCCEEDED e UNSUPPORTED', async () => {
-    expect(resolveUniversalAnalyticalIntent({ content: FELIPE_QUESTION, now: NOW }).kind).toBe(
+    expect(resolveUniversalAnalyticalIntent({ content: PROVIDER_TOOL_QUESTION, now: NOW }).kind).toBe(
       'UNRESOLVED',
     );
-    expect(resolveAdvisorBillingIntent(FELIPE_QUESTION)).toBeNull();
+    expect(resolveAdvisorBillingIntent(PROVIDER_TOOL_QUESTION)).toBeNull();
     const harness = createHarness({ text: UNAVAILABLE_PROSE, monthlyPlanning: true });
-    const result = await ask(harness, FELIPE_QUESTION);
+    const result = await ask(harness, PROVIDER_TOOL_QUESTION);
     expect(result.run?.status).toBe('SUCCEEDED');
     expect(result.factualAnswer).toBeNull();
     expect(result.analyticalOutcome).toBe('UNSUPPORTED');
@@ -272,8 +274,19 @@ describe('trilha de resultado no envio do consultor', () => {
       consultantMessageId: result.consultantMessage.id,
       runId: result.run?.id,
     });
-    expect(JSON.stringify(harness.recorded[0])).not.toContain('laranjeiras');
     expect(JSON.stringify(harness.recorded[0])).not.toContain(UNAVAILABLE_PROSE);
+  });
+
+  it('maior gasto em dois centros na mesma frase clarifica sem provider', async () => {
+    expect(resolveUniversalAnalyticalIntent({ content: FELIPE_QUESTION, now: NOW }).kind).toBe(
+      'UNRESOLVED',
+    );
+    const harness = createHarness({ text: UNAVAILABLE_PROSE, monthlyPlanning: true });
+    const result = await ask(harness, FELIPE_QUESTION);
+    expect(result.run).toBeNull();
+    expect(result.factualAnswer?.providerCalled).toBe(false);
+    expect(result.consultantMessage.content).toMatch(/centro de custo/i);
+    expect(harness.openai.generateCalls).toHaveLength(0);
   });
 
   it('faturamento determinístico continua igual, sem provider, ANSWERED', async () => {
@@ -331,7 +344,7 @@ describe('trilha de resultado no envio do consultor', () => {
       ],
       analyticalTools: toolBox(JSON.stringify({ status: 'OK', returnedCount: 2, total: '1500.00' })),
     });
-    const result = await ask(harness, FELIPE_QUESTION);
+    const result = await ask(harness, PROVIDER_TOOL_QUESTION);
     expect(result.run?.status).toBe('SUCCEEDED');
     expect(result.consultantMessage.content).toBe(UNAVAILABLE_PROSE);
     expect(result.analyticalOutcome).toBe('ANSWERED');
@@ -359,7 +372,7 @@ describe('trilha de resultado no envio do consultor', () => {
         }),
       ),
     });
-    const result = await ask(harness, FELIPE_QUESTION);
+    const result = await ask(harness, PROVIDER_TOOL_QUESTION);
     expect(result.run?.status).toBe('SUCCEEDED');
     expect(result.analyticalOutcome).toBe('TOOL_ERROR');
     expect(harness.recorded[0]?.traces[0]?.reason).toBe('TOOL_TIMEOUT');
@@ -368,7 +381,7 @@ describe('trilha de resultado no envio do consultor', () => {
 
   it('erro do provedor registra PROVIDER_ERROR e preserva o status técnico', async () => {
     const harness = createHarness({ behavior: 'error' });
-    await expect(ask(harness, FELIPE_QUESTION)).rejects.toBeInstanceOf(AdvisorExecutionError);
+    await expect(ask(harness, PROVIDER_TOOL_QUESTION)).rejects.toBeInstanceOf(AdvisorExecutionError);
     expect(harness.runs[0]?.status).toBe('FAILED');
     expect(harness.recorded[0]).toMatchObject({
       outcome: 'PROVIDER_ERROR',
@@ -388,7 +401,7 @@ describe('trilha de resultado no envio do consultor', () => {
       ],
       analyticalTools: toolBox(JSON.stringify({ status: 'EMPTY_RESULT', returnedCount: 0 })),
     });
-    const result = await ask(harness, FELIPE_QUESTION);
+    const result = await ask(harness, PROVIDER_TOOL_QUESTION);
     expect(result.run?.status).toBe('SUCCEEDED');
     expect(result.analyticalOutcome).toBe('NO_DATA');
     expect(harness.recorded[0]?.traces[0]).toMatchObject({ status: 'EMPTY', reason: 'NO_DATA' });

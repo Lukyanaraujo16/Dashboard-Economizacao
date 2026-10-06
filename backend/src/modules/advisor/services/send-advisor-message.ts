@@ -63,6 +63,11 @@ import {
   answerCostCenterEntityComparison,
   isCostCenterEntityComparisonQuestion,
 } from '../domain/plan-cost-center-entity-comparison.js';
+import { assembleCostCenterOutflowMovementsPlan } from '../domain/assemble-cost-center-outflow-movements-plan.js';
+import {
+  costCenterOutflowMovementsState,
+  parseCostCenterOutflowMovementsConversationState,
+} from '../domain/cost-center-outflow-movements-conversation-state.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
@@ -630,6 +635,39 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               run: null,
               factualAnswer: entityAnswer.meta,
               analyticalOutcome,
+            };
+          }
+        }
+      }
+
+      if (!isAdvisorInterpretiveQuestion(question)) {
+        const priorMovementsState = parseCostCenterOutflowMovementsConversationState(
+          conversation.analyticalContext,
+        );
+        const assembled = assembleCostCenterOutflowMovementsPlan({
+          content: question,
+          period,
+          priorState: priorMovementsState,
+        });
+        if (assembled.kind !== 'UNMATCHED') {
+          const movementsAnswer = await answerCostCenterOutflowMovementsPlan({
+            assembled,
+            tenantId,
+            conversationId: conversation.id,
+            question,
+            now: input.now,
+            analyticalTools: deps.analyticalTools,
+            conversations: deps.conversations,
+            recordTrail,
+          });
+          if (movementsAnswer !== null) {
+            return {
+              conversationId: conversation.id,
+              userMessage,
+              consultantMessage: movementsAnswer.consultantMessage,
+              run: null,
+              factualAnswer: movementsAnswer.factualAnswer,
+              analyticalOutcome: movementsAnswer.analyticalOutcome,
             };
           }
         }
@@ -1301,6 +1339,348 @@ function readWinnerFromToolContent(
 ): { readonly displayName: string; readonly normalizedKey: string } | null {
   try {
     return readAdvisorNominalRankingWinner(JSON.parse(content) as Record<string, unknown>);
+  } catch {
+    return null;
+  }
+}
+
+async function answerCostCenterOutflowMovementsPlan(input: {
+  readonly assembled: Exclude<
+    ReturnType<typeof assembleCostCenterOutflowMovementsPlan>,
+    { readonly kind: 'UNMATCHED' }
+  >;
+  readonly tenantId: string;
+  readonly conversationId: string;
+  readonly question: string;
+  readonly now?: Date;
+  readonly analyticalTools: AdvisorAnalyticalToolExecutor | undefined;
+  readonly conversations: {
+    createMessage: SendAdvisorMessageDependencies['conversations']['createMessage'];
+    saveAnalyticalContext?: SendAdvisorMessageDependencies['conversations']['saveAnalyticalContext'];
+  };
+  readonly recordTrail: (trailInput: {
+    readonly consultantMessageId: string;
+    readonly runId: string | null;
+    readonly answerSource: AnalyticalAnswerSource;
+    readonly toolRoundCount: number;
+    readonly traces: AnalyticalToolTraceDraft[];
+    readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+  }) => Promise<AnalyticalOutcome>;
+}): Promise<{
+  readonly consultantMessage: AiMessageRecord;
+  readonly factualAnswer: AdvisorFactualAnswerMeta;
+  readonly analyticalOutcome: AnalyticalOutcome;
+} | null> {
+  const assembled = input.assembled;
+
+  if (assembled.kind === 'FOLLOW_UP_WITHOUT_CONTEXT') {
+    const content =
+      'Não há uma consulta anterior de maiores gastos por centro de custo nesta conversa para eu reutilizar. Informe o centro de custo e o período.';
+    const consultantMessage = await input.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      { senderType: 'CONSULTANT', content },
+    );
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'COST_CENTER',
+      toolRoundCount: 0,
+      traces: [],
+      facts: {
+        providerFailed: false,
+        capabilityDenied: false,
+        clarificationRequired: true,
+        factualClosed: true,
+        factualPartial: false,
+        structuredStatus: 'UNRESOLVED',
+      },
+    });
+    return {
+      consultantMessage,
+      factualAnswer: {
+        classification: 'FACTUAL_CLOSED',
+        providerCalled: false,
+        intentKind: 'FACTUAL_LIMITATION',
+        factKind: null,
+        identityStatus: null,
+        returnedCount: null,
+        coveragePercent: null,
+        composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+      },
+      analyticalOutcome,
+    };
+  }
+
+  if (assembled.kind === 'MISSING_ENTITY') {
+    const content =
+      'Não consegui identificar com segurança o centro de custo dessa consulta de maiores gastos. Informe o nome do centro de custo.';
+    const consultantMessage = await input.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      { senderType: 'CONSULTANT', content },
+    );
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'COST_CENTER',
+      toolRoundCount: 0,
+      traces: [],
+      facts: {
+        providerFailed: false,
+        capabilityDenied: false,
+        clarificationRequired: true,
+        factualClosed: true,
+        factualPartial: false,
+        structuredStatus: 'UNRESOLVED',
+      },
+    });
+    return {
+      consultantMessage,
+      factualAnswer: {
+        classification: 'FACTUAL_CLOSED',
+        providerCalled: false,
+        intentKind: 'FACTUAL_LIMITATION',
+        factKind: null,
+        identityStatus: null,
+        returnedCount: null,
+        coveragePercent: null,
+        composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+      },
+      analyticalOutcome,
+    };
+  }
+
+  if (assembled.kind === 'CAPABILITY_DENIED') {
+    const content = composeCapabilityDeniedAnswer({
+      query: assembled.query,
+      validation: assembled.validation,
+    });
+    const consultantMessage = await input.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      { senderType: 'CONSULTANT', content },
+    );
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'CAPABILITY_DENIED',
+      toolRoundCount: 0,
+      traces: [],
+      facts: {
+        providerFailed: false,
+        capabilityDenied: true,
+        clarificationRequired: false,
+        factualClosed: true,
+        factualPartial: false,
+        structuredStatus: null,
+      },
+    });
+    return {
+      consultantMessage,
+      factualAnswer: {
+        classification: 'FACTUAL_CLOSED',
+        providerCalled: false,
+        intentKind: 'FACTUAL_LIMITATION',
+        factKind: null,
+        identityStatus: null,
+        returnedCount: null,
+        coveragePercent: null,
+        composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+      },
+      analyticalOutcome,
+    };
+  }
+
+  const slots = assembled.slots;
+  if (input.analyticalTools === undefined) {
+    const content =
+      'Não consegui obter o detalhamento das movimentações agora.';
+    const consultantMessage = await input.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      { senderType: 'CONSULTANT', content },
+    );
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'COST_CENTER',
+      toolRoundCount: 0,
+      traces: [],
+      facts: {
+        providerFailed: false,
+        capabilityDenied: false,
+        clarificationRequired: false,
+        factualClosed: true,
+        factualPartial: false,
+        structuredStatus: 'UNAVAILABLE',
+      },
+    });
+    return {
+      consultantMessage,
+      factualAnswer: {
+        classification: 'FACTUAL_CLOSED',
+        providerCalled: false,
+        intentKind: 'FACTUAL_LIMITATION',
+        factKind: null,
+        identityStatus: null,
+        returnedCount: null,
+        coveragePercent: null,
+        composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+      },
+      analyticalOutcome,
+    };
+  }
+
+  const toolStartedAt = Date.now();
+  const toolResult = await input.analyticalTools.execute({
+    tenantId: input.tenantId,
+    resolvedMonthKey: slots.monthKey,
+    now: input.now,
+    call: {
+      id: 'plan-cost-center-outflow-movements',
+      name: CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
+      arguments: {
+        monthKey: slots.monthKey,
+        direction: 'OUTFLOW',
+        costCenterQuery: slots.costCenterMention,
+        limit: slots.limit,
+      },
+    },
+  });
+  const composed = composeAdvisorFactualAnswer({
+    content: input.question,
+    anaphora: 'NONE',
+    toolName: CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
+    toolOk: toolResult.ok,
+    toolContent: toolResult.content,
+  });
+  if (composed.answer === null || composed.meta === null) {
+    const status = readStructuredStatus(toolResult.content) ?? 'UNAVAILABLE';
+    const content =
+      status === 'AMBIGUOUS'
+        ? 'Há mais de um centro de custo correspondente. Especifique o nome ou o código.'
+        : status === 'NOT_FOUND'
+          ? 'Não encontrei esse centro de custo.'
+          : 'Não há atribuição oficial suficiente de centros de custo nas movimentações realizadas deste mês.';
+    const consultantMessage = await input.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      { senderType: 'CONSULTANT', content },
+    );
+    const trace = traceFromToolResult(
+      toolResult,
+      1,
+      Date.now() - toolStartedAt,
+      {
+        monthKey: slots.monthKey,
+        direction: 'OUTFLOW',
+        costCenterQuery: slots.costCenterMention,
+        limit: slots.limit,
+      },
+    );
+    const traces = trace === null ? [] : [trace];
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'COST_CENTER',
+      toolRoundCount: traces.length > 0 ? 1 : 0,
+      traces,
+      facts: {
+        providerFailed: false,
+        capabilityDenied: false,
+        clarificationRequired: status === 'AMBIGUOUS',
+        factualClosed: true,
+        factualPartial: false,
+        structuredStatus: status,
+      },
+    });
+    return {
+      consultantMessage,
+      factualAnswer: {
+        classification: 'FACTUAL_CLOSED',
+        providerCalled: false,
+        intentKind: 'FACTUAL_LIMITATION',
+        factKind: null,
+        identityStatus: null,
+        returnedCount: null,
+        coveragePercent: null,
+        composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+      },
+      analyticalOutcome,
+    };
+  }
+
+  const consultantMessage = await input.conversations.createMessage(
+    input.tenantId,
+    input.conversationId,
+    { senderType: 'CONSULTANT', content: composed.answer },
+  );
+  const resolvedName = readResolvedCostCenterName(toolResult.content);
+  const structuredStatus = readStructuredStatus(toolResult.content) ?? 'OK';
+  if (
+    (structuredStatus === 'OK' || structuredStatus === 'EMPTY_RESULT') &&
+    resolvedName !== null &&
+    typeof input.conversations.saveAnalyticalContext === 'function'
+  ) {
+    await input.conversations.saveAnalyticalContext(
+      input.tenantId,
+      input.conversationId,
+      costCenterOutflowMovementsState({
+        monthKey: slots.monthKey,
+        periodSource: slots.periodSource,
+        limit: slots.limit,
+        costCenterQuery: resolvedName,
+      }),
+    );
+  }
+  const trace = traceFromToolResult(
+    toolResult,
+    1,
+    Date.now() - toolStartedAt,
+    {
+      monthKey: slots.monthKey,
+      direction: 'OUTFLOW',
+      costCenterQuery: slots.costCenterMention,
+      limit: slots.limit,
+    },
+  );
+  const traces = trace === null ? [] : [trace];
+  const analyticalOutcome = await input.recordTrail({
+    consultantMessageId: consultantMessage.id,
+    runId: null,
+    answerSource: 'COST_CENTER',
+    toolRoundCount: traces.length > 0 ? 1 : 0,
+    traces,
+    facts: {
+      ...closedTrailFacts(
+        composed.meta.intentKind === 'FACTUAL_LIMITATION'
+          ? (structuredStatus ?? 'UNRESOLVED')
+          : structuredStatus,
+        composed.meta.identityStatus === 'PARTIAL',
+      ),
+      clarificationRequired:
+        structuredStatus === 'AMBIGUOUS' || structuredStatus === 'UNRESOLVED',
+    },
+  });
+  return {
+    consultantMessage,
+    factualAnswer: composed.meta,
+    analyticalOutcome,
+  };
+}
+
+function readResolvedCostCenterName(toolContent: string): string | null {
+  try {
+    const parsed = JSON.parse(toolContent) as {
+      status?: string;
+      costCenter?: { name?: string };
+    };
+    if (parsed.status !== 'OK' && parsed.status !== 'EMPTY_RESULT') {
+      return null;
+    }
+    const name = parsed.costCenter?.name;
+    return typeof name === 'string' && name.trim() !== '' ? name.trim() : null;
   } catch {
     return null;
   }
