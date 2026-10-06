@@ -19,6 +19,9 @@ export type CashRealizedDayPanelProps = {
   readonly direction: 'inflows' | 'outflows';
   readonly costCenterId: string | null;
   readonly categoryId: string | null;
+  /** Rótulo da série. Ausente mantém Recebimentos/Pagamentos. */
+  readonly title?: string;
+  readonly itemNoun?: readonly [string, string];
 };
 
 const MONTHS = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'] as const;
@@ -35,7 +38,14 @@ function formatDayHeading(date: string): string {
   return `${Number(match[3])} ${month} ${match[1]}`;
 }
 
-function movementNoun(direction: 'inflows' | 'outflows', count: number): string {
+function movementNoun(
+  direction: 'inflows' | 'outflows',
+  count: number,
+  itemNoun?: readonly [string, string],
+): string {
+  if (itemNoun) {
+    return count === 1 ? itemNoun[0] : itemNoun[1];
+  }
   if (direction === 'inflows') {
     return count === 1 ? 'recebimento' : 'recebimentos';
   }
@@ -63,6 +73,8 @@ export function CashRealizedDayPanel({
   direction,
   costCenterId,
   categoryId,
+  title,
+  itemNoun,
 }: CashRealizedDayPanelProps) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
 
@@ -94,13 +106,13 @@ export function CashRealizedDayPanel({
     return () => controller.abort();
   }, [categoryId, costCenterId, date, direction]);
 
-  const nature = direction === 'inflows' ? 'Recebimentos' : 'Pagamentos';
+  const nature = title ?? (direction === 'inflows' ? 'Recebimentos' : 'Pagamentos');
   const heading = formatDayHeading(date);
   const ready = state.kind === 'ready' ? state.data : null;
   const showTotal = ready !== null && ready.completeness !== 'UNAVAILABLE' && ready.total !== null;
   const countLabel =
     ready !== null && ready.completeness === 'COMPLETE' && ready.itemCount > 0
-      ? `${ready.itemCount} ${movementNoun(direction, ready.itemCount)}`
+      ? `${ready.itemCount} ${movementNoun(direction, ready.itemCount, itemNoun)}`
       : null;
   const partialLabel =
     ready !== null && ready.completeness === 'PARTIAL' && ready.hasMore && ready.itemCount > ready.items.length

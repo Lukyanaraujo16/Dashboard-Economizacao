@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import { useCallback, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
 import { monthShortLabelPtBr } from '../../../lib/dashboard-month';
@@ -56,6 +56,11 @@ export type CashMonthlyGroupedBarsProps = {
   readonly outflowLabel?: string;
   readonly resultLabel?: string;
   readonly includeResultInTooltip?: boolean;
+  /** Mês civil selecionado (YYYY-MM). Ausente = nenhuma seleção. */
+  readonly selectedMonthKey?: string | null;
+  /** Clique ou Enter/Espaço no mês. O chamador decide o toggle. */
+  readonly onMonthSelect?: (monthKey: string) => void;
+  readonly selectionHint?: string;
 };
 
 /** OUT/25 — eixo denso e título do tooltip. */
@@ -172,8 +177,13 @@ export function CashMonthlyGroupedBars({
   outflowLabel = 'Saídas',
   resultLabel = 'Resultado',
   includeResultInTooltip = true,
+  selectedMonthKey = null,
+  onMonthSelect,
+  selectionHint = 'Selecione um mês para ver os lançamentos',
 }: CashMonthlyGroupedBarsProps) {
+  const selectionHintId = useId();
   const plotRef = useRef<HTMLDivElement>(null);
+  const barsFrameRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [hoverZone, setHoverZone] = useState<'bars' | 'balance'>('bars');
 
@@ -243,9 +253,17 @@ export function CashMonthlyGroupedBars({
       if (event.key === 'ArrowRight') {
         event.preventDefault();
         setActiveIndex(Math.min(last, current + 1));
+        return;
+      }
+      if ((event.key === 'Enter' || event.key === ' ') && onMonthSelect) {
+        event.preventDefault();
+        const monthKey = buckets[current]?.monthKey;
+        if (monthKey !== undefined) {
+          onMonthSelect(monthKey);
+        }
       }
     },
-    [activeIndex, count],
+    [activeIndex, buckets, count, onMonthSelect],
   );
 
   const showChart = buckets.length > 0 && !allForecastBucketsZero(forecastBuckets);
@@ -260,6 +278,11 @@ export function CashMonthlyGroupedBars({
   }
 
   const scale = maxInflowOutflowScale(forecastBuckets);
+  const selectedIndex =
+    selectedMonthKey === null
+      ? -1
+      : buckets.findIndex((bucket) => bucket.monthKey === selectedMonthKey);
+  const emphasized = activeIndex >= 0 || selectedIndex >= 0;
   const active = activeIndex >= 0 ? buckets[activeIndex] : undefined;
   const activeBalance =
     showBalance && active && balanceByMonthKey ? balanceByMonthKey.get(active.monthKey) : undefined;
@@ -288,9 +311,11 @@ export function CashMonthlyGroupedBars({
 
       <div
         ref={plotRef}
-        className={styles.plot}
+        className={cx(styles.plot, onMonthSelect && styles.selectable)}
         role="img"
         aria-label={ariaLabel}
+        aria-describedby={onMonthSelect && selectedMonthKey === null ? selectionHintId : undefined}
+        data-selected-month={selectedMonthKey ?? undefined}
         tabIndex={0}
         onMouseMove={
           showBalanceBand
@@ -307,6 +332,7 @@ export function CashMonthlyGroupedBars({
         <div className={styles.scroll}>
           <div className={styles.alignedStack}>
             <div
+              ref={barsFrameRef}
               className={styles.chartFrame}
               data-monthly-bars-plot=""
               onMouseMove={(event) => {
@@ -317,14 +343,23 @@ export function CashMonthlyGroupedBars({
               <ul className={styles.chart}>
                 {buckets.map((bucket, index) => {
                   const activeBucket = index === activeIndex;
+                  const selectedBucket = index === selectedIndex;
                   return (
                     <li
                       key={bucket.monthKey}
                       className={styles.bucket}
                       data-active={activeBucket ? 'true' : undefined}
-                      data-dimmed={activeIndex >= 0 && !activeBucket ? 'true' : undefined}
+                      data-selected={selectedBucket ? 'true' : undefined}
+                      data-dimmed={emphasized && !activeBucket && !selectedBucket ? 'true' : undefined}
                       onMouseEnter={() => setActiveIndex(index)}
                       onFocus={() => setActiveIndex(index)}
+                      onClick={
+                        onMonthSelect
+                          ? () => {
+                              onMonthSelect(bucket.monthKey);
+                            }
+                          : undefined
+                      }
                       aria-label={`${formatMonthKeyPtBr(bucket.monthKey)}: ${inflowLabel.toLowerCase()} ${moneyOrDash(
                         bucket.inflows,
                       )}, ${outflowLabel.toLowerCase()} ${moneyOrDash(bucket.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(
@@ -471,11 +506,13 @@ export function CashMonthlyGroupedBars({
             verticalMode="floating-top"
             anchorRatio={anchorRatioFromIndex(activeIndex, count)}
             containerRef={plotRef}
+            trackRef={barsFrameRef}
+            slotCount={count}
             className={styles.tooltip}
             role="tooltip"
             aria-hidden="true"
           >
-            <p className={styles.tooltipMonth}>{axisMonthLabel(active.monthKey)}</p>
+            <p className={styles.tooltipMonth}>{formatMonthKeyPtBr(active.monthKey)}</p>
             {showBandBarsTooltip ? (
               <>
                 <p className={styles.tooltipRow}>
@@ -523,9 +560,15 @@ export function CashMonthlyGroupedBars({
 
       {caption ? <p className={styles.caption}>{caption}</p> : null}
 
+      {onMonthSelect && selectedMonthKey === null ? (
+        <p id={selectionHintId} className={styles.hint} data-cash-month-hint="true">
+          {selectionHint}
+        </p>
+      ) : null}
+
       <span className={styles.liveRegion} aria-live="polite">
         {active
-          ? `${axisMonthLabel(active.monthKey)}: ${inflowLabel.toLowerCase()} ${moneyOrDash(active.inflows)}, ${outflowLabel.toLowerCase()} ${moneyOrDash(active.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(active.result)}${
+          ? `${formatMonthKeyPtBr(active.monthKey)}: ${inflowLabel.toLowerCase()} ${moneyOrDash(active.inflows)}, ${outflowLabel.toLowerCase()} ${moneyOrDash(active.outflows)}, ${resultLabel.toLowerCase()} ${moneyOrDash(active.result)}${
               showBalance
                 ? `, ${balanceTooltipLabel.toLowerCase()} ${activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}`
                 : ''

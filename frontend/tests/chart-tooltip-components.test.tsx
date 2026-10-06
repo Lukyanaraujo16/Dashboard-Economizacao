@@ -117,10 +117,71 @@ describe('ChartTooltip nos componentes V2', () => {
     fireEvent.mouseMove(plot, { clientX: 620, clientY: 40 });
     const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
     expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
+    expect(tip.textContent).toMatch(/10\/08\/2026/);
     expect(tip.textContent).toMatch(/Entradas/);
     expect(tip.textContent).toMatch(/Saídas/);
     expect(tip.textContent).toMatch(/R\$/);
     expect(tip.style.bottom).toMatch(/calc\(100%/);
+  });
+
+  it('CompetenceDailyBars no modal desce o tooltip quando o topo cortaria a data', async () => {
+    render(
+      <ThemeProvider>
+        <WidgetExpandDialog open title="Movimentação financeira" onClose={vi.fn()}>
+          <CompetenceDailyBars
+            revenueDaily={dailySeries(10)}
+            expenseDaily={dailySeries(10)}
+            monthKey="2026-08"
+            revenueLabel="Entradas"
+            expenseLabel="Saídas"
+            balanceByDate={new Map([['2026-08-01', '1000.00']])}
+            balanceLabel="Saldo bancário"
+          />
+        </WidgetExpandDialog>
+      </ThemeProvider>,
+    );
+    const plot = screen.getByRole('img', {
+      name: /Receitas e despesas por dia de competência em ago\/2026/,
+    });
+    const content = plot.closest('[class*="content"]') as HTMLElement;
+    content.style.overflowY = 'auto';
+    applyRect(content, 640, 220, 0);
+    content.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 80,
+        right: 640,
+        bottom: 300,
+        width: 640,
+        height: 220,
+        x: 0,
+        y: 80,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    mockPlotRect(plot, 640, 108);
+    plot.getBoundingClientRect = () =>
+      ({
+        left: 16,
+        top: 88,
+        right: 656,
+        bottom: 196,
+        width: 640,
+        height: 108,
+        x: 16,
+        y: 88,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    await act(async () => {
+      fireEvent.mouseMove(plot, { clientX: 20, clientY: 40 });
+    });
+    await waitFor(() => {
+      const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
+      expect(tip.textContent).toMatch(/01\/08\/2026/);
+      expect(tip.textContent).toMatch(/Entradas/);
+      expect(tip.textContent).toMatch(/Saídas/);
+      expect(tip.textContent).toMatch(/Saldo bancário/);
+      expect(tip.getAttribute('data-vertical-placement')).not.toBe('above');
+    });
   });
 
   it('Sparkline exibe tooltip visível com data e valor após medição', async () => {
@@ -232,7 +293,7 @@ describe('ChartTooltip nos componentes V2', () => {
     const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
     expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
     expect(tip.getAttribute('data-vertical-placement')).toBe('above');
-    expect(tip.textContent).toMatch(/AGO\/26/);
+    expect(tip.textContent).toMatch(/ago\/2026/);
     expect(tip.textContent).toMatch(/Entradas/);
     expect(tip.textContent).toMatch(/Saídas/);
     expect(tip.textContent).toMatch(/Resultado/);
@@ -249,14 +310,14 @@ describe('ChartTooltip nos componentes V2', () => {
 
     fireEvent.mouseMove(plot, { clientX: 4, clientY: 40 });
     const firstTip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
-    expect(firstTip.textContent).toMatch(/SET\/25/);
+    expect(firstTip.textContent).toMatch(/set\/2025/);
     const firstLeft = Number.parseFloat(firstTip.style.left);
     expect(firstLeft).toBeGreaterThanOrEqual(0);
     expect(firstLeft).toBeLessThan(120);
 
     fireEvent.mouseMove(plot, { clientX: 240, clientY: 40 });
     const midTip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
-    expect(midTip.textContent).toMatch(/FEV\/26|MAR\/26/);
+    expect(midTip.textContent).toMatch(/fev\/2026|mar\/2026/);
     const midLeft = Number.parseFloat(midTip.style.left);
     expect(midLeft).toBeGreaterThan(firstLeft);
     expect(midLeft).toBeLessThan(lastLeft);
@@ -288,7 +349,7 @@ describe('ChartTooltip nos componentes V2', () => {
     fireEvent.mouseMove(plot, { clientX: 4, clientY: 40 });
     const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
     expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
-    expect(tip.textContent).toMatch(/SET\/25/);
+    expect(tip.textContent).toMatch(/set\/2025/);
     expect(tip.textContent).toMatch(/—/);
     expect(tip.textContent).not.toMatch(/R\$\s*0,00/);
     expect(tip.style.transform).not.toBe('translateX(-50%)');
@@ -394,7 +455,7 @@ describe('ChartTooltip nos componentes V2', () => {
     mockPlotRect(balancePlot, 420, 52);
     fireEvent.mouseMove(balancePlot, { clientX: 210, clientY: 20 });
     const tip = screen.getByRole('tooltip', { hidden: true }) as HTMLElement;
-    expect(tip.textContent).toMatch(/OUT\/26/);
+    expect(tip.textContent).toMatch(/out\/2026/);
     expect(tip.textContent).toMatch(/Saldo projetado/);
     expect(tip.textContent).toMatch(/-R\$\s*20\.000,00|-R\$\s*20.000,00|R\$\s*-20\.000,00/);
     expect(tip.textContent).toMatch(/Projeção a partir do saldo oficial em 23\/09\/2026/);

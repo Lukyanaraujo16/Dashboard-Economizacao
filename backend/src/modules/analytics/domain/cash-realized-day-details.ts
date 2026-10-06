@@ -1,6 +1,6 @@
 import { Prisma } from '../../../generated/prisma/client.js';
 import type { FinancialCategoryReadRecord } from '../../finance/domain/types.js';
-import { civilDateUtcFromKey } from './civil-calendar.js';
+import { civilDateUtcFromKey, civilMonthBoundsFromKey } from './civil-calendar.js';
 import type { CashRealizedDetailsDirection } from './cash-realized-details.js';
 import {
   collectAttributedCashSettlements,
@@ -10,6 +10,9 @@ import {
 
 /** Página segura de um dia civil. Não é o TOP N mensal nem o default 100 da categoria. */
 export const CASH_REALIZED_DAY_DETAILS_LIMIT = 40;
+
+/** Página do mês realizado. O total cobre o mês inteiro; a lista pode continuar. */
+export const CASH_REALIZED_MONTH_DETAILS_LIMIT = 80;
 
 export const CASH_REALIZED_DAY_COUNTERPARTY_FALLBACK = 'Sem contraparte identificada';
 
@@ -37,6 +40,27 @@ export type CashRealizedDayDetails = {
   readonly itemCount: number;
   readonly limit: number;
   readonly items: readonly CashRealizedDayDetailItem[];
+};
+
+export type CashRealizedMonthDetails = {
+  readonly monthKey: string;
+  readonly from: Date;
+  readonly to: Date;
+  readonly direction: CashRealizedDetailsDirection;
+  readonly completeness: CashRealizedDayCompleteness;
+  readonly total: Prisma.Decimal | null;
+  readonly returnedSum: Prisma.Decimal | null;
+  readonly difference: Prisma.Decimal | null;
+  readonly hasMore: boolean;
+  readonly itemCount: number;
+  readonly limit: number;
+  readonly offset: number;
+  readonly items: readonly CashRealizedDayDetailItem[];
+};
+
+export type BuildCashRealizedMonthDetailsInput = Omit<BuildCashRealizedDayDetailsInput, 'date'> & {
+  readonly monthKey: string;
+  readonly offset?: number;
 };
 
 export type BuildCashRealizedDayDetailsInput = {
@@ -102,7 +126,7 @@ function sumAttributed(rows: readonly AttributedCashSettlement[]): Prisma.Decima
   );
 }
 
-function unavailable(
+function unavailableDay(
   date: string,
   direction: CashRealizedDetailsDirection,
   limit: number,
@@ -121,37 +145,54 @@ function unavailable(
   };
 }
 
-/**
- * Explica um ponto de `daily.realized`.
- * Reusa `collectAttributedCashSettlements` — a mesma população do gráfico.
- * `categoryKey` não é obrigatório: sem filtro, a categoria é só rótulo.
- */
-export function buildCashRealizedDayDetails(
-  input: BuildCashRealizedDayDetailsInput,
-): CashRealizedDayDetails {
-  const limit =
-    input.limit === undefined
-      ? CASH_REALIZED_DAY_DETAILS_LIMIT
-      : Math.min(
-          CASH_REALIZED_DAY_DETAILS_LIMIT,
-          Math.max(1, Math.trunc(input.limit)),
-        );
-  const day = civilDateUtcFromKey(input.date);
-  if (day === null) {
-    return unavailable(input.date, input.direction, limit);
-  }
+type WindowPage = {
+  readonly available: boolean;
+  readonly total: Prisma.Decimal | null;
+  readonly returnedSum: Prisma.Decimal | null;
+  readonly difference: Prisma.Decimal | null;
+  readonly hasMore: boolean;
+  readonly itemCount: number;
+  readonly items: readonly CashRealizedDayDetailItem[];
+};
 
+/**
+ * Mesma população de `collectAttributedCashSettlements` usada pelo gráfico de caixa.
+ * `offset` só fatia a lista; `total` continua sendo o período inteiro.
+ */
+function pageAttributedWindow(input: {
+  readonly from: Date;
+  readonly to: Date;
+  readonly direction: CashRealizedDetailsDirection;
+  readonly today: Date;
+  readonly settlements: CalculateMonthlyCashFlowInput['settlements'];
+  readonly realizedInstallments?: CalculateMonthlyCashFlowInput['realizedInstallments'];
+  readonly categories?: BuildCashRealizedDayDetailsInput['categories'];
+  readonly partyNames: ReadonlyMap<string, string>;
+  readonly categoryFilter?: CalculateMonthlyCashFlowInput['categoryFilter'];
+  readonly costCenter?: CalculateMonthlyCashFlowInput['costCenter'];
+  readonly costCenterLabel?: string | null;
+  readonly limit: number;
+  readonly offset: number;
+}): WindowPage {
   const attributed = collectAttributedCashSettlements({
     today: input.today,
-    from: day,
-    to: day,
+    from: input.from,
+    to: input.to,
     settlements: input.settlements,
     realizedInstallments: input.realizedInstallments,
     categoryFilter: input.categoryFilter ?? null,
     costCenter: input.costCenter,
   });
   if (!attributed.available) {
-    return unavailable(input.date, input.direction, limit);
+    return {
+      available: false,
+      total: null,
+      returnedSum: null,
+      difference: null,
+      hasMore: false,
+      itemCount: 0,
+      items: [],
+    };
   }
 
   const wanted = transactionTypeForDirection(input.direction);
@@ -166,9 +207,9 @@ export function buildCashRealizedDayDetails(
       right.settlement.settlementExternalId ?? '',
     );
   });
-  const page = ordered.slice(0, limit);
+  const page = ordered.slice(input.offset, input.offset + input.limit);
   const returnedSum = sumAttributed(page);
-  const hasMore = ordered.length > page.length;
+  const hasMore = input.offset + page.length < ordered.length;
   const expectedType = expectedTypeForDirection(input.direction);
   const catalog = new Map((input.categories ?? []).map((category) => [category.externalId, category]));
   const costCenterLabel = input.costCenterLabel?.trim() || null;
@@ -191,16 +232,122 @@ export function buildCashRealizedDayDetails(
   });
 
   return {
-    date: input.date,
-    direction: input.direction,
-    completeness: hasMore ? 'PARTIAL' : 'COMPLETE',
+    available: true,
     total,
     returnedSum,
     difference: total.minus(returnedSum),
     hasMore,
     itemCount: ordered.length,
-    limit,
     items,
+  };
+}
+
+/**
+ * Explica um ponto de `daily.realized`.
+ * Reusa `collectAttributedCashSettlements` — a mesma população do gráfico.
+ * `categoryKey` não é obrigatório: sem filtro, a categoria é só rótulo.
+ */
+export function buildCashRealizedDayDetails(
+  input: BuildCashRealizedDayDetailsInput,
+): CashRealizedDayDetails {
+  const limit = clampCashRealizedDayDetailsLimit(input.limit);
+  const day = civilDateUtcFromKey(input.date);
+  if (day === null) {
+    return unavailableDay(input.date, input.direction, limit);
+  }
+
+  const page = pageAttributedWindow({
+    ...input,
+    from: day,
+    to: day,
+    limit,
+    offset: 0,
+  });
+  if (!page.available) {
+    return unavailableDay(input.date, input.direction, limit);
+  }
+
+  return {
+    date: input.date,
+    direction: input.direction,
+    completeness: page.hasMore ? 'PARTIAL' : 'COMPLETE',
+    total: page.total,
+    returnedSum: page.returnedSum,
+    difference: page.difference,
+    hasMore: page.hasMore,
+    itemCount: page.itemCount,
+    limit,
+    items: page.items,
+  };
+}
+
+function unavailableMonth(
+  monthKey: string,
+  from: Date,
+  to: Date,
+  direction: CashRealizedDetailsDirection,
+  limit: number,
+  offset: number,
+): CashRealizedMonthDetails {
+  return {
+    monthKey,
+    from,
+    to,
+    direction,
+    completeness: 'UNAVAILABLE',
+    total: null,
+    returnedSum: null,
+    difference: null,
+    hasMore: false,
+    itemCount: 0,
+    limit,
+    offset,
+    items: [],
+  };
+}
+
+/**
+ * Explica um mês de `cash-movement-history` / `realized`.
+ * Mesma atribuição do gráfico mensal; a página não substitui o total.
+ */
+export function buildCashRealizedMonthDetails(
+  input: BuildCashRealizedMonthDetailsInput,
+): CashRealizedMonthDetails {
+  const limit = clampCashRealizedMonthDetailsLimit(input.limit);
+  const offset = clampCashRealizedMonthDetailsOffset(input.offset);
+  let bounds: { from: Date; to: Date; monthKey: string };
+  try {
+    bounds = civilMonthBoundsFromKey(input.monthKey);
+  } catch {
+    const fallback = new Date(0);
+    return unavailableMonth(input.monthKey, fallback, fallback, input.direction, limit, offset);
+  }
+
+  const page = pageAttributedWindow({
+    ...input,
+    from: bounds.from,
+    to: bounds.to,
+    limit,
+    offset,
+  });
+  if (!page.available) {
+    return unavailableMonth(bounds.monthKey, bounds.from, bounds.to, input.direction, limit, offset);
+  }
+
+  return {
+    monthKey: bounds.monthKey,
+    from: bounds.from,
+    to: bounds.to,
+    direction: input.direction,
+    completeness: page.hasMore || offset > 0 ? 'PARTIAL' : 'COMPLETE',
+    total: page.total,
+    returnedSum: page.returnedSum,
+    difference: page.difference,
+    hasMore: page.hasMore,
+    itemCount: page.itemCount,
+    limit,
+    offset,
+    items: page.items,
   };
 }
 
@@ -209,4 +356,18 @@ export function clampCashRealizedDayDetailsLimit(limit: number | undefined): num
     return CASH_REALIZED_DAY_DETAILS_LIMIT;
   }
   return Math.min(CASH_REALIZED_DAY_DETAILS_LIMIT, Math.max(1, Math.trunc(limit)));
+}
+
+export function clampCashRealizedMonthDetailsLimit(limit: number | undefined): number {
+  if (limit === undefined || Number.isNaN(limit)) {
+    return CASH_REALIZED_MONTH_DETAILS_LIMIT;
+  }
+  return Math.min(CASH_REALIZED_MONTH_DETAILS_LIMIT, Math.max(1, Math.trunc(limit)));
+}
+
+export function clampCashRealizedMonthDetailsOffset(offset: number | undefined): number {
+  if (offset === undefined || Number.isNaN(offset)) {
+    return 0;
+  }
+  return Math.max(0, Math.trunc(offset));
 }

@@ -9,12 +9,14 @@ import type { DashboardMonthEndCashPressureResponse } from '../src/services/dash
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import type { DashboardMonthlyCashFlowResponse } from '../src/services/dashboard/monthly-cash-flow.types';
 import { getDashboardCashMovementHistory } from '../src/services/dashboard/cash-movement-history';
+import { getDashboardCashExpectedHorizon } from '../src/services/dashboard/cash-expected-horizon';
 import { getDashboardReceivableStockDetails } from '../src/services/dashboard/receivable-stock-details';
 import { getDashboardPayableStockDetails } from '../src/services/dashboard/payable-stock-details';
 import { getDashboardExpectedReceivableDetails } from '../src/services/dashboard/expected-receivable-details';
 import { getDashboardExpectedPayableDetails } from '../src/services/dashboard/expected-payable-details';
 import { getDashboardCashRealizedDetails } from '../src/services/dashboard/cash-realized-details';
 import { getDashboardCashRealizedDayDetails } from '../src/services/dashboard/cash-realized-day-details';
+import { getDashboardCashRealizedMonthDetails } from '../src/services/dashboard/cash-realized-month-details';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
 import type { RevenueGoalSnapshot } from '../src/services/dashboard/revenue-goal.types';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
@@ -49,6 +51,9 @@ vi.mock('../src/services/dashboard/monthly-cash-flow', () => ({
 vi.mock('../src/services/dashboard/cash-movement-history', () => ({
   getDashboardCashMovementHistory: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/cash-expected-horizon', () => ({
+  getDashboardCashExpectedHorizon: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/receivable-stock-details', () => ({
   getDashboardReceivableStockDetails: vi.fn(),
 }));
@@ -67,6 +72,9 @@ vi.mock('../src/services/dashboard/cash-realized-details', () => ({
 vi.mock('../src/services/dashboard/cash-realized-day-details', () => ({
   getDashboardCashRealizedDayDetails: vi.fn(),
 }));
+vi.mock('../src/services/dashboard/cash-realized-month-details', () => ({
+  getDashboardCashRealizedMonthDetails: vi.fn(),
+}));
 vi.mock('../src/services/dashboard/revenue-goal', () => ({
   getDashboardRevenueGoal: vi.fn(),
   putDashboardRevenueGoal: vi.fn(),
@@ -82,11 +90,13 @@ const getOverview = vi.mocked(getDashboardOverview);
 const getMonthEnd = vi.mocked(getDashboardMonthEndCashPressure);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getHistory = vi.mocked(getDashboardCashMovementHistory);
+const getHorizon = vi.mocked(getDashboardCashExpectedHorizon);
 const getReceivableStockDetails = vi.mocked(getDashboardReceivableStockDetails);
 const getPayableStockDetails = vi.mocked(getDashboardPayableStockDetails);
 const getExpectedReceivableDetails = vi.mocked(getDashboardExpectedReceivableDetails);
 const getExpectedPayableDetails = vi.mocked(getDashboardExpectedPayableDetails);
 const getCashRealizedDetails = vi.mocked(getDashboardCashRealizedDetails);
+const getCashRealizedMonthDetails = vi.mocked(getDashboardCashRealizedMonthDetails);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
 
 const CENTER = '11111111-1111-4111-8111-111111111111';
@@ -420,6 +430,44 @@ beforeEach(() => {
       },
     ],
   });
+  getCashRealizedMonthDetails.mockImplementation(async (input) => ({
+    monthKey: input.monthKey,
+    from: `${input.monthKey}-01`,
+    to: `${input.monthKey}-28`,
+    direction: input.direction,
+    completeness: 'COMPLETE' as const,
+    total: input.direction === 'inflows' ? '10.00' : '5.00',
+    returnedSum: input.direction === 'inflows' ? '10.00' : '5.00',
+    difference: '0',
+    hasMore: false,
+    itemCount: 1,
+    limit: 80,
+    offset: input.offset ?? 0,
+    items:
+      input.direction === 'inflows'
+        ? [
+            {
+              occurredOn: `${input.monthKey}-05`,
+              attributedAmount: '10.00',
+              partyName: 'Cliente Caixa',
+              description: null,
+              displayLabel: 'Cliente Caixa',
+              categoryNames: ['Serviços'],
+              costCenterLabel: null,
+            },
+          ]
+        : [
+            {
+              occurredOn: `${input.monthKey}-05`,
+              attributedAmount: '5.00',
+              partyName: null,
+              description: 'Tarifa',
+              displayLabel: 'Tarifa',
+              categoryNames: [],
+              costCenterLabel: null,
+            },
+          ],
+  }));
   getRevenueGoal.mockResolvedValue(goal);
   getCostCenters.mockResolvedValue({ items: [] });
   getCategories.mockResolvedValue({ items: [] });
@@ -481,15 +529,11 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
       expect(getReceivableStockDetails).toHaveBeenCalled();
     });
     expect(getExpectedReceivableDetails).not.toHaveBeenCalled();
-    const receivableChart = within(dialog).getByRole('img', {
-      name: 'A receber no prazo por dia de vencimento',
-    });
-    const receivableTitles = within(dialog).getByText('Títulos em aberto');
     expect(
-      receivableChart.compareDocumentPosition(receivableTitles) & Node.DOCUMENT_POSITION_FOLLOWING,
+      within(dialog).getByRole('img', { name: 'A receber no prazo por dia de vencimento' }),
     ).toBeTruthy();
-    expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
-    expect(within(dialog).getByText('Cliente Teste')).toBeTruthy();
+    expect(within(dialog).queryByText('Títulos em aberto')).toBeNull();
+    expect(within(dialog).queryByText('Cliente Teste')).toBeNull();
     expect(
       within(dialog).queryByText(/Composição por categoria do previsto não disponível/i),
     ).toBeNull();
@@ -507,18 +551,14 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
       expect(getPayableStockDetails).toHaveBeenCalled();
     });
     expect(getExpectedPayableDetails).not.toHaveBeenCalled();
-    const payableChart = within(dialog).getByRole('img', {
-      name: 'A pagar no prazo por dia de vencimento',
-    });
-    const payableTitles = within(dialog).getByText('Títulos em aberto');
     expect(
-      payableChart.compareDocumentPosition(payableTitles) & Node.DOCUMENT_POSITION_FOLLOWING,
+      within(dialog).getByRole('img', { name: 'A pagar no prazo por dia de vencimento' }),
     ).toBeTruthy();
-    expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
-    expect(within(dialog).getByText('Fornecedor XYZ')).toBeTruthy();
+    expect(within(dialog).queryByText('Títulos em aberto')).toBeNull();
+    expect(within(dialog).queryByText('Fornecedor XYZ')).toBeNull();
   });
 
-  it('lista longa de títulos permanece abaixo do gráfico ampliado', async () => {
+  it('lista permanente de títulos não aparece abaixo do gráfico ampliado', async () => {
     getReceivableStockDetails.mockResolvedValue({
       today: '2026-08-19',
       available: true,
@@ -559,24 +599,20 @@ describe('PRE-F13-HOME-POLISH-1 — expansão Home caixa', () => {
     });
 
     const receivable = await openKpiExpand('A receber');
-    const receivableChart = within(receivable).getByRole('img', {
-      name: 'A receber no prazo por dia de vencimento',
-    });
-    const lastReceivable = within(receivable).getByText(/Título longo 12/);
     expect(
-      receivableChart.compareDocumentPosition(lastReceivable) & Node.DOCUMENT_POSITION_FOLLOWING,
+      within(receivable).getByRole('img', { name: 'A receber no prazo por dia de vencimento' }),
     ).toBeTruthy();
+    expect(within(receivable).queryByText(/Título longo 12/)).toBeNull();
+    expect(within(receivable).queryByText('Títulos em aberto')).toBeNull();
     fireEvent.click(within(receivable).getByRole('button', { name: 'Fechar' }));
 
     fireEvent.click(kpiScope('Contas a pagar').getByRole('button', { name: 'Expandir' }));
     const payable = await screen.findByRole('dialog');
-    const payableChart = within(payable).getByRole('img', {
-      name: 'A pagar no prazo por dia de vencimento',
-    });
-    const lastPayable = await within(payable).findByText(/Conta longa 12/);
     expect(
-      payableChart.compareDocumentPosition(lastPayable) & Node.DOCUMENT_POSITION_FOLLOWING,
+      within(payable).getByRole('img', { name: 'A pagar no prazo por dia de vencimento' }),
     ).toBeTruthy();
+    expect(within(payable).queryByText(/Conta longa 12/)).toBeNull();
+    expect(within(payable).queryByText('Títulos em aberto')).toBeNull();
   });
 
   it('Z9/Z10 — Despesas abre com Pago, acumulado e A pagar', async () => {
@@ -823,8 +859,8 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
     await waitFor(() => {
       expect(getPayableStockDetails).toHaveBeenCalled();
     });
-    expect(within(payable).getByText('Títulos em aberto')).toBeTruthy();
-    expect(within(payable).getByText('Fornecedor XYZ')).toBeTruthy();
+    expect(within(payable).queryByText('Títulos em aberto')).toBeNull();
+    expect(within(payable).queryByText('Fornecedor XYZ')).toBeNull();
   });
 
   it('mês passado mantém realizado e expected pode ficar vazio', async () => {
@@ -1049,7 +1085,7 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
       expect(getReceivableStockDetails).toHaveBeenCalled();
     });
     expect(getExpectedReceivableDetails).not.toHaveBeenCalled();
-    expect(within(receivable).getByText('Títulos em aberto')).toBeTruthy();
+    expect(within(receivable).queryByText('Títulos em aberto')).toBeNull();
     fireEvent.click(within(receivable).getByRole('button', { name: 'Fechar' }));
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull();
@@ -1061,7 +1097,7 @@ describe('Home — detalhe previsto de Faturamento e Despesas', () => {
       expect(getPayableStockDetails).toHaveBeenCalled();
     });
     expect(getExpectedPayableDetails).not.toHaveBeenCalled();
-    expect(within(payable).getByText('Títulos em aberto')).toBeTruthy();
+    expect(within(payable).queryByText('Títulos em aberto')).toBeNull();
   });
 });
 
@@ -1182,5 +1218,324 @@ describe('Home — detalhe diário de caixa realizado', () => {
     expect(getDayDetails).toHaveBeenCalledWith(
       expect.objectContaining({ direction: 'outflows', date: '2026-08-06' }),
     );
+  });
+});
+
+describe('Movimentação financeira — detalhe no modal', () => {
+  const getDayDetails = vi.mocked(getDashboardCashRealizedDayDetails);
+
+  function mockDailyBars(element: HTMLElement) {
+    const rect = {
+      width: 320,
+      height: 108,
+      left: 0,
+      top: 40,
+      right: 320,
+      bottom: 148,
+      x: 0,
+      y: 40,
+      toJSON() {
+        return {};
+      },
+    } as DOMRect;
+    element.getBoundingClientRect = () => rect;
+    const bars = element.querySelector('[data-daily-bars-plot]');
+    if (bars instanceof HTMLElement) {
+      bars.getBoundingClientRect = () => rect;
+    }
+  }
+
+  function dayPayload(input: {
+    readonly date: string;
+    readonly direction: 'inflows' | 'outflows';
+    readonly total: string;
+    readonly label: string | null;
+  }) {
+    const empty = input.label === null;
+    return {
+      date: input.date,
+      direction: input.direction,
+      completeness: 'COMPLETE' as const,
+      total: input.total,
+      returnedSum: input.total,
+      difference: '0',
+      hasMore: false,
+      itemCount: empty ? 0 : 1,
+      limit: 40,
+      items: empty
+        ? []
+        : [
+            {
+              occurredOn: input.date,
+              attributedAmount: input.total,
+              partyName: input.direction === 'inflows' ? input.label : null,
+              description: input.direction === 'outflows' ? input.label : null,
+              displayLabel: input.label ?? '',
+              categoryNames: input.direction === 'inflows' ? ['Serviços'] : [],
+              costCenterLabel: null,
+            },
+          ],
+    };
+  }
+
+  beforeEach(() => {
+    dashboardSearchParams = new URLSearchParams('month=2026-08');
+    getDayDetails.mockImplementation(async (input) => {
+      if (input.date === '2026-08-06') {
+        return dayPayload({
+          date: input.date,
+          direction: input.direction,
+          total: '0.00',
+          label: null,
+        });
+      }
+      if (input.date === '2026-08-12') {
+        return dayPayload({
+          date: input.date,
+          direction: input.direction,
+          total: input.direction === 'inflows' ? '20.00' : '7.00',
+          label: input.direction === 'inflows' ? 'Cliente Doze' : 'Saída Doze',
+        });
+      }
+      return dayPayload({
+        date: input.date,
+        direction: input.direction,
+        total: input.direction === 'inflows' ? '888888.88' : '0.00',
+        label: input.direction === 'inflows' ? 'Cliente Caixa' : null,
+      });
+    });
+  });
+
+  it('não lista lançamentos enquanto nenhum dia está selecionado e o tooltip mostra a data', async () => {
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    expect(dialog.querySelector('[data-cash-movement-details]')).toBeNull();
+    expect(within(dialog).getByText('Selecione um dia para ver os lançamentos')).toBeTruthy();
+    const plot = within(dialog).getByRole('img', { name: /Entradas e saídas de caixa por dia de baixa/ });
+    mockDailyBars(plot);
+    fireEvent.mouseMove(plot, { clientX: 20, clientY: 20 });
+    const tip = within(dialog).getByRole('tooltip', { hidden: true });
+    expect(tip.textContent).toMatch(/05\/08\/2026/);
+    expect(tip.textContent).toMatch(/Entradas/);
+    expect(tip.textContent).toMatch(/Saídas/);
+    expect(getDayDetails).not.toHaveBeenCalled();
+  });
+
+  it('seleciona o dia, separa entradas e saídas e reconcilia com o gráfico', async () => {
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    const plot = within(dialog).getByRole('img', { name: /Entradas e saídas de caixa por dia de baixa/ });
+    mockDailyBars(plot);
+    fireEvent.click(plot, { clientX: 20, clientY: 20 });
+    expect(await within(dialog).findByRole('region', { name: 'Entradas em 5 AGO 2026' })).toBeTruthy();
+    expect(within(dialog).getByRole('region', { name: 'Saídas em 5 AGO 2026' })).toBeTruthy();
+    expect(within(dialog).getByText('Cliente Caixa')).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*888\.888,88/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Nenhum lançamento neste dia.')).toBeTruthy();
+    expect(getDayDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ date: '2026-08-05', direction: 'inflows', costCenterId: null, categoryId: null }),
+    );
+    expect(getDayDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ date: '2026-08-05', direction: 'outflows' }),
+    );
+    fireEvent.click(plot, { clientX: 20, clientY: 20 });
+    await waitFor(() => {
+      expect(dialog.querySelector('[data-cash-movement-details]')).toBeNull();
+    });
+  });
+
+  it('troca o dia e trata dia sem movimento', async () => {
+    getMonthlyCashFlow.mockResolvedValue({
+      ...cashFlowHomeFixture,
+      daily: {
+        realized: [
+          { date: '2026-08-05', inflows: '888888.88', outflows: '0.00', result: '888888.88' },
+          { date: '2026-08-06', inflows: '0.00', outflows: '0.00', result: '0.00' },
+          { date: '2026-08-12', inflows: '20.00', outflows: '7.00', result: '13.00' },
+        ],
+        expected: cashFlowHomeFixture.daily.expected,
+      },
+    });
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    const plot = within(dialog).getByRole('img', { name: /Entradas e saídas de caixa por dia de baixa/ });
+    mockDailyBars(plot);
+    fireEvent.click(plot, { clientX: 300, clientY: 20 });
+    expect(await within(dialog).findByText('Cliente Doze')).toBeTruthy();
+    expect(within(dialog).getByText('Saída Doze')).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*20,00/).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(/R\$\s*7,00/).length).toBeGreaterThan(0);
+    fireEvent.click(plot, { clientX: 160, clientY: 20 });
+    expect(await within(dialog).findByRole('region', { name: 'Entradas em 6 AGO 2026' })).toBeTruthy();
+    expect(within(dialog).getAllByText('Nenhum lançamento neste dia.')).toHaveLength(2);
+    expect(within(dialog).queryByText('Cliente Doze')).toBeNull();
+  });
+
+  it('envia centro de custo e categoria no detalhe diário', async () => {
+    dashboardSearchParams = new URLSearchParams(`month=2026-08&costCenter=${CENTER}&category=${CATEGORY}`);
+    getCostCenters.mockResolvedValue({
+      items: [{ id: CENTER, name: 'Centro A', code: null, active: true }],
+    });
+    getCategories.mockResolvedValue({
+      items: [{ id: CATEGORY, name: 'Categoria A', type: 'REVENUE' }],
+    });
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    const plot = within(dialog).getByRole('img', { name: /Entradas e saídas de caixa por dia de baixa/ });
+    mockDailyBars(plot);
+    fireEvent.click(plot, { clientX: 20, clientY: 20 });
+    await within(dialog).findByText('Cliente Caixa');
+    expect(getDayDetails).toHaveBeenCalledWith(
+      expect.objectContaining({
+        date: '2026-08-05',
+        direction: 'inflows',
+        costCenterId: CENTER,
+        categoryId: CATEGORY,
+      }),
+    );
+    expect(getDayDetails.mock.calls.every((call) => !('tenantId' in (call[0] ?? {})))).toBe(true);
+  });
+
+  it('seleciona o mês realizado, reconcilia e troca para mês sem movimento', async () => {
+    getHistory.mockResolvedValue({
+      today: '2026-08-19',
+      startMonth: '2026-07',
+      endMonth: '2026-08',
+      costCenterCashSplit: true,
+      months: [
+        { monthKey: '2026-07', realized: { inflows: '0.00', outflows: '0.00', result: '0.00' } },
+        { monthKey: '2026-08', realized: { inflows: '10.00', outflows: '5.00', result: '5.00' } },
+      ],
+    });
+    getCashRealizedMonthDetails.mockImplementation(async (input) => {
+      const empty = input.monthKey === '2026-07';
+      return {
+        monthKey: input.monthKey,
+        from: `${input.monthKey}-01`,
+        to: `${input.monthKey}-31`,
+        direction: input.direction,
+        completeness: 'COMPLETE',
+        total: empty ? '0.00' : input.direction === 'inflows' ? '10.00' : '5.00',
+        returnedSum: empty ? '0.00' : input.direction === 'inflows' ? '10.00' : '5.00',
+        difference: '0',
+        hasMore: false,
+        itemCount: empty ? 0 : 1,
+        limit: 80,
+        offset: 0,
+        items: empty
+          ? []
+          : [
+              {
+                occurredOn: `${input.monthKey}-05`,
+                attributedAmount: input.direction === 'inflows' ? '10.00' : '5.00',
+                partyName: input.direction === 'inflows' ? 'Cliente Caixa' : null,
+                description: input.direction === 'outflows' ? 'Tarifa' : null,
+                displayLabel: input.direction === 'inflows' ? 'Cliente Caixa' : 'Tarifa',
+                categoryNames: [],
+                costCenterLabel: null,
+              },
+            ],
+      };
+    });
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    expect(dialog.querySelector('[data-cash-movement-details]')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Mensal' }));
+    const august = await within(dialog).findByText('AGO/26');
+    fireEvent.click(august);
+    expect(await within(dialog).findByRole('region', { name: 'Entradas em AGO 2026' })).toBeTruthy();
+    expect(within(dialog).getByRole('region', { name: 'Saídas em AGO 2026' })).toBeTruthy();
+    expect(within(dialog).getByText('Cliente Caixa')).toBeTruthy();
+    expect(within(dialog).getByText('Tarifa')).toBeTruthy();
+    expect(getCashRealizedMonthDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ monthKey: '2026-08', direction: 'inflows' }),
+    );
+    expect(getCashRealizedMonthDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ monthKey: '2026-08', direction: 'outflows' }),
+    );
+    fireEvent.click(within(dialog).getByText('JUL/26'));
+    expect(await within(dialog).findByRole('region', { name: 'Entradas em JUL 2026' })).toBeTruthy();
+    expect(within(dialog).getAllByText('Nenhum lançamento neste mês.')).toHaveLength(2);
+    expect(within(dialog).queryByText('Cliente Caixa')).toBeNull();
+    expect(
+      within(dialog).getByRole('listitem', { name: /ago\/2026: entradas/i }),
+    ).toBeTruthy();
+  });
+
+  it('página parcial do mês não apresenta a lista como o total', async () => {
+    getCashRealizedMonthDetails.mockImplementation(async (input) => ({
+      monthKey: input.monthKey,
+      from: `${input.monthKey}-01`,
+      to: `${input.monthKey}-31`,
+      direction: input.direction,
+      completeness: 'PARTIAL' as const,
+      total: input.direction === 'inflows' ? '30.00' : '0.00',
+      returnedSum: input.direction === 'inflows' ? '10.00' : '0.00',
+      difference: input.direction === 'inflows' ? '20.00' : '0.00',
+      hasMore: input.direction === 'inflows',
+      itemCount: input.direction === 'inflows' ? 2 : 0,
+      limit: 80,
+      offset: input.offset ?? 0,
+      items:
+        input.direction === 'inflows' && (input.offset ?? 0) === 0
+          ? [
+              {
+                occurredOn: `${input.monthKey}-05`,
+                attributedAmount: '10.00',
+                partyName: 'Cliente Parcial',
+                description: null,
+                displayLabel: 'Cliente Parcial',
+                categoryNames: [],
+                costCenterLabel: null,
+              },
+            ]
+          : [],
+    }));
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Mensal' }));
+    fireEvent.click(await within(dialog).findByText('AGO/26'));
+    expect(await within(dialog).findByText('Cliente Parcial')).toBeTruthy();
+    expect(within(dialog).getByText('Exibindo 1 de 2')).toBeTruthy();
+    expect(within(dialog).getByText(/O valor acima é o total do mês/)).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*30,00/).length).toBeGreaterThan(0);
+  });
+
+  it('Mensal > Previsto detalha o mês com a fonte de títulos previstos', async () => {
+    dashboardSearchParams = new URLSearchParams('month=2026-10');
+    getHorizon.mockResolvedValue({
+      today: '2026-10-06',
+      startMonth: '2026-10',
+      endMonth: '2026-12',
+      horizon: 3,
+      costCenterCashSplit: true,
+      totals: { receivables: '50000.00', payables: '166188.45', result: '-116188.45' },
+      months: [
+        {
+          monthKey: '2026-10',
+          expected: { receivables: '50000.00', payables: '166188.45', result: '-116188.45' },
+        },
+        {
+          monthKey: '2026-11',
+          expected: { receivables: '0.00', payables: '0.00', result: '0.00' },
+        },
+        {
+          monthKey: '2026-12',
+          expected: { receivables: '0.00', payables: '0.00', result: '0.00' },
+        },
+      ],
+      projection: {
+        available: false,
+        unavailableReason: null,
+        base: null,
+        months: [],
+      },
+    });
+    const dialog = await openSectionExpand('movimentacao-financeira');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Mensal' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Previsto' }));
+    const october = await within(dialog).findByText('OUT/26');
+    fireEvent.click(october);
+    expect(await within(dialog).findByText('Cliente Outubro')).toBeTruthy();
+    expect(within(dialog).getByText('Fornecedor Outubro')).toBeTruthy();
+    expect(within(dialog).getAllByText(/R\$\s*50\.000,00/).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(/R\$\s*166\.188,45/).length).toBeGreaterThan(0);
+    expect(getExpectedReceivableDetails).toHaveBeenCalledWith('2026-10', null, null);
+    expect(getExpectedPayableDetails).toHaveBeenCalledWith('2026-10', null, null);
+    expect(getCashRealizedMonthDetails).not.toHaveBeenCalled();
   });
 });

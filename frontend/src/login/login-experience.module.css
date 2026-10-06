@@ -3,6 +3,8 @@
   --login-ease: cubic-bezier(0.16, 0.84, 0.28, 1);
   position: relative;
   isolation: isolate;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   overflow: hidden;
   background: var(--color-background);
@@ -125,12 +127,21 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--space-8);
-  min-height: 100vh;
+  flex: 1 1 auto;
   width: 100%;
   max-width: 92rem; /* ~1472px — presença em large display sem crescer infinito */
   margin-inline: auto;
   padding: var(--space-8) var(--space-4);
   align-items: center;
+}
+
+.signatureBar {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 92rem;
+  margin-inline: auto;
+  padding: 0 var(--space-4) var(--space-5);
 }
 
 .brandColumn,
@@ -487,6 +498,10 @@
     padding: var(--space-10) var(--space-8);
   }
 
+  .signatureBar {
+    padding-inline: var(--space-8);
+  }
+
   .authCard {
     padding: var(--space-8);
   }
@@ -503,6 +518,10 @@
     gap: var(--space-5);
     padding: var(--space-12) clamp(var(--space-8), 3.5vw, var(--space-16));
     align-items: center;
+  }
+
+  .signatureBar {
+    padding-inline: clamp(var(--space-8), 3.5vw, var(--space-16));
   }
 
   .brandColumn {
@@ -559,6 +578,10 @@
     gap: var(--space-6);
   }
 
+  .signatureBar {
+    padding-inline: clamp(var(--space-10), 4vw, var(--space-16));
+  }
+
   .brandInner {
     width: min(100%, 50rem);
   }
@@ -591,6 +614,10 @@
     padding-inline: clamp(var(--space-12), 5vw, 5rem);
     gap: var(--space-6);
   }
+
+  .signatureBar {
+    padding-inline: clamp(var(--space-12), 5vw, 5rem);
+  }
 }
 
 @media (max-width: 767px) {
@@ -599,7 +626,7 @@
     gap: var(--space-5);
     padding: var(--space-5) var(--space-4) var(--space-6);
     align-items: start;
-    min-height: 100svh;
+    min-height: 0;
   }
 
   .brandInner {

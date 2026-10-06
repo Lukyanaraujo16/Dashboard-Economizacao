@@ -142,11 +142,6 @@ function ReceivableHarness() {
           )}
         />
       ) : null}
-      <h3>Títulos em aberto</h3>
-      <ExpectedReceivableDetailsPanel
-        items={receivableItems}
-        ariaLabel="Títulos a receber em aberto"
-      />
     </>
   );
 }
@@ -179,8 +174,6 @@ function PayableHarness() {
           )}
         />
       ) : null}
-      <h3>Títulos em aberto</h3>
-      <ExpectedPayableDetailsPanel items={payableItems} ariaLabel="Títulos a pagar em aberto" />
     </>
   );
 }
@@ -198,12 +191,11 @@ function selectOffset(fromEnd: number) {
 }
 
 describe('interação do drill-down de A receber', () => {
-  it('seleciona o dia, troca, esvazia e limpa sem remover a listagem geral', () => {
+  it('seleciona o dia, troca, esvazia e limpa sem listar todos os títulos', () => {
     render(<ReceivableHarness />);
     expect(screen.getByText('Selecione um dia para ver os títulos')).toBeTruthy();
-    expect(screen.getByRole('list', { name: 'Títulos a receber em aberto' }).textContent).toMatch(
-      /Cliente Vencido/,
-    );
+    expect(screen.queryByRole('heading', { name: 'Títulos em aberto' })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Títulos a receber em aberto' })).toBeNull();
 
     selectOffset(2);
     const day = screen.getByRole('region', { name: /A receber em 10 OUT 2026/ });
@@ -213,9 +205,6 @@ describe('interação do drill-down de A receber', () => {
     expect(day.textContent).not.toMatch(/Cliente Vencido/);
     expect(day.textContent).toMatch(/R\$\s*150,00/);
     expect(day.textContent).toMatch(/10\/10\/2026/);
-    expect(screen.getByRole('list', { name: 'Títulos a receber em aberto' }).textContent).toMatch(
-      /Cliente C/,
-    );
 
     selectOffset(1);
     const next = screen.getByRole('region', { name: /A receber em 11 OUT 2026/ });
@@ -232,14 +221,14 @@ describe('interação do drill-down de A receber', () => {
     selectOffset(0);
     expect(screen.queryByRole('region', { name: /A receber em/ })).toBeNull();
     expect(screen.getByText('Selecione um dia para ver os títulos')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Títulos em aberto' })).toBeTruthy();
-    expect(screen.getByRole('list', { name: 'Títulos a receber em aberto' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Títulos em aberto' })).toBeNull();
   });
 });
 
 describe('interação do drill-down de Contas a pagar', () => {
-  it('seleciona o dia, troca, esvazia e limpa sem remover a listagem geral', () => {
+  it('seleciona o dia, troca, esvazia e limpa sem listar todos os títulos', () => {
     render(<PayableHarness />);
+    expect(screen.queryByRole('heading', { name: 'Títulos em aberto' })).toBeNull();
     selectOffset(2);
     const day = screen.getByRole('region', { name: /A pagar em 10 OUT 2026/ });
     expect(within(day).getByText('Fornecedor A')).toBeTruthy();
@@ -247,9 +236,6 @@ describe('interação do drill-down de Contas a pagar', () => {
     expect(day.textContent).not.toMatch(/Fornecedor C/);
     expect(day.textContent).toMatch(/R\$\s*100,00/);
     expect(day.textContent).toMatch(/10\/10\/2026/);
-    expect(screen.getByRole('list', { name: 'Títulos a pagar em aberto' }).textContent).toMatch(
-      /Fornecedor C/,
-    );
 
     selectOffset(1);
     expect(screen.getByRole('region', { name: /A pagar em 11 OUT 2026/ }).textContent).toMatch(
@@ -265,6 +251,6 @@ describe('interação do drill-down de Contas a pagar', () => {
 
     selectOffset(0);
     expect(screen.queryByRole('region', { name: /A pagar em/ })).toBeNull();
-    expect(screen.getByRole('list', { name: 'Títulos a pagar em aberto' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Títulos em aberto' })).toBeNull();
   });
 });

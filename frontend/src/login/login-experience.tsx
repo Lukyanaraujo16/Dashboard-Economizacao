@@ -24,6 +24,7 @@ import {
   validateLoginFields,
   type LoginFieldErrors,
 } from './login-form-validation';
+import { InstitutionalFooter } from '../components/layout/institutional-footer';
 import styles from './login-experience.module.css';
 import { PlatformBrandMark } from './platform-brand-mark';
 
@@ -383,6 +384,9 @@ export function LoginExperience({
             </Card>
           </section>
         </main>
+        <div className={styles.signatureBar}>
+          <InstitutionalFooter placement="login" />
+        </div>
       </LoginShell>
     </ThemeProvider>
   );

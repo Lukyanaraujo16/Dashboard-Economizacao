@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { ConsultantHost } from '../consultant';
 import { AppHeader } from './app-header';
 import { AppSidebar } from './app-sidebar';
+import { InstitutionalFooter } from './institutional-footer';
 import styles from './app-shell.module.css';
 import { ShellBreadcrumbProvider } from './shell-breadcrumb-context';
 import { SupportModeBanner } from './support-mode-banner';
@@ -37,6 +38,9 @@ export function AppShell({ children }: AppShellProps) {
           <SupportModeBanner />
           <main className={styles.main} id="conteudo-principal">
             <div className={styles.content}>{children}</div>
+            <div className={styles.pageEnd}>
+              <InstitutionalFooter />
+            </div>
           </main>
         </div>
         <ConsultantHost />

@@ -48,6 +48,7 @@ import {
   parseCashRealizedDetailsOffset,
 } from './parse-cash-realized-details-query.js';
 import { parseCashRealizedDayDetailsQuery } from './parse-cash-realized-day-details-query.js';
+import { parseCashRealizedMonthDetailsQuery } from './parse-cash-realized-month-details-query.js';
 
 export async function registerDashboardOverviewRoutes(app: FastifyInstance): Promise<void> {
   const prisma = getPrismaClient();
@@ -503,6 +504,29 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         costCenterId,
         categoryId,
         ...(parsed.limit === undefined ? {} : { limit: parsed.limit }),
+      });
+      return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
+    },
+  );
+
+  app.get(
+    '/dashboard/cash-realized/month-details',
+    { preHandler: requireAuthentication },
+    async (request, reply) => {
+      const auth = request.auth;
+      if (!auth) {
+        throw new UnauthenticatedError();
+      }
+      const parsed = parseCashRealizedMonthDetailsQuery(request.query);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const categoryId = parseDashboardCategoryQuery(request.query);
+      const body = await dashboard.getCashRealizedMonthDetails(auth, {
+        monthKey: parsed.monthKey,
+        direction: parsed.direction,
+        costCenterId,
+        categoryId,
+        ...(parsed.limit === undefined ? {} : { limit: parsed.limit }),
+        ...(parsed.offset === undefined ? {} : { offset: parsed.offset }),
       });
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },

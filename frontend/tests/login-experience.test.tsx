@@ -148,10 +148,15 @@ describe('LoginExperience (visual freeze)', () => {
     );
 
     container.querySelectorAll('img').forEach((img) => {
+      if (img.getAttribute('src') === '/brand/lukyan-araujo-mark.png') {
+        return;
+      }
       fireEvent.error(img);
     });
 
-    expect(container.querySelectorAll('img')).toHaveLength(0);
+    expect(
+      container.querySelectorAll('img:not([src="/brand/lukyan-araujo-mark.png"])'),
+    ).toHaveLength(0);
     expect(
       container.querySelectorAll('[data-brand-placeholder="true"]').length,
     ).toBeGreaterThanOrEqual(2);

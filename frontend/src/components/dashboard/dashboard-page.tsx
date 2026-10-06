@@ -94,9 +94,7 @@ import { CashRealizedCategoryPanel } from './cash-realized-category-panel';
 import { ExpectedDueDayPanel } from './expected-due-day-panel';
 import { expectedDueDayChartAmount } from './expected-due-day-drilldown';
 import { ExpectedReceivableDetailsPanel } from './expected-receivable-details-panel';
-import expectedReceivableStyles from './expected-receivable-details-panel.module.css';
 import { ExpectedPayableDetailsPanel } from './expected-payable-details-panel';
-import expectedPayableStyles from './expected-payable-details-panel.module.css';
 import {
   CASH_PAYABLE_SPARKLINE_CAPTION,
   CASH_RECEIVABLE_SPARKLINE_CAPTION,
@@ -150,6 +148,9 @@ import {
   resolveOperationalTenantId,
   shouldSkipOverviewFetch,
 } from './dashboard-overview-view';
+import { CashExpectedMonthPanels } from './cash-expected-month-panels';
+import { CashRealizedDayPanel } from './cash-realized-day-panel';
+import { CashRealizedMonthPanel } from './cash-realized-month-panel';
 import { DailyRealizedCashChart } from './daily-realized-cash-chart';
 import {
   nextScopedDaySelection,
@@ -1132,6 +1133,22 @@ export function DashboardPage() {
   const expenseDayDate = visibleScopedDay(expenseDaySelection, realizedDayScope);
   const receivableDayDate = visibleScopedDay(receivableDaySelection, realizedDayScope);
   const payableDayDate = visibleScopedDay(payableDaySelection, realizedDayScope);
+  const [movementDaySelection, setMovementDaySelection] = useState<ScopedDaySelection | null>(null);
+  const [movementMonthSelection, setMovementMonthSelection] = useState<ScopedDaySelection | null>(
+    null,
+  );
+  const [movementExpectedSelection, setMovementExpectedSelection] =
+    useState<ScopedDaySelection | null>(null);
+  const movementFilterScope = `${selectedMonthKey}|${selectedCostCenterId ?? ''}|${selectedCategoryId ?? ''}`;
+  const movementDayScope = `cash-daily|${movementFilterScope}`;
+  const movementMonthScope = `cash-monthly|${movementFilterScope}`;
+  const movementExpectedScope = `cash-expected|${movementFilterScope}|${expectedHorizon}`;
+  const movementDayDate = visibleScopedDay(movementDaySelection, movementDayScope);
+  const movementMonthKey = visibleScopedDay(movementMonthSelection, movementMonthScope);
+  const movementExpectedMonthKey = visibleScopedDay(
+    movementExpectedSelection,
+    movementExpectedScope,
+  );
 
   useEffect(() => {
     if (
@@ -1768,6 +1785,9 @@ export function DashboardPage() {
     setExpandKind(null);
     setBillingDaySelection(null);
     setExpenseDaySelection(null);
+    setMovementDaySelection(null);
+    setMovementMonthSelection(null);
+    setMovementExpectedSelection(null);
     setReceivableStockDetailsView({ kind: 'idle' });
     setPayableStockDetailsView({ kind: 'idle' });
   }, []);
@@ -2294,11 +2314,6 @@ export function DashboardPage() {
               snapshot={revenueGoalData}
               onEdit={openGoalEditor}
             />
-            {sliceFilterActive ? (
-              <p className={styles.goalConsolidatedNote}>
-                Consolidado da empresa — não é afetado pelos filtros da Home.
-              </p>
-            ) : null}
           </WidgetBody>
         </WidgetShell>
 
@@ -2322,11 +2337,6 @@ export function DashboardPage() {
               snapshot={expenseCeilingData}
               onEdit={openCeilingEditor}
             />
-            {sliceFilterActive ? (
-              <p className={styles.goalConsolidatedNote}>
-                Consolidado da empresa — não é afetado pelos filtros da Home.
-              </p>
-            ) : null}
           </WidgetBody>
         </WidgetShell>
 
@@ -2375,9 +2385,6 @@ export function DashboardPage() {
         </WidgetShell>
       </div>
 
-      <p className={styles.hint}>
-        Clique em um card ou gráfico para abrir o detalhe em regime de caixa do mês selecionado.
-      </p>
 
       {expandKind === 'billing' && cashFlowModel && cashFlowModel.billing !== null ? (
         <WidgetExpandDialog
@@ -2523,29 +2530,6 @@ export function DashboardPage() {
                 )}
               />
             ) : null}
-            <h3 className={expectedReceivableStyles.sectionTitle}>Títulos em aberto</h3>
-            {receivableStockDetailsView.kind === 'loading' ? (
-              <p className={expectedReceivableStyles.loading}>Carregando detalhes…</p>
-            ) : null}
-            {receivableStockDetailsView.kind === 'error' ? (
-              <p className={expectedReceivableStyles.error} role="alert">
-                {receivableStockDetailsView.message}
-              </p>
-            ) : null}
-            {receivableStockDetailsView.kind === 'ready' &&
-            receivableStockDetailsView.data.available ? (
-              <ExpectedReceivableDetailsPanel
-                items={receivableStockDetailsView.data.items}
-                emptyMessage="Nenhum valor a receber em aberto."
-                ariaLabel="Títulos a receber em aberto"
-              />
-            ) : null}
-            {receivableStockDetailsView.kind === 'ready' &&
-            !receivableStockDetailsView.data.available ? (
-              <p className={expectedReceivableStyles.empty}>
-                Detalhamento indisponível para o centro de custo selecionado.
-              </p>
-            ) : null}
           </div>
         </WidgetExpandDialog>
       ) : null}
@@ -2615,29 +2599,6 @@ export function DashboardPage() {
                   />
                 )}
               />
-            ) : null}
-            <h3 className={expectedPayableStyles.sectionTitle}>Títulos em aberto</h3>
-            {payableStockDetailsView.kind === 'loading' ? (
-              <p className={expectedPayableStyles.loading}>Carregando detalhes…</p>
-            ) : null}
-            {payableStockDetailsView.kind === 'error' ? (
-              <p className={expectedPayableStyles.error} role="alert">
-                {payableStockDetailsView.message}
-              </p>
-            ) : null}
-            {payableStockDetailsView.kind === 'ready' &&
-            payableStockDetailsView.data.available ? (
-              <ExpectedPayableDetailsPanel
-                items={payableStockDetailsView.data.items}
-                emptyMessage="Nenhuma conta a pagar em aberto."
-                ariaLabel="Títulos a pagar em aberto"
-              />
-            ) : null}
-            {payableStockDetailsView.kind === 'ready' &&
-            !payableStockDetailsView.data.available ? (
-              <p className={expectedPayableStyles.empty}>
-                Detalhamento indisponível para o centro de custo selecionado.
-              </p>
             ) : null}
           </div>
         </WidgetExpandDialog>
@@ -3116,7 +3077,21 @@ export function DashboardPage() {
                             ? `${projectedBalanceCaption ?? ''} ${CASH_PROJECTED_OPEN_TITLES_NOTE}`.trim()
                             : projectedBalanceCaption
                         }
+                        selectedMonthKey={movementExpectedMonthKey}
+                        onMonthSelect={(monthKey) =>
+                          setMovementExpectedSelection((current) =>
+                            nextScopedDaySelection(current, movementExpectedScope, monthKey),
+                          )
+                        }
+                        selectionHint="Selecione um mês para ver os títulos previstos"
                       />
+                      {movementExpectedMonthKey ? (
+                        <CashExpectedMonthPanels
+                          monthKey={movementExpectedMonthKey}
+                          costCenterId={selectedCostCenterId}
+                          categoryId={selectedCategoryId}
+                        />
+                      ) : null}
                     </>
                   ) : (
                     <StateWrapper
@@ -3135,34 +3110,90 @@ export function DashboardPage() {
                     align="start"
                   />
                 ) : monthlyHistoryBuckets ? (
-                  <CashMonthlyGroupedBars
-                    buckets={monthlyHistoryBuckets}
-                    ariaLabel={`Entradas e saídas realizadas por mês de baixa · 12 meses até ${monthLabel}`}
-                    caption={CASH_MONTHLY_REALIZED_CAPTION}
-                    emptyMessage={`Sem baixas de caixa nos 12 meses até ${monthLabel}.`}
-                    balanceByMonthKey={monthlyBalanceMap}
-                    balanceLayout="band"
-                    balanceTooltipLabel="Saldo bancário"
-                    includeResultInTooltip={false}
-                    balanceCoverageNote={showMonthlyBalanceLine ? balanceCoverageNote : null}
-                  />
+                  <>
+                    <CashMonthlyGroupedBars
+                      buckets={monthlyHistoryBuckets}
+                      ariaLabel={`Entradas e saídas realizadas por mês de baixa · 12 meses até ${monthLabel}`}
+                      caption={CASH_MONTHLY_REALIZED_CAPTION}
+                      emptyMessage={`Sem baixas de caixa nos 12 meses até ${monthLabel}.`}
+                      balanceByMonthKey={monthlyBalanceMap}
+                      balanceLayout="band"
+                      balanceTooltipLabel="Saldo bancário"
+                      includeResultInTooltip={false}
+                      balanceCoverageNote={showMonthlyBalanceLine ? balanceCoverageNote : null}
+                      selectedMonthKey={movementMonthKey}
+                      onMonthSelect={(monthKey) =>
+                        setMovementMonthSelection((current) =>
+                          nextScopedDaySelection(current, movementMonthScope, monthKey),
+                        )
+                      }
+                      selectionHint="Selecione um mês para ver os lançamentos"
+                    />
+                    {movementMonthKey ? (
+                      <div data-cash-movement-details="month">
+                        <CashRealizedMonthPanel
+                          monthKey={movementMonthKey}
+                          direction="inflows"
+                          costCenterId={selectedCostCenterId}
+                          categoryId={selectedCategoryId}
+                          title="Entradas"
+                        />
+                        <CashRealizedMonthPanel
+                          monthKey={movementMonthKey}
+                          direction="outflows"
+                          costCenterId={selectedCostCenterId}
+                          categoryId={selectedCategoryId}
+                          title="Saídas"
+                        />
+                      </div>
+                    ) : null}
+                  </>
                 ) : (
                   <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
                 )}
               </>
             ) : dailySeries.inflows && dailySeries.outflows ? (
-              <CompetenceDailyBars
-                revenueDaily={dailySeries.inflows}
-                expenseDaily={dailySeries.outflows}
-                monthKey={selectedMonthKey}
-                revenueLabel="Entradas"
-                expenseLabel="Saídas"
-                ariaLabel={`Entradas e saídas de caixa por dia de baixa em ${monthLabel}`}
-                caption={CASH_DAILY_REALIZED_CAPTION}
-                emptyMessage={`Sem baixas de caixa em ${monthLabel}.`}
-                balanceByDate={dailyBalanceMap}
-                balanceCoverageNote={showDailyBalanceLine ? balanceCoverageNote : null}
-              />
+              <>
+                <CompetenceDailyBars
+                  revenueDaily={dailySeries.inflows}
+                  expenseDaily={dailySeries.outflows}
+                  monthKey={selectedMonthKey}
+                  revenueLabel="Entradas"
+                  expenseLabel="Saídas"
+                  ariaLabel={`Entradas e saídas de caixa por dia de baixa em ${monthLabel}`}
+                  caption={CASH_DAILY_REALIZED_CAPTION}
+                  emptyMessage={`Sem baixas de caixa em ${monthLabel}.`}
+                  balanceByDate={dailyBalanceMap}
+                  balanceCoverageNote={showDailyBalanceLine ? balanceCoverageNote : null}
+                  selectedDate={movementDayDate}
+                  onPointSelect={(date) =>
+                    setMovementDaySelection((current) =>
+                      nextScopedDaySelection(current, movementDayScope, date),
+                    )
+                  }
+                  selectionHint="Selecione um dia para ver os lançamentos"
+                />
+                {movementDayDate ? (
+                  <div data-cash-movement-details="day">
+                    <CashRealizedDayPanel
+                      date={movementDayDate}
+                      direction="inflows"
+                      costCenterId={selectedCostCenterId}
+                      categoryId={selectedCategoryId}
+                      title="Entradas"
+                      itemNoun={['lançamento', 'lançamentos']}
+                    />
+                    <CashRealizedDayPanel
+                      date={movementDayDate}
+                      direction="outflows"
+                      costCenterId={selectedCostCenterId}
+                      categoryId={selectedCategoryId}
+                      title="Saídas"
+                      itemNoun={['lançamento', 'lançamentos']}
+                    />
+                  </div>
+                ) : null}
+              </>
             ) : (
               <StateWrapper state="empty" emptyMessage={CASH_SERIES_UNAVAILABLE} align="start" />
             )}

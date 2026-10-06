@@ -599,6 +599,23 @@ export type DashboardCashRealizedDayDetailItem = {
   readonly costCenterLabel: string | null;
 };
 
+/** Explicação de um mês de caixa realizado. O total é o mês inteiro, mesmo com página parcial. */
+export type DashboardCashRealizedMonthDetailsResponse = {
+  readonly monthKey: string;
+  readonly from: string;
+  readonly to: string;
+  readonly direction: 'inflows' | 'outflows';
+  readonly completeness: DashboardCashRealizedDayCompleteness;
+  readonly total: string | null;
+  readonly returnedSum: string | null;
+  readonly difference: string | null;
+  readonly hasMore: boolean;
+  readonly itemCount: number;
+  readonly limit: number;
+  readonly offset: number;
+  readonly items: readonly DashboardCashRealizedDayDetailItem[];
+};
+
 /** Explicação de um ponto diário de caixa realizado. Completeness vem pronta do backend. */
 export type DashboardCashRealizedDayDetailsResponse = {
   readonly date: string;

@@ -287,7 +287,7 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
     ).findByRole('tooltip', { hidden: true })) as HTMLElement;
     expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
     expect(tip.getAttribute('data-vertical-placement')).toBe('above');
-    expect(tip.textContent).toMatch(/AGO\/26/);
+    expect(tip.textContent).toMatch(/ago\/2026/);
     expect(tip.textContent).toMatch(/Entradas/);
     expect(tip.textContent).toMatch(/Saídas/);
     expect(tip.textContent).toMatch(/R\$\s*888\.888,88/);
@@ -326,7 +326,7 @@ describe('Correção 08-B — Movimentação financeira Mensal', () => {
       }) as DOMRect;
     fireEvent.mouseMove(expandPlot, { clientX: 20, clientY: 40 });
     const tip = within(expandPlot).getByRole('tooltip', { hidden: true }) as HTMLElement;
-    expect(tip.textContent).toMatch(/SET\/25/);
+    expect(tip.textContent).toMatch(/set\/2025/);
     expect(tip.textContent).toMatch(/Entradas/);
     expect(tip.getAttribute('data-vertical-mode')).toBe('floating-top');
     expect(tip.style.bottom).toMatch(/calc\(100%/);

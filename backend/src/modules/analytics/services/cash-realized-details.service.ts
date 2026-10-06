@@ -16,8 +16,12 @@ import {
 } from '../domain/cash-realized-details.js';
 import {
   buildCashRealizedDayDetails,
+  buildCashRealizedMonthDetails,
   clampCashRealizedDayDetailsLimit,
+  clampCashRealizedMonthDetailsLimit,
+  clampCashRealizedMonthDetailsOffset,
   type CashRealizedDayDetails,
+  type CashRealizedMonthDetails,
 } from '../domain/cash-realized-day-details.js';
 import { civilDateUtcFromKey } from '../domain/civil-calendar.js';
 import { civilMonthBounds, civilMonthBoundsFromKey, civilMonthKey } from '../domain/civil-calendar.js';
@@ -60,12 +64,28 @@ export type GetCashRealizedDayDetailsInput = {
   readonly now?: Date;
 };
 
+export type GetCashRealizedMonthDetailsInput = {
+  readonly tenantId: string;
+  readonly integrationId?: string;
+  readonly monthKey: string;
+  readonly direction: CashRealizedDetailsDirection;
+  readonly costCenterId?: string;
+  readonly costCenterLabel?: string | null;
+  readonly categoryFilter?: GetMonthlyCashFlowInput['categoryFilter'];
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly now?: Date;
+};
+
 export type CashRealizedDetailsService = {
   getCashRealizedDetails(input: GetCashRealizedDetailsInput): Promise<CashRealizedDetails>;
   listAllCashRealizedDetails(
     input: Omit<GetCashRealizedDetailsInput, 'limit' | 'offset'>,
   ): Promise<CashRealizedDetails>;
   getCashRealizedDayDetails(input: GetCashRealizedDayDetailsInput): Promise<CashRealizedDayDetails>;
+  getCashRealizedMonthDetails(
+    input: GetCashRealizedMonthDetailsInput,
+  ): Promise<CashRealizedMonthDetails>;
 };
 
 export type CashRealizedDetailsServiceDependencies = {
@@ -304,24 +324,16 @@ export function createCashRealizedDetailsService(
       });
   }
 
-  async function loadDayDetails(
-    input: GetCashRealizedDayDetailsInput,
-  ): Promise<CashRealizedDayDetails> {
+  async function loadAttributedWindow(input: {
+    readonly tenantId: string;
+    readonly integrationId?: string;
+    readonly from: Date;
+    readonly to: Date;
+    readonly costCenterId?: string;
+    readonly categoryFilter?: GetMonthlyCashFlowInput['categoryFilter'];
+  }) {
     assertTenantId(input.tenantId);
     const tenantId = input.tenantId.trim();
-    const day = civilDateUtcFromKey(input.date);
-    const limit = clampCashRealizedDayDetailsLimit(input.limit);
-    if (day === null) {
-      return buildCashRealizedDayDetails({
-        date: input.date,
-        direction: input.direction,
-        today: civilTodayInSaoPaulo(input.now ?? new Date()),
-        settlements: [],
-        partyNames: new Map(),
-        limit,
-      });
-    }
-    const today = civilTodayInSaoPaulo(input.now ?? new Date());
     const scope = {
       tenantId,
       ...(input.integrationId !== undefined && input.integrationId.trim() !== ''
@@ -329,7 +341,7 @@ export function createCashRealizedDetailsService(
         : {}),
     };
     const [settlements, receivables, payables] = await Promise.all([
-      deps.ledger.listActiveByOccurredOn({ ...scope, from: day, to: day }),
+      deps.ledger.listActiveByOccurredOn({ ...scope, from: input.from, to: input.to }),
       deps.receivables.findActiveByTenant(scope),
       deps.payables.findActiveByTenant(scope),
     ]);
@@ -385,20 +397,14 @@ export function createCashRealizedDetailsService(
       ),
     ];
     const partyNames = await deps.parties.findNamesByIds(scope, partyIds);
-    const base = {
-      date: input.date,
-      direction: input.direction,
-      today,
-      settlements: settlementSources,
-      realizedInstallments,
-      categories,
-      partyNames,
-      categoryFilter: input.categoryFilter ?? null,
-      costCenterLabel: input.costCenterLabel ?? null,
-      limit,
-    };
     if (input.costCenterId === undefined) {
-      return buildCashRealizedDayDetails(base);
+      return {
+        settlements: settlementSources,
+        realizedInstallments,
+        categories,
+        partyNames,
+        costCenter: undefined,
+      };
     }
     const allocations = requireAllocations(deps);
     const [realizedReceivableAllocations, realizedPayableAllocations] = await Promise.all([
@@ -413,14 +419,100 @@ export function createCashRealizedDetailsService(
         externalIds: payableIds,
       }),
     ]);
-    return buildCashRealizedDayDetails({
-      ...base,
+    return {
+      settlements: settlementSources,
+      realizedInstallments,
+      categories,
+      partyNames,
       costCenter: {
         expectedReceivables: [],
         expectedPayables: [],
         realizedReceivables: realizedReceivableAllocations,
         realizedPayables: realizedPayableAllocations,
       },
+    };
+  }
+
+  async function loadDayDetails(
+    input: GetCashRealizedDayDetailsInput,
+  ): Promise<CashRealizedDayDetails> {
+    const limit = clampCashRealizedDayDetailsLimit(input.limit);
+    const day = civilDateUtcFromKey(input.date);
+    const today = civilTodayInSaoPaulo(input.now ?? new Date());
+    if (day === null) {
+      return buildCashRealizedDayDetails({
+        date: input.date,
+        direction: input.direction,
+        today,
+        settlements: [],
+        partyNames: new Map(),
+        limit,
+      });
+    }
+    const window = await loadAttributedWindow({
+      tenantId: input.tenantId,
+      ...(input.integrationId !== undefined ? { integrationId: input.integrationId } : {}),
+      from: day,
+      to: day,
+      ...(input.costCenterId !== undefined ? { costCenterId: input.costCenterId } : {}),
+      categoryFilter: input.categoryFilter,
+    });
+    return buildCashRealizedDayDetails({
+      date: input.date,
+      direction: input.direction,
+      today,
+      settlements: window.settlements,
+      realizedInstallments: window.realizedInstallments,
+      categories: window.categories,
+      partyNames: window.partyNames,
+      categoryFilter: input.categoryFilter ?? null,
+      costCenterLabel: input.costCenterLabel ?? null,
+      limit,
+      ...(window.costCenter !== undefined ? { costCenter: window.costCenter } : {}),
+    });
+  }
+
+  async function loadMonthDetails(
+    input: GetCashRealizedMonthDetailsInput,
+  ): Promise<CashRealizedMonthDetails> {
+    const limit = clampCashRealizedMonthDetailsLimit(input.limit);
+    const offset = clampCashRealizedMonthDetailsOffset(input.offset);
+    const today = civilTodayInSaoPaulo(input.now ?? new Date());
+    let bounds: { from: Date; to: Date };
+    try {
+      bounds = civilMonthBoundsFromKey(input.monthKey);
+    } catch {
+      return buildCashRealizedMonthDetails({
+        monthKey: input.monthKey,
+        direction: input.direction,
+        today,
+        settlements: [],
+        partyNames: new Map(),
+        limit,
+        offset,
+      });
+    }
+    const window = await loadAttributedWindow({
+      tenantId: input.tenantId,
+      ...(input.integrationId !== undefined ? { integrationId: input.integrationId } : {}),
+      from: bounds.from,
+      to: bounds.to,
+      ...(input.costCenterId !== undefined ? { costCenterId: input.costCenterId } : {}),
+      categoryFilter: input.categoryFilter,
+    });
+    return buildCashRealizedMonthDetails({
+      monthKey: input.monthKey,
+      direction: input.direction,
+      today,
+      settlements: window.settlements,
+      realizedInstallments: window.realizedInstallments,
+      categories: window.categories,
+      partyNames: window.partyNames,
+      categoryFilter: input.categoryFilter ?? null,
+      costCenterLabel: input.costCenterLabel ?? null,
+      limit,
+      offset,
+      ...(window.costCenter !== undefined ? { costCenter: window.costCenter } : {}),
     });
   }
 
@@ -437,6 +529,9 @@ export function createCashRealizedDetailsService(
     },
     getCashRealizedDayDetails(input) {
       return loadDayDetails(input);
+    },
+    getCashRealizedMonthDetails(input) {
+      return loadMonthDetails(input);
     },
   };
 }

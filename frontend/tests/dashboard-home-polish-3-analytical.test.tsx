@@ -243,9 +243,9 @@ describe('PRE-F13-HOME-POLISH-3 — detalhamento analítico', () => {
     expect(within(dialog).queryByText(/competência/i)).toBeNull();
   });
 
-  it('P3-6 — A receber lista estoque em aberto sem composição categórica agregada', async () => {
+  it('P3-6 — A receber abre o estoque sem composição categórica agregada', async () => {
     const dialog = await openKpiExpand('A receber');
-    expect(within(dialog).getByText('Títulos em aberto')).toBeTruthy();
+    expect(within(dialog).queryByText('Títulos em aberto')).toBeNull();
     expect(
       within(dialog).queryByText(/Composição por categoria do previsto não disponível/i),
     ).toBeNull();

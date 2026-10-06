@@ -302,14 +302,14 @@ describe('Mensal → Realizado — marca do primeiro saldo conhecido', () => {
     mockWidth(balancePlot, 480, 52);
     fireEvent.mouseMove(balancePlot, { clientX: 460, clientY: 10 });
     const sepTip = screen.getByRole('tooltip', { hidden: true });
-    expect(sepTip.textContent).toMatch(/SET\/26/);
+    expect(sepTip.textContent).toMatch(/set\/2026/);
     expect(sepTip.textContent).toMatch(/Saldo bancário/);
     expect(sepTip.textContent).toMatch(/R\$\s*1\.500,25/);
     expect(sepTip.textContent).not.toMatch(/R\$\s*0,00/);
 
     fireEvent.mouseMove(balancePlot, { clientX: 20, clientY: 10 });
     const octTip = screen.getByRole('tooltip', { hidden: true });
-    expect(octTip.textContent).toMatch(/OUT\/25/);
+    expect(octTip.textContent).toMatch(/out\/2025/);
     expect(octTip.textContent).toMatch(/Saldo bancário/);
     expect(octTip.textContent).toMatch(/—/);
     expect(octTip.textContent).not.toMatch(/R\$\s*1\.500,25/);
@@ -317,7 +317,7 @@ describe('Mensal → Realizado — marca do primeiro saldo conhecido', () => {
 
     fireEvent.mouseMove(balancePlot, { clientX: 420, clientY: 10 });
     const agoTip = screen.getByRole('tooltip', { hidden: true });
-    expect(agoTip.textContent).toMatch(/AGO\/26/);
+    expect(agoTip.textContent).toMatch(/ago\/2026/);
     expect(agoTip.textContent).toMatch(/—/);
     expect(agoTip.textContent).not.toMatch(/R\$\s*1\.500,25/);
     expect(agoTip.textContent).not.toMatch(/R\$\s*0,00/);

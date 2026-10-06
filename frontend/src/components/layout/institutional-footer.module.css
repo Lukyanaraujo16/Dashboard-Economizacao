@@ -1,0 +1,76 @@
+.footer {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 1.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 55%, transparent);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.login {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0;
+  text-align: center;
+}
+
+.sep {
+  color: color-mix(in srgb, var(--color-text-muted) 70%, transparent);
+}
+
+.credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.creditLink {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--duration-fast) ease;
+}
+
+.creditLink:hover {
+  opacity: 0.72;
+}
+
+.creditLink:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.mark {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+@media (max-width: 767px) {
+  .line {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .sep {
+    display: none;
+  }
+}

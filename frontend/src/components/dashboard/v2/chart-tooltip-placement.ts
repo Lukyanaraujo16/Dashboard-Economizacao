@@ -93,6 +93,162 @@ export type VerticalTooltipPlacementInput = {
   readonly mode?: VerticalTooltipMode;
 };
 
+export type FloatingTooltipClipInput = {
+  readonly spaceAbove: number;
+  readonly spaceBelow: number;
+  readonly tooltipHeight: number;
+  readonly gap?: number;
+  readonly padding?: number;
+};
+
+/** Distância mínima entre o tooltip e a coluna do ponto/barra ativa. */
+export const FLOATING_TOOLTIP_GAP = 16;
+
+/** Folga mínima entre o tooltip e a borda do ancestral visível. */
+export const FLOATING_TOOLTIP_EDGE = 14;
+
+export type FloatingTooltipSide = 'right' | 'left' | 'above' | 'below';
+
+export type FloatingTooltipBoxInput = {
+  readonly anchorX: number;
+  /** Metade da coluna do ponto/barra que deve permanecer descoberta. */
+  readonly anchorClearance: number;
+  readonly tooltipWidth: number;
+  readonly tooltipHeight: number;
+  readonly containerWidth: number;
+  readonly containerHeight: number;
+  /** Área visível no mesmo eixo do container. Pode ultrapassar o plot. */
+  readonly visibleLeft: number;
+  readonly visibleTop: number;
+  readonly visibleRight: number;
+  readonly visibleBottom: number;
+  readonly gap?: number;
+  readonly padding?: number;
+};
+
+export type FloatingTooltipBox = {
+  readonly side: FloatingTooltipSide;
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+function rangesOverlap(
+  start: number,
+  end: number,
+  otherStart: number,
+  otherEnd: number,
+): boolean {
+  return start < otherEnd && end > otherStart;
+}
+
+/**
+ * Posiciona o tooltip flutuante ao lado da coluna ativa.
+ * Esquerda ou direita, a que tiver espaço. Se nenhuma couber,
+ * usa a faixa acima ou abaixo do plot, desde que caiba no ancestral visível.
+ */
+export function resolveFloatingTooltipBox(input: FloatingTooltipBoxInput): FloatingTooltipBox {
+  const gap = input.gap ?? FLOATING_TOOLTIP_GAP;
+  const padding = input.padding ?? DEFAULT_CHART_TOOLTIP_PADDING;
+  const containerHeight = Math.max(input.containerHeight, 0);
+  const visibleLeft = input.visibleLeft + padding;
+  const visibleTop = input.visibleTop + padding;
+  const visibleRight = input.visibleRight - padding;
+  const visibleBottom = input.visibleBottom - padding;
+  const width = Math.max(input.tooltipWidth, 0);
+  const height = Math.max(input.tooltipHeight, 0);
+  const clearance = Math.max(input.anchorClearance, 0);
+  const anchorLeft = input.anchorX - clearance;
+  const anchorRight = input.anchorX + clearance;
+
+  const fits = (left: number, top: number): boolean =>
+    left >= visibleLeft - 0.5 &&
+    top >= visibleTop - 0.5 &&
+    left + width <= visibleRight + 0.5 &&
+    top + height <= visibleBottom + 0.5;
+
+  const coversActiveColumn = (left: number, top: number): boolean =>
+    rangesOverlap(left, left + width, anchorLeft, anchorRight) &&
+    rangesOverlap(top, top + height, 0, containerHeight);
+
+  const clampTop = (top: number): number => {
+    const maxTop = visibleBottom - height;
+    if (maxTop < visibleTop) {
+      return visibleTop;
+    }
+    return clampValue(top, visibleTop, maxTop);
+  };
+
+  const clampLeft = (left: number): number => {
+    const maxLeft = visibleRight - width;
+    if (maxLeft < visibleLeft) {
+      return visibleLeft;
+    }
+    return clampValue(left, visibleLeft, maxLeft);
+  };
+
+  const centeredTop = clampTop((containerHeight - height) / 2);
+  const spaceRight = visibleRight - (anchorRight + gap);
+  const spaceLeft = anchorLeft - gap - visibleLeft;
+  const lateral: ReadonlyArray<{ readonly side: 'right' | 'left'; readonly left: number }> =
+    spaceRight >= spaceLeft
+      ? [
+          { side: 'right', left: anchorRight + gap },
+          { side: 'left', left: anchorLeft - gap - width },
+        ]
+      : [
+          { side: 'left', left: anchorLeft - gap - width },
+          { side: 'right', left: anchorRight + gap },
+        ];
+
+  for (const candidate of lateral) {
+    if (fits(candidate.left, centeredTop) && !coversActiveColumn(candidate.left, centeredTop)) {
+      return { side: candidate.side, left: candidate.left, top: centeredTop, width, height };
+    }
+  }
+
+  const horizontalLeft = clampLeft(input.anchorX - width / 2);
+  const aboveTop = -gap - height;
+  if (fits(horizontalLeft, aboveTop) && !coversActiveColumn(horizontalLeft, aboveTop)) {
+    return { side: 'above', left: horizontalLeft, top: aboveTop, width, height };
+  }
+
+  const belowTop = containerHeight + gap;
+  if (fits(horizontalLeft, belowTop) && !coversActiveColumn(horizontalLeft, belowTop)) {
+    return { side: 'below', left: horizontalLeft, top: belowTop, width, height };
+  }
+
+  const fallbackSide = spaceRight >= spaceLeft ? 'right' : 'left';
+  const fallbackLeft = fallbackSide === 'right' ? anchorRight + gap : anchorLeft - gap - width;
+  return {
+    side: fallbackSide,
+    left: fallbackLeft,
+    top: centeredTop,
+    width,
+    height,
+  };
+}
+
+/**
+ * Fallback vertical enquanto o tooltip ainda não tem medida.
+ * Com medida, `resolveFloatingTooltipBox` escolhe o lado.
+ */
+export function resolveFloatingTooltipVertical(
+  input: FloatingTooltipClipInput,
+): VerticalTooltipPlacement {
+  const gap = input.gap ?? 4;
+  const padding = input.padding ?? DEFAULT_CHART_TOOLTIP_PADDING;
+  const needed = Math.max(input.tooltipHeight, 0) + gap + padding;
+  if (input.spaceAbove >= needed) {
+    return 'above';
+  }
+  if (input.spaceBelow >= needed) {
+    return 'below';
+  }
+  return 'inside-top';
+}
+
 /**
  * Escolhe colocação vertical.
  * - inside-top: tooltip no topo interno do plot (comparison chart / similares).

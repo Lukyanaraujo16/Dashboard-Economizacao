@@ -13,6 +13,7 @@ import {
 
 import { formatMoneyBrl } from '../../../lib/format-money-brl';
 import { cx } from '../../ui/utils/cx';
+import { formatCivilDatePtBr } from '../cash-balance-series-view';
 import { formatMonthKeyPtBr } from '../dashboard-forecast-view';
 import {
   alignDailySeries,
@@ -64,6 +65,8 @@ export type CompetenceDailyBarsProps = {
   readonly selectedDate?: string | null;
   /** Clique, toque ou Enter/Espaço no dia. O chamador decide o toggle. */
   readonly onPointSelect?: (date: string) => void;
+  /** Texto exibido enquanto nenhum dia está selecionado. */
+  readonly selectionHint?: string;
 };
 
 /** Altura da barra em unidades do viewBox; mantém visível qualquer dia com valor. */
@@ -98,6 +101,7 @@ export function CompetenceDailyBars({
   balanceCoverageNote = null,
   selectedDate = null,
   onPointSelect,
+  selectionHint = 'Selecione um dia para ver os títulos',
 }: CompetenceDailyBarsProps) {
   const selectionHintId = useId();
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -431,11 +435,13 @@ export function CompetenceDailyBars({
             verticalMode="floating-top"
             anchorRatio={anchorRatioFromIndex(activeIndex, count)}
             containerRef={plotRef}
+            trackRef={barsPlotRef}
+            slotCount={count}
             className={styles.tooltip}
             role="tooltip"
             aria-hidden="true"
           >
-            <p className={styles.tooltipDay}>{formatDayPt(activeRevenue.date)}</p>
+            <p className={styles.tooltipDay}>{formatCivilDatePtBr(activeRevenue.date)}</p>
             <p className={styles.tooltipRow}>
               <span className={cx(styles.swatch, styles.revenueSwatch)} />
               {revenueLabel}
@@ -470,13 +476,13 @@ export function CompetenceDailyBars({
 
       {onPointSelect && selectedDate === null ? (
         <p id={selectionHintId} className={styles.hint} data-expected-due-day-hint="true">
-          Selecione um dia para ver os títulos
+          {selectionHint}
         </p>
       ) : null}
 
       <span className={styles.liveRegion} aria-live="polite">
         {activeRevenue && activeExpense
-          ? `${formatDayPt(activeRevenue.date)}: ${revenueLabel.toLowerCase()} ${formatMoneyBrl(activeRevenue.amount)}, ${expenseLabel.toLowerCase()} ${formatMoneyBrl(activeExpense.amount)}${
+          ? `${formatCivilDatePtBr(activeRevenue.date)}: ${revenueLabel.toLowerCase()} ${formatMoneyBrl(activeRevenue.amount)}, ${expenseLabel.toLowerCase()} ${formatMoneyBrl(activeExpense.amount)}${
               hasBalanceSeries
                 ? `, ${balanceLabel.toLowerCase()} ${activeBalance !== undefined ? formatMoneyBrl(activeBalance) : '—'}`
                 : ''
