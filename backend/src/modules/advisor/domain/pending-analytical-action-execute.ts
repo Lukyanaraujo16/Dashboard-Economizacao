@@ -1,6 +1,10 @@
 /**
  * Execução de PendingAnalyticalAction via tools allowlisted existentes.
+ * Resultado de execução ≠ resposta user-facing: composição natural é feita
+ * pelo provider + evidence gate (ver send-advisor-message).
  */
+import type { GenerationInput } from '../../../infrastructure/ai/types.js';
+import type { AdvisorContextBlock } from './context-blocks.js';
 import type { AdvisorAnalyticalToolExecutor } from './advisor-analytical-tools.js';
 import {
   buildToolArgumentsFromPendingStep,
@@ -104,6 +108,111 @@ export async function executePendingAnalyticalAction(input: {
   return { status: 'OK', executions, snapshotOnly: false };
 }
 
+/**
+ * Instruções de composição user-facing após ACCEPT/MODIFY.
+ * Evidência fica nos blocos FINANCIAL_FACTS / ANALYTICAL_FACTS / toolRounds —
+ * nunca deve ser ecoada crua na resposta.
+ */
+export const PENDING_ACTION_USER_COMPOSE_INSTRUCTIONS = [
+  'PENDING_ACTION_USER_COMPOSE:',
+  'O usuário aceitou (ou aceitou com ajuste) uma ação analítica pendente já executada.',
+  'Escreva a RESPOSTA FINAL em português, como consultor financeiro, em linguagem natural.',
+  'Regras:',
+  '- Use APENAS cifras e entidades presentes em FINANCIAL_FACTS, ANALYTICAL_FACTS e tool results.',
+  '- Não invente números, totais, percentuais, entidades ou conclusões além da evidência.',
+  '- Se faltar dado operacional para concluir (ex.: custo mensal de uma decisão), diga isso naturalmente e peça o dado faltante.',
+  '- Una evidências de múltiplos steps em UMA leitura coerente (não concatene dumps técnicos).',
+  '- NÃO mencione: PendingAnalyticalAction, tools, capabilities, entityScope, provenance,',
+  '  temporalScope, evidenceRefs, JSON, contratos internos, "Resultado da ação aceita",',
+  '  nomes canônicos internos (cash.realized.*, stock.payables.*, etc.).',
+  '- Formate valores monetários de forma legível (ex.: R$ 1.234,56) quando citar cifras oficiais.',
+  '- Respeite domínio: títulos a pagar ≠ despesa realizada; faturamento ≠ entrada de caixa.',
+].join('\n');
+
+/**
+ * Blocos de contexto para o provider compor a resposta natural.
+ * Contêm evidência estruturada — não são a resposta final.
+ */
+export function buildPendingActionComposeBlocks(input: {
+  readonly action: PendingAnalyticalAction;
+  readonly execution: PendingActionExecutionResult;
+  readonly snapshotFactsText?: string | null;
+  readonly userMessage: string;
+  readonly resolvedMonthKey: string;
+}): GenerationInput['blocks'] {
+  const blocks: AdvisorContextBlock[] = [
+    {
+      type: 'PLATFORM_INSTRUCTIONS',
+      content: PENDING_ACTION_USER_COMPOSE_INSTRUCTIONS,
+      trustLevel: 'PLATFORM',
+    },
+  ];
+
+  const facts = input.snapshotFactsText?.trim();
+  if (facts !== undefined && facts !== '') {
+    blocks.push({
+      type: 'FINANCIAL_FACTS',
+      content: facts.slice(0, 3_000),
+      trustLevel: 'ANALYTICAL_FACT',
+    });
+  }
+
+  if (input.execution.status !== 'UNAVAILABLE') {
+    for (const exec of input.execution.executions) {
+      if (!exec.ok) {
+        continue;
+      }
+      blocks.push({
+        type: 'ANALYTICAL_FACTS',
+        content: [
+          `toolEvidence:${exec.name}`,
+          `ok:${exec.ok}`,
+          exec.content.slice(0, 4_000),
+        ].join('\n'),
+        trustLevel: 'ANALYTICAL_FACT',
+      });
+    }
+    if (input.execution.status === 'PARTIAL_UNAVAILABLE') {
+      blocks.push({
+        type: 'ANALYTICAL_FACTS',
+        content: `limitation:parts_unavailable:${input.execution.unavailable.join(',')}`,
+        trustLevel: 'ANALYTICAL_FACT',
+      });
+    }
+  } else {
+    blocks.push({
+      type: 'ANALYTICAL_FACTS',
+      content: `limitation:execution_unavailable`,
+      trustLevel: 'ANALYTICAL_FACT',
+    });
+  }
+
+  blocks.push({
+    type: 'USER_QUESTION',
+    content: [
+      `resolvedMonthKey: ${input.resolvedMonthKey}`,
+      `pendingObjective: ${input.action.objective}`,
+      `offerSnippet: ${input.action.offerSnippet}`,
+      `domain: ${input.action.domain}`,
+      `operation: ${input.action.operation}`,
+      'CURRENT_USER_MESSAGE:',
+      input.userMessage.slice(0, 1_000),
+    ].join('\n'),
+    trustLevel: 'UNTRUSTED',
+  });
+
+  return blocks;
+}
+
+/** Fallback seguro se o provider falhar — nunca devolve dump técnico. */
+export function pendingActionCompositionFallback(): string {
+  return 'Consultei os dados oficiais disponíveis, mas não consegui redigir a leitura agora. Pode tentar de novo em instantes?';
+}
+
+/**
+ * Digest interno opcional (testes / debug). NÃO usar como content user-facing.
+ * @deprecated Preferir buildPendingActionComposeBlocks + provider.
+ */
 export function composePendingActionAnswer(input: {
   readonly action: PendingAnalyticalAction;
   readonly execution: PendingActionExecutionResult;
@@ -112,89 +221,29 @@ export function composePendingActionAnswer(input: {
   if (input.execution.status === 'UNAVAILABLE') {
     return input.execution.message;
   }
-  if (input.execution.snapshotOnly) {
-    const facts = input.snapshotFactsText?.trim();
-    if (facts !== undefined && facts !== '') {
-      return [
-        `Segue a leitura pedida (${input.action.objective}).`,
-        '',
-        'Use apenas os fatos oficiais CURRENT_SNAPSHOT / FINANCIAL_FACTS já carregados neste contexto.',
-        facts.slice(0, 1_500),
-      ].join('\n');
-    }
-    return `Posso usar a posição atual do Dashboard para "${input.action.objective}", mas os fatos de snapshot não vieram neste turno.`;
-  }
-
-  const lines: string[] = [`Resultado da ação aceita: ${input.action.objective}`];
-  const hasPreload = input.action.steps.some((step) => step.toolName === null);
-  if (hasPreload) {
-    const facts = input.snapshotFactsText?.trim();
-    if (facts !== undefined && facts !== '') {
-      lines.push('- Posição / fatos oficiais de snapshot:');
-      lines.push(facts.slice(0, 1_200));
-    } else {
-      lines.push(
-        '- Posição de caixa: use os FINANCIAL_FACTS / CURRENT_SNAPSHOT já carregados neste contexto.',
-      );
-    }
+  const lines: string[] = [`internal_pending_digest:${input.action.objective}`];
+  if (input.execution.status === 'PARTIAL_UNAVAILABLE') {
+    lines.push(`limitation:${input.execution.unavailable.join(',')}`);
   }
   for (const exec of input.execution.executions) {
-    if (!exec.ok) {
-      lines.push(`- ${exec.name}: indisponível nesta consulta.`);
-      continue;
-    }
-    try {
-      const parsed = JSON.parse(exec.content) as Record<string, unknown>;
-      if (Array.isArray(parsed.lines)) {
-        const rows = parsed.lines as Array<Record<string, unknown>>;
-        lines.push(`- ${exec.name} (${rows.length} itens):`);
-        for (const row of rows.slice(0, 20)) {
-          const label =
-            typeof row.description === 'string'
-              ? row.description
-              : typeof row.partyName === 'string'
-                ? row.partyName
-                : typeof row.label === 'string'
-                  ? row.label
-                  : 'item';
-          const amount =
-            typeof row.amount === 'string'
-              ? row.amount
-              : typeof row.unpaid === 'string'
-                ? row.unpaid
-                : null;
-          const due = typeof row.dueDate === 'string' ? row.dueDate : null;
-          const situation =
-            typeof row.situation === 'string'
-              ? row.situation
-              : typeof row.installmentStatus === 'string'
-                ? row.installmentStatus
-                : null;
-          lines.push(
-            `  • ${label}${amount !== null ? ` — ${amount}` : ''}${due !== null ? ` — ${due}` : ''}${situation !== null ? ` — ${situation}` : ''}`,
-          );
-        }
-        continue;
-      }
-      if (Array.isArray(parsed.categories)) {
-        const cats = parsed.categories as Array<Record<string, unknown>>;
-        lines.push(`- ${exec.name}:`);
-        for (const cat of cats.slice(0, 10)) {
-          lines.push(
-            `  • ${String(cat.label ?? 'categoria')}${typeof cat.amount === 'string' ? ` — ${cat.amount}` : ''}`,
-          );
-        }
-        continue;
-      }
-      lines.push(`- ${exec.name}: consulta concluída.`);
-    } catch {
-      lines.push(`- ${exec.name}: consulta concluída.`);
-    }
-  }
-  if (input.execution.status === 'PARTIAL_UNAVAILABLE') {
-    lines.push(
-      `Limitação: partes indisponíveis (${input.execution.unavailable.join(', ')}).`,
-    );
+    lines.push(`tool:${exec.name}:ok=${exec.ok}:cardinality=${exec.resultCardinality ?? 0}`);
   }
   return lines.join('\n');
+}
+
+/** Heurística de regressão: detecta dump técnico típico do bug de homologação. */
+export function pendingAnswerLooksLikeTechnicalDump(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    t.includes('resultado da ação aceita') ||
+    t.includes('entityscope:') ||
+    t.includes('provenance:') ||
+    t.includes('temporalscope:') ||
+    t.includes('evidencerefs') ||
+    t.includes('posição / fatos oficiais de snapshot') ||
+    /\bcash\.realized\./i.test(text) ||
+    /\bstock\.payables\./i.test(text) ||
+    t.includes('pendinganalyticalaction') ||
+    /^\s*\{[\s\S]*"lines"\s*:/m.test(text.trim())
+  );
 }

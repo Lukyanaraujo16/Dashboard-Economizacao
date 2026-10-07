@@ -31,8 +31,11 @@ import {
 } from '../src/modules/advisor/domain/pending-analytical-action-classify.js';
 import { isReplyEligibleForPendingExtract } from '../src/modules/advisor/domain/pending-extract-eligibility.js';
 import {
+  buildPendingActionComposeBlocks,
   composePendingActionAnswer,
   executePendingAnalyticalAction,
+  pendingActionCompositionFallback,
+  pendingAnswerLooksLikeTechnicalDump,
 } from '../src/modules/advisor/domain/pending-analytical-action-execute.js';
 import type { AdvisorAnalyticalToolExecutor } from '../src/modules/advisor/domain/advisor-analytical-tools.js';
 import type { IaProvider } from '../src/infrastructure/ai/types.js';
@@ -516,8 +519,10 @@ describe('B.1 execute ACCEPT / composto (R/S/T)', () => {
       ordering: 'VALUE_DESC',
       limit: 5,
     });
-    const answer = composePendingActionAnswer({ action: pending, execution: result });
-    expect(answer).toContain('Folha');
+    expect(result.status).toBe('OK');
+    if (result.status === 'OK') {
+      expect(result.executions[0]?.content).toContain('Folha');
+    }
   });
 
   it('C+E: MODIFY aplica patch nos args', () => {
@@ -584,8 +589,212 @@ describe('B.1 execute ACCEPT / composto (R/S/T)', () => {
       expect(result.unavailable).toContain('cash_movement_lines');
       expect(result.executions.some((e) => e.name === 'payable_titles')).toBe(true);
     }
-    const answer = composePendingActionAnswer({ action: created!, execution: result });
-    expect(answer).toContain('Limitação');
+    const digest = composePendingActionAnswer({ action: created!, execution: result });
+    expect(digest).toContain('limitation:');
+    // Digest interno ≠ resposta user-facing
+    expect(pendingAnswerLooksLikeTechnicalDump(digest)).toBe(false);
+  });
+});
+
+describe('B.1.2 composição user-facing pós-ACCEPT (sem dump técnico)', () => {
+  const LEAK_PATTERNS = [
+    'Resultado da ação aceita',
+    'entityScope:',
+    'provenance:',
+    'temporalScope:',
+    'evidenceRefs',
+    'cash.realized.inflows',
+    'Posição / fatos oficiais de snapshot',
+  ];
+
+  function assertNoLeakage(text: string): void {
+    expect(pendingAnswerLooksLikeTechnicalDump(text)).toBe(false);
+    for (const pattern of LEAK_PATTERNS) {
+      expect(text).not.toContain(pattern);
+    }
+  }
+
+  it('A/F: blocos de compose separam evidência da resposta; fallback sem dump', () => {
+    const pending = payableRankingPending();
+    const execution = {
+      status: 'OK' as const,
+      snapshotOnly: false,
+      executions: [
+        {
+          id: 't1',
+          name: 'payable_titles',
+          ok: true,
+          content: JSON.stringify({
+            lines: [
+              {
+                description: 'Folha',
+                unpaid: 'R$ 12.000,00',
+                dueDate: '2026-10-25',
+                situation: 'OPEN',
+              },
+            ],
+          }),
+          resultCardinality: 1,
+          arguments: { monthKey: MONTH, status: 'OPEN', limit: 5 },
+        },
+      ],
+    };
+    const blocks = buildPendingActionComposeBlocks({
+      action: pending,
+      execution,
+      snapshotFactsText: [
+        'scope: PERIOD',
+        'entityScope: TENANT',
+        'provenance: fatos oficiais',
+        'temporalScope: PERIOD',
+        'cash.realized.inflows: 21752.67',
+      ].join('\n'),
+      userMessage: 'quero sim',
+      resolvedMonthKey: MONTH,
+    });
+    expect(blocks.some((b) => b.type === 'PLATFORM_INSTRUCTIONS')).toBe(true);
+    expect(blocks.some((b) => b.type === 'FINANCIAL_FACTS')).toBe(true);
+    expect(blocks.some((b) => b.type === 'ANALYTICAL_FACTS')).toBe(true);
+    // Evidência interna pode conter campos técnicos nos blocos — a resposta final não.
+    const userFacing = pendingActionCompositionFallback();
+    assertNoLeakage(userFacing);
+  });
+
+  it('A: ACCEPT "quero sim" — resposta natural mockada não vaza dump', async () => {
+    const natural =
+      'Consultei os compromissos abertos. O maior é Folha, com R$ 12.000,00. Os demais itens seguem em ordem de valor.';
+    const provider = mockProvider(natural);
+    const pending = payableRankingPending();
+    const blocks = buildPendingActionComposeBlocks({
+      action: pending,
+      execution: {
+        status: 'OK',
+        snapshotOnly: false,
+        executions: [
+          {
+            id: 't1',
+            name: 'payable_titles',
+            ok: true,
+            content: JSON.stringify({
+              lines: [{ description: 'Folha', unpaid: 'R$ 12.000,00' }],
+            }),
+            resultCardinality: 1,
+            arguments: {},
+          },
+        ],
+      },
+      userMessage: 'quero sim',
+      resolvedMonthKey: MONTH,
+    });
+    const drafted = await provider.generate({
+      tenantId: '11111111-1111-4111-8111-111111111111',
+      provider: 'openai',
+      model: 'gpt-5.4-mini',
+      blocks,
+    });
+    assertNoLeakage(drafted.text);
+    expect(drafted.text).toContain('Folha');
+  });
+
+  it('B: ACCEPT sem “pode” — “beleza, vamos nessa então”', async () => {
+    const pending = payableRankingPending();
+    const result = await resolvePendingAnalyticalActionDecision({
+      provider: mockProvider(JSON.stringify({ decision: 'ACCEPT' })),
+      providerId: 'openai',
+      model: 'gpt-5.4-mini',
+      tenantId: '11111111-1111-4111-8111-111111111111',
+      userMessage: 'beleza, vamos nessa então',
+      pending,
+    });
+    expect(result?.decision).toBe('ACCEPT');
+  });
+
+  it('C: MODIFY CC — contrato patchavel sem exposição na resposta', async () => {
+    const pending = payableRankingPending();
+    const result = await resolvePendingAnalyticalActionDecision({
+      provider: mockProvider(
+        JSON.stringify({ decision: 'MODIFY', patch: { costCenterQuery: 'Laranjeiras' } }),
+      ),
+      providerId: 'openai',
+      model: 'gpt-5.4-mini',
+      tenantId: '11111111-1111-4111-8111-111111111111',
+      userMessage: 'beleza, mas só Laranjeiras',
+      pending,
+    });
+    expect(result?.decision).toBe('MODIFY');
+    const patched = applyPendingPatch(pending, result!.patch);
+    expect(patched?.steps[0]?.filters.costCenterQuery).toBe('Laranjeiras');
+    const natural = 'Para Laranjeiras, os maiores compromissos abertos são estes, em ordem de valor.';
+    assertNoLeakage(natural);
+  });
+
+  it('D: COMPOUND — uma leitura, não concatenação de dumps', () => {
+    const compound = createPendingAnalyticalAction({
+      id: 'cmp-1',
+      createdFromMessageId: 'm',
+      domain: 'SNAPSHOT',
+      operation: 'CURRENT_POSITION',
+      steps: [
+        { toolName: null, filters: { monthKey: MONTH } },
+        {
+          toolName: 'payable_titles',
+          filters: { monthKey: MONTH, status: 'OVERDUE', ordering: 'VALUE_DESC', limit: 5 },
+        },
+      ],
+      objective: 'caixa + vencidos',
+      offerSnippet: 'cruzar caixa e vencidos',
+      now: NOW,
+    });
+    expect(compound).not.toBeNull();
+    const blocks = buildPendingActionComposeBlocks({
+      action: compound!,
+      execution: {
+        status: 'OK',
+        snapshotOnly: false,
+        executions: [
+          {
+            id: 'p1',
+            name: 'payable_titles',
+            ok: true,
+            content: JSON.stringify({
+              lines: [{ description: 'Empréstimo', unpaid: '1550.24', situation: 'OVERDUE' }],
+            }),
+            resultCardinality: 1,
+            arguments: {},
+          },
+        ],
+      },
+      snapshotFactsText: 'cash.realized.inflows: 21752.67\ncash.realized.outflows: 800.00',
+      userMessage: 'quero sim',
+      resolvedMonthKey: MONTH,
+    });
+    const platform = blocks.find((b) => b.type === 'PLATFORM_INSTRUCTIONS')?.content ?? '';
+    expect(platform).toContain('UMA leitura coerente');
+    expect(platform).toContain('NÃO mencione');
+    // Resposta final mockada (única) sem dump
+    const unified =
+      'O caixa do mês está positivo, mas há compromissos vencidos, incluindo um empréstimo. Com esses dados, a leitura exige cautela.';
+    assertNoLeakage(unified);
+  });
+
+  it('E: evidência insuficiente — limitação natural, sem inventar', () => {
+    const limitation =
+      'Com os dados disponíveis consigo descrever a posição de caixa e os compromissos, mas falta o custo mensal da decisão para concluir com segurança. Se você informar esse valor, faço a leitura.';
+    assertNoLeakage(limitation);
+    expect(limitation.toLowerCase()).toMatch(/falta|informe|segurança/);
+  });
+
+  it('F: detector de leakage captura o dump histórico do bug', () => {
+    const dump = [
+      'Resultado da ação aceita: avaliar a posição atual de caixa',
+      '- Posição / fatos oficiais de snapshot:',
+      'entityScope: TENANT',
+      'provenance: fatos oficiais',
+      'temporalScope: PERIOD',
+      'cash.realized.inflows: 21752.67',
+      '- payable_titles (3 itens):',
+    ].join('\n');
+    expect(pendingAnswerLooksLikeTechnicalDump(dump)).toBe(true);
   });
 });
 

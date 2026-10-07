@@ -693,8 +693,12 @@ export type {
   PendingExtractPathKind,
 } from './pending-extract-eligibility.js';
 export {
+  PENDING_ACTION_USER_COMPOSE_INSTRUCTIONS,
+  buildPendingActionComposeBlocks,
   composePendingActionAnswer,
   executePendingAnalyticalAction,
+  pendingActionCompositionFallback,
+  pendingAnswerLooksLikeTechnicalDump,
 } from './pending-analytical-action-execute.js';
 export type {
   PendingActionExecutionResult,

@@ -85,8 +85,10 @@ import {
   resolvePendingAnalyticalActionDecision,
 } from '../domain/pending-analytical-action-classify.js';
 import {
-  composePendingActionAnswer,
+  buildPendingActionComposeBlocks,
   executePendingAnalyticalAction,
+  pendingActionCompositionFallback,
+  pendingAnswerLooksLikeTechnicalDump,
 } from '../domain/pending-analytical-action-execute.js';
 import {
   isReplyEligibleForPendingExtract,
@@ -2978,12 +2980,8 @@ async function tryHandlePendingAnalyticalAction(input: {
     }
   }
 
-  const composed = composePendingActionAnswer({
-    action: actionToRun,
-    execution,
-    snapshotFactsText,
-  });
-
+  // EXECUTION RESULT ≠ USER-FACING RESPONSE: provider compõe linguagem natural;
+  // evidence gate (finalizeAdvisorAgentAnswer) valida grounding.
   const toolRounds: IaToolRound[] =
     execution.status === 'UNAVAILABLE'
       ? []
@@ -3004,73 +3002,59 @@ async function tryHandlePendingAnalyticalAction(input: {
           },
         ];
 
-  const evidenceItems: AdvisorEvidenceItem[] = [
-    ...(snapshotFactsText !== null && snapshotFactsText !== ''
-      ? [
-          {
-            text: snapshotFactsText,
-            entityScope: 'TENANT' as const,
-            source: 'FINANCIAL_FACTS' as const,
-          },
-        ]
-      : []),
-    ...collectEvidenceItems([], toolRounds),
-  ];
-  const gated = gateAdvisorEvidenceBoundAnswer({
-    answerText: composed,
-    evidenceItems,
-    agentToolPath: evidenceItems.length > 0,
-    requiredEntityScope: 'UNKNOWN',
-    requiredCostCenterName: null,
+  const composeBlocks = buildPendingActionComposeBlocks({
+    action: actionToRun,
+    execution,
+    snapshotFactsText,
+    userMessage: input.question,
+    resolvedMonthKey: input.periodMonthKey,
   });
 
-  let answerText = gated.ok ? gated.text : gated.text;
-  if (!gated.ok && evidenceItems.length > 0) {
-    try {
-      const rewrite = await provider.generate({
+  let answerText: string;
+  try {
+    const drafted = await provider.generate({
+      tenantId: input.tenantId,
+      provider: input.readyProvider,
+      model: input.readyModel,
+      blocks: composeBlocks,
+      ...(toolRounds.length > 0 ? { toolRounds } : {}),
+    });
+    const finalized = await finalizeAdvisorAgentAnswer({
+      text: drafted.text,
+      usage: drafted.usage,
+      blocks: composeBlocks,
+      toolRounds,
+      executedToolCount: toolRounds.reduce((n, round) => n + round.results.length, 0),
+      generate: (payload) => provider.generate(payload),
+      tenantId: input.tenantId,
+      providerId: input.readyProvider,
+      model: input.readyModel,
+      explicitCostCenter: { status: 'ABSENT' },
+    });
+    answerText = finalized.text;
+  } catch (error) {
+    console.info(
+      JSON.stringify({
+        event: 'advisor_pending_action_compose_failed',
         tenantId: input.tenantId,
-        provider: input.readyProvider,
-        model: input.readyModel,
-        blocks: [
-          {
-            type: 'PLATFORM_INSTRUCTIONS',
-            content: [
-              'REWRITE_EVIDENCE_BOUND:',
-              'Reescreva usando APENAS valores oficiais das tool results.',
-              'Não invente totais. Preserve ranking/listagem individual.',
-              `Resposta rejeitada: ${composed.slice(0, 2_000)}`,
-            ].join('\n'),
-            trustLevel: 'PLATFORM',
-          },
-          {
-            type: 'ANALYTICAL_FACTS',
-            content: execution.status === 'UNAVAILABLE'
-              ? execution.message
-              : execution.executions.map((e) => e.content).join('\n'),
-            trustLevel: 'PLATFORM',
-          },
-        ],
-      });
-      const afterRewrite = applyAdvisorEvidenceBoundRewrite({
-        original: gated,
-        rejectedAnswerText: composed,
-        rewriteText: rewrite.text,
-        evidenceItems,
-        requiredEntityScope: 'UNKNOWN',
-        requiredCostCenterName: null,
-      });
-      answerText = afterRewrite.text;
-    } catch {
-      const salvaged = applyAdvisorEvidenceBoundRewrite({
-        original: gated,
-        rejectedAnswerText: composed,
-        rewriteText: composed,
-        evidenceItems,
-        requiredEntityScope: 'UNKNOWN',
-        requiredCostCenterName: null,
-      });
-      answerText = salvaged.ok ? salvaged.text : gated.text;
-    }
+        conversationId: input.conversationId,
+        pendingId: actionToRun.id,
+        message: error instanceof Error ? error.message : 'unknown',
+      }),
+    );
+    answerText = pendingActionCompositionFallback();
+  }
+
+  if (pendingAnswerLooksLikeTechnicalDump(answerText)) {
+    console.info(
+      JSON.stringify({
+        event: 'advisor_pending_action_compose_leakage_blocked',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        pendingId: actionToRun.id,
+      }),
+    );
+    answerText = pendingActionCompositionFallback();
   }
 
   const consultantMessage = await input.deps.conversations.createMessage(
