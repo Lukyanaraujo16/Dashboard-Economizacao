@@ -298,13 +298,20 @@ describe('envio — maiores gastos por centro (Fase 1)', () => {
     expect(result.consultantMessage.content).toContain('18.000,00');
     expect(result.consultantMessage.content).toContain('Clínica Life Laranjeiras');
     expect(result.consultantMessage.content).toContain('Aluguel');
+    // Template COST_CENTER outflow: sem extract (zero overhead — oferta livre só em free-form)
     expect(harness.openai.generateCalls).toHaveLength(0);
     expect(harness.savedContexts).toHaveLength(1);
     expect(harness.savedContexts[0]).toMatchObject({
-      kind: 'COST_CENTER_OUTFLOW_MOVEMENTS',
-      limit: 1,
-      monthKey: '2026-08',
-      costCenterQuery: 'Clínica Life Laranjeiras',
+      kind: 'ADVISOR_CONVERSATION_BAG',
+      version: 1,
+      slots: {
+        costCenterOutflowMovements: {
+          kind: 'COST_CENTER_OUTFLOW_MOVEMENTS',
+          limit: 1,
+          monthKey: '2026-08',
+          costCenterQuery: 'Clínica Life Laranjeiras',
+        },
+      },
     });
   });
 

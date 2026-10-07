@@ -637,3 +637,66 @@ export type {
   AdvisorKnowledgeDocumentKind,
   AdvisorKnowledgeDocumentValidation,
 } from './advisor-knowledge-document-validation.js';
+export {
+  ADVISOR_CONVERSATION_BAG_KIND,
+  ADVISOR_CONVERSATION_BAG_VERSION,
+  emptyAdvisorConversationBag,
+  mergeAdvisorConversationBag,
+  parseAdvisorConversationBag,
+  serializeAdvisorConversationBag,
+} from './advisor-conversation-bag.js';
+export type {
+  AdvisorConversationBag,
+  AdvisorConversationBagSlots,
+} from './advisor-conversation-bag.js';
+export {
+  PENDING_ANALYTICAL_ACTION_KIND,
+  PENDING_ANALYTICAL_ACTION_TTL_MS,
+  PENDING_ANALYTICAL_ACTION_VERSION,
+  PENDING_ALLOWED_TOOLS,
+  PENDING_ANALYTICAL_DOMAINS,
+  PENDING_ANALYTICAL_OPERATIONS,
+  PENDING_RESOLUTION_DECISIONS,
+  applyPendingPatch,
+  buildToolArgumentsFromPendingStep,
+  createPendingAnalyticalAction,
+  isCapabilityCompatible,
+  isPendingActionExecutable,
+  isPendingAllowedTool,
+  isPendingAnalyticalDomain,
+  isPendingAnalyticalOperation,
+  markPendingConsumed,
+  markPendingExpired,
+  markPendingRejected,
+  parsePendingAnalyticalAction,
+  parsePendingResolutionResult,
+  pendingActionHasSnapshotPreloadStep,
+} from './pending-analytical-action.js';
+export type {
+  PendingAnalyticalAction,
+  PendingAnalyticalFilters,
+  PendingAnalyticalPatch,
+  PendingAnalyticalStep,
+  PendingResolutionDecision,
+  PendingResolutionResult,
+} from './pending-analytical-action.js';
+export {
+  extractPendingAnalyticalActionFromOffer,
+  parseJsonObjectFromModelText,
+  resolvePendingAnalyticalActionDecision,
+} from './pending-analytical-action-classify.js';
+export {
+  isReplyEligibleForPendingExtract,
+} from './pending-extract-eligibility.js';
+export type {
+  PendingExtractEligibility,
+  PendingExtractPathKind,
+} from './pending-extract-eligibility.js';
+export {
+  composePendingActionAnswer,
+  executePendingAnalyticalAction,
+} from './pending-analytical-action-execute.js';
+export type {
+  PendingActionExecutionResult,
+  PendingActionToolExecution,
+} from './pending-analytical-action-execute.js';

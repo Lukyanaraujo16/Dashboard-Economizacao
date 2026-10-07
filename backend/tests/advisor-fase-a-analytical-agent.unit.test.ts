@@ -410,7 +410,8 @@ describe('Fase A — agente analítico controlado (prova de autonomia)', () => {
     expect(cashFlowCalls[0]?.monthKey).toBe('2026-08');
     expect(result.consultantMessage.content).toContain('Folha');
     expect(result.consultantMessage.content).toContain('R$ 28000');
-    expect(openai.generateCalls).toHaveLength(2);
+    // tool round + resposta final + extract pending (B.1.1, resposta analítica elegível)
+    expect(openai.generateCalls).toHaveLength(3);
     expect(
       openai.generateCalls[0]?.tools?.some((tool) => tool.name === 'cash_realized_breakdown'),
     ).toBe(true);

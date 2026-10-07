@@ -31,14 +31,12 @@ import { isAdvisorInterpretiveQuestion } from '../domain/classify-advisor-factua
 import { runAdvisorMonthlyPlanning } from '../domain/run-advisor-monthly-planning.js';
 import { runAdvisorBillingAnswer } from '../domain/run-advisor-billing-answer.js';
 import { runAdvisorDailyCashMovement } from '../domain/run-advisor-daily-cash-movement.js';
-import { parseDailyCashMovementConversationState } from '../domain/daily-cash-movement-conversation-state.js';
 import type { CashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
 import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import type { MonthlyPlanningServices } from '../domain/load-monthly-planning-fact.js';
 import { executeAnalyticalQuery } from '../domain/analytical/execute-analytical-query.js';
 import { validateAnalyticalCapability } from '../domain/analytical/validate-analytical-capability.js';
 import {
-  parseAnalyticalConversationState,
   type AnalyticalConversationState,
 } from '../domain/analytical-conversation-state.js';
 import {
@@ -66,8 +64,34 @@ import {
 import { assembleCostCenterOutflowMovementsPlan } from '../domain/assemble-cost-center-outflow-movements-plan.js';
 import {
   costCenterOutflowMovementsState,
-  parseCostCenterOutflowMovementsConversationState,
 } from '../domain/cost-center-outflow-movements-conversation-state.js';
+import {
+  mergeAdvisorConversationBag,
+  parseAdvisorConversationBag,
+  serializeAdvisorConversationBag,
+  type AdvisorConversationBag,
+} from '../domain/advisor-conversation-bag.js';
+import {
+  applyPendingPatch,
+  isPendingActionExecutable,
+  markPendingConsumed,
+  markPendingExpired,
+  markPendingRejected,
+  pendingActionHasSnapshotPreloadStep,
+  type PendingAnalyticalAction,
+} from '../domain/pending-analytical-action.js';
+import {
+  extractPendingAnalyticalActionFromOffer,
+  resolvePendingAnalyticalActionDecision,
+} from '../domain/pending-analytical-action-classify.js';
+import {
+  composePendingActionAnswer,
+  executePendingAnalyticalAction,
+} from '../domain/pending-analytical-action-execute.js';
+import {
+  isReplyEligibleForPendingExtract,
+  type PendingExtractPathKind,
+} from '../domain/pending-extract-eligibility.js';
 import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
@@ -344,7 +368,63 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         }),
       );
 
-      const priorState = parseAnalyticalConversationState(conversation.analyticalContext);
+      let conversationBag = parseAdvisorConversationBag(conversation.analyticalContext);
+      const persistBag = async (next: AdvisorConversationBag): Promise<void> => {
+        await deps.conversations.saveAnalyticalContext(
+          tenantId,
+          conversation.id,
+          serializeAdvisorConversationBag(next) as never,
+        );
+        conversationBag = next;
+      };
+      /** Finalização comum B.1.1: extract semântico após resposta analítica elegível. */
+      const afterAnalyticalReply = async (
+        consultantMessage: AiMessageRecord,
+        answerSource: AnalyticalAnswerSource,
+        toolEvidence?: readonly {
+          readonly toolName: string;
+          readonly ok: boolean;
+          readonly contentPreview: string;
+        }[],
+      ): Promise<void> => {
+        await maybePersistPendingOfferFromAssistant({
+          deps,
+          tenantId,
+          conversationId: conversation.id,
+          consultantMessageId: consultantMessage.id,
+          assistantText: consultantMessage.content,
+          resolvedMonthKey: period.monthKey,
+          providerId: ready.provider,
+          model,
+          conversationBag,
+          persistBag,
+          now: input.now,
+          answerSource,
+          pathKind: 'ANALYTICAL',
+          toolEvidence,
+        });
+      };
+
+      const pendingGate = await tryHandlePendingAnalyticalAction({
+        deps,
+        tenantId,
+        userId,
+        conversationId: conversation.id,
+        question,
+        periodMonthKey: period.monthKey,
+        now: input.now,
+        readyProvider: ready.provider,
+        readyModel: model,
+        conversationBag,
+        persistBag,
+        userMessage,
+        recordTrail,
+      });
+      if (pendingGate !== null) {
+        return pendingGate;
+      }
+
+      const priorState = conversationBag.slots.counterparty;
       if (deps.monthlyPlanning !== undefined && !isAdvisorInterpretiveQuestion(question)) {
         const planned = await runAdvisorMonthlyPlanning({
           content: question,
@@ -402,10 +482,12 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             senderType: 'CONSULTANT',
             content: billing.answer,
           });
+          const billingSource: AnalyticalAnswerSource =
+            billing.intentKind === 'BILLING_SERIES' ? 'BILLING_SERIES' : 'BILLING';
           const analyticalOutcome = await recordTrail({
             consultantMessageId: consultantMessage.id,
             runId: null,
-            answerSource: billing.intentKind === 'BILLING_SERIES' ? 'BILLING_SERIES' : 'BILLING',
+            answerSource: billingSource,
             toolRoundCount: 0,
             traces: [],
             facts: closedTrailFacts('OK'),
@@ -434,14 +516,18 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           content: question,
           referenceMonthKey: period.monthKey,
           now: input.now,
-          priorState: parseDailyCashMovementConversationState(conversation.analyticalContext),
+          priorState: conversationBag.slots.dailyCashMovement,
           tenantId,
           details: deps.dailyCashMovements.details,
           costCenters: deps.dailyCashMovements.costCenters,
         });
         if (daily !== null) {
           if (daily.state !== null) {
-            await deps.conversations.saveAnalyticalContext(tenantId, conversation.id, daily.state);
+            await persistBag(
+              mergeAdvisorConversationBag(conversationBag, {
+                dailyCashMovement: daily.state,
+              }),
+            );
           }
           const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
             senderType: 'CONSULTANT',
@@ -494,9 +580,11 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           deps,
           tenantId,
           conversationId: conversation.id,
+          userId,
           userMessage,
           query: universalIntent.query,
           now: input.now,
+          existingBag: conversationBag,
           recordTrail,
         });
       }
@@ -508,14 +596,20 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           referenceMonthKey: input.monthKey,
         });
         if (followUp.kind === 'CLEAR' && priorState !== null) {
-          await saveCounterpartyState(deps, tenantId, conversation.id, null);
+          await persistBag(
+            mergeAdvisorConversationBag(conversationBag, { counterparty: null }),
+          );
         }
         if (followUp.kind === 'ORDINAL' && priorState !== null) {
           const ordinal = composeOrdinalAnswer({ state: priorState, rank: followUp.rank });
-          await saveCounterpartyState(deps, tenantId, conversation.id, {
-            ...priorState,
-            focusDisplayName: ordinal.focusDisplayName,
-          });
+          await persistBag(
+            mergeAdvisorConversationBag(conversationBag, {
+              counterparty: {
+                ...priorState,
+                focusDisplayName: ordinal.focusDisplayName,
+              },
+            }),
+          );
           const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
             senderType: 'CONSULTANT',
             content: ordinal.answer,
@@ -541,9 +635,11 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               deps,
               tenantId,
               conversationId: conversation.id,
+              userId,
               userMessage,
               query: followUp.query,
               now: input.now,
+              existingBag: conversationBag,
               recordTrail,
             });
           }
@@ -681,9 +777,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       }
 
       if (!isAdvisorInterpretiveQuestion(question)) {
-        const priorMovementsState = parseCostCenterOutflowMovementsConversationState(
-          conversation.analyticalContext,
-        );
+        const priorMovementsState = conversationBag.slots.costCenterOutflowMovements;
         const assembled = assembleCostCenterOutflowMovementsPlan({
           content: question,
           period,
@@ -699,6 +793,10 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             analyticalTools: deps.analyticalTools,
             conversations: deps.conversations,
             recordTrail,
+            existingBag: conversationBag,
+            onBagPersisted: async (next) => {
+              conversationBag = next;
+            },
           });
           if (movementsAnswer !== null) {
             return {
@@ -1099,13 +1197,27 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             : (contentStatus ?? 'OK');
         const composerTrace = drilldown === null ? null : traceFromToolResult(drilldown, 1);
         const composerTraces = composerTrace === null ? [] : [composerTrace];
+        const factualAnswerSource = answerSourceFromIntent(
+          composed.meta.intentKind === 'FACTUAL_LIMITATION' ? null : composed.meta.intentKind,
+          sourceTool,
+        );
+        await afterAnalyticalReply(
+          consultantMessage,
+          factualAnswerSource,
+          drilldown === null
+            ? []
+            : [
+                {
+                  toolName: drilldown.name,
+                  ok: drilldown.ok,
+                  contentPreview: drilldown.content.slice(0, 240),
+                },
+              ],
+        );
         const analyticalOutcome = await recordTrail({
           consultantMessageId: consultantMessage.id,
           runId: null,
-          answerSource: answerSourceFromIntent(
-            composed.meta.intentKind === 'FACTUAL_LIMITATION' ? null : composed.meta.intentKind,
-            sourceTool,
-          ),
+          answerSource: factualAnswerSource,
           toolRoundCount: composerTraces.length > 0 ? 1 : 0,
           traces: composerTraces,
           facts: {
@@ -1200,6 +1312,16 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           finishedAt: new Date(),
           messageId: consultantMessage.id,
         });
+
+        await afterAnalyticalReply(
+          consultantMessage,
+          'PROVIDER',
+          observed.traces.map((trace) => ({
+            toolName: trace.toolName,
+            ok: trace.status === 'SUCCESS' || trace.known,
+            contentPreview: '',
+          })),
+        );
 
         const analyticalOutcome = await recordTrail({
           consultantMessageId: consultantMessage.id,
@@ -1881,6 +2003,8 @@ async function answerCostCenterOutflowMovementsPlan(input: {
     createMessage: SendAdvisorMessageDependencies['conversations']['createMessage'];
     saveAnalyticalContext?: SendAdvisorMessageDependencies['conversations']['saveAnalyticalContext'];
   };
+  readonly existingBag?: AdvisorConversationBag;
+  readonly onBagPersisted?: (bag: AdvisorConversationBag) => Promise<void>;
   readonly recordTrail: (trailInput: {
     readonly consultantMessageId: string;
     readonly runId: string | null;
@@ -2146,16 +2270,22 @@ async function answerCostCenterOutflowMovementsPlan(input: {
     resolvedName !== null &&
     typeof input.conversations.saveAnalyticalContext === 'function'
   ) {
-    await input.conversations.saveAnalyticalContext(
-      input.tenantId,
-      input.conversationId,
-      costCenterOutflowMovementsState({
+    const next = mergeAdvisorConversationBag(input.existingBag ?? parseAdvisorConversationBag(null), {
+      costCenterOutflowMovements: costCenterOutflowMovementsState({
         monthKey: slots.monthKey,
         periodSource: slots.periodSource,
         limit: slots.limit,
         costCenterQuery: resolvedName,
       }),
+    });
+    await input.conversations.saveAnalyticalContext(
+      input.tenantId,
+      input.conversationId,
+      serializeAdvisorConversationBag(next) as never,
     );
+    if (input.onBagPersisted !== undefined) {
+      await input.onBagPersisted(next);
+    }
   }
   const trace = traceFromToolResult(
     toolResult,
@@ -2339,14 +2469,17 @@ async function answerCounterpartyQuery(input: {
     readonly conversations: {
       createMessage: SendAdvisorMessageDependencies['conversations']['createMessage'];
       saveAnalyticalContext?: SendAdvisorMessageDependencies['conversations']['saveAnalyticalContext'];
+      findConversation?: SendAdvisorMessageDependencies['conversations']['findConversation'];
     };
     readonly counterpartyIdentity?: SendAdvisorMessageDependencies['counterpartyIdentity'];
   };
   readonly tenantId: string;
   readonly conversationId: string;
+  readonly userId?: string;
   readonly userMessage: AiMessageRecord;
   readonly query: AnalyticalQuery;
   readonly now?: Date;
+  readonly existingBag?: AdvisorConversationBag;
   readonly recordTrail: (input: {
     readonly consultantMessageId: string | null;
     readonly runId: string | null;
@@ -2374,6 +2507,10 @@ async function answerCounterpartyQuery(input: {
       input.tenantId,
       input.conversationId,
       stateFromLegacy(input.query, outcome.legacyFact),
+      {
+        userId: input.userId,
+        existingBag: input.existingBag,
+      },
     );
   }
   const consultantMessage = await input.deps.conversations.createMessage(
@@ -2477,18 +2614,42 @@ async function saveCounterpartyState(
   deps: {
     readonly conversations: {
       saveAnalyticalContext?: SendAdvisorMessageDependencies['conversations']['saveAnalyticalContext'];
+      findConversation?: SendAdvisorMessageDependencies['conversations']['findConversation'];
     };
   },
   tenantId: string,
   conversationId: string,
   state: AnalyticalConversationState | null,
+  options?: {
+    readonly userId?: string;
+    readonly existingBag?: AdvisorConversationBag;
+  },
 ): Promise<void> {
   if (typeof deps.conversations.saveAnalyticalContext !== 'function') {
     return;
   }
-  const payload =
-    state === null ? null : (JSON.parse(JSON.stringify(state)) as AnalyticalConversationState);
-  await deps.conversations.saveAnalyticalContext(tenantId, conversationId, payload);
+  let base = options?.existingBag ?? parseAdvisorConversationBag(null);
+  if (
+    options?.existingBag === undefined &&
+    typeof deps.conversations.findConversation === 'function' &&
+    options?.userId !== undefined
+  ) {
+    const row = await deps.conversations.findConversation(
+      tenantId,
+      options.userId,
+      conversationId,
+    );
+    base = parseAdvisorConversationBag(row?.analyticalContext ?? null);
+  }
+  const next = mergeAdvisorConversationBag(base, {
+    counterparty:
+      state === null ? null : (JSON.parse(JSON.stringify(state)) as AnalyticalConversationState),
+  });
+  await deps.conversations.saveAnalyticalContext(
+    tenantId,
+    conversationId,
+    serializeAdvisorConversationBag(next) as never,
+  );
 }
 
 function traceFromToolResult(
@@ -2574,5 +2735,511 @@ function isRunErrorCode(code: string): code is AiRunErrorCode {
     code === 'CONTENT_REJECTED' ||
     code === 'PROVIDER_ERROR' ||
     code === 'UNKNOWN'
+  );
+}
+
+/**
+ * Resolução semântica de PendingAnalyticalAction antes do pipeline analítico.
+ * Zero overhead quando não há pending (U).
+ */
+async function tryHandlePendingAnalyticalAction(input: {
+  readonly deps: SendAdvisorMessageDependencies;
+  readonly tenantId: string;
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly question: string;
+  readonly periodMonthKey: string;
+  readonly now?: Date;
+  readonly readyProvider: GenerationInput['provider'];
+  readonly readyModel: string;
+  readonly conversationBag: AdvisorConversationBag;
+  readonly persistBag: (next: AdvisorConversationBag) => Promise<void>;
+  readonly userMessage: AiMessageRecord;
+  readonly recordTrail: (trailInput: {
+    readonly consultantMessageId: string | null;
+    readonly runId: string | null;
+    readonly answerSource: AnalyticalAnswerSource;
+    readonly toolRoundCount: number;
+    readonly traces: AnalyticalToolTraceDraft[];
+    readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+  }) => Promise<AnalyticalOutcome>;
+}): Promise<SendAdvisorMessageResult | null> {
+  const pending = input.conversationBag.slots.pendingAnalyticalAction;
+  if (pending === null) {
+    return null;
+  }
+
+  const now = input.now ?? new Date();
+  const executable = isPendingActionExecutable(pending, now);
+  if (!executable.ok) {
+    const marked =
+      executable.reason === 'EXPIRED' ? markPendingExpired(pending) : markPendingConsumed(pending);
+    await input.persistBag(
+      mergeAdvisorConversationBag(input.conversationBag, {
+        pendingAnalyticalAction: marked.status === 'EXPIRED' ? marked : null,
+      }),
+    );
+    console.info(
+      JSON.stringify({
+        event: 'advisor_pending_action_skipped',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        pendingId: pending.id,
+        reason: executable.reason,
+      }),
+    );
+    return null;
+  }
+
+  const provider = input.deps.providers.resolve(input.readyProvider);
+  if (provider.id !== input.readyProvider) {
+    throw new IaProviderError('PROVIDER_ERROR', 'Registry devolveu provider diferente do configurado.');
+  }
+
+  const resolution = await resolvePendingAnalyticalActionDecision({
+    provider,
+    providerId: input.readyProvider,
+    model: input.readyModel,
+    tenantId: input.tenantId,
+    userMessage: input.question,
+    pending,
+  });
+
+  if (resolution === null) {
+    console.info(
+      JSON.stringify({
+        event: 'advisor_pending_action_resolve_failed',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        pendingId: pending.id,
+      }),
+    );
+    return null;
+  }
+
+  console.info(
+    JSON.stringify({
+      event: 'advisor_pending_action_resolved',
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      pendingId: pending.id,
+      decision: resolution.decision,
+      domain: pending.domain,
+      operation: pending.operation,
+      extraProviderCalls: 1,
+    }),
+  );
+
+  if (resolution.decision === 'UNRELATED') {
+    await input.persistBag(
+      mergeAdvisorConversationBag(input.conversationBag, {
+        pendingAnalyticalAction: null,
+      }),
+    );
+    return null;
+  }
+
+  if (resolution.decision === 'REJECT') {
+    await input.persistBag(
+      mergeAdvisorConversationBag(input.conversationBag, {
+        pendingAnalyticalAction: markPendingRejected(pending),
+      }),
+    );
+    const consultantMessage = await input.deps.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      {
+        senderType: 'CONSULTANT',
+        content: 'Certo — não sigo com essa consulta. Se quiser outra leitura, é só pedir.',
+      },
+    );
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'PROVIDER',
+      toolRoundCount: 0,
+      traces: [],
+      facts: closedTrailFacts('OK'),
+    });
+    return {
+      conversationId: input.conversationId,
+      userMessage: input.userMessage,
+      consultantMessage,
+      run: null,
+      factualAnswer: null,
+      analyticalOutcome,
+    };
+  }
+
+  let actionToRun: PendingAnalyticalAction = pending;
+  if (resolution.decision === 'MODIFY') {
+    const patched = applyPendingPatch(pending, resolution.patch);
+    if (patched === null) {
+      console.info(
+        JSON.stringify({
+          event: 'advisor_pending_action_patch_rejected',
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+          pendingId: pending.id,
+        }),
+      );
+      const consultantMessage = await input.deps.conversations.createMessage(
+        input.tenantId,
+        input.conversationId,
+        {
+          senderType: 'CONSULTANT',
+          content:
+            'Não consigo aplicar esse ajuste com segurança na ação pendente. Reformule o recorte (mês, centro ou limite) ou peça de novo a consulta.',
+        },
+      );
+      const analyticalOutcome = await input.recordTrail({
+        consultantMessageId: consultantMessage.id,
+        runId: null,
+        answerSource: 'PROVIDER',
+        toolRoundCount: 0,
+        traces: [],
+        facts: closedTrailFacts('UNRESOLVED'),
+      });
+      return {
+        conversationId: input.conversationId,
+        userMessage: input.userMessage,
+        consultantMessage,
+        run: null,
+        factualAnswer: null,
+        analyticalOutcome,
+      };
+    }
+    actionToRun = patched;
+  }
+
+  // Consome antes da execução para idempotência / anti-replay.
+  await input.persistBag(
+    mergeAdvisorConversationBag(input.conversationBag, {
+      pendingAnalyticalAction: markPendingConsumed(actionToRun),
+    }),
+  );
+
+  const snapshotOnly = actionToRun.steps.every((step) => step.toolName === null);
+  if (!snapshotOnly && input.deps.analyticalTools === undefined) {
+    const consultantMessage = await input.deps.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      {
+        senderType: 'CONSULTANT',
+        content: 'A ação pendente não pode ser executada neste momento (tools indisponíveis).',
+      },
+    );
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'PROVIDER',
+      toolRoundCount: 0,
+      traces: [],
+      facts: closedTrailFacts('UNRESOLVED'),
+    });
+    return {
+      conversationId: input.conversationId,
+      userMessage: input.userMessage,
+      consultantMessage,
+      run: null,
+      factualAnswer: null,
+      analyticalOutcome,
+    };
+  }
+
+  const execution =
+    snapshotOnly || input.deps.analyticalTools === undefined
+      ? ({ status: 'OK' as const, executions: [], snapshotOnly: true })
+      : await executePendingAnalyticalAction({
+          action: actionToRun,
+          tenantId: input.tenantId,
+          resolvedMonthKey: input.periodMonthKey,
+          analyticalTools: input.deps.analyticalTools,
+          now: input.now,
+        });
+
+  let snapshotFactsText: string | null = null;
+  if (pendingActionHasSnapshotPreloadStep(actionToRun)) {
+    try {
+      const built = await input.deps.context.build({
+        tenantId: input.tenantId,
+        userId: input.userId,
+        conversationId: input.conversationId,
+        question: input.question,
+        monthKey: input.periodMonthKey,
+        now: input.now,
+      });
+      const factBlocks = built.blocks.filter(
+        (block) => block.type === 'FINANCIAL_FACTS' || block.type === 'ANALYTICAL_FACTS',
+      );
+      snapshotFactsText = factBlocks.map((block) => block.content).join('\n').slice(0, 2_000);
+    } catch {
+      snapshotFactsText = null;
+    }
+  }
+
+  const composed = composePendingActionAnswer({
+    action: actionToRun,
+    execution,
+    snapshotFactsText,
+  });
+
+  const toolRounds: IaToolRound[] =
+    execution.status === 'UNAVAILABLE'
+      ? []
+      : [
+          {
+            calls: execution.executions.map((exec) => ({
+              id: exec.id,
+              name: exec.name,
+              arguments: exec.arguments,
+            })),
+            results: execution.executions.map((exec) => ({
+              id: exec.id,
+              name: exec.name,
+              ok: exec.ok,
+              content: exec.content,
+              resultCardinality: exec.resultCardinality ?? 0,
+            })),
+          },
+        ];
+
+  const evidenceItems: AdvisorEvidenceItem[] = [
+    ...(snapshotFactsText !== null && snapshotFactsText !== ''
+      ? [
+          {
+            text: snapshotFactsText,
+            entityScope: 'TENANT' as const,
+            source: 'FINANCIAL_FACTS' as const,
+          },
+        ]
+      : []),
+    ...collectEvidenceItems([], toolRounds),
+  ];
+  const gated = gateAdvisorEvidenceBoundAnswer({
+    answerText: composed,
+    evidenceItems,
+    agentToolPath: evidenceItems.length > 0,
+    requiredEntityScope: 'UNKNOWN',
+    requiredCostCenterName: null,
+  });
+
+  let answerText = gated.ok ? gated.text : gated.text;
+  if (!gated.ok && evidenceItems.length > 0) {
+    try {
+      const rewrite = await provider.generate({
+        tenantId: input.tenantId,
+        provider: input.readyProvider,
+        model: input.readyModel,
+        blocks: [
+          {
+            type: 'PLATFORM_INSTRUCTIONS',
+            content: [
+              'REWRITE_EVIDENCE_BOUND:',
+              'Reescreva usando APENAS valores oficiais das tool results.',
+              'Não invente totais. Preserve ranking/listagem individual.',
+              `Resposta rejeitada: ${composed.slice(0, 2_000)}`,
+            ].join('\n'),
+            trustLevel: 'PLATFORM',
+          },
+          {
+            type: 'ANALYTICAL_FACTS',
+            content: execution.status === 'UNAVAILABLE'
+              ? execution.message
+              : execution.executions.map((e) => e.content).join('\n'),
+            trustLevel: 'PLATFORM',
+          },
+        ],
+      });
+      const afterRewrite = applyAdvisorEvidenceBoundRewrite({
+        original: gated,
+        rejectedAnswerText: composed,
+        rewriteText: rewrite.text,
+        evidenceItems,
+        requiredEntityScope: 'UNKNOWN',
+        requiredCostCenterName: null,
+      });
+      answerText = afterRewrite.text;
+    } catch {
+      const salvaged = applyAdvisorEvidenceBoundRewrite({
+        original: gated,
+        rejectedAnswerText: composed,
+        rewriteText: composed,
+        evidenceItems,
+        requiredEntityScope: 'UNKNOWN',
+        requiredCostCenterName: null,
+      });
+      answerText = salvaged.ok ? salvaged.text : gated.text;
+    }
+  }
+
+  const consultantMessage = await input.deps.conversations.createMessage(
+    input.tenantId,
+    input.conversationId,
+    {
+      senderType: 'CONSULTANT',
+      content: sanitizeConsultantText(answerText),
+    },
+  );
+
+  const traces: AnalyticalToolTraceDraft[] = [];
+  if (execution.status !== 'UNAVAILABLE') {
+    for (const [index, exec] of execution.executions.entries()) {
+      const trace = traceFromToolResult(
+        {
+          name: exec.name,
+          content: exec.content,
+          resultCardinality: exec.resultCardinality,
+        },
+        1,
+        undefined,
+        exec.arguments,
+      );
+      if (trace !== null) {
+        traces.push({ ...trace, round: index + 1 });
+      }
+    }
+  }
+
+  const analyticalOutcome = await input.recordTrail({
+    consultantMessageId: consultantMessage.id,
+    runId: null,
+    answerSource: 'PROVIDER',
+    toolRoundCount: traces.length > 0 ? 1 : 0,
+    traces,
+    facts: closedTrailFacts(
+      execution.status === 'OK' ? 'OK' : execution.status === 'PARTIAL_UNAVAILABLE' ? 'PARTIAL' : 'UNRESOLVED',
+      execution.status === 'PARTIAL_UNAVAILABLE',
+    ),
+  });
+
+  console.info(
+    JSON.stringify({
+      event: 'advisor_pending_action_executed',
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      pendingId: actionToRun.id,
+      decision: resolution.decision,
+      domain: actionToRun.domain,
+      operation: actionToRun.operation,
+      executionStatus: execution.status,
+      toolCount: execution.status === 'UNAVAILABLE' ? 0 : execution.executions.length,
+      status: 'CONSUMED',
+    }),
+  );
+
+  return {
+    conversationId: input.conversationId,
+    userMessage: input.userMessage,
+    consultantMessage,
+    run: null,
+    factualAnswer: null,
+    analyticalOutcome,
+  };
+}
+
+/**
+ * Finalização comum: extract semântico de oferta → PendingAnalyticalAction.
+ * Gate estrutural (path/source), não dicionário de frases.
+ * +1 provider quando elegível; 0 quando META/erro/capability-denied.
+ */
+async function maybePersistPendingOfferFromAssistant(input: {
+  readonly deps: SendAdvisorMessageDependencies;
+  readonly tenantId: string;
+  readonly conversationId: string;
+  readonly consultantMessageId: string;
+  readonly assistantText: string;
+  readonly resolvedMonthKey: string;
+  readonly providerId: GenerationInput['provider'];
+  readonly model: string;
+  readonly conversationBag: AdvisorConversationBag;
+  readonly persistBag: (next: AdvisorConversationBag) => Promise<void>;
+  readonly now?: Date;
+  readonly answerSource: AnalyticalAnswerSource | string;
+  readonly pathKind: PendingExtractPathKind;
+  readonly toolEvidence?: readonly {
+    readonly toolName: string;
+    readonly ok: boolean;
+    readonly contentPreview: string;
+  }[];
+}): Promise<void> {
+  if (typeof input.deps.conversations.saveAnalyticalContext !== 'function') {
+    return;
+  }
+
+  const eligibility = isReplyEligibleForPendingExtract({
+    pathKind: input.pathKind,
+    answerSource: input.answerSource,
+    assistantText: input.assistantText,
+  });
+  if (!eligibility.eligible) {
+    console.info(
+      JSON.stringify({
+        event: 'advisor_pending_action_extract',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        decision: 'NO_PENDING_ACTION',
+        reason: eligibility.reason,
+        answerSource: input.answerSource,
+        pathKind: input.pathKind,
+        extraProviderCalls: 0,
+      }),
+    );
+    return;
+  }
+
+  const provider = input.deps.providers.resolve(input.providerId);
+  if (provider.id !== input.providerId) {
+    return;
+  }
+
+  const extracted = await extractPendingAnalyticalActionFromOffer({
+    provider,
+    providerId: input.providerId,
+    model: input.model,
+    tenantId: input.tenantId,
+    assistantText: input.assistantText,
+    createdFromMessageId: input.consultantMessageId,
+    resolvedMonthKey: input.resolvedMonthKey,
+    toolEvidence: input.toolEvidence,
+    now: input.now,
+  });
+
+  if (extracted === null) {
+    console.info(
+      JSON.stringify({
+        event: 'advisor_pending_action_extract',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        decision: 'NO_PENDING_ACTION',
+        reason: 'EXTRACTOR_NO_PENDING',
+        answerSource: input.answerSource,
+        pathKind: input.pathKind,
+        extraProviderCalls: 1,
+      }),
+    );
+    return;
+  }
+
+  await input.persistBag(
+    mergeAdvisorConversationBag(input.conversationBag, {
+      pendingAnalyticalAction: extracted,
+    }),
+  );
+
+  console.info(
+    JSON.stringify({
+      event: 'advisor_pending_action_extract',
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      decision: 'PENDING_ANALYTICAL_ACTION',
+      pendingId: extracted.id,
+      domain: extracted.domain,
+      operation: extracted.operation,
+      stepCount: extracted.steps.length,
+      answerSource: input.answerSource,
+      pathKind: input.pathKind,
+      extraProviderCalls: 1,
+    }),
   );
 }

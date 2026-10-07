@@ -906,7 +906,8 @@ describe('send-advisor-message (F13.3)', () => {
       'As categorias oficiais de agosto foram ranqueadas no backend.',
     );
     expect(executeTool).toHaveBeenCalled();
-    expect(openai.generateCalls).toHaveLength(2);
+    // tool round + resposta + extract pending (B.1.1)
+    expect(openai.generateCalls).toHaveLength(3);
   });
 
   it('executa cash_movement_lines com julho herdado da conversa', async () => {

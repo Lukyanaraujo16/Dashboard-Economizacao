@@ -389,7 +389,8 @@ describe('Fase A.2 — completion contract do agente', () => {
       expect(harness.completionEvents.some((e) => e.completionDecision === 'CONTINUE')).toBe(false);
       expect(harness.completionEvents.some((e) => e.completionDecision === 'ANSWER')).toBe(true);
       expect(result.consultantMessage.content).toContain('Folha');
-      expect(openai.generateCalls).toHaveLength(2);
+      // tool round + resposta + extract pending (B.1.1)
+      expect(openai.generateCalls).toHaveLength(3);
     } finally {
       harness.restore();
     }
