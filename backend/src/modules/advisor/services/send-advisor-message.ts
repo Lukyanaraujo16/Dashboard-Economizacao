@@ -95,6 +95,18 @@ import {
   type PendingExtractPathKind,
 } from '../domain/pending-extract-eligibility.js';
 import {
+  extractUserAnalyticalAssumption,
+  isEligibleForUserAssumptionExtract,
+} from '../domain/user-assumption-classify.js';
+import {
+  buildDerivedScenarioEvidence,
+  serializeUserAssumptionsEvidenceBlock,
+} from '../domain/user-assumption-scenario.js';
+import {
+  listActiveUserAssumptions,
+  type UserAnalyticalAssumption,
+} from '../domain/user-analytical-assumption.js';
+import {
   CASH_COST_CENTER_LOOKUP_TOOL_NAME,
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_COST_CENTER_RANKING_TOOL_NAME,
@@ -129,6 +141,7 @@ import {
   gateAdvisorEvidenceBoundAnswer,
   inferEvidenceEntityScope,
   normalizeAdvisorToolCallFingerprint,
+  resolveAdvisorNumericEvidenceMode,
   type AdvisorEvidenceItem,
 } from '../domain/advisor-evidence-bound-answer.js';
 import {
@@ -424,6 +437,72 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       });
       if (pendingGate !== null) {
         return pendingGate;
+      }
+
+      // Premissas explícitas do usuário (cenário) — só quando há magnitude estrutural.
+      if (isEligibleForUserAssumptionExtract({ userMessage: question })) {
+        const recentConsultant = [...history]
+          .reverse()
+          .find(
+            (item) =>
+              item.senderType === 'CONSULTANT' &&
+              item.conversationId === conversation.id &&
+              item.tenantId === tenantId,
+          );
+        try {
+          const provider = deps.providers.resolve(ready.provider);
+          if (provider.id === ready.provider) {
+            const extracted = await extractUserAnalyticalAssumption({
+              provider,
+              providerId: ready.provider,
+              model,
+              tenantId,
+              userMessage: question,
+              createdFromMessageId: userMessage.id,
+              existingAssumptions: conversationBag.slots.userAssumptions,
+              recentConsultantSnippet: recentConsultant?.content ?? null,
+              now: input.now,
+            });
+            if (extracted.decision === 'USER_ASSUMPTION') {
+              await persistBag(
+                mergeAdvisorConversationBag(conversationBag, {
+                  userAssumptions: extracted.assumptions,
+                }),
+              );
+              console.info(
+                JSON.stringify({
+                  event: 'advisor_user_assumption_extracted',
+                  tenantId,
+                  conversationId: conversation.id,
+                  assumptionId: extracted.assumption.id,
+                  valueKind: extracted.assumption.valueKind,
+                  cadence: extracted.assumption.cadence,
+                  role: extracted.assumption.role,
+                  extraProviderCalls: 1,
+                }),
+              );
+            } else {
+              console.info(
+                JSON.stringify({
+                  event: 'advisor_user_assumption_extracted',
+                  tenantId,
+                  conversationId: conversation.id,
+                  decision: 'NO_ASSUMPTION',
+                  extraProviderCalls: 1,
+                }),
+              );
+            }
+          }
+        } catch (error) {
+          console.info(
+            JSON.stringify({
+              event: 'advisor_user_assumption_extract_failed',
+              tenantId,
+              conversationId: conversation.id,
+              message: error instanceof Error ? error.message : 'unknown',
+            }),
+          );
+        }
       }
 
       const priorState = conversationBag.slots.counterparty;
@@ -1245,6 +1324,18 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             })
           : built;
 
+      const financialFactsText =
+        contextForProvider.blocks.find((block) => block.type === 'FINANCIAL_FACTS')?.content ??
+        null;
+      const assumptionBlocks = buildUserAssumptionContextBlocks({
+        assumptions: conversationBag.slots.userAssumptions,
+        financialFactsText,
+      });
+      const blocksForProvider =
+        assumptionBlocks.length === 0
+          ? contextForProvider.blocks
+          : [...contextForProvider.blocks, ...assumptionBlocks];
+
       let run = await deps.runs.createRun(tenantId, {
         userId,
         conversationId: conversation.id,
@@ -1271,7 +1362,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           resolvedMonthKey: period.monthKey,
           providerId: ready.provider,
           model,
-          blocks: contextForProvider.blocks,
+          blocks: blocksForProvider,
           generate: (payload) => provider.generate(payload),
           analyticalTools: deps.analyticalTools,
           now: input.now,
@@ -1279,6 +1370,10 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           questionScope: questionToolScope,
           explicitCostCenter: questionDemand.explicitCostCenter,
           questionDemand,
+          question,
+          activeAssumptionValues: listActiveUserAssumptions(
+            conversationBag.slots.userAssumptions,
+          ).map((row) => row.value),
           initialToolEvidence:
             drilldown !== null && drilldown.ok
               ? [
@@ -1477,6 +1572,8 @@ async function runAdvisorGeneration(input: {
   readonly questionScope?: { readonly costCenterQuery?: string; readonly resolvedCostCenterName?: string };
   readonly explicitCostCenter?: ExplicitCostCenterScope;
   readonly questionDemand: AdvisorQuestionAnalyticalDemand;
+  readonly question?: string;
+  readonly activeAssumptionValues?: readonly number[];
   readonly initialToolEvidence?: readonly AnalyticalToolEvidence[];
 }): Promise<GenerationOutput> {
   const tools = input.analyticalTools?.tools ?? [];
@@ -1584,6 +1681,8 @@ async function runAdvisorGeneration(input: {
         providerId: input.providerId,
         model: input.model,
         explicitCostCenter: input.explicitCostCenter ?? { status: 'ABSENT' },
+        question: input.question,
+        activeAssumptionValues: input.activeAssumptionValues,
       });
     }
 
@@ -1750,6 +1849,8 @@ async function finalizeAdvisorAgentAnswer(input: {
   readonly providerId: GenerationInput['provider'];
   readonly model: string;
   readonly explicitCostCenter: ExplicitCostCenterScope;
+  readonly question?: string;
+  readonly activeAssumptionValues?: readonly number[];
 }): Promise<GenerationOutput> {
   const agentToolPath = input.executedToolCount > 0;
   const evidenceItems = collectEvidenceItems(input.blocks, input.toolRounds);
@@ -1763,12 +1864,17 @@ async function finalizeAdvisorAgentAnswer(input: {
       : input.explicitCostCenter.status === 'AMBIGUOUS'
         ? input.explicitCostCenter.query
         : null;
+  const numericEvidenceMode = resolveAdvisorNumericEvidenceMode({
+    question: input.question ?? '',
+    activeAssumptionValues: input.activeAssumptionValues ?? [],
+  });
   const gated = gateAdvisorEvidenceBoundAnswer({
     answerText: input.text,
     evidenceItems,
     agentToolPath,
     requiredEntityScope,
     requiredCostCenterName,
+    numericEvidenceMode,
   });
   if (gated.ok) {
     return { text: gated.text, usage: input.usage };
@@ -1784,6 +1890,7 @@ async function finalizeAdvisorAgentAnswer(input: {
       unsupportedCount: gated.unsupportedClaims.length,
       outcome: 'REWRITE_ATTEMPT',
       requiredEntityScope,
+      numericEvidenceMode,
     }),
   );
 
@@ -1793,6 +1900,16 @@ async function finalizeAdvisorAgentAnswer(input: {
       gated.unsupportedClaims.length > 0
         ? gated.unsupportedClaims.join('; ')
         : 'ABSENT';
+    const provenanceRewrite =
+      gated.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE'
+        ? [
+            'PROVENANCE_REWRITE:',
+            'Cifras rejeitadas existem só como USER_ASSUMPTION / SCENARIO_DERIVED.',
+            'NÃO afirme pagamento/receita/despesa/saldo/lançamento realizado com esses valores.',
+            'Se mencionar a premissa, deixe claro que é estimativa/cenário informado pelo usuário.',
+            'Se a pergunta pede fato oficial e não há evidência oficial correspondente, declare a limitação.',
+          ]
+        : [];
     const rewrite = await input.generate({
       tenantId: input.tenantId,
       provider: input.providerId,
@@ -1809,6 +1926,7 @@ async function finalizeAdvisorAgentAnswer(input: {
             'NÃO some, agregue nem invente totais/percentuais que não estejam explícitos na evidência.',
             'Se a resposta anterior trouxe soma/agregação não sustentada, REMOVA essa agregação e preserve o ranking/listagem com os valores oficiais individuais.',
             'Não invente números. Se não houver cifra oficial compatível com o escopo, declare a limitação.',
+            ...provenanceRewrite,
             `Cifras rejeitadas (remover ou substituir só por valores oficiais): ${unsupportedList}`,
             `Resposta anterior rejeitada: ${input.text.slice(0, 2_000)}`,
           ].join('\n'),
@@ -1825,6 +1943,7 @@ async function finalizeAdvisorAgentAnswer(input: {
       evidenceItems,
       requiredEntityScope,
       requiredCostCenterName,
+      numericEvidenceMode,
     });
     console.info(
       JSON.stringify({
@@ -1849,6 +1968,7 @@ async function finalizeAdvisorAgentAnswer(input: {
       evidenceItems,
       requiredEntityScope,
       requiredCostCenterName,
+      numericEvidenceMode,
     });
     console.info(
       JSON.stringify({
@@ -1858,6 +1978,7 @@ async function finalizeAdvisorAgentAnswer(input: {
         status: salvaged.ok ? 'OK' : gated.reason,
         reason: salvaged.ok ? 'OK' : gated.reason,
         outcome: salvaged.ok ? 'SALVAGE_ACCEPTED' : 'DETERMINISTIC_LIMITATION',
+        numericEvidenceMode,
       }),
     );
     return { text: salvaged.ok ? salvaged.text : gated.text, usage };
@@ -1878,10 +1999,20 @@ function collectEvidenceItems(
         resolvedCostCenter: 'NONE',
       });
     } else if (block.type === 'ANALYTICAL_FACTS' || block.type === 'PRESENTED_INSIGHT_FACTS') {
+      const source =
+        block.content.includes('USER_ASSUMPTIONS_BLOCK') ||
+        block.content.includes('provenance: USER_ASSUMPTION')
+          ? ('USER_ASSUMPTION' as const)
+          : block.content.includes('SCENARIO_DERIVED_BLOCK') ||
+              block.content.includes('DERIVED_FROM(OFFICIAL_FACT+USER_ASSUMPTION)')
+            ? ('SCENARIO_DERIVED' as const)
+            : block.type === 'ANALYTICAL_FACTS'
+              ? ('ANALYTICAL_FACTS' as const)
+              : ('PRESENTED_INSIGHT_FACTS' as const);
       items.push({
         text: block.content,
         entityScope: inferEvidenceEntityScope(block.content),
-        source: block.type === 'ANALYTICAL_FACTS' ? 'ANALYTICAL_FACTS' : 'PRESENTED_INSIGHT_FACTS',
+        source,
       });
     }
   }
@@ -1896,6 +2027,51 @@ function collectEvidenceItems(
     }
   }
   return items;
+}
+
+function buildUserAssumptionContextBlocks(input: {
+  readonly assumptions: readonly UserAnalyticalAssumption[];
+  readonly financialFactsText: string | null;
+}): GenerationInput['blocks'] {
+  const assumptionBlock = serializeUserAssumptionsEvidenceBlock(input.assumptions);
+  if (assumptionBlock === null) {
+    return [];
+  }
+  const blocks: Array<GenerationInput['blocks'][number]> = [
+    {
+      type: 'PLATFORM_INSTRUCTIONS',
+      content: [
+        'USER_ASSUMPTION_USAGE:',
+        'Há premissas explícitas do usuário (USER_ASSUMPTIONS_BLOCK / SCENARIO_DERIVED_BLOCK).',
+        'Você PODE usá-las em análise CONDICIONAL / cenário.',
+        'Nunca as apresente como fato do ERP, Conta Azul, dashboard ou lançamento realizado.',
+        'Deixe claro semanticamente que o valor foi informado/estimado pelo usuário.',
+        'Ao citar a premissa, use assumptionAmountBrl / assumptionPercentDisplay do bloco (ou equivalente numérico sustentado).',
+        'Se usar SCENARIO_DERIVED, cite derived.*Brl / percentDisplay exatamente — sem arredondar para outro valor.',
+        'Combine com FINANCIAL_FACTS oficiais e SCENARIO_DERIVED quando útil; não invente entidades oficiais.',
+        'Se a premissa não bastar para concluir, diga a limitação naturalmente.',
+        'Não responda que a premissa "não existe nos fatos oficiais" — ela é input de cenário, não lançamento.',
+      ].join('\n'),
+      trustLevel: 'PLATFORM',
+    },
+    {
+      type: 'ANALYTICAL_FACTS',
+      content: assumptionBlock,
+      trustLevel: 'ANALYTICAL_FACT',
+    },
+  ];
+  const derived = buildDerivedScenarioEvidence({
+    assumptions: input.assumptions,
+    financialFactsText: input.financialFactsText,
+  });
+  if (derived !== null) {
+    blocks.push({
+      type: 'ANALYTICAL_FACTS',
+      content: derived,
+      trustLevel: 'ANALYTICAL_FACT',
+    });
+  }
+  return blocks;
 }
 
 function toQuestionToolScope(

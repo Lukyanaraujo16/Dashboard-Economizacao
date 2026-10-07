@@ -20,6 +20,31 @@ export const ADVISOR_EVIDENCE_SCOPE_LIMITATION_TEXT =
   'Não posso afirmar valores desse escopo apenas com fatos da empresa (tenant-wide). É necessário um resultado oficial com o mesmo escopo (ex.: centro de custo resolvido).';
 
 /**
+ * Premissa/cenário presente na evidência, mas claim tratado como fato realizado/oficial.
+ * Não apaga a assumption — só bloqueia promoção indevida.
+ */
+export const ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT =
+  'Esse valor aparece apenas como premissa ou resultado de cenário que você informou, não como fato oficial desta consulta. Posso usá-lo em simulação condicional, mas não posso afirmar que foi pago, lançado ou realizado nos dados oficiais.';
+
+/** Classe de autorização do grounding (não é source bruto). */
+export type AdvisorEvidenceAuthorizationClass = 'OFFICIAL' | 'SCENARIO';
+
+/**
+ * OFFICIAL_ONLY: só OFFICIAL sustenta a cifra (fecha promoção USER_ASSUMPTION→fato).
+ * SCENARIO_OR_OFFICIAL: premissa/derived também autorizam claims condicionais.
+ */
+export type AdvisorNumericEvidenceMode = 'OFFICIAL_ONLY' | 'SCENARIO_OR_OFFICIAL';
+
+export function evidenceSourceAuthorizationClass(
+  source: AdvisorEvidenceSource,
+): AdvisorEvidenceAuthorizationClass {
+  if (source === 'USER_ASSUMPTION' || source === 'SCENARIO_DERIVED') {
+    return 'SCENARIO';
+  }
+  return 'OFFICIAL';
+}
+
+/**
  * Valores monetários BR.
  * Ordem importa: milhar com pontos antes do inteiro simples, para não casar
  * "R$ 280" dentro de "R$ 28000".
@@ -36,18 +61,28 @@ const JSON_AMOUNT_FIELD_RE =
  * Só chaves com semântica monetária — não autoriza monthKey/ano/contagens.
  */
 const FACT_BARE_AMOUNT_RE =
-  /(?:^|\n)\s*[^\n:]*(?:amount|total|billing|inflows|outflows|result|payables|receivables|unpaid|paid|open|overdue|value|delta|rate|attributed|population|identified|settlement)[^\n:]*\s*[:=]\s*(?<num>-?\d+(?:[.,]\d{1,20})?)\b/gi;
+  /(?:^|\n)\s*[^\n:]*(?:amount|total|billing|inflows|outflows|result|payables|receivables|unpaid|paid|open|overdue|value|delta|rate|attributed|population|identified|settlement|assumption|derived|share)[^\n:]*\s*[:=]\s*(?<num>-?\d+(?:[.,]\d{1,20})?)\b/gi;
 
 /** Tolerância absoluta para equivalência monetária (centavos). */
 const MONEY_CLAIM_ABS_TOLERANCE = 0.05;
 
 export type AdvisorEvidenceEntityScope = 'TENANT' | 'COST_CENTER' | 'UNKNOWN';
 
+export type AdvisorEvidenceSource =
+  | 'FINANCIAL_FACTS'
+  | 'ANALYTICAL_FACTS'
+  | 'PRESENTED_INSIGHT_FACTS'
+  | 'TOOL_RESULT'
+  /** Premissa explícita do usuário — autoriza cifra no gate sem virar fato oficial. */
+  | 'USER_ASSUMPTION'
+  /** Cálculo auditável official+assumption. */
+  | 'SCENARIO_DERIVED';
+
 export type AdvisorEvidenceItem = {
   readonly text: string;
   readonly entityScope: AdvisorEvidenceEntityScope;
   readonly resolvedCostCenter?: string | null;
-  readonly source: 'FINANCIAL_FACTS' | 'ANALYTICAL_FACTS' | 'PRESENTED_INSIGHT_FACTS' | 'TOOL_RESULT';
+  readonly source: AdvisorEvidenceSource;
 };
 
 export type AdvisorEvidenceBoundGateInput = {
@@ -58,6 +93,12 @@ export type AdvisorEvidenceBoundGateInput = {
   readonly agentToolPath: boolean;
   readonly requiredEntityScope?: AdvisorEvidenceEntityScope;
   readonly requiredCostCenterName?: string | null;
+  /**
+   * Compatibilidade provenance × claim.
+   * Omitido: SCENARIO_OR_OFFICIAL (números de premissa/derived autorizam — legado seguro
+   * só quando o caller não distingue modo; o runtime AGENT resolve explicitamente).
+   */
+  readonly numericEvidenceMode?: AdvisorNumericEvidenceMode;
 };
 
 export type AdvisorEvidenceBoundGateResult = {
@@ -68,8 +109,36 @@ export type AdvisorEvidenceBoundGateResult = {
     | 'OK'
     | 'UNSUPPORTED_NUMERIC_CLAIMS'
     | 'INCOMPATIBLE_EVIDENCE_SCOPE'
+    | 'INCOMPATIBLE_EVIDENCE_PROVENANCE'
     | 'SKIPPED_NON_AGENT';
 };
+
+/**
+ * Resolve se cifras só de USER_ASSUMPTION/SCENARIO_DERIVED podem autorizar a resposta.
+ * Estrutural: pergunta cita magnitude compatível com assumption ACTIVE → cenário.
+ * Sem catálogo de frases factuais ("realmente"/"paguei"). Sem provider.
+ * Default seguro OFFICIAL_ONLY quando há assumptions mas a pergunta não reancora a premissa.
+ */
+export function resolveAdvisorNumericEvidenceMode(input: {
+  readonly question: string;
+  readonly activeAssumptionValues: readonly number[];
+}): AdvisorNumericEvidenceMode {
+  if (input.activeAssumptionValues.length === 0) {
+    return 'OFFICIAL_ONLY';
+  }
+  const cited = extractNumericMagnitudesFromProse(input.question);
+  if (cited.length === 0) {
+    return 'OFFICIAL_ONLY';
+  }
+  for (const claimValue of cited) {
+    for (const assumptionValue of input.activeAssumptionValues) {
+      if (Math.abs(claimValue - assumptionValue) <= MONEY_CLAIM_ABS_TOLERANCE) {
+        return 'SCENARIO_OR_OFFICIAL';
+      }
+    }
+  }
+  return 'OFFICIAL_ONLY';
+}
 
 export function collectAuthorizedFinancialClaimTokens(
   evidenceTexts: readonly string[],
@@ -106,8 +175,12 @@ export function gateAdvisorEvidenceBoundAnswer(
   const items = normalizeEvidenceItems(input);
   const requiredScope = input.requiredEntityScope ?? 'UNKNOWN';
   const requiresCostCenter = requiredScope === 'COST_CENTER';
+  const hasScenarioEvidence = items.some(
+    (item) => evidenceSourceAuthorizationClass(item.source) === 'SCENARIO',
+  );
 
-  if (!input.agentToolPath && !requiresCostCenter) {
+  // Gate também quando há evidência de cenário (mesmo sem tool round) — fecha H sem tools.
+  if (!input.agentToolPath && !requiresCostCenter && !hasScenarioEvidence) {
     return {
       ok: true,
       text: input.answerText,
@@ -116,7 +189,15 @@ export function gateAdvisorEvidenceBoundAnswer(
     };
   }
 
-  const authorized = collectTokensFromItems(items, requiredScope);
+  const officialItems = items.filter(
+    (item) => evidenceSourceAuthorizationClass(item.source) === 'OFFICIAL',
+  );
+  const scenarioItems = items.filter(
+    (item) => evidenceSourceAuthorizationClass(item.source) === 'SCENARIO',
+  );
+  const officialAuthorized = collectTokensFromItems(officialItems, requiredScope);
+  const scenarioAuthorized = collectTokensFromItems(scenarioItems, requiredScope);
+  const mode: AdvisorNumericEvidenceMode = input.numericEvidenceMode ?? 'SCENARIO_OR_OFFICIAL';
   const claims = extractFinancialClaims(input.answerText);
 
   if (requiresCostCenter) {
@@ -140,27 +221,25 @@ export function gateAdvisorEvidenceBoundAnswer(
     }
   }
 
-  const unsupported = claims.filter((claim) => {
-    const isPercent = claim.includes('%');
-    const money = normalizeFinancialClaim(claim);
-    const bare = normalizeNumericToken(claim.replace(/R\$/gi, '').replace(/%/g, ''), {
-      money: !isPercent,
-    });
-    if (authorized.has(money) || (bare !== null && authorized.has(bare))) {
-      return false;
-    }
-    // Equivalência numérica: 98200.00 ↔ R$ 98.200,00 ↔ 98200 ↔ R$ 98.200.
-    if (bare !== null && !isPercent && authorizedHasNumericMagnitude(authorized, bare)) {
-      return false;
-    }
-    // Percentuais oficiais vêm com alta precisão; aceita arredondamento pragmático (2–4 casas).
-    if (isPercent && bare !== null && authorizedHasRoundedPercent(authorized, bare)) {
-      return false;
-    }
-    return true;
-  });
+  const unsupportedOfficial: string[] = [];
+  const unsupportedProvenance: string[] = [];
 
-  if (unsupported.length === 0) {
+  for (const claim of claims) {
+    if (claimAuthorizedByTokenSet(claim, officialAuthorized)) {
+      continue;
+    }
+    if (claimAuthorizedByTokenSet(claim, scenarioAuthorized)) {
+      if (mode === 'SCENARIO_OR_OFFICIAL') {
+        continue;
+      }
+      // Magnitude só em USER_ASSUMPTION/SCENARIO_DERIVED sob pergunta factual.
+      unsupportedProvenance.push(claim);
+      continue;
+    }
+    unsupportedOfficial.push(claim);
+  }
+
+  if (unsupportedOfficial.length === 0 && unsupportedProvenance.length === 0) {
     return {
       ok: true,
       text: input.answerText,
@@ -169,12 +248,62 @@ export function gateAdvisorEvidenceBoundAnswer(
     };
   }
 
+  if (unsupportedOfficial.length === 0 && unsupportedProvenance.length > 0) {
+    return {
+      ok: false,
+      text: buildProvenanceLimitationText(scenarioItems),
+      unsupportedClaims: unsupportedProvenance,
+      reason: 'INCOMPATIBLE_EVIDENCE_PROVENANCE',
+    };
+  }
+
   return {
     ok: false,
     text: ADVISOR_EVIDENCE_GATE_LIMITATION_TEXT,
-    unsupportedClaims: unsupported,
+    unsupportedClaims: [...unsupportedOfficial, ...unsupportedProvenance],
     reason: 'UNSUPPORTED_NUMERIC_CLAIMS',
   };
+}
+
+/**
+ * Limitação determinística citando BRL da premissa/cenário (sem promover a fato).
+ */
+function buildProvenanceLimitationText(
+  scenarioItems: readonly AdvisorEvidenceItem[],
+): string {
+  const amounts: string[] = [];
+  for (const item of scenarioItems) {
+    for (const match of item.text.matchAll(/assumptionAmountBrl:\s*(R\$[^\n]+)/gi)) {
+      const value = match[1]?.trim();
+      if (value !== undefined && value !== '') {
+        amounts.push(value);
+      }
+    }
+  }
+  const unique = [...new Set(amounts)].slice(0, 3);
+  if (unique.length === 0) {
+    return ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT;
+  }
+  const listed = unique.join(', ');
+  return `O valor ${listed} aparece apenas como premissa ou resultado de cenário que você informou, não como fato oficial desta consulta. Posso usá-lo em simulação condicional, mas não posso afirmar que foi pago, lançado ou realizado nos dados oficiais.`;
+}
+
+function claimAuthorizedByTokenSet(claim: string, authorized: ReadonlySet<string>): boolean {
+  const isPercent = claim.includes('%');
+  const money = normalizeFinancialClaim(claim);
+  const bare = normalizeNumericToken(claim.replace(/R\$/gi, '').replace(/%/g, ''), {
+    money: !isPercent,
+  });
+  if (authorized.has(money) || (bare !== null && authorized.has(bare))) {
+    return true;
+  }
+  if (bare !== null && !isPercent && authorizedHasNumericMagnitude(authorized, bare)) {
+    return true;
+  }
+  if (isPercent && bare !== null && authorizedHasRoundedPercent(authorized, bare)) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -191,6 +320,7 @@ export function applyAdvisorEvidenceBoundRewrite(input: {
   readonly evidenceItems?: readonly AdvisorEvidenceItem[];
   readonly requiredEntityScope?: AdvisorEvidenceEntityScope;
   readonly requiredCostCenterName?: string | null;
+  readonly numericEvidenceMode?: AdvisorNumericEvidenceMode;
 }): AdvisorEvidenceBoundGateResult {
   if (input.original.ok) {
     return input.original;
@@ -201,6 +331,7 @@ export function applyAdvisorEvidenceBoundRewrite(input: {
     agentToolPath: true as const,
     requiredEntityScope: input.requiredEntityScope,
     requiredCostCenterName: input.requiredCostCenterName,
+    numericEvidenceMode: input.numericEvidenceMode,
   };
   const rewriteGated = gateAdvisorEvidenceBoundAnswer({
     answerText: input.rewriteText,
@@ -257,12 +388,19 @@ export function applyAdvisorEvidenceBoundRewrite(input: {
     return bestSalvage;
   }
 
+  const provenanceFail =
+    rewriteGated.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE' ||
+    input.original.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE';
   return {
     ok: false,
     text:
       rewriteGated.reason === 'INCOMPATIBLE_EVIDENCE_SCOPE'
         ? ADVISOR_EVIDENCE_SCOPE_LIMITATION_TEXT
-        : ADVISOR_EVIDENCE_GATE_LIMITATION_TEXT,
+        : provenanceFail
+          ? input.original.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE'
+            ? input.original.text
+            : ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT
+          : ADVISOR_EVIDENCE_GATE_LIMITATION_TEXT,
     unsupportedClaims: rewriteGated.unsupportedClaims,
     reason: rewriteGated.reason,
   };
@@ -488,15 +626,64 @@ function authorizedHasRoundedPercent(
   return false;
 }
 
+/**
+ * Expande "R$ 5 mil" / "R$ 5,5 mil" para forma decimal BR antes do extract,
+ * evitando que o regex monetário capture só "R$ 5" e rejeite cifra autorizada de 5000.
+ */
+function expandBrMilMoneyClaims(text: string): string {
+  return text.replace(/R\$\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*mil\b/gi, (full, raw: string) => {
+    const n = Number(String(raw).replace(',', '.'));
+    if (!Number.isFinite(n)) {
+      return full;
+    }
+    const cents = (n * 1000).toFixed(2);
+    const [intPart, dec] = cents.split('.') as [string, string];
+    const withDots = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return `R$ ${withDots},${dec}`;
+  });
+}
+
 function extractFinancialClaims(text: string): string[] {
+  const normalized = expandBrMilMoneyClaims(text);
   const claims: string[] = [];
-  for (const match of text.match(MONEY_CLAIM_RE) ?? []) {
+  for (const match of normalized.match(MONEY_CLAIM_RE) ?? []) {
     claims.push(match);
   }
-  for (const match of text.match(PERCENT_CLAIM_RE) ?? []) {
+  for (const match of normalized.match(PERCENT_CLAIM_RE) ?? []) {
     claims.push(match);
   }
   return claims;
+}
+
+/** Magnitudes numéricas citadas em prosa (pergunta) — para reancorar cenário sem frases. */
+export function extractNumericMagnitudesFromProse(text: string): readonly number[] {
+  const out: number[] = [];
+  for (const claim of extractFinancialClaims(text)) {
+    const isPercent = claim.includes('%');
+    const bare = normalizeNumericToken(claim.replace(/R\$/gi, '').replace(/%/g, ''), {
+      money: !isPercent,
+    });
+    if (bare !== null) {
+      const n = Number(bare);
+      if (Number.isFinite(n)) {
+        out.push(n);
+      }
+    }
+  }
+  // "5 mil" sem R$ (cue estrutural de magnitude, alinhado a messageHasAssumptionMagnitudeCue).
+  const milBare = /\b(\d+(?:[.,]\d+)?)\s*mil\b/gi;
+  let milMatch: RegExpExecArray | null;
+  while ((milMatch = milBare.exec(text)) !== null) {
+    const raw = milMatch[1];
+    if (raw === undefined) {
+      continue;
+    }
+    const n = Number(raw.replace(',', '.'));
+    if (Number.isFinite(n)) {
+      out.push(n * 1000);
+    }
+  }
+  return out;
 }
 
 function normalizeFinancialClaim(claim: string): string {

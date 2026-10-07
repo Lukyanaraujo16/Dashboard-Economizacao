@@ -106,13 +106,21 @@ export {
 } from './advisor-cash-realized-breakdown.js';
 export {
   ADVISOR_EVIDENCE_GATE_LIMITATION_TEXT,
+  ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT,
   ADVISOR_EVIDENCE_SCOPE_LIMITATION_TEXT,
   applyAdvisorEvidenceBoundRewrite,
   collectAuthorizedFinancialClaimTokens,
+  evidenceSourceAuthorizationClass,
+  extractNumericMagnitudesFromProse,
   gateAdvisorEvidenceBoundAnswer,
   inferEvidenceEntityScope,
   normalizeAdvisorToolCallFingerprint,
+  resolveAdvisorNumericEvidenceMode,
   stripUnsupportedMonetaryClaims,
+} from './advisor-evidence-bound-answer.js';
+export type {
+  AdvisorEvidenceAuthorizationClass,
+  AdvisorNumericEvidenceMode,
 } from './advisor-evidence-bound-answer.js';
 export {
   canDeterministicPathFullyAnswer,
@@ -704,3 +712,31 @@ export type {
   PendingActionExecutionResult,
   PendingActionToolExecution,
 } from './pending-analytical-action-execute.js';
+export {
+  USER_ANALYTICAL_ASSUMPTION_KIND,
+  USER_ANALYTICAL_ASSUMPTION_VERSION,
+  applyUserAssumptionToList,
+  createUserAnalyticalAssumption,
+  formatBrMoney,
+  formatUserAssumptionEvidenceText,
+  listActiveUserAssumptions,
+  messageHasAssumptionMagnitudeCue,
+  parseUserAnalyticalAssumption,
+  parseUserAnalyticalAssumptionList,
+} from './user-analytical-assumption.js';
+export type {
+  UserAnalyticalAssumption,
+  UserAssumptionCadence,
+  UserAssumptionRole,
+  UserAssumptionStatus,
+  UserAssumptionValueKind,
+} from './user-analytical-assumption.js';
+export {
+  extractUserAnalyticalAssumption,
+  isEligibleForUserAssumptionExtract,
+} from './user-assumption-classify.js';
+export {
+  buildDerivedScenarioEvidence,
+  readOfficialCashResultFromFacts,
+  serializeUserAssumptionsEvidenceBlock,
+} from './user-assumption-scenario.js';

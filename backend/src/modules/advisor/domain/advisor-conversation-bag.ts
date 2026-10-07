@@ -18,6 +18,10 @@ import {
   parsePendingAnalyticalAction,
   type PendingAnalyticalAction,
 } from './pending-analytical-action.js';
+import {
+  parseUserAnalyticalAssumptionList,
+  type UserAnalyticalAssumption,
+} from './user-analytical-assumption.js';
 
 export const ADVISOR_CONVERSATION_BAG_KIND = 'ADVISOR_CONVERSATION_BAG' as const;
 export const ADVISOR_CONVERSATION_BAG_VERSION = 1 as const;
@@ -27,6 +31,8 @@ export type AdvisorConversationBagSlots = {
   readonly costCenterOutflowMovements: CostCenterOutflowMovementsConversationState | null;
   readonly dailyCashMovement: DailyCashMovementConversationState | null;
   readonly pendingAnalyticalAction: PendingAnalyticalAction | null;
+  /** Premissas explícitas do usuário (cenário). Nunca fatos oficiais. */
+  readonly userAssumptions: readonly UserAnalyticalAssumption[];
 };
 
 export type AdvisorConversationBag = {
@@ -48,6 +54,7 @@ export function emptyAdvisorConversationBag(): AdvisorConversationBag {
       costCenterOutflowMovements: null,
       dailyCashMovement: null,
       pendingAnalyticalAction: null,
+      userAssumptions: [],
     },
   };
 }
@@ -79,6 +86,7 @@ export function parseAdvisorConversationBag(value: unknown): AdvisorConversation
         pendingAnalyticalAction: parsePendingAnalyticalAction(
           slots.pendingAnalyticalAction ?? null,
         ),
+        userAssumptions: parseUserAnalyticalAssumptionList(slots.userAssumptions ?? []),
       },
     };
   }
@@ -137,6 +145,10 @@ export function mergeAdvisorConversationBag(
         patch.pendingAnalyticalAction === undefined
           ? current.slots.pendingAnalyticalAction
           : patch.pendingAnalyticalAction,
+      userAssumptions:
+        patch.userAssumptions === undefined
+          ? current.slots.userAssumptions
+          : patch.userAssumptions,
     },
   };
 }
@@ -154,6 +166,7 @@ export function serializeAdvisorConversationBag(bag: AdvisorConversationBag): ob
         costCenterOutflowMovements: bag.slots.costCenterOutflowMovements,
         dailyCashMovement: bag.slots.dailyCashMovement,
         pendingAnalyticalAction: bag.slots.pendingAnalyticalAction,
+        userAssumptions: bag.slots.userAssumptions,
       },
     }),
   ) as object;
