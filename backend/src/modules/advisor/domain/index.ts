@@ -114,6 +114,7 @@ export {
   extractNumericMagnitudesFromProse,
   gateAdvisorEvidenceBoundAnswer,
   inferEvidenceEntityScope,
+  looksLikeMutilatedMonetarySalvage,
   normalizeAdvisorToolCallFingerprint,
   resolveAdvisorNumericEvidenceMode,
   stripUnsupportedMonetaryClaims,

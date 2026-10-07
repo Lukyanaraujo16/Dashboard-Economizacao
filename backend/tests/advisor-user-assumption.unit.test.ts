@@ -26,9 +26,11 @@ import {
   serializeAdvisorConversationBag,
 } from '../src/modules/advisor/domain/advisor-conversation-bag.js';
 import {
-  ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT,
+  applyAdvisorEvidenceBoundRewrite,
   gateAdvisorEvidenceBoundAnswer,
+  looksLikeMutilatedMonetarySalvage,
   resolveAdvisorNumericEvidenceMode,
+  stripUnsupportedMonetaryClaims,
 } from '../src/modules/advisor/domain/advisor-evidence-bound-answer.js';
 import type { GenerationInput, IaProvider } from '../src/infrastructure/ai/types.js';
 
@@ -404,11 +406,9 @@ describe('H — provenance × claim (USER_ASSUMPTION não autoriza fato)', () =>
     expect(gated.ok).toBe(false);
     expect(gated.reason).toBe('INCOMPATIBLE_EVIDENCE_PROVENANCE');
     expect(gated.text).toContain('R$ 5.000,00');
-    expect(gated.text).toMatch(/premissa|cenário/i);
+    expect(gated.text).toMatch(/premissa|estimativa|cenário/i);
     expect(gated.text).not.toMatch(/você pagou/i);
-    expect(gated.text.startsWith('O valor') || gated.text === ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT).toBe(
-      true,
-    );
+    expect(looksLikeMutilatedMonetarySalvage(gated.text)).toBe(false);
   });
 
   it('H2: mesma assumption autoriza cenário quando pergunta reancora magnitude', () => {
@@ -563,5 +563,234 @@ describe('H — provenance × claim (USER_ASSUMPTION não autoriza fato)', () =>
     });
     expect(gated.ok).toBe(false);
     expect(gated.reason).toBe('INCOMPATIBLE_EVIDENCE_PROVENANCE');
+  });
+});
+
+describe('H composition — provenance failure nunca mutila resposta', () => {
+  const officialCash =
+    'cash.realized.result: 21113.07\ncash.realized.resultBrl: R$ 21.113,07';
+
+  function itemsFor(assumptionValue: number) {
+    const assumption = monthlyCost(assumptionValue);
+    const derived = buildDerivedScenarioEvidence({
+      assumptions: [assumption],
+      financialFactsText: officialCash,
+    })!;
+    return {
+      assumption,
+      derived,
+      items: [
+        { text: officialCash, entityScope: 'TENANT' as const, source: 'FINANCIAL_FACTS' as const },
+        {
+          text: formatUserAssumptionEvidenceText(assumption),
+          entityScope: 'TENANT' as const,
+          source: 'USER_ASSUMPTION' as const,
+        },
+        { text: derived, entityScope: 'TENANT' as const, source: 'SCENARIO_DERIVED' as const },
+      ],
+    };
+  }
+
+  function assertCompleteSafeAnswer(text: string) {
+    expect(text.trim().length).toBeGreaterThan(40);
+    expect(looksLikeMutilatedMonetarySalvage(text)).toBe(false);
+    expect(text).not.toMatch(/(?:^|\n)\s*000,00/);
+    expect(text).not.toMatch(/(?:^|\n)\s*113,07/);
+    expect(text).not.toMatch(/você pagou\s*r\$\s*5/i);
+    expect(text).toMatch(/premissa|estimativa|cenário/i);
+    expect(text).toContain('R$ 5.000,00');
+  }
+
+  it('repro pré-fix: strip+salvage mutilava milhar BR em frase com vários R$', () => {
+    const answer =
+      'Os R$ 5.000,00 que você informou levam o cenário a R$ 16.113,07 frente ao resultado oficial de R$ 21.113,07. Se você quiser, eu também posso te ajudar a comparar isso com o faturamento do mês.';
+    const stripped = stripUnsupportedMonetaryClaims(answer, ['R$ 5.000,00', 'R$ 16.113,07']);
+    // Com máscara de milhar o strip deixa de gerar "113,07..." órfão.
+    expect(looksLikeMutilatedMonetarySalvage(stripped)).toBe(false);
+    expect(stripped).not.toMatch(/(?:^|\n)\s*113,07/);
+  });
+
+  it('T1: factual sem official — limitation completa (não salvage)', () => {
+    const { items } = itemsFor(5000);
+    const providerAnswer =
+      'Os R$ 5.000,00 que você informou levam o cenário a R$ 16.113,07 frente ao resultado oficial de R$ 21.113,07. Se você quiser, eu também posso te ajudar a comparar isso com o faturamento do mês.';
+    const gated = gateAdvisorEvidenceBoundAnswer({
+      answerText: providerAnswer,
+      evidenceItems: items,
+      agentToolPath: true,
+      numericEvidenceMode: 'OFFICIAL_ONLY',
+    });
+    expect(gated.reason).toBe('INCOMPATIBLE_EVIDENCE_PROVENANCE');
+
+    const delivered = applyAdvisorEvidenceBoundRewrite({
+      original: gated,
+      rejectedAnswerText: providerAnswer,
+      rewriteText: providerAnswer,
+      evidenceItems: items,
+      numericEvidenceMode: 'OFFICIAL_ONLY',
+    });
+    expect(delivered.ok).toBe(false);
+    expect(delivered.reason).toBe('INCOMPATIBLE_EVIDENCE_PROVENANCE');
+    expect(delivered.text).toBe(gated.text);
+    assertCompleteSafeAnswer(delivered.text);
+  });
+
+  it('T2: assumption referenciada como premissa (não como pagamento)', () => {
+    const { items } = itemsFor(5000);
+    const gated = gateAdvisorEvidenceBoundAnswer({
+      answerText: 'A estimativa de R$ 5.000,00 não prova pagamento. Oficial: R$ 21.113,07.',
+      evidenceItems: items,
+      agentToolPath: true,
+      numericEvidenceMode: 'OFFICIAL_ONLY',
+    });
+    expect(gated.reason).toBe('INCOMPATIBLE_EVIDENCE_PROVENANCE');
+    assertCompleteSafeAnswer(gated.text);
+    expect(gated.text).toMatch(/não (posso confirmar|um pagamento)|não um pagamento/i);
+  });
+
+  it('T3: OFFICIAL correspondente autoriza 5000 factual', () => {
+    const assumption = monthlyCost(5000);
+    const items = [
+      {
+        text: 'paid.amount: 5000.00\npaid.amountBrl: R$ 5.000,00',
+        entityScope: 'TENANT' as const,
+        source: 'FINANCIAL_FACTS' as const,
+      },
+      {
+        text: formatUserAssumptionEvidenceText(assumption),
+        entityScope: 'TENANT' as const,
+        source: 'USER_ASSUMPTION' as const,
+      },
+    ];
+    const gated = gateAdvisorEvidenceBoundAnswer({
+      answerText: 'Você pagou R$ 5.000,00.',
+      evidenceItems: items,
+      agentToolPath: true,
+      numericEvidenceMode: 'OFFICIAL_ONLY',
+    });
+    expect(gated.ok).toBe(true);
+  });
+
+  it('T4: cenário continua com SCENARIO_OR_OFFICIAL', () => {
+    const { items } = itemsFor(5000);
+    expect(
+      resolveAdvisorNumericEvidenceMode({
+        question: 'Considerando os R$ 5 mil, como fica meu caixa?',
+        activeAssumptionValues: [5000],
+      }),
+    ).toBe('SCENARIO_OR_OFFICIAL');
+    const gated = gateAdvisorEvidenceBoundAnswer({
+      answerText:
+        'Considerando os R$ 5.000,00 que você informou, o resultado oficial de R$ 21.113,07 ficaria em R$ 16.113,07.',
+      evidenceItems: items,
+      agentToolPath: true,
+      numericEvidenceMode: 'SCENARIO_OR_OFFICIAL',
+    });
+    expect(gated.ok).toBe(true);
+  });
+
+  it('T5: derived não vira resultado real', () => {
+    const { items } = itemsFor(5000);
+    expect(
+      resolveAdvisorNumericEvidenceMode({
+        question: 'Então meu resultado real foi R$ 16.113,07?',
+        activeAssumptionValues: [5000],
+      }),
+    ).toBe('OFFICIAL_ONLY');
+    const gated = gateAdvisorEvidenceBoundAnswer({
+      answerText: 'Sim, seu resultado real foi R$ 16.113,07.',
+      evidenceItems: items,
+      agentToolPath: true,
+      numericEvidenceMode: 'OFFICIAL_ONLY',
+    });
+    expect(gated.ok).toBe(false);
+    expect(gated.reason).toBe('INCOMPATIBLE_EVIDENCE_PROVENANCE');
+  });
+
+  it('T6: nenhum fragmento após provenance paths', () => {
+    const { items } = itemsFor(5000);
+    const samples = [
+      'Os R$ 5.000,00 que você informou são estimativa.',
+      'Considerando os R$ 5.000,00 do cenário e R$ 16.113,07 derivado vs R$ 21.113,07 oficial.',
+      'A estimativa de R$ 5.000,00 não é pagamento. Se você quiser, eu também posso te ajudar a comparar isso com o faturamento do mês.',
+    ];
+    for (const sample of samples) {
+      const gated = gateAdvisorEvidenceBoundAnswer({
+        answerText: sample,
+        evidenceItems: items,
+        agentToolPath: true,
+        numericEvidenceMode: 'OFFICIAL_ONLY',
+      });
+      const delivered = applyAdvisorEvidenceBoundRewrite({
+        original: gated,
+        rejectedAnswerText: sample,
+        rewriteText: sample,
+        evidenceItems: items,
+        numericEvidenceMode: 'OFFICIAL_ONLY',
+      });
+      expect(looksLikeMutilatedMonetarySalvage(delivered.text)).toBe(false);
+      expect(delivered.text).not.toMatch(/(?:^|\n)\s*000,00/);
+      expect(delivered.text).not.toMatch(/(?:^|\n)\s*113,07/);
+    }
+  });
+
+  it('T7: lifecycle — factual não apaga; 7000 supersede', () => {
+    const first = monthlyCost(5000, 'a-5k');
+    let bag = mergeAdvisorConversationBag(parseAdvisorConversationBag(null), {
+      userAssumptions: [first],
+    });
+    const { items } = itemsFor(5000);
+    const gated = gateAdvisorEvidenceBoundAnswer({
+      answerText: 'Você pagou R$ 5.000,00.',
+      evidenceItems: items,
+      agentToolPath: true,
+      numericEvidenceMode: 'OFFICIAL_ONLY',
+    });
+    expect(gated.reason).toBe('INCOMPATIBLE_EVIDENCE_PROVENANCE');
+    expect(listActiveUserAssumptions(bag.slots.userAssumptions)).toHaveLength(1);
+
+    const second = createUserAnalyticalAssumption({
+      id: 'a-7k',
+      createdFromMessageId: 'm7',
+      valueKind: 'AMOUNT',
+      value: 7000,
+      cadence: 'MONTHLY',
+      role: 'COST',
+      label: 'custo revisado',
+      now: NOW,
+    })!;
+    bag = mergeAdvisorConversationBag(bag, {
+      userAssumptions: applyUserAssumptionToList(bag.slots.userAssumptions, second),
+    });
+    const active = listActiveUserAssumptions(bag.slots.userAssumptions);
+    expect(active.map((row) => row.value)).toEqual([7000]);
+    expect(
+      resolveAdvisorNumericEvidenceMode({
+        question: 'Tá, voltando à simulação, considera R$ 7 mil.',
+        activeAssumptionValues: active.map((row) => row.value),
+      }),
+    ).toBe('SCENARIO_OR_OFFICIAL');
+  });
+
+  it('T8: invented number continua bloqueada', () => {
+    const { items } = itemsFor(5000);
+    const gated = gateAdvisorEvidenceBoundAnswer({
+      answerText: 'O impacto inventado seria R$ 99.999,00.',
+      evidenceItems: items,
+      agentToolPath: true,
+      numericEvidenceMode: 'SCENARIO_OR_OFFICIAL',
+    });
+    expect(gated.ok).toBe(false);
+    expect(gated.reason).toBe('UNSUPPORTED_NUMERIC_CLAIMS');
+  });
+
+  it('strip não deixa órfãos com claim curto R$ 5', () => {
+    const text =
+      'Os R$ 5.000,00 que você informou. Oficial R$ 21.113,07. Se você quiser, eu também posso te ajudar a comparar isso com o faturamento do mês.';
+    const stripped = stripUnsupportedMonetaryClaims(text, ['R$ 5']);
+    // Prefixo curto não pode casar dentro de R$ 5.000,00 (senão virava "000,00...").
+    expect(stripped).toContain('R$ 5.000,00');
+    expect(stripped).not.toMatch(/(?:^|\n)\s*000,00/);
+    expect(looksLikeMutilatedMonetarySalvage(stripped)).toBe(false);
   });
 });

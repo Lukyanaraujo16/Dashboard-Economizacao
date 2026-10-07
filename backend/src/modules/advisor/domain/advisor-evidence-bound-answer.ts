@@ -267,6 +267,7 @@ export function gateAdvisorEvidenceBoundAnswer(
 
 /**
  * Limitação determinística citando BRL da premissa/cenário (sem promover a fato).
+ * Resposta completa — nunca fragmento de sanitize/salvage.
  */
 function buildProvenanceLimitationText(
   scenarioItems: readonly AdvisorEvidenceItem[],
@@ -285,7 +286,13 @@ function buildProvenanceLimitationText(
     return ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT;
   }
   const listed = unique.join(', ');
-  return `O valor ${listed} aparece apenas como premissa ou resultado de cenário que você informou, não como fato oficial desta consulta. Posso usá-lo em simulação condicional, mas não posso afirmar que foi pago, lançado ou realizado nos dados oficiais.`;
+  return (
+    `${listed} ${unique.length === 1 ? 'foi um valor informado' : 'foram valores informados'} ` +
+    `por você como premissa/estimativa de cenário, não um pagamento, lançamento ou valor realizado ` +
+    `nos dados oficiais. Com as evidências oficiais disponíveis nesta consulta, não posso confirmar ` +
+    `esse montante como fato realizado. Se quiser, posso seguir na simulação com essa premissa ` +
+    `ou com outro valor que você indicar.`
+  );
 }
 
 function claimAuthorizedByTokenSet(claim: string, authorized: ReadonlySet<string>): boolean {
@@ -325,6 +332,19 @@ export function applyAdvisorEvidenceBoundRewrite(input: {
   if (input.original.ok) {
     return input.original;
   }
+
+  // Provenance failure: NUNCA salvage/strip — o `.` de milhar BR (5.000) quebra o
+  // removedor de sentenças e gera fragmentos ("000,00." / "113,07."). Entregar a
+  // limitação determinística completa (já cita assumptionAmountBrl com segurança).
+  if (input.original.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE') {
+    return {
+      ok: false,
+      text: input.original.text,
+      unsupportedClaims: input.original.unsupportedClaims,
+      reason: 'INCOMPATIBLE_EVIDENCE_PROVENANCE',
+    };
+  }
+
   const gateInput = {
     authorizedEvidenceTexts: input.authorizedEvidenceTexts,
     evidenceItems: input.evidenceItems,
@@ -359,6 +379,9 @@ export function applyAdvisorEvidenceBoundRewrite(input: {
     if (salvagedText.trim() === '' || salvagedText === candidate.text) {
       continue;
     }
+    if (looksLikeMutilatedMonetarySalvage(salvagedText)) {
+      continue;
+    }
     const salvaged = gateAdvisorEvidenceBoundAnswer({
       answerText: salvagedText,
       ...gateInput,
@@ -388,18 +411,13 @@ export function applyAdvisorEvidenceBoundRewrite(input: {
     return bestSalvage;
   }
 
-  const provenanceFail =
-    rewriteGated.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE' ||
-    input.original.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE';
   return {
     ok: false,
     text:
       rewriteGated.reason === 'INCOMPATIBLE_EVIDENCE_SCOPE'
         ? ADVISOR_EVIDENCE_SCOPE_LIMITATION_TEXT
-        : provenanceFail
-          ? input.original.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE'
-            ? input.original.text
-            : ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT
+        : rewriteGated.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE'
+          ? ADVISOR_EVIDENCE_PROVENANCE_LIMITATION_TEXT
           : ADVISOR_EVIDENCE_GATE_LIMITATION_TEXT,
     unsupportedClaims: rewriteGated.unsupportedClaims,
     reason: rewriteGated.reason,
@@ -409,6 +427,9 @@ export function applyAdvisorEvidenceBoundRewrite(input: {
 /**
  * Remove sentenças/trechos que contêm cifras não autorizadas.
  * Preserva valores individuais oficiais quando a agregação inventada é acessória.
+ *
+ * Importante: mascara milhares BR (`5.000`) antes do split por `.`, senão o
+ * removedor corta no meio do valor e deixa fragmentos (`000,00.` / `113,07.`).
  */
 export function stripUnsupportedMonetaryClaims(
   text: string,
@@ -417,22 +438,51 @@ export function stripUnsupportedMonetaryClaims(
   if (unsupportedClaims.length === 0) {
     return text;
   }
-  let result = text;
+  const moneyDotPlaceholder = '\uE000';
+  const moneyClaimRe = new RegExp(MONEY_CLAIM_RE.source, 'gi');
+  const maskMoneyDots = (value: string): string =>
+    value.replace(moneyClaimRe, (money) => money.replace(/\./g, moneyDotPlaceholder));
+  const unmaskMoneyDots = (value: string): string =>
+    value.split(moneyDotPlaceholder).join('.');
+
+  let result = maskMoneyDots(text);
   for (const claim of unsupportedClaims) {
-    const escaped = claim
+    const escaped = maskMoneyDots(claim)
       .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       .replace(/\s+/g, '\\s*');
     // Remove a sentença (até pontuação ou quebra de linha) que contém a cifra.
+    // `(?![\\d\uE000])` evita match de prefixo curto ("R$ 5" dentro de "R$ 5.000").
     result = result.replace(
-      new RegExp(`[^\\n.!?]*${escaped}[^\\n.!?]*[.!?]?`, 'gi'),
+      new RegExp(`[^\\n.!?]*${escaped}(?![\\d${moneyDotPlaceholder}])[^\\n.!?]*[.!?]?`, 'gi'),
       '',
     );
   }
+  result = unmaskMoneyDots(result);
   return result
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
+}
+
+/** Fragmentos típicos de strip quebrado em milhar BR — não entregar ao usuário. */
+export function looksLikeMutilatedMonetarySalvage(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    return true;
+  }
+  // Começa no meio de um valor ("000,00." / "113,07 frente...")
+  if (/^\d{3},\d{2}\b/.test(trimmed)) {
+    return true;
+  }
+  if (/^[.,]\d{2}\b/.test(trimmed)) {
+    return true;
+  }
+  // Linha órfã só com resto decimal
+  if (/(?:^|\n)\s*\d{3},\d{2}\s*\.?\s*(?:\n|$)/.test(trimmed)) {
+    return true;
+  }
+  return false;
 }
 
 export function normalizeAdvisorToolCallFingerprint(

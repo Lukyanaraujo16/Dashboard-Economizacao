@@ -1880,6 +1880,25 @@ async function finalizeAdvisorAgentAnswer(input: {
     return { text: gated.text, usage: input.usage };
   }
 
+  // Provenance×claim: limitação determinística completa (+0 provider). Evita rewrite/salvage
+  // que mutilava milhares BR ("000,00." / "113,07.") ao strippar sentenças.
+  if (gated.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE') {
+    console.info(
+      JSON.stringify({
+        event: 'advisor_agent_evidence_gate',
+        tenantId: input.tenantId,
+        mode: 'AGENT_TOOL',
+        status: gated.reason,
+        reason: gated.reason,
+        unsupportedCount: gated.unsupportedClaims.length,
+        outcome: 'DETERMINISTIC_PROVENANCE_LIMITATION',
+        requiredEntityScope,
+        numericEvidenceMode,
+      }),
+    );
+    return { text: gated.text, usage: input.usage };
+  }
+
   console.info(
     JSON.stringify({
       event: 'advisor_agent_evidence_gate',
@@ -1900,16 +1919,6 @@ async function finalizeAdvisorAgentAnswer(input: {
       gated.unsupportedClaims.length > 0
         ? gated.unsupportedClaims.join('; ')
         : 'ABSENT';
-    const provenanceRewrite =
-      gated.reason === 'INCOMPATIBLE_EVIDENCE_PROVENANCE'
-        ? [
-            'PROVENANCE_REWRITE:',
-            'Cifras rejeitadas existem só como USER_ASSUMPTION / SCENARIO_DERIVED.',
-            'NÃO afirme pagamento/receita/despesa/saldo/lançamento realizado com esses valores.',
-            'Se mencionar a premissa, deixe claro que é estimativa/cenário informado pelo usuário.',
-            'Se a pergunta pede fato oficial e não há evidência oficial correspondente, declare a limitação.',
-          ]
-        : [];
     const rewrite = await input.generate({
       tenantId: input.tenantId,
       provider: input.providerId,
@@ -1926,7 +1935,6 @@ async function finalizeAdvisorAgentAnswer(input: {
             'NÃO some, agregue nem invente totais/percentuais que não estejam explícitos na evidência.',
             'Se a resposta anterior trouxe soma/agregação não sustentada, REMOVA essa agregação e preserve o ranking/listagem com os valores oficiais individuais.',
             'Não invente números. Se não houver cifra oficial compatível com o escopo, declare a limitação.',
-            ...provenanceRewrite,
             `Cifras rejeitadas (remover ou substituir só por valores oficiais): ${unsupportedList}`,
             `Resposta anterior rejeitada: ${input.text.slice(0, 2_000)}`,
           ].join('\n'),
