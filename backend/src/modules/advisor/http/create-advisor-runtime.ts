@@ -41,6 +41,7 @@ import {
 } from '../domain/advisor-analytical-tools.js';
 import { createAdvisorNominalDimensionService } from '../domain/advisor-nominal-tools.js';
 import { createAdvisorCostCenterDimensionService } from '../domain/advisor-cost-center-tools.js';
+import { createAdvisorPayableTitlesService } from '../domain/advisor-payable-titles-tools.js';
 import { createCounterpartyIdentityService } from '../domain/load-counterparty-identity-population.js';
 import { createBuildAdvisorContext } from '../services/build-advisor-context.js';
 import {
@@ -212,12 +213,20 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     parties,
     categories,
   });
+  const payableTitles = createAdvisorPayableTitlesService({
+    payables,
+    categories,
+    parties,
+    costCenters,
+    costCenterAllocations,
+  });
   const analyticalTools = createAdvisorAnalyticalToolExecutor({
     cashComparison,
     cashBreakdown,
     cashMovements,
     cashNominal,
     cashCostCenter,
+    payableTitles,
   });
   const context = createBuildAdvisorContext({
     settings,

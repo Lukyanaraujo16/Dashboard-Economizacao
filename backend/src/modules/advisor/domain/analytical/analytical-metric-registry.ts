@@ -85,6 +85,14 @@ export const ANALYTICAL_METRIC_REGISTRY: readonly AnalyticalMetricDefinition[] =
     publicationStatus: 'HAS_PUBLISHED_CAPABILITIES',
   },
   {
+    key: 'PAYABLE_TITLE',
+    semanticFamily: 'STOCK',
+    factualMeaning: 'ACCOUNTS_PAYABLE_TITLES_BY_DUE_DATE',
+    temporalSemantics: 'civilMonth',
+    possibleDirections: [],
+    publicationStatus: 'HAS_PUBLISHED_CAPABILITIES',
+  },
+  {
     key: 'DELINQUENCY',
     semanticFamily: 'STOCK',
     factualMeaning: 'RECEIVABLE_DELINQUENCY_RATE',

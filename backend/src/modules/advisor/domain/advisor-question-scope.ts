@@ -32,6 +32,16 @@ export type AdvisorQuestionAnalyticalDemand = {
   /** Pedido adicional de composição/explicação além de um agregado fechado. */
   readonly wantsCompositionOrDriver: boolean;
   readonly wantsOpenInvestigation: boolean;
+  /**
+   * Domínio PAYABLE/OBLIGATION (≠ REALIZED_CASH).
+   * Pode ser só VALUE agregado (estoque) ou detalhe de títulos.
+   */
+  readonly wantsPayableObligation: boolean;
+  /**
+   * Detalhe/ranking/listagem/movements de títulos PAYABLE.
+   * False quando a pergunta pede apenas VALUE/estoque agregado.
+   */
+  readonly wantsPayableTitleDetail: boolean;
 };
 
 export type DeterministicPathCapability = {
@@ -188,6 +198,10 @@ export function deriveQuestionAnalyticalDemand(input: {
       /\b(caixa|resultado|moviment|categor|saidas?|gastos?)\b/.test(folded)) &&
     !/\b(?:maior|menores?|top\s*\d+|ranking)\b/.test(folded);
 
+  const wantsPayableObligation = detectPayableObligationDemand(folded);
+  const wantsPayableTitleDetail =
+    wantsPayableObligation && detectPayableTitleDetailDemand(folded);
+
   return {
     explicitCostCenter,
     wantsOutflow,
@@ -195,7 +209,78 @@ export function deriveQuestionAnalyticalDemand(input: {
     wantsComparison: input.comparison,
     wantsCompositionOrDriver,
     wantsOpenInvestigation,
+    wantsPayableObligation,
+    wantsPayableTitleDetail,
   };
+}
+
+/**
+ * Domínio PAYABLE/OBLIGATION — distinto de saída realizada de caixa.
+ * Não hardcoda frases de homologação; usa cues estruturais de obrigação.
+ */
+function detectPayableObligationDemand(folded: string): boolean {
+  if (
+    /\b(?:a|para) pagar\b/.test(folded) ||
+    /\bpagave(?:l|is)\b/.test(folded) ||
+    /\bcontas? a pagar\b/.test(folded) ||
+    /\bobrigac/.test(folded) ||
+    /\btitulos?\b/.test(folded)
+  ) {
+    return true;
+  }
+  // Despesa registrada incluindo não realizadas / abertas (≠ só caixa realizado).
+  if (
+    /\bdespesas?\b/.test(folded) &&
+    (/\b(?:nao realizadas?|ainda nao|em aberto|no geral)\b/.test(folded) ||
+      /\bregistradas?\b/.test(folded) ||
+      /\b(?:pagas?|quitadas?)\b.+\babertas?\b/.test(folded) ||
+      /\babertas?\b.+\b(?:pagas?|quitadas?)\b/.test(folded))
+  ) {
+    return true;
+  }
+  // Listagem por status de obrigação (inclui follow-up conversacional).
+  // Exige verbo de listagem + filtro de status; não cobre agregado VALUE.
+  if (
+    /\b(?:mostre|mostrar|mostra|liste|listar|quais)\b/.test(folded) &&
+    /\b(?:abertas?|em aberto|quitadas?|pagas?)\b/.test(folded) &&
+    !/\b(?:caixa|realizad|saidas?|entradas?)\b/.test(folded)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Operação de detalhe PAYABLE (ranking/listagem/movements/vencimentos).
+ * Agregado VALUE ("quanto/total/estoque a pagar") retorna false.
+ */
+function detectPayableTitleDetailDemand(folded: string): boolean {
+  if (/\b(?:maior(?:es)?|menor(?:es)?|top\s*\d+|ranking)\b/.test(folded)) {
+    return true;
+  }
+  if (/\b(?:liste|listar|lista|mostre|mostrar|mostra|enumere|enumera)\b/.test(folded)) {
+    return true;
+  }
+  if (/\bquais\b/.test(folded)) {
+    return true;
+  }
+  if (/\b(?:vencem|vencimento|vencimentos|vencidos?)\b/.test(folded)) {
+    return true;
+  }
+  // Pedido explícito de títulos/contas individuais (não só o estoque).
+  if (/\b(?:titulos?|contas?)\b/.test(folded) && !isPayableAggregateValueCue(folded)) {
+    return true;
+  }
+  return false;
+}
+
+function isPayableAggregateValueCue(folded: string): boolean {
+  return (
+    /\b(?:quanto|total|estoque|saldo)\b/.test(folded) &&
+    !/\b(?:maior(?:es)?|menor(?:es)?|top\s*\d+|ranking|quais|liste|listar|mostre|mostrar)\b/.test(
+      folded,
+    )
+  );
 }
 
 /**
@@ -241,6 +326,11 @@ export function canDeterministicPathFullyAnswer(input: {
   }
 
   if (demand.wantsOutflow && path.metricFamily === 'BILLING') {
+    return false;
+  }
+
+  // Detalhe de títulos PAYABLE não fecha só com snapshot/estoque agregado.
+  if (demand.wantsPayableTitleDetail && path.metricFamily === 'SNAPSHOT') {
     return false;
   }
 
@@ -341,6 +431,7 @@ export function toolsSupportingCostCenterQuery(): ReadonlySet<string> {
     'cash_result_cost_center_lookup',
     'compare_cash_cost_center',
     'cash_cost_center_movement_lines',
+    'payable_titles',
   ]);
 }
 

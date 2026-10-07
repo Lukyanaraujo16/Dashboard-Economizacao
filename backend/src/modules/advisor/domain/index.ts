@@ -47,6 +47,30 @@ export {
   createAdvisorCashMovementLinesService,
   listAdvisorAnalyticalTools,
 } from './advisor-analytical-tools.js';
+export {
+  PAYABLE_TITLES_TOOL,
+  assertPayableTitlesArgs,
+  createAdvisorPayableTitlesService,
+} from './advisor-payable-titles-tools.js';
+export type {
+  AdvisorPayableTitlesRequest,
+  AdvisorPayableTitlesService,
+} from './advisor-payable-titles-tools.js';
+export {
+  PAYABLE_TITLES_TOOL_NAME,
+  ADVISOR_PAYABLE_TITLE_STATUSES,
+  ADVISOR_PAYABLE_TITLE_ORDERINGS,
+  isAdvisorPayableTitleStatus,
+  isAdvisorPayableTitleOrdering,
+  rankAdvisorPayableTitles,
+  serializeAdvisorPayableTitles,
+} from './advisor-payable-titles.js';
+export type {
+  AdvisorPayableTitleStatus,
+  AdvisorPayableTitleOrdering,
+  AdvisorPayableTitleWindow,
+  AdvisorPayableTitleSourceLine,
+} from './advisor-payable-titles.js';
 export type {
   AdvisorAnalyticalToolCall,
   AdvisorAnalyticalToolDefinition,
@@ -88,6 +112,7 @@ export {
   gateAdvisorEvidenceBoundAnswer,
   inferEvidenceEntityScope,
   normalizeAdvisorToolCallFingerprint,
+  stripUnsupportedMonetaryClaims,
 } from './advisor-evidence-bound-answer.js';
 export {
   canDeterministicPathFullyAnswer,

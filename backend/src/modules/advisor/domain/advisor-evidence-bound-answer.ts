@@ -29,7 +29,17 @@ const MONEY_CLAIM_RE =
 const PERCENT_CLAIM_RE = /\d{1,3}(?:[.,]\d{1,4})?\s*%/g;
 /** Campos JSON oficiais com cifra (evita colher year/month soltos do texto). */
 const JSON_AMOUNT_FIELD_RE =
-  /"(?:amount|totalRealized|total|absolute|absoluteDelta|netAmount|value|result|sharePercent|percent|percentageDelta|attributedAmount|costCenterAmount|populationAmount|identifiedAmount|unidentifiedAmount|originalSettlementAmount|delta|billing|realizedOutflows|realizedInflows)"\s*:\s*"?(?<num>-?\d+(?:[.,]\d{1,20})?)"?/gi;
+  /"(?<field>amount|totalRealized|total|absolute|absoluteDelta|netAmount|value|result|sharePercent|percent|percentageDelta|attributedAmount|costCenterAmount|populationAmount|identifiedAmount|unidentifiedAmount|originalSettlementAmount|delta|billing|realizedOutflows|realizedInflows|unpaid|paid)"\s*:\s*"?(?<num>-?\d+(?:[.,]\d{1,20})?)"?/gi;
+
+/**
+ * FINANCIAL_FACTS / prosa analítica com `chave: 98200.00` (sem R$).
+ * Só chaves com semântica monetária — não autoriza monthKey/ano/contagens.
+ */
+const FACT_BARE_AMOUNT_RE =
+  /(?:^|\n)\s*[^\n:]*(?:amount|total|billing|inflows|outflows|result|payables|receivables|unpaid|paid|open|overdue|value|delta|rate|attributed|population|identified|settlement)[^\n:]*\s*[:=]\s*(?<num>-?\d+(?:[.,]\d{1,20})?)\b/gi;
+
+/** Tolerância absoluta para equivalência monetária (centavos). */
+const MONEY_CLAIM_ABS_TOLERANCE = 0.05;
 
 export type AdvisorEvidenceEntityScope = 'TENANT' | 'COST_CENTER' | 'UNKNOWN';
 
@@ -131,13 +141,20 @@ export function gateAdvisorEvidenceBoundAnswer(
   }
 
   const unsupported = claims.filter((claim) => {
+    const isPercent = claim.includes('%');
     const money = normalizeFinancialClaim(claim);
-    const bare = normalizeNumericToken(claim.replace(/R\$/gi, '').replace(/%/g, ''));
+    const bare = normalizeNumericToken(claim.replace(/R\$/gi, '').replace(/%/g, ''), {
+      money: !isPercent,
+    });
     if (authorized.has(money) || (bare !== null && authorized.has(bare))) {
       return false;
     }
+    // Equivalência numérica: 98200.00 ↔ R$ 98.200,00 ↔ 98200 ↔ R$ 98.200.
+    if (bare !== null && !isPercent && authorizedHasNumericMagnitude(authorized, bare)) {
+      return false;
+    }
     // Percentuais oficiais vêm com alta precisão; aceita arredondamento pragmático (2–4 casas).
-    if (claim.includes('%') && bare !== null && authorizedHasRoundedPercent(authorized, bare)) {
+    if (isPercent && bare !== null && authorizedHasRoundedPercent(authorized, bare)) {
       return false;
     }
     return true;
@@ -162,10 +179,13 @@ export function gateAdvisorEvidenceBoundAnswer(
 
 /**
  * Tentativa controlada: se o rewrite ainda tiver cifras não sustentadas,
- * cai na limitação determinística.
+ * tenta salvage determinístico (remove só agregações/cifras não autorizadas)
+ * antes da limitação.
  */
 export function applyAdvisorEvidenceBoundRewrite(input: {
   readonly original: AdvisorEvidenceBoundGateResult;
+  /** Prosa rejeitada pelo gate (não a mensagem de limitação). */
+  readonly rejectedAnswerText?: string;
   readonly rewriteText: string;
   readonly authorizedEvidenceTexts?: readonly string[];
   readonly evidenceItems?: readonly AdvisorEvidenceItem[];
@@ -175,26 +195,106 @@ export function applyAdvisorEvidenceBoundRewrite(input: {
   if (input.original.ok) {
     return input.original;
   }
-  const second = gateAdvisorEvidenceBoundAnswer({
-    answerText: input.rewriteText,
+  const gateInput = {
     authorizedEvidenceTexts: input.authorizedEvidenceTexts,
     evidenceItems: input.evidenceItems,
-    agentToolPath: true,
+    agentToolPath: true as const,
     requiredEntityScope: input.requiredEntityScope,
     requiredCostCenterName: input.requiredCostCenterName,
+  };
+  const rewriteGated = gateAdvisorEvidenceBoundAnswer({
+    answerText: input.rewriteText,
+    ...gateInput,
   });
-  if (second.ok) {
-    return second;
+
+  // Salvage determinístico: remove agregações/cifras não sustentadas e revalida.
+  const salvageCandidates: Array<{ text: string; unsupported: readonly string[] }> = [];
+  if (input.rejectedAnswerText !== undefined && input.rejectedAnswerText.trim() !== '') {
+    salvageCandidates.push({
+      text: input.rejectedAnswerText,
+      unsupported: input.original.unsupportedClaims,
+    });
   }
+  if (!rewriteGated.ok) {
+    salvageCandidates.push({
+      text: input.rewriteText,
+      unsupported: rewriteGated.unsupportedClaims,
+    });
+  }
+
+  let bestSalvage: AdvisorEvidenceBoundGateResult | null = null;
+  for (const candidate of salvageCandidates) {
+    const salvagedText = stripUnsupportedMonetaryClaims(candidate.text, candidate.unsupported);
+    if (salvagedText.trim() === '' || salvagedText === candidate.text) {
+      continue;
+    }
+    const salvaged = gateAdvisorEvidenceBoundAnswer({
+      answerText: salvagedText,
+      ...gateInput,
+    });
+    if (!salvaged.ok) {
+      continue;
+    }
+    if (
+      bestSalvage === null ||
+      extractFinancialClaims(salvaged.text).length > extractFinancialClaims(bestSalvage.text).length
+    ) {
+      bestSalvage = salvaged;
+    }
+  }
+
+  // Preferir ranking/listagem salvado com cifras oficiais a um rewrite vazio
+  // (limitação genérica sem números) que passaria o gate por ausência de claims.
+  if (bestSalvage !== null && extractFinancialClaims(bestSalvage.text).length > 0) {
+    if (!rewriteGated.ok || extractFinancialClaims(input.rewriteText).length === 0) {
+      return bestSalvage;
+    }
+  }
+  if (rewriteGated.ok) {
+    return rewriteGated;
+  }
+  if (bestSalvage !== null) {
+    return bestSalvage;
+  }
+
   return {
     ok: false,
     text:
-      second.reason === 'INCOMPATIBLE_EVIDENCE_SCOPE'
+      rewriteGated.reason === 'INCOMPATIBLE_EVIDENCE_SCOPE'
         ? ADVISOR_EVIDENCE_SCOPE_LIMITATION_TEXT
         : ADVISOR_EVIDENCE_GATE_LIMITATION_TEXT,
-    unsupportedClaims: second.unsupportedClaims,
-    reason: second.reason,
+    unsupportedClaims: rewriteGated.unsupportedClaims,
+    reason: rewriteGated.reason,
   };
+}
+
+/**
+ * Remove sentenças/trechos que contêm cifras não autorizadas.
+ * Preserva valores individuais oficiais quando a agregação inventada é acessória.
+ */
+export function stripUnsupportedMonetaryClaims(
+  text: string,
+  unsupportedClaims: readonly string[],
+): string {
+  if (unsupportedClaims.length === 0) {
+    return text;
+  }
+  let result = text;
+  for (const claim of unsupportedClaims) {
+    const escaped = claim
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\s+/g, '\\s*');
+    // Remove a sentença (até pontuação ou quebra de linha) que contém a cifra.
+    result = result.replace(
+      new RegExp(`[^\\n.!?]*${escaped}[^\\n.!?]*[.!?]?`, 'gi'),
+      '',
+    );
+  }
+  return result
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 }
 
 export function normalizeAdvisorToolCallFingerprint(
@@ -253,9 +353,12 @@ function collectTokensFromItems(
 
 function addTokensFromText(tokens: Set<string>, text: string): void {
   for (const claim of extractFinancialClaims(text)) {
+    const isPercent = claim.includes('%');
     const money = normalizeFinancialClaim(claim);
     tokens.add(money);
-    const bare = normalizeNumericToken(claim.replace(/R\$/gi, '').replace(/%/g, ''));
+    const bare = normalizeNumericToken(claim.replace(/R\$/gi, '').replace(/%/g, ''), {
+      money: !isPercent,
+    });
     if (bare !== null) {
       addMagnitudeTokens(tokens, bare);
     }
@@ -264,15 +367,65 @@ function addTokensFromText(tokens: Set<string>, text: string): void {
   let fieldMatch: RegExpExecArray | null;
   while ((fieldMatch = JSON_AMOUNT_FIELD_RE.exec(text)) !== null) {
     const raw = fieldMatch.groups?.num;
+    const field = fieldMatch.groups?.field ?? '';
     if (raw === undefined) {
       continue;
     }
-    const normalized = normalizeNumericToken(raw);
+    // Percentuais JSON NÃO usam milhar BR (25.472 ≠ 25472).
+    const isPercentField = /percent/i.test(field);
+    const normalized = normalizeNumericToken(raw, { money: !isPercentField });
     if (normalized !== null) {
       addMagnitudeTokens(tokens, normalized);
-      addRoundedPercentTokens(tokens, normalized);
+      if (isPercentField) {
+        addRoundedPercentTokens(tokens, normalized);
+      }
     }
   }
+  FACT_BARE_AMOUNT_RE.lastIndex = 0;
+  let factMatch: RegExpExecArray | null;
+  while ((factMatch = FACT_BARE_AMOUNT_RE.exec(text)) !== null) {
+    const raw = factMatch.groups?.num;
+    if (raw === undefined) {
+      continue;
+    }
+    const normalized = normalizeNumericToken(raw, { money: true });
+    if (normalized !== null) {
+      addMagnitudeTokens(tokens, normalized);
+    }
+  }
+}
+
+function authorizedHasNumericMagnitude(
+  authorized: ReadonlySet<string>,
+  bareClaim: string,
+): boolean {
+  const claimNumber = Number(bareClaim);
+  if (!Number.isFinite(claimNumber)) {
+    return false;
+  }
+  for (const token of authorized) {
+    const bare = token.startsWith('r$')
+      ? token.slice(2)
+      : token.endsWith('%')
+        ? token.slice(0, -1)
+        : token;
+    if (!/^-?\d+(?:\.\d+)?$/.test(bare)) {
+      continue;
+    }
+    const evidenceNumber = Number(bare);
+    if (!Number.isFinite(evidenceNumber)) {
+      continue;
+    }
+    if (Math.abs(evidenceNumber - claimNumber) <= MONEY_CLAIM_ABS_TOLERANCE) {
+      return true;
+    }
+    if (
+      Math.abs(Math.abs(evidenceNumber) - Math.abs(claimNumber)) <= MONEY_CLAIM_ABS_TOLERANCE
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Autoriza magnitudem com e sem sinal (delta negativo vs prosa "diferença de R$ X"). */
@@ -349,24 +502,30 @@ function extractFinancialClaims(text: string): string[] {
 function normalizeFinancialClaim(claim: string): string {
   const trimmed = claim.trim().toLowerCase().replace(/\s+/g, '');
   if (trimmed.includes('%')) {
-    const bare = normalizeNumericToken(trimmed.replace('%', ''));
+    const bare = normalizeNumericToken(trimmed.replace('%', ''), { money: false });
     return bare === null ? trimmed : `${bare}%`;
   }
-  const bare = normalizeNumericToken(trimmed.replace(/r\$/g, ''));
+  const bare = normalizeNumericToken(trimmed.replace(/r\$/g, ''), { money: true });
   return bare === null ? trimmed : `r$${bare}`;
 }
 
-function normalizeNumericToken(raw: string): string | null {
+function normalizeNumericToken(
+  raw: string,
+  options: { readonly money?: boolean } = {},
+): string | null {
   const cleaned = raw.trim().replace(/\s+/g, '');
   if (cleaned === '' || cleaned === '-' || cleaned === '.') {
     return null;
   }
   let normalized = cleaned;
-  // BR milhar: exige 2+ grupos .000 (1.234.567) OU vírgula decimal (1.234,56).
-  // Evita tratar "25.472" (percentual JSON) como 25472.
+  // BR milhar com vírgula decimal: 1.234,56 / 80.000,00
+  // BR milhar longo: 1.234.567
+  // BR milhar monetário sem centavos: R$ 80.000 → 80000 (só com money=true;
+  // percentuais como 25.472 ficam intactos).
   if (
     /^-?\d{1,3}(?:\.\d{3}){2,}(?:,\d+)?$/.test(normalized) ||
-    /^-?\d{1,3}(?:\.\d{3})+,\d+$/.test(normalized)
+    /^-?\d{1,3}(?:\.\d{3})+,\d+$/.test(normalized) ||
+    (options.money === true && /^-?\d{1,3}(?:\.\d{3})+$/.test(normalized))
   ) {
     normalized = normalized.replace(/\./g, '').replace(',', '.');
   } else if (normalized.includes(',') && normalized.includes('.')) {

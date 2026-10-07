@@ -41,12 +41,16 @@ import {
   buildNominalCompareQuery,
   buildNominalLookupQuery,
   buildNominalRankingQuery,
+  buildPayableTitlesQuery,
 } from './analytical/build-analytical-query-from-tool.js';
 import {
   executeAnalyticalQuery,
   legacyFactFromAnalyticalOutcome,
 } from './analytical/execute-analytical-query.js';
-import type { AnalyticalExecutionRuntime } from './analytical/analytical-execution-types.js';
+import type {
+  AnalyticalExecutionHints,
+  AnalyticalExecutionRuntime,
+} from './analytical/analytical-execution-types.js';
 import type { AnalyticalQuery } from './analytical/analytical-query.js';
 import {
   assertCashNominalLookupArgs,
@@ -76,6 +80,12 @@ import {
   CASH_COST_CENTER_RANKING_TOOL_NAME,
   COMPARE_CASH_COST_CENTER_TOOL_NAME,
 } from './advisor-cost-center-dimension.js';
+import {
+  PAYABLE_TITLES_TOOL,
+  assertPayableTitlesArgs,
+  type AdvisorPayableTitlesService,
+} from './advisor-payable-titles-tools.js';
+import { PAYABLE_TITLES_TOOL_NAME } from './advisor-payable-titles.js';
 import { toolsSupportingCostCenterQuery } from './advisor-question-scope.js';
 
 export const ADVISOR_MAX_TOOL_ROUNDS = 3;
@@ -267,6 +277,7 @@ export function listAdvisorAnalyticalTools(): readonly AdvisorAnalyticalToolDefi
     COMPARE_CASH_MONTHS_TOOL,
     CASH_REALIZED_BREAKDOWN_TOOL,
     CASH_MOVEMENT_LINES_TOOL,
+    PAYABLE_TITLES_TOOL,
     ...listAdvisorNominalTools(),
     ...listAdvisorCostCenterTools(),
   ];
@@ -459,6 +470,7 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
   readonly cashMovements?: AdvisorCashMovementLinesService;
   readonly cashNominal?: AdvisorNominalDimensionService;
   readonly cashCostCenter?: AdvisorCostCenterDimensionService;
+  readonly payableTitles?: AdvisorPayableTitlesService;
 }): AdvisorAnalyticalToolExecutor {
   const allowlist = new Set(listAdvisorAnalyticalTools().map((tool) => tool.name));
 
@@ -544,6 +556,22 @@ export function createAdvisorAnalyticalToolExecutor(deps: {
           }
           return await executeNominal(
             deps.cashNominal,
+            tenantId,
+            call,
+            input.resolvedMonthKey,
+            input.now,
+            startedAt,
+          );
+        }
+        if (call.name === PAYABLE_TITLES_TOOL_NAME) {
+          if (deps.payableTitles === undefined) {
+            throw new AdvisorDomainError(
+              'ANALYTICAL_TOOL_FAILED',
+              'Não consegui obter os títulos de contas a pagar agora.',
+            );
+          }
+          return await executePayableTitles(
+            deps.payableTitles,
             tenantId,
             call,
             input.resolvedMonthKey,
@@ -860,6 +888,60 @@ async function executeMovements(
   };
 }
 
+async function executePayableTitles(
+  payableTitles: AdvisorPayableTitlesService,
+  tenantId: string,
+  call: AdvisorAnalyticalToolCall,
+  resolvedMonthKey: string | undefined,
+  now: Date | undefined,
+  startedAt: number,
+): Promise<AdvisorAnalyticalToolResult> {
+  const args = assertPayableTitlesArgs(call.arguments);
+  const monthKey = bindResolvedMonthKey(args.monthKey, resolvedMonthKey);
+  const limits = clampAdvisorDrilldownLimit(args.limit);
+  const query = buildPayableTitlesQuery({
+    monthKey,
+    ordering: args.ordering,
+    limit: args.limit,
+    ...(args.costCenterQuery !== undefined ? { costCenterQuery: args.costCenterQuery } : {}),
+  });
+  const serialized = await runUniversalToolQuery({
+    query,
+    runtime: { tenantId, now, payableTitles },
+    hints: {
+      payableTitleStatus: args.status,
+      payableTitleOrdering: args.ordering,
+    },
+  });
+  const returnedCount =
+    typeof serialized.returnedCount === 'number'
+      ? serialized.returnedCount
+      : Array.isArray(serialized.lines)
+        ? serialized.lines.length
+        : 0;
+  const status = typeof serialized.status === 'string' ? serialized.status : 'OK';
+  const entityMiss = status === 'NOT_FOUND' || status === 'AMBIGUOUS';
+  logToolExecution({
+    toolName: call.name,
+    durationMs: Date.now() - startedAt,
+    ok: !entityMiss,
+    resultCardinality: returnedCount,
+    monthKey,
+    comparisonMonthKey: null,
+    direction: null,
+    requestedLimit: limits.requestedLimit,
+    effectiveLimit: limits.effectiveLimit,
+  });
+  return {
+    id: call.id,
+    name: call.name,
+    ok: !entityMiss,
+    content: JSON.stringify(serialized),
+    resultCardinality: returnedCount,
+    monthKey,
+  };
+}
+
 async function executeNominal(
   cashNominal: AdvisorNominalDimensionService,
   tenantId: string,
@@ -1025,7 +1107,7 @@ async function executeCostCenter(
 async function runUniversalToolQuery(input: {
   readonly query: AnalyticalQuery;
   readonly runtime: AnalyticalExecutionRuntime;
-  readonly hints?: { readonly movementSort?: AdvisorCashMovementSort };
+  readonly hints?: AnalyticalExecutionHints;
 }): Promise<Record<string, unknown>> {
   const outcome = await withToolTimeout(
     executeAnalyticalQuery({
@@ -1180,10 +1262,10 @@ function assertNoForbiddenArgs(raw: Record<string, unknown>): void {
       );
     }
   }
-  if ('tenantId' in raw || 'userId' in raw) {
+  if ('tenantId' in raw || 'userId' in raw || 'costCenterId' in raw) {
     throw new AdvisorDomainError(
       'ANALYTICAL_TOOL_INVALID_INPUT',
-      'tenantId/userId não são aceitos no input da tool.',
+      'tenantId/userId/costCenterId não são aceitos no input da tool.',
     );
   }
 }
@@ -1218,6 +1300,7 @@ function guardExplicitCostCenterScope(
         CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
         CASH_REALIZED_BREAKDOWN_TOOL_NAME,
         CASH_COST_CENTER_LOOKUP_TOOL_NAME,
+        PAYABLE_TITLES_TOOL_NAME,
       ],
     };
   }

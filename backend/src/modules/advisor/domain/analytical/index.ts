@@ -153,6 +153,7 @@ export {
   buildCostCenterLookupQuery,
   buildCostCenterCompareQuery,
   buildCostCenterMovementsQuery,
+  buildPayableTitlesQuery,
   buildCurrentSnapshotQuery,
   buildFinancialFactsMonthQuery,
 } from './build-analytical-query-from-tool.js';

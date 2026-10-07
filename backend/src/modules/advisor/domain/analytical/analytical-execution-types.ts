@@ -8,6 +8,11 @@ import type { AdvisorCashMovementLinesService } from '../advisor-analytical-tool
 import type { AdvisorNominalDimensionService } from '../advisor-nominal-tools.js';
 import type { AdvisorCostCenterDimensionService } from '../advisor-cost-center-tools.js';
 import type { AdvisorCashMovementSort } from '../advisor-cash-movement-lines.js';
+import type { AdvisorPayableTitlesService } from '../advisor-payable-titles-tools.js';
+import type {
+  AdvisorPayableTitleOrdering,
+  AdvisorPayableTitleStatus,
+} from '../advisor-payable-titles.js';
 import type { FinancialStockSnapshot, MonthlyCashFlow } from '../../../analytics/domain/types.js';
 import type { MonthlyCashFlowService } from '../../../analytics/services/monthly-cash-flow.service.js';
 import type { ExpenseCeilingRepository } from '../../../dashboard/repositories/expense-ceiling.repository.js';
@@ -27,6 +32,7 @@ export type AnalyticalExecutionRuntime = {
   readonly cashMovements?: AdvisorCashMovementLinesService;
   readonly cashNominal?: AdvisorNominalDimensionService;
   readonly cashCostCenter?: AdvisorCostCenterDimensionService;
+  readonly payableTitles?: AdvisorPayableTitlesService;
   readonly counterpartyIdentity?: CounterpartyIdentityService;
   /** Já materializados pelo Context Builder (preload). */
   readonly monthlyCashFlow?: MonthlyCashFlow | null;
@@ -45,6 +51,8 @@ export type AnalyticalExecutionRuntime = {
  */
 export type AnalyticalExecutionHints = {
   readonly movementSort?: AdvisorCashMovementSort;
+  readonly payableTitleStatus?: AdvisorPayableTitleStatus;
+  readonly payableTitleOrdering?: AdvisorPayableTitleOrdering;
 };
 
 export type ValidatedAnalyticalQuery = {

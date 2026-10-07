@@ -63,6 +63,37 @@ export function buildMonthlyCompetenceWhere(
   return where;
 }
 
+/**
+ * Títulos reconhecidos (OPEN/OVERDUE/PARTIALLY_PAID/PAID) por vencimento no mês.
+ * Mesmo conjunto de status da competência; âncora temporal = dueDate (Dashboard AP).
+ */
+export function buildRecognizedInstallmentDueDateWhere(
+  scope: FinanceReadScope,
+  from: Date,
+  to: Date,
+): Prisma.ReceivableWhereInput & Prisma.PayableWhereInput {
+  const where: Prisma.ReceivableWhereInput & Prisma.PayableWhereInput = {
+    tenantId: scope.tenantId,
+    lifecycleStatus: 'ACTIVE',
+    status: { in: [...MONTHLY_COMPETENCE_REVENUE_STATUSES] },
+    dueDate: { gte: from, lte: to },
+  };
+  if (scope.integrationId !== undefined && scope.integrationId.trim() !== '') {
+    where.integrationId = scope.integrationId;
+  }
+  return where;
+}
+
+export function buildRecognizedInstallmentDueDateWhereForConfirmedCostCenterAllocation(
+  scope: FinanceReadScope,
+  from: Date,
+  to: Date,
+): Prisma.ReceivableWhereInput & Prisma.PayableWhereInput {
+  return withAnalyticallyConfirmedCostCenterDetail(
+    buildRecognizedInstallmentDueDateWhere(scope, from, to),
+  );
+}
+
 /** CURRENT competência: ACTIVE + statuses de competência + detalhe CC confirmado. */
 export function buildMonthlyCompetenceWhereForConfirmedCostCenterAllocation(
   scope: FinanceReadScope,

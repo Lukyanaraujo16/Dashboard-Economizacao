@@ -21,6 +21,7 @@ export const ANALYTICAL_OBLIGATIONS = [
   'MOVEMENTS',
   'RANKING',
   'INVESTIGATION',
+  'PAYABLE_TITLES',
 ] as const;
 
 export type AnalyticalObligation = (typeof ANALYTICAL_OBLIGATIONS)[number];
@@ -71,6 +72,7 @@ const OBLIGATION_TOOL_PROVIDERS: Record<AnalyticalObligation, readonly string[]>
     'compare_cash_cost_center',
     'cash_cost_center_movement_lines',
     'cash_cost_center_ranking',
+    'payable_titles',
   ],
   VALUE: [
     'cash_realized_breakdown',
@@ -84,6 +86,7 @@ const OBLIGATION_TOOL_PROVIDERS: Record<AnalyticalObligation, readonly string[]>
     'cash_nominal_ranking',
     'compare_cash_nominal',
     'cash_cost_center_ranking',
+    'payable_titles',
   ],
   COMPARISON: ['compare_cash_months', 'compare_cash_cost_center', 'compare_cash_nominal'],
   // Composição/driver: ranking por categoria OU linhas (ambos explicam concentração).
@@ -92,11 +95,12 @@ const OBLIGATION_TOOL_PROVIDERS: Record<AnalyticalObligation, readonly string[]>
     'cash_movement_lines',
     'cash_cost_center_movement_lines',
   ],
-  MOVEMENTS: ['cash_movement_lines', 'cash_cost_center_movement_lines'],
+  MOVEMENTS: ['cash_movement_lines', 'cash_cost_center_movement_lines', 'payable_titles'],
   RANKING: [
     'cash_realized_breakdown',
     'cash_nominal_ranking',
     'cash_cost_center_ranking',
+    'payable_titles',
   ],
   INVESTIGATION: [
     'cash_realized_breakdown',
@@ -105,7 +109,10 @@ const OBLIGATION_TOOL_PROVIDERS: Record<AnalyticalObligation, readonly string[]>
     'cash_cost_center_movement_lines',
     'cash_movement_lines',
     'cash_cost_center_ranking',
+    'payable_titles',
   ],
+  /** Só payable_titles satisfaz — REALIZED_CASH não conta. */
+  PAYABLE_TITLES: ['payable_titles'],
 };
 
 /**
@@ -120,6 +127,8 @@ export function deriveAnalyticalObligations(
     demand.wantsComparison ||
     demand.wantsCompositionOrDriver ||
     demand.wantsOpenInvestigation ||
+    demand.wantsPayableObligation ||
+    demand.wantsPayableTitleDetail ||
     demand.explicitCostCenter.status !== 'ABSENT';
 
   if (!financial) {
@@ -136,6 +145,12 @@ export function deriveAnalyticalObligations(
   }
 
   obligations.push('VALUE');
+
+  // PAYABLE agregado (estoque) → VALUE via payable_stock / FINANCIAL_FACTS.
+  // PAYABLE detalhe/ranking/listagem → exige payable_titles.
+  if (demand.wantsPayableTitleDetail) {
+    obligations.push('PAYABLE_TITLES');
+  }
 
   if (demand.wantsComparison) {
     obligations.push('COMPARISON');
@@ -181,9 +196,11 @@ export function evaluateAnalyticalCompletion(input: {
 
   // FINANCIAL_FACTS / fatos preload tenant-wide: VALUE sem ENTITY_SCOPE.
   // UNKNOWN trata-se como TENANT (marcação ausente = escopo empresa).
+  // Agregado payable_stock / FINANCIAL_FACTS NÃO satisfaz PAYABLE_TITLES.
   if (
     !requiresEntity &&
     required.includes('VALUE') &&
+    !required.includes('PAYABLE_TITLES') &&
     (input.preloadFactScopes ?? []).some(
       (scope) => scope === 'TENANT' || scope === 'UNKNOWN',
     )
@@ -323,6 +340,11 @@ export function analyzeToolEvidence(
     name === 'cash_nominal_lookup'
   ) {
     satisfies.add('VALUE');
+  } else if (name === 'payable_titles') {
+    satisfies.add('VALUE');
+    satisfies.add('PAYABLE_TITLES');
+    satisfies.add('MOVEMENTS');
+    satisfies.add('RANKING');
   }
 
   return {

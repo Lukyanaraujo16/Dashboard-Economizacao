@@ -6,6 +6,7 @@ import {
   executeBillingSeriesMonths,
   executeFinancialFactsMonth,
   executeMonthlyPlanning,
+  executePayableTitles,
   executeRealizedCashCategoryBreakdown,
   executeRealizedCashCounterparty,
   executeRealizedCashCostCenter,
@@ -28,6 +29,7 @@ const ANALYTICAL_EXECUTOR_REGISTRY: Record<AnalyticalExecutorKey, AnalyticalExec
   financialFactsMonth: executeFinancialFactsMonth,
   billingSeriesMonths: executeBillingSeriesMonths,
   monthlyPlanning: executeMonthlyPlanning,
+  payableTitles: executePayableTitles,
 };
 
 export function getAnalyticalExecutor(

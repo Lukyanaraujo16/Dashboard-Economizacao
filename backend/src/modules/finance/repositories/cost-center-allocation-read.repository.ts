@@ -16,6 +16,7 @@ import {
   assertTenantId,
   buildActiveInstallmentWhereForConfirmedCostCenterAllocation,
   buildMonthlyCompetenceWhereForConfirmedCostCenterAllocation,
+  buildRecognizedInstallmentDueDateWhereForConfirmedCostCenterAllocation,
   withAnalyticallyConfirmedCostCenterDetail,
 } from './read-query.js';
 import type { Prisma } from '../../../generated/prisma/client.js';
@@ -45,6 +46,10 @@ export type CostCenterAllocationReadRepository = {
     query: DueDateRangeQuery & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
   findActivePayableAllocationsByDueDate(
+    query: DueDateRangeQuery & { readonly costCenterId: string },
+  ): Promise<readonly CostCenterAllocationInstallment[]>;
+  /** Títulos reconhecidos (inclui PAID) por dueDate + rateio CC confirmado. */
+  findRecognizedPayableAllocationsByDueDate(
     query: DueDateRangeQuery & { readonly costCenterId: string },
   ): Promise<readonly CostCenterAllocationInstallment[]>;
   /**
@@ -220,6 +225,31 @@ export function createCostCenterAllocationReadRepository(
             ...buildActiveInstallmentWhereForConfirmedCostCenterAllocation(query),
             dueDate: { gte: query.from, lte: query.to },
           },
+        },
+        include: { payable: true },
+        orderBy: [{ id: 'asc' }],
+      })) as AllocationWithPayableRow[];
+      return rows.map((row) => ({
+        amount: row.amount,
+        installment: mapPayableReadRecord(asPayable(row.payable)),
+      }));
+    },
+
+    async findRecognizedPayableAllocationsByDueDate(query) {
+      assertTenantId(query.tenantId);
+      if (query.from.getTime() > query.to.getTime()) {
+        return [];
+      }
+      const rows = (await client.installmentCostCenterAllocation.findMany({
+        where: {
+          tenantId: query.tenantId,
+          costCenterId: query.costCenterId,
+          payableId: { not: null },
+          payable: buildRecognizedInstallmentDueDateWhereForConfirmedCostCenterAllocation(
+            query,
+            query.from,
+            query.to,
+          ),
         },
         include: { payable: true },
         orderBy: [{ id: 'asc' }],

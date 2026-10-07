@@ -1665,6 +1665,10 @@ async function finalizeAdvisorAgentAnswer(input: {
 
   let usage = input.usage;
   try {
+    const unsupportedList =
+      gated.unsupportedClaims.length > 0
+        ? gated.unsupportedClaims.join('; ')
+        : 'ABSENT';
     const rewrite = await input.generate({
       tenantId: input.tenantId,
       provider: input.providerId,
@@ -1677,7 +1681,11 @@ async function finalizeAdvisorAgentAnswer(input: {
             'REWRITE_EVIDENCE_BOUND:',
             'Reescreva a resposta anterior usando APENAS valores presentes nos FINANCIAL_FACTS/ANALYTICAL_FACTS/tool results deste contexto.',
             'Respeite entityScope: fatos TENANT não autorizam afirmações de COST_CENTER.',
+            'Pode citar valores INDIVIDUAIS oficiais (ex.: cada título/linha retornada pela tool).',
+            'NÃO some, agregue nem invente totais/percentuais que não estejam explícitos na evidência.',
+            'Se a resposta anterior trouxe soma/agregação não sustentada, REMOVA essa agregação e preserve o ranking/listagem com os valores oficiais individuais.',
             'Não invente números. Se não houver cifra oficial compatível com o escopo, declare a limitação.',
+            `Cifras rejeitadas (remover ou substituir só por valores oficiais): ${unsupportedList}`,
             `Resposta anterior rejeitada: ${input.text.slice(0, 2_000)}`,
           ].join('\n'),
           trustLevel: 'PLATFORM',
@@ -1688,6 +1696,7 @@ async function finalizeAdvisorAgentAnswer(input: {
     usage = addUsage(usage, rewrite.usage);
     const afterRewrite = applyAdvisorEvidenceBoundRewrite({
       original: gated,
+      rejectedAnswerText: input.text,
       rewriteText: rewrite.text,
       evidenceItems,
       requiredEntityScope,
@@ -1700,22 +1709,34 @@ async function finalizeAdvisorAgentAnswer(input: {
         mode: 'AGENT_TOOL',
         status: afterRewrite.ok ? 'OK' : afterRewrite.reason,
         reason: afterRewrite.reason,
-        outcome: afterRewrite.ok ? 'REWRITE_ACCEPTED' : 'DETERMINISTIC_LIMITATION',
+        outcome: afterRewrite.ok
+          ? afterRewrite.text === rewrite.text
+            ? 'REWRITE_ACCEPTED'
+            : 'SALVAGE_ACCEPTED'
+          : 'DETERMINISTIC_LIMITATION',
       }),
     );
     return { text: afterRewrite.text, usage };
   } catch {
+    const salvaged = applyAdvisorEvidenceBoundRewrite({
+      original: gated,
+      rejectedAnswerText: input.text,
+      rewriteText: input.text,
+      evidenceItems,
+      requiredEntityScope,
+      requiredCostCenterName,
+    });
     console.info(
       JSON.stringify({
         event: 'advisor_agent_evidence_gate',
         tenantId: input.tenantId,
         mode: 'AGENT_TOOL',
-        status: gated.reason,
-        reason: gated.reason,
-        outcome: 'DETERMINISTIC_LIMITATION',
+        status: salvaged.ok ? 'OK' : gated.reason,
+        reason: salvaged.ok ? 'OK' : gated.reason,
+        outcome: salvaged.ok ? 'SALVAGE_ACCEPTED' : 'DETERMINISTIC_LIMITATION',
       }),
     );
-    return { text: gated.text, usage };
+    return { text: salvaged.ok ? salvaged.text : gated.text, usage };
   }
 }
 

@@ -2,6 +2,7 @@ import { serializeAdvisorCashMonthComparison } from '../compare-advisor-cash-mon
 import { serializeAdvisorCashRealizedBreakdown } from '../advisor-cash-realized-breakdown.js';
 import { serializeAdvisorCashMovementLines } from '../advisor-cash-movement-lines.js';
 import { serializeAdvisorCurrentSnapshotFacts } from '../advisor-current-snapshot-facts.js';
+import { serializeAdvisorPayableTitles } from '../advisor-payable-titles.js';
 import { buildFinancialFactsContent } from '../financial-facts-text.js';
 import type { AnalyticalExecutor, AnalyticalExecutionSuccess } from './analytical-execution-types.js';
 import { wrapLegacyAnalyticalResult } from './legacy-analytical-fact.js';
@@ -522,5 +523,35 @@ export const executeRealizedCashDayMovements: AnalyticalExecutor = async ({
         occurredOn: formatCivilDateKey(item.occurredOn),
       })),
     },
+  });
+};
+
+export const executePayableTitles: AnalyticalExecutor = async ({
+  validated,
+  runtime,
+  hints,
+}) => {
+  if (runtime.payableTitles === undefined) {
+    throw new Error('EXECUTOR_DEPENDENCY_MISSING:payableTitles');
+  }
+  const monthKey = requireMonthKey(validated.query.period, 'self');
+  const titleStatus = hints?.payableTitleStatus ?? 'OPEN';
+  const ordering =
+    hints?.payableTitleOrdering ??
+    (validated.query.operation === 'MOVEMENTS' ? 'DUE_DATE_ASC' : 'VALUE_DESC');
+  const costCenterQuery = validated.query.filters?.costCenterQuery;
+  const window = await runtime.payableTitles.list({
+    tenantId: runtime.tenantId,
+    monthKey,
+    status: titleStatus,
+    ordering,
+    ...(validated.query.limit !== undefined ? { limit: validated.query.limit } : {}),
+    ...(costCenterQuery !== undefined ? { costCenterQuery } : {}),
+    now: runtime.now,
+  });
+  return success({
+    validated,
+    executorKey: 'payableTitles',
+    legacyFact: serializeAdvisorPayableTitles(window),
   });
 };

@@ -10,11 +10,16 @@ import {
   assertTenantId,
   buildActiveInstallmentWhere,
   buildMonthlyCompetenceWhere,
+  buildRecognizedInstallmentDueDateWhere,
 } from './read-query.js';
 
 export type PayableReadRepository = {
   findActiveByTenant(scope: FinanceReadScope): Promise<readonly FinancialInstallmentReadRecord[]>;
   findActiveByDueDateRange(
+    query: DueDateRangeQuery,
+  ): Promise<readonly FinancialInstallmentReadRecord[]>;
+  /** OPEN/OVERDUE/PARTIALLY_PAID/PAID com dueDate no intervalo (universo de títulos do mês). */
+  findRecognizedByDueDateRange(
     query: DueDateRangeQuery,
   ): Promise<readonly FinancialInstallmentReadRecord[]>;
   findMonthlyCompetenceExpenses(
@@ -47,6 +52,18 @@ export function createPayableReadRepository(prisma: PrismaClient): PayableReadRe
           ...buildActiveInstallmentWhere(query),
           dueDate: { gte: query.from, lte: query.to },
         },
+        orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map(mapPayableReadRecord);
+    },
+
+    async findRecognizedByDueDateRange(query) {
+      assertTenantId(query.tenantId);
+      if (query.from.getTime() > query.to.getTime()) {
+        return [];
+      }
+      const rows = await prisma.payable.findMany({
+        where: buildRecognizedInstallmentDueDateWhere(query, query.from, query.to),
         orderBy: [{ dueDate: 'asc' }, { id: 'asc' }],
       });
       return rows.map(mapPayableReadRecord);

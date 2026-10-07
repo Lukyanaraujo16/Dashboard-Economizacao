@@ -217,6 +217,31 @@ export function buildCostCenterMovementsQuery(input: {
   };
 }
 
+export function buildPayableTitlesQuery(input: {
+  readonly monthKey: string;
+  readonly ordering: 'VALUE_DESC' | 'DUE_DATE_ASC';
+  readonly limit?: number;
+  readonly costCenterQuery?: string;
+}): AnalyticalQuery {
+  const limit = input.limit;
+  const operation =
+    input.ordering === 'DUE_DATE_ASC'
+      ? 'MOVEMENTS'
+      : limit === 1
+        ? 'RANKING_WINNER'
+        : 'RANKING_TOPN';
+  return {
+    semanticFamily: 'STOCK',
+    metric: 'PAYABLE_TITLE',
+    period: { kind: 'MONTH', monthKey: input.monthKey },
+    operation,
+    ...(input.costCenterQuery !== undefined && input.costCenterQuery.trim() !== ''
+      ? { filters: { costCenterQuery: input.costCenterQuery.trim() } }
+      : {}),
+    ...(limit !== undefined ? { limit } : {}),
+  };
+}
+
 export function buildCurrentSnapshotQuery(): AnalyticalQuery {
   return {
     semanticFamily: 'STOCK',

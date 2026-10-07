@@ -22,6 +22,7 @@ export const ANALYTICAL_METRIC_KEYS = [
   'EXPENSE_CEILING',
   'RECEIVABLE_STOCK',
   'PAYABLE_STOCK',
+  'PAYABLE_TITLE',
   'DELINQUENCY',
   'BANK_BALANCE',
   'FORECAST_CASH',
@@ -89,6 +90,7 @@ export const ANALYTICAL_EXECUTOR_KEYS = [
   'financialFactsMonth',
   'billingSeriesMonths',
   'monthlyPlanning',
+  'payableTitles',
 ] as const;
 export type AnalyticalExecutorKey = (typeof ANALYTICAL_EXECUTOR_KEYS)[number];
 
