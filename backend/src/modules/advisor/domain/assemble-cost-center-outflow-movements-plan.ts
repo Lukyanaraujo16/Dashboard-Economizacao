@@ -82,10 +82,13 @@ export function assembleCostCenterOutflowMovementsPlan(input: {
   }
 
   // Precedência: pergunta completa → entidade → período → UNMATCHED.
+  // Sem estado C.1: UNMATCHED (não FOLLOW_UP_WITHOUT_CONTEXT).
+  // "E em <centro>?" após BILLING→INFLOW lookup deve cair em LastAnalyticalQuery,
+  // não no caminho de maiores gastos.
   const entityFollowUp = extractCostCenterEntityFollowUp(folded);
   if (entityFollowUp !== null) {
     if (input.priorState === null) {
-      return { kind: 'FOLLOW_UP_WITHOUT_CONTEXT' };
+      return { kind: 'UNMATCHED' };
     }
     return finalizeSlots({
       monthKey: input.priorState.monthKey,

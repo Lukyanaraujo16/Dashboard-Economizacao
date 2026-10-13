@@ -211,14 +211,14 @@ describe('assembler de maiores gastos por centro (Fase 1)', () => {
     });
   });
 
-  it('follow-up sem estado factual não inventa contexto', () => {
+  it('follow-up de entidade sem estado C.1 é UNMATCHED (cede a LastAnalyticalQuery)', () => {
     expect(
       assembleCostCenterOutflowMovementsPlan({
         content: 'E em Jacaraípe?',
         period: periodFor('E em Jacaraípe?'),
         priorState: null,
       }).kind,
-    ).toBe('FOLLOW_UP_WITHOUT_CONTEXT');
+    ).toBe('UNMATCHED');
   });
 
   it('C.1 T1/T2 — follow-up de período herda operação/CC/limit e troca só o mês', () => {
@@ -665,9 +665,15 @@ describe('envio — maiores gastos por centro (Fase 1)', () => {
       question: 'E em Jacaraípe?',
       now: NOW,
     });
-    expect(follow.run).toBeNull();
-    expect(follow.consultantMessage.content).toMatch(/não há uma consulta anterior/i);
-    expect(harness.openai.generateCalls).toHaveLength(0);
+    // Sem prior C.1: entity follow-up é UNMATCHED (não inventa ranking).
+    // Este harness não injeta monthlyPlanning → continuidade não clarifica;
+    // em produção com planning, Last/continuidade respondem.
+    expect(follow.consultantMessage.content).not.toMatch(
+      /consulta anterior de maiores gastos/i,
+    );
+    expect(follow.consultantMessage.content).not.toMatch(
+      /maior(?:es)?\s+gastos?\s+de\s+jacara/i,
+    );
   });
 
   it('comparação de resultado CC homologada continua no caminho seguro', async () => {

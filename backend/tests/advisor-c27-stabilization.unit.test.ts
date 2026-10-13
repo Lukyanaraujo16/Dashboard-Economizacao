@@ -166,6 +166,340 @@ describe('C.2.7 F — BILLING → REALIZED_CASH INFLOW', () => {
   });
 });
 
+describe('C.2 post-deploy — REALIZED_CASH continuidade por centro (regressão Clínica Life)', () => {
+  it('C — 3 turnos: BILLING Laranjeiras ago → caixa → E em Jacaraípe? (lookup INFLOW)', async () => {
+    const toolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+    const harness = createHarness({
+      byKey: {
+        '2026-08': flow({ monthKey: '2026-08', inflows: '5000', receivables: '0' }),
+      },
+      byCenter: {
+        'cc-laranj': {
+          '2026-08': flow({
+            monthKey: '2026-08',
+            inflows: '200',
+            receivables: '169715.64',
+          }),
+        },
+        'cc-jac': {
+          '2026-08': flow({
+            monthKey: '2026-08',
+            inflows: '80',
+            receivables: '100',
+          }),
+        },
+      },
+      executeTool: async ({ call }) => {
+        toolCalls.push({ name: call.name, args: call.arguments as Record<string, unknown> });
+        if (call.name === 'cash_cost_center_lookup') {
+          const q = String(call.arguments.costCenterQuery ?? '');
+          const jac = /jacara/i.test(q);
+          return {
+            id: call.id,
+            name: call.name,
+            ok: true,
+            content: lookupPayload({
+              name: jac ? 'Clínica Life Jacaraípe' : 'Clínica Life Laranjeiras',
+              amount: jac ? '88.00' : '55.00',
+              direction: 'INFLOW',
+              monthKey: String(call.arguments.monthKey ?? '2026-08'),
+            }),
+          };
+        }
+        throw new Error(`tool inesperado: ${call.name}`);
+      },
+    });
+
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual foi o faturamento de Laranjeiras em agosto de 2026?',
+      now: NOW,
+    });
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.capabilityKey).toBe(
+      'billing.cost_center.month',
+    );
+    expect(
+      harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.query.filters?.costCenterQuery,
+    ).toMatch(/laranj/i);
+
+    const second = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E quanto entrou no caixa?',
+      now: NOW,
+    });
+    expect(second.run).toBeNull();
+    expect(second.consultantMessage.content).not.toMatch(/maiores gastos/i);
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.capabilityKey).toBe(
+      'realized_cash.cost_center.month.lookup',
+    );
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.query.metric).toBe(
+      'REALIZED_CASH',
+    );
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.query.direction).toBe(
+      'INFLOW',
+    );
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.query.operation).toBe(
+      'LOOKUP',
+    );
+
+    const third = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em Jacaraípe?',
+      now: NOW,
+    });
+    expect(third.run).toBeNull();
+    expect(third.consultantMessage.content).not.toMatch(
+      /consulta anterior de maiores gastos/i,
+    );
+    expect(third.consultantMessage.content).not.toMatch(/faturamento oficial/i);
+    expect(third.consultantMessage.content).toMatch(/88|Jacaraípe|entrada/i);
+    expect(harness.openai.generateCalls).toHaveLength(0);
+
+    const lookups = toolCalls.filter((row) => row.name === 'cash_cost_center_lookup');
+    expect(lookups.length).toBeGreaterThanOrEqual(2);
+    const lastLookup = lookups.at(-1)!;
+    expect(lastLookup.args.direction).toBe('INFLOW');
+    expect(String(lastLookup.args.monthKey)).toBe('2026-08');
+    expect(String(lastLookup.args.costCenterQuery)).toMatch(/jacara/i);
+    expect(lookups.every((row) => row.name !== 'cash_cost_center_movements')).toBe(true);
+
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.capabilityKey).toBe(
+      'realized_cash.cost_center.month.lookup',
+    );
+    expect(
+      harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.query.filters?.costCenterQuery,
+    ).toMatch(/jacara/i);
+  });
+
+  it('A — BILLING série 3m Laranjeiras → E de Jacaraípe? preserva BILLING', async () => {
+    const harness = createHarness({
+      byKey: {
+        '2026-08': flow({ monthKey: '2026-08', inflows: '1', receivables: '0' }),
+        '2026-09': flow({ monthKey: '2026-09', inflows: '1', receivables: '0' }),
+        '2026-10': flow({ monthKey: '2026-10', inflows: '1', receivables: '0' }),
+      },
+      byCenter: {
+        'cc-laranj': {
+          '2026-08': flow({ monthKey: '2026-08', inflows: '10', receivables: '100' }),
+          '2026-09': flow({ monthKey: '2026-09', inflows: '10', receivables: '110' }),
+          '2026-10': flow({ monthKey: '2026-10', inflows: '10', receivables: '120' }),
+        },
+        'cc-jac': {
+          '2026-08': flow({ monthKey: '2026-08', inflows: '10', receivables: '200' }),
+          '2026-09': flow({ monthKey: '2026-09', inflows: '10', receivables: '210' }),
+          '2026-10': flow({ monthKey: '2026-10', inflows: '10', receivables: '220' }),
+        },
+      },
+    });
+
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual foi o faturamento de Laranjeiras nos últimos 3 meses?',
+      now: NOW,
+    });
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.capabilityKey).toBe(
+      'billing.cost_center.series.months',
+    );
+
+    const second = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E de Jacaraípe?',
+      now: NOW,
+    });
+    expect(second.run).toBeNull();
+    expect(second.consultantMessage.content).toMatch(/faturamento|Jacaraípe/i);
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.capabilityKey).toBe(
+      'billing.cost_center.series.months',
+    );
+    expect(
+      harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.query.filters?.costCenterQuery,
+    ).toMatch(/jacara/i);
+  });
+
+  it('D — ranking C.1 → troca de centro ainda usa movimentos (não lookup)', async () => {
+    const toolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+    const harness = createHarness({
+      byKey: {},
+      executeTool: async ({ call }) => {
+        toolCalls.push({ name: call.name, args: call.arguments as Record<string, unknown> });
+        if (
+          call.name === 'cash_cost_center_movement_lines' ||
+          call.name === 'cash_cost_center_movements'
+        ) {
+          return {
+            id: call.id,
+            name: call.name,
+            ok: true,
+            content: movementPayload({
+              name: String(call.arguments.costCenterQuery ?? 'X'),
+              limit: Number(call.arguments.limit ?? 10),
+              monthKey: String(call.arguments.monthKey ?? '2026-09'),
+              lines: [{ amount: '40.00', description: 'gasto' }],
+            }),
+          };
+        }
+        throw new Error(`tool inesperado: ${call.name}`);
+      },
+    });
+
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quais foram os 10 maiores gastos de Laranjeiras em setembro?',
+      now: NOW,
+    });
+    expect(harness.savedContexts.at(-1)?.slots.lastAnalyticalQuery?.capabilityKey).toBe(
+      'realized_cash.cost_center.month.movements',
+    );
+
+    const second = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em Jacaraípe?',
+      now: NOW,
+    });
+    expect(second.run).toBeNull();
+    expect(second.consultantMessage.content).not.toMatch(
+      /consulta anterior de maiores gastos/i,
+    );
+    const moves = toolCalls.filter(
+      (row) =>
+        row.name === 'cash_cost_center_movement_lines' ||
+        row.name === 'cash_cost_center_movements',
+    );
+    expect(moves.length).toBeGreaterThanOrEqual(2);
+    expect(String(moves.at(-1)!.args.costCenterQuery)).toMatch(/jacara/i);
+    expect(toolCalls.every((row) => row.name !== 'cash_cost_center_lookup')).toBe(true);
+  });
+
+  it('E — mudança explícita de métrica (caixa→faturamento) é NEW_QUERY no classificador', () => {
+    const prior = lastAnalyticalQueryFromBilling({
+      capabilityKey: 'billing.cost_center.month',
+      monthKey: '2026-08',
+      costCenterQuery: 'Laranjeiras',
+      structuredStatus: 'OK',
+    })!;
+    const afterCash = applyAnalyticalDimensionPatch({
+      prior,
+      patch: { metric: 'REALIZED_CASH', direction: 'INFLOW' },
+    });
+    expect(afterCash.ok).toBe(true);
+    if (!afterCash.ok) return;
+    const classified = classifyAnalyticalContinuity({
+      content: 'Qual foi o faturamento de Jacaraípe em agosto?',
+      period: { monthKey: '2026-08', source: 'EXPLICIT', comparison: false },
+      prior: {
+        version: 1,
+        kind: 'LAST_ANALYTICAL_QUERY',
+        query: afterCash.query,
+        capabilityKey: afterCash.capabilityKey as 'realized_cash.cost_center.month.lookup',
+        executionStatus: 'OK',
+      },
+    });
+    expect(classified.decision).toBe('NEW_QUERY');
+  });
+
+  it('F — NEW_QUERY não herda centro do last indevidamente', () => {
+    const prior = lastAnalyticalQueryFromBilling({
+      capabilityKey: 'billing.cost_center.month',
+      monthKey: '2026-08',
+      costCenterQuery: 'Laranjeiras',
+      structuredStatus: 'OK',
+    })!;
+    const classified = classifyAnalyticalContinuity({
+      content: 'Qual foi o resultado de caixa em agosto?',
+      period: { monthKey: '2026-08', source: 'EXPLICIT', comparison: false },
+      prior,
+    });
+    expect(classified.decision).toBe('NEW_QUERY');
+  });
+
+  it('G — Pending ALTERNATIVES não regride (ACCEPT→clarify)', async () => {
+    const pending = createPendingAnalyticalAction({
+      id: 'pend-alt-reg',
+      createdFromMessageId: 'msg-offer',
+      domain: 'REALIZED_CASH',
+      operation: 'MOVEMENTS',
+      objective: 'Oferecer caminhos',
+      offerSnippet: 'Posso detalhar saídas ou contas a pagar.',
+      offerKind: 'ALTERNATIVES',
+      steps: [
+        {
+          toolName: 'cash_cost_center_movement_lines',
+          filters: { monthKey: '2026-08', direction: 'OUTFLOW', limit: 5 },
+        },
+      ],
+      alternatives: [
+        {
+          id: 'A',
+          label: 'Detalhar saídas realizadas',
+          domain: 'REALIZED_CASH',
+          operation: 'MOVEMENTS',
+          objective: 'Maiores saídas',
+          steps: [
+            {
+              toolName: 'cash_cost_center_movement_lines',
+              filters: { monthKey: '2026-08', direction: 'OUTFLOW', limit: 5 },
+            },
+          ],
+        },
+        {
+          id: 'B',
+          label: 'Aprofundar contas a pagar',
+          domain: 'PAYABLE',
+          operation: 'RANKING_TOPN',
+          objective: 'Títulos a pagar',
+          steps: [
+            {
+              toolName: 'payable_titles',
+              filters: { monthKey: '2026-08', ordering: 'VALUE_DESC', limit: 5 },
+            },
+          ],
+        },
+      ],
+      now: NOW,
+    });
+    expect(pending).not.toBeNull();
+    expect(isPendingAlternativesOffer(pending!)).toBe(true);
+    expect(buildPendingAlternativesClarification(pending!)).toMatch(
+      /Detalhar saídas|contas a pagar/i,
+    );
+
+    const harness = createHarness({
+      byKey: {},
+      initialBag: mergeAdvisorConversationBag(emptyAdvisorConversationBag(), {
+        pendingAnalyticalAction: pending,
+      }),
+      resolvePendingText: JSON.stringify({ decision: 'ACCEPT' }),
+    });
+    const result = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quero, pode seguir.',
+      now: NOW,
+    });
+    expect(result.consultantMessage.content).toMatch(/prefere|caminho|1\.|2\./i);
+    const bag =
+      harness.savedContexts.at(-1) ??
+      parseAdvisorConversationBag(harness.getAnalyticalContext());
+    expect(bag.slots.pendingAnalyticalAction?.status).toBe('PENDING');
+    expect(bag.slots.pendingAnalyticalAction?.offerKind).toBe('ALTERNATIVES');
+  });
+});
+
 describe('C.2.7 G — pergunta composta', () => {
   it('G1 — faturamento → dez maiores gastos de outro centro = NEW_QUERY', () => {
     const prior = lastAnalyticalQueryFromBilling({
