@@ -319,6 +319,7 @@ export {
   assembleCostCenterOutflowMovementsPlan,
   extractCostCenterEntityFollowUp,
   extractOutflowMovementsCostCenterMention,
+  isCostCenterOutflowMovementsPeriodFollowUp,
   matchesCostCenterOutflowMovementsFamily,
 } from './assemble-cost-center-outflow-movements-plan.js';
 export type {
@@ -659,33 +660,79 @@ export type {
   AdvisorConversationBagSlots,
 } from './advisor-conversation-bag.js';
 export {
+  LAST_ANALYTICAL_EXECUTION_STATUSES,
+  LAST_ANALYTICAL_QUERY_COVERED_KEYS,
+  LAST_ANALYTICAL_QUERY_KIND,
+  LAST_ANALYTICAL_QUERY_VERSION,
+  buildLastAnalyticalQuery,
+  isLastAnalyticalQueryCoveredKey,
+  isPersistableAnalyticalExecutionStatus,
+  normalizePersistableExecutionStatus,
+  parseLastAnalyticalQuery,
+} from './last-analytical-query.js';
+export type {
+  LastAnalyticalExecutionStatus,
+  LastAnalyticalQuery,
+  LastAnalyticalQueryCoveredKey,
+} from './last-analytical-query.js';
+export {
+  applyAnalyticalDimensionPatch,
+  patchPeriodMonthKey,
+} from './analytical-dimension-patch.js';
+export type {
+  AnalyticalDimensionPatch,
+  ApplyAnalyticalDimensionPatchResult,
+} from './analytical-dimension-patch.js';
+export {
+  ANALYTICAL_CONTINUITY_DECISIONS,
+  classifyAnalyticalContinuity,
+  extractContinuityEntityFollowUp,
+} from './classify-analytical-continuity.js';
+export type {
+  AnalyticalContinuityDecision,
+  ClassifyAnalyticalContinuityResult,
+} from './classify-analytical-continuity.js';
+export { runAnalyticalContinuityAnswer } from './run-analytical-continuity-answer.js';
+export type { AnalyticalContinuityAnswer } from './run-analytical-continuity-answer.js';
+export {
+  resolveSemanticAnalyticalContinuity,
+  shouldAttemptSemanticContinuity,
+} from './resolve-semantic-analytical-continuity.js';
+export type { SemanticContinuityProposal } from './resolve-semantic-analytical-continuity.js';
+export {
   PENDING_ANALYTICAL_ACTION_KIND,
   PENDING_ANALYTICAL_ACTION_TTL_MS,
   PENDING_ANALYTICAL_ACTION_VERSION,
   PENDING_ALLOWED_TOOLS,
   PENDING_ANALYTICAL_DOMAINS,
   PENDING_ANALYTICAL_OPERATIONS,
+  PENDING_OFFER_KINDS,
   PENDING_RESOLUTION_DECISIONS,
   applyPendingPatch,
+  buildPendingAlternativesClarification,
   buildToolArgumentsFromPendingStep,
   createPendingAnalyticalAction,
   isCapabilityCompatible,
   isPendingActionExecutable,
   isPendingAllowedTool,
+  isPendingAlternativesOffer,
   isPendingAnalyticalDomain,
   isPendingAnalyticalOperation,
   markPendingConsumed,
   markPendingExpired,
   markPendingRejected,
+  materializePendingAlternative,
   parsePendingAnalyticalAction,
   parsePendingResolutionResult,
   pendingActionHasSnapshotPreloadStep,
 } from './pending-analytical-action.js';
 export type {
   PendingAnalyticalAction,
+  PendingAnalyticalAlternative,
   PendingAnalyticalFilters,
   PendingAnalyticalPatch,
   PendingAnalyticalStep,
+  PendingOfferKind,
   PendingResolutionDecision,
   PendingResolutionResult,
 } from './pending-analytical-action.js';

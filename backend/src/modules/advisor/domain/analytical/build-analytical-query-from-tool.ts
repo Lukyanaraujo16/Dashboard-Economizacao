@@ -255,6 +255,39 @@ export function buildCurrentSnapshotQuery(): AnalyticalQuery {
   };
 }
 
+export function buildBillingCostCenterMonthQuery(input: {
+  readonly monthKey: string;
+  readonly costCenterQuery: string;
+}): AnalyticalQuery {
+  return {
+    semanticFamily: 'BILLING',
+    metric: 'BILLING',
+    period: { kind: 'MONTH', monthKey: input.monthKey },
+    dimension: 'COST_CENTER',
+    operation: 'VALUE',
+    filters: { costCenterQuery: input.costCenterQuery.trim() },
+  };
+}
+
+export function buildBillingCostCenterSeriesQuery(input: {
+  readonly endMonthKey: string;
+  readonly count: number;
+  readonly costCenterQuery: string;
+}): AnalyticalQuery {
+  return {
+    semanticFamily: 'BILLING',
+    metric: 'BILLING',
+    period: {
+      kind: 'MONTH_WINDOW',
+      endMonthKey: input.endMonthKey,
+      count: input.count,
+    },
+    dimension: 'COST_CENTER',
+    operation: 'VALUE',
+    filters: { costCenterQuery: input.costCenterQuery.trim() },
+  };
+}
+
 export function buildFinancialFactsMonthQuery(input: {
   readonly monthKey: string;
   readonly metric?: 'BILLING' | 'REALIZED_CASH' | 'CASH_RESULT';

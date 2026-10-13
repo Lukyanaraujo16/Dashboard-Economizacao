@@ -10,15 +10,18 @@ import {
   parsePendingAnalyticalAction,
   parsePendingResolutionResult,
   type PendingAnalyticalAction,
+  type PendingAnalyticalAlternative,
   type PendingAnalyticalDomain,
   type PendingAnalyticalFilters,
   type PendingAnalyticalOperation,
   type PendingAnalyticalStep,
   type PendingAllowedTool,
+  type PendingOfferKind,
   type PendingResolutionResult,
   isPendingAllowedTool,
   isPendingAnalyticalDomain,
   isPendingAnalyticalOperation,
+  PENDING_OFFER_KINDS,
 } from './pending-analytical-action.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -55,22 +58,23 @@ const EXTRACT_INSTRUCTIONS = [
   'Decida semanticamente se a resposta do assistente oferece ao usuário uma próxima ação analítica concreta e executável.',
   'Não dependa de palavras literais (posso/se quiser/quer que). Avalie o significado da oferta.',
   'Responda SOMENTE JSON válido, sem markdown.',
-  'Schema:',
-  '{"decision":"NO_PENDING_ACTION"}',
-  'ou',
-  '{"decision":"PENDING_ANALYTICAL_ACTION","domain":"PAYABLE|REALIZED_CASH|SNAPSHOT","operation":"RANKING_TOPN|MOVEMENTS|VALUE|LOOKUP|CURRENT_POSITION","objective":"string<=200","offerSnippet":"string<=400","steps":[{"toolName":"payable_titles|cash_movement_lines|cash_realized_breakdown|cash_cost_center_movement_lines|null","filters":{"monthKey":"YYYY-MM?","status":"OPEN|PAID|OVERDUE|ALL?","ordering":"VALUE_DESC|DUE_DATE_ASC?","limit":1-20?,"costCenterQuery":"string?","direction":"INFLOW|OUTFLOW?"}}]}',
+  'Schema SINGLE/COMPOUND:',
+  '{"decision":"PENDING_ANALYTICAL_ACTION","offerKind":"SINGLE|COMPOUND","domain":"PAYABLE|REALIZED_CASH|SNAPSHOT","operation":"RANKING_TOPN|MOVEMENTS|VALUE|LOOKUP|CURRENT_POSITION","objective":"string<=200","offerSnippet":"string<=400","steps":[{"toolName":"payable_titles|cash_movement_lines|cash_realized_breakdown|cash_cost_center_movement_lines|null","filters":{...}}]}',
+  'Schema ALTERNATIVES (A OU B — escolha exclusiva, NÃO execute ambos):',
+  '{"decision":"PENDING_ANALYTICAL_ACTION","offerKind":"ALTERNATIVES","domain":"<domain da 1ª opção>","operation":"<operation da 1ª opção>","objective":"string<=200","offerSnippet":"string<=400","steps":[<steps da 1ª opção>],"alternatives":[{"id":"A","label":"string<=160","domain":"...","operation":"...","objective":"...","steps":[...]},{"id":"B",...}]}',
+  'ou {"decision":"NO_PENDING_ACTION"}',
   'Regras:',
   '- Só use tools/domains/operations da allowlist.',
   '- Nunca inclua tenantId, costCenterId, userId, SQL ou capability inventada.',
-  '- Oferta composta (ex.: posição atual do caixa + títulos vencidos/compromissos):',
-  '  domain=SNAPSHOT, operation=CURRENT_POSITION,',
-  '  steps: [{toolName:null, filters:{monthKey}} para posição/caixa via FINANCIAL_FACTS,',
-  '          {toolName:"payable_titles", filters:{status:"OVERDUE"|OPEN, ordering, limit, monthKey}}].',
-  '- Inclua TODOS os steps da oferta composta quando TODOS forem allowlisted.',
-  '- Se QUALQUER etapa da oferta composta NÃO for representável com segurança → NO_PENDING_ACTION (não mutile a oferta).',
-  '- Se a oferta for uma única ação independente clara → um step basta.',
+  '- COMPOUND = usuário receberá A E B juntos (ex.: caixa + vencidos na mesma leitura).',
+  '- ALTERNATIVES = assistente ofereceu caminhos mutuamente exclusivos (1. ... ou 2. ...).',
+  '  NÃO modele ALTERNATIVES como COMPOUND. Cada alternativa é uma ação allowlisted completa.',
+  '- Oferta composta AND: offerKind=COMPOUND, domain=SNAPSHOT quando misturar preload+payable,',
+  '  steps com TODOS os passos allowlisted; se algum não for representável → NO_PENDING_ACTION.',
+  '- Oferta única → offerKind=SINGLE, um step basta.',
+  '- Se alguma alternativa de ALTERNATIVES for inválida/insegura → NO_PENDING_ACTION (não mutile).',
   '- Se não houver próxima ação analítica executável → NO_PENDING_ACTION.',
-  '- offerSnippet deve citar a oferta do assistente, não a pergunta do usuário.',
+  '- offerSnippet / label devem citar a oferta do assistente, não a pergunta do usuário.',
 ].join('\n');
 
 const RESOLVE_INSTRUCTIONS = [
@@ -80,16 +84,23 @@ const RESOLVE_INSTRUCTIONS = [
   'Responda SOMENTE JSON válido, sem markdown.',
   'Schema:',
   '{"decision":"ACCEPT"}',
+  '{"decision":"AMBIGUOUS_ACCEPT"}',
+  '{"decision":"SELECT_ALTERNATIVE","alternativeId":"A|B|..."}',
   '{"decision":"REJECT"}',
   '{"decision":"UNRELATED"}',
   '{"decision":"MODIFY","patch":{"monthKey":"YYYY-MM?","status":"OPEN|PAID|OVERDUE|ALL?","ordering":"VALUE_DESC|DUE_DATE_ASC?","limit":1-20?,"costCenterQuery":"string?","direction":"INFLOW|OUTFLOW?"}}',
   'Regras:',
-  '- ACCEPT = usuário aceita a ação pendente (qualquer formulação natural equivalente).',
-  '- MODIFY = aceita com alteração allowlisted (centro, mês, limit, status, ordering, direction).',
-  '- REJECT = recusa seguir com a ação.',
+  '- Se offerKind=SINGLE|COMPOUND: ACCEPT = aceita executar a ação (ou o composto AND).',
+  '- Se offerKind=ALTERNATIVES:',
+  '  ACCEPT genérico sem escolher opção ("quero", "pode seguir", "manda ver") → AMBIGUOUS_ACCEPT.',
+  '  Escolha clara de uma opção (ordinal, paráfrase do label, domínio) → SELECT_ALTERNATIVE + alternativeId.',
+  '  Pedido explícito de "os dois" sem confirmação estruturada → AMBIGUOUS_ACCEPT (não execute ambos).',
+  '- MODIFY = aceita com alteração allowlisted (só SINGLE/COMPOUND).',
+  '- REJECT = recusa seguir.',
   '- UNRELATED = nova pergunta independente.',
   '- Nunca invente tool/domain/capability. Nunca envie tenantId/costCenterId/SQL.',
   '- MODIFY exige patch com pelo menos um campo permitido.',
+  '- SELECT_ALTERNATIVE exige alternativeId de uma opção listada em PENDING.',
 ].join('\n');
 
 export type PendingExtractEvidence = {
@@ -167,8 +178,67 @@ export async function extractPendingAnalyticalActionFromOffer(input: {
     return null;
   }
 
+  const offerKind = coerceOfferKind(parsed.offerKind, Array.isArray(parsed.alternatives));
+  if (offerKind === null) {
+    return null;
+  }
+
+  const steps = coerceSteps(parsed.steps, input.resolvedMonthKey);
+  if (steps === null || steps.length === 0) {
+    return null;
+  }
+
+  if (offerKind === 'ALTERNATIVES') {
+    const alternatives = coerceAlternatives(parsed.alternatives, input.resolvedMonthKey);
+    if (alternatives === null) {
+      return null;
+    }
+    // Shell top-level: 1ª alternativa (compat com steps obrigatórios).
+    const first = alternatives[0]!;
+    return createPendingAnalyticalAction({
+      id: randomUUID(),
+      createdFromMessageId: input.createdFromMessageId,
+      domain: first.domain,
+      operation: first.operation,
+      steps: first.steps,
+      objective: parsed.objective,
+      offerSnippet: parsed.offerSnippet,
+      offerKind: 'ALTERNATIVES',
+      alternatives,
+      now: input.now,
+    });
+  }
+
+  return createPendingAnalyticalAction({
+    id: randomUUID(),
+    createdFromMessageId: input.createdFromMessageId,
+    domain: parsed.domain as PendingAnalyticalDomain,
+    operation: parsed.operation as PendingAnalyticalOperation,
+    steps,
+    objective: parsed.objective,
+    offerSnippet: parsed.offerSnippet,
+    offerKind,
+    alternatives: null,
+    now: input.now,
+  });
+}
+
+function coerceOfferKind(raw: unknown, hasAlternatives: boolean): PendingOfferKind | null {
+  if (raw === undefined || raw === null) {
+    return hasAlternatives ? 'ALTERNATIVES' : 'SINGLE';
+  }
+  if (typeof raw !== 'string' || !(PENDING_OFFER_KINDS as readonly string[]).includes(raw)) {
+    return null;
+  }
+  return raw as PendingOfferKind;
+}
+
+function coerceSteps(
+  rawSteps: unknown[],
+  resolvedMonthKey: string,
+): PendingAnalyticalStep[] | null {
   const steps: PendingAnalyticalStep[] = [];
-  for (const raw of parsed.steps.slice(0, 3)) {
+  for (const raw of rawSteps.slice(0, 3)) {
     if (!isRecord(raw)) {
       return null;
     }
@@ -180,26 +250,53 @@ export async function extractPendingAnalyticalActionFromOffer(input: {
     } else {
       return null;
     }
-    const filters = coerceFilters(raw.filters, input.resolvedMonthKey);
+    const filters = coerceFilters(raw.filters, resolvedMonthKey);
     if (filters === null) {
       return null;
     }
     steps.push({ toolName, filters });
   }
-  if (steps.length === 0) {
+  return steps;
+}
+
+function coerceAlternatives(
+  value: unknown,
+  resolvedMonthKey: string,
+): readonly PendingAnalyticalAlternative[] | null {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 3) {
     return null;
   }
-
-  return createPendingAnalyticalAction({
-    id: randomUUID(),
-    createdFromMessageId: input.createdFromMessageId,
-    domain: parsed.domain as PendingAnalyticalDomain,
-    operation: parsed.operation as PendingAnalyticalOperation,
-    steps,
-    objective: parsed.objective,
-    offerSnippet: parsed.offerSnippet,
-    now: input.now,
-  });
+  const out: PendingAnalyticalAlternative[] = [];
+  for (const raw of value) {
+    if (!isRecord(raw)) {
+      return null;
+    }
+    if (
+      typeof raw.id !== 'string' ||
+      typeof raw.label !== 'string' ||
+      typeof raw.domain !== 'string' ||
+      !isPendingAnalyticalDomain(raw.domain) ||
+      typeof raw.operation !== 'string' ||
+      !isPendingAnalyticalOperation(raw.operation) ||
+      typeof raw.objective !== 'string' ||
+      !Array.isArray(raw.steps)
+    ) {
+      return null;
+    }
+    const steps = coerceSteps(raw.steps, resolvedMonthKey);
+    if (steps === null || steps.length === 0) {
+      return null;
+    }
+    out.push({
+      id: raw.id.trim(),
+      label: raw.label.trim(),
+      domain: raw.domain as PendingAnalyticalDomain,
+      operation: raw.operation as PendingAnalyticalOperation,
+      steps,
+      objective: raw.objective.trim(),
+    });
+  }
+  return out;
 }
 
 function coerceFilters(
@@ -226,6 +323,8 @@ function coerceFilters(
     objective: 'probe',
     offerSnippet: 'probe',
     status: 'PENDING',
+    offerKind: 'SINGLE',
+    alternatives: null,
   });
   if (probe === null) {
     return null;
@@ -257,11 +356,13 @@ export async function resolvePendingAnalyticalActionDecision(input: {
         'PENDING_ANALYTICAL_ACTION:',
         JSON.stringify({
           id: input.pending.id,
+          offerKind: input.pending.offerKind,
           domain: input.pending.domain,
           operation: input.pending.operation,
           objective: input.pending.objective,
           offerSnippet: input.pending.offerSnippet,
           steps: input.pending.steps,
+          alternatives: input.pending.alternatives,
           status: input.pending.status,
           expiresAt: input.pending.expiresAt,
         }),

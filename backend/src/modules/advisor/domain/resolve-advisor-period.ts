@@ -167,6 +167,32 @@ type NamedPeriodMention = {
   readonly year?: string;
 };
 
+/**
+ * "dez" é ambíguo em PT: abreviação de dezembro e cardinal "10"
+ * ("os dez maiores", "top dez"). Só trata "dez" como mês quando o
+ * contexto temporal é inequívoco (dezembro por extenso, "em/de dez",
+ * ou "dez" + ano). Cardinalidade de ranking nunca conta como período.
+ */
+function isAmbiguousDezAsTen(folded: string, matchIndex: number, matched: string): boolean {
+  if (foldPt(matched) !== 'dez') {
+    return false;
+  }
+  const before = folded.slice(Math.max(0, matchIndex - 8), matchIndex);
+  const after = folded.slice(matchIndex + matched.length, matchIndex + matched.length + 24);
+  if (/\bos\s+$/.test(before) || /\btop\s+$/.test(before)) {
+    return true;
+  }
+  if (/^\s+maior/.test(after) || /^\s+(?:gastos?|despesas?|saidas?|lancamentos?)\b/.test(after)) {
+    return true;
+  }
+  // "dez" nu sem marcador temporal (em/de) — não inventa dezembro.
+  const temporalCue =
+    /(?:^|[\s,;:])(?:em|de|para|desde|ate)\s+$/.test(before) ||
+    /^\s*(?:de\s*)?\d{4}\b/.test(after) ||
+    /^\s*\/\s*\d{4}\b/.test(after);
+  return !temporalCue;
+}
+
 function collectNamedPeriodMentions(folded: string): NamedPeriodMention[] {
   const mentions: NamedPeriodMention[] = [];
   const occupied: Array<{ readonly start: number; readonly end: number }> = [];
@@ -204,6 +230,9 @@ function collectNamedPeriodMentions(folded: string): NamedPeriodMention[] {
     if (match.index === undefined) {
       return;
     }
+    if (isAmbiguousDezAsTen(folded, match.index, match[1] ?? '')) {
+      return;
+    }
     const month = monthNumberFromName(match[1] ?? '');
     if (month === undefined) {
       return;
@@ -217,6 +246,9 @@ function collectNamedPeriodMentions(folded: string): NamedPeriodMention[] {
   const namedSlashYear = new RegExp(`\\b(${MONTH_NAME_PATTERN})\\b\\s*/\\s*(\\d{4})`, 'g');
   pushMatches(folded, namedSlashYear, (match) => {
     if (match.index === undefined) {
+      return;
+    }
+    if (isAmbiguousDezAsTen(folded, match.index, match[1] ?? '')) {
       return;
     }
     const month = monthNumberFromName(match[1] ?? '');
@@ -237,6 +269,9 @@ function collectNamedPeriodMentions(folded: string): NamedPeriodMention[] {
       (span) => match.index! < span.end && match.index! + match[0].length > span.start,
     );
     if (overlaps) {
+      return;
+    }
+    if (isAmbiguousDezAsTen(folded, match.index, match[1] ?? '')) {
       return;
     }
     const month = monthNumberFromName(match[1] ?? '');
@@ -281,6 +316,9 @@ function collectBareMonthNumbers(folded: string): string[] {
     .replace(/\b(0?[1-9]|1[0-2])[/-]\d{4}\b/g, ' ');
   const months: string[] = [];
   pushMatches(stripped, new RegExp(`\\b(${MONTH_NAME_PATTERN})\\b`, 'g'), (match) => {
+    if (match.index !== undefined && isAmbiguousDezAsTen(stripped, match.index, match[1] ?? '')) {
+      return;
+    }
     const month = monthNumberFromName(match[1] ?? '');
     if (month !== undefined) {
       months.push(month);

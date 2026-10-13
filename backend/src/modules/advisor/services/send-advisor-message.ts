@@ -30,6 +30,12 @@ import {
 import { isAdvisorInterpretiveQuestion } from '../domain/classify-advisor-factual-response.js';
 import { runAdvisorMonthlyPlanning } from '../domain/run-advisor-monthly-planning.js';
 import { runAdvisorBillingAnswer } from '../domain/run-advisor-billing-answer.js';
+import { runAdvisorBillingCostCenterAnswer } from '../domain/run-advisor-billing-cost-center-answer.js';
+import {
+  extractAdvisorBillingCostCenterMention,
+  resolveAdvisorBillingIntent,
+  resolveAdvisorBillingIntentForCostCenter,
+} from '../domain/resolve-advisor-billing-intent.js';
 import { runAdvisorDailyCashMovement } from '../domain/run-advisor-daily-cash-movement.js';
 import type { CashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
 import type { CostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
@@ -71,12 +77,26 @@ import {
   serializeAdvisorConversationBag,
   type AdvisorConversationBag,
 } from '../domain/advisor-conversation-bag.js';
+import { applyAnalyticalDimensionPatch } from '../domain/analytical-dimension-patch.js';
+import { classifyAnalyticalContinuity } from '../domain/classify-analytical-continuity.js';
+import {
+  lastAnalyticalQueryFromBilling,
+  lastAnalyticalQueryFromCostCenterMovements,
+} from '../domain/build-last-analytical-query-from-answer.js';
+import { runAnalyticalContinuityAnswer } from '../domain/run-analytical-continuity-answer.js';
+import {
+  resolveSemanticAnalyticalContinuity,
+  shouldAttemptSemanticContinuity,
+} from '../domain/resolve-semantic-analytical-continuity.js';
 import {
   applyPendingPatch,
+  buildPendingAlternativesClarification,
   isPendingActionExecutable,
+  isPendingAlternativesOffer,
   markPendingConsumed,
   markPendingExpired,
   markPendingRejected,
+  materializePendingAlternative,
   pendingActionHasSnapshotPreloadStep,
   type PendingAnalyticalAction,
 } from '../domain/pending-analytical-action.js';
@@ -506,6 +526,43 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       }
 
       const priorState = conversationBag.slots.counterparty;
+      if (
+        questionDemand.wantsAccountingProfit &&
+        !isAdvisorInterpretiveQuestion(question)
+      ) {
+        const content =
+          'Não tenho um indicador oficial de lucro contábil (competência) nesta base. O resultado de caixa realizado não substitui lucro líquido, lucro contábil, EBITDA nem margem.';
+        const consultantMessage = await deps.conversations.createMessage(
+          tenantId,
+          conversation.id,
+          { senderType: 'CONSULTANT', content },
+        );
+        const analyticalOutcome = await recordTrail({
+          consultantMessageId: consultantMessage.id,
+          runId: null,
+          answerSource: 'CAPABILITY_DENIED',
+          toolRoundCount: 0,
+          traces: [],
+          facts: closedTrailFacts('UNAVAILABLE'),
+        });
+        return {
+          conversationId: conversation.id,
+          userMessage,
+          consultantMessage,
+          run: null,
+          factualAnswer: {
+            classification: 'FACTUAL_CLOSED',
+            providerCalled: false,
+            intentKind: 'FACTUAL_LIMITATION',
+            factKind: null,
+            identityStatus: null,
+            returnedCount: null,
+            coveragePercent: null,
+            composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+          },
+          analyticalOutcome,
+        };
+      }
       if (deps.monthlyPlanning !== undefined && !isAdvisorInterpretiveQuestion(question)) {
         const planned = await runAdvisorMonthlyPlanning({
           content: question,
@@ -551,45 +608,226 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         }
       }
       if (deps.monthlyPlanning !== undefined && !isAdvisorInterpretiveQuestion(question)) {
-        const billing = await runAdvisorBillingAnswer({
-          content: question,
-          tenantId,
-          monthKey: period.monthKey,
-          now: input.now,
-          cashFlow: deps.monthlyPlanning.cashFlow,
-        });
-        if (billing !== null) {
-          const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
-            senderType: 'CONSULTANT',
-            content: billing.answer,
+        const billingCcScope = questionDemand.explicitCostCenter;
+        const billingForCostCenter = resolveAdvisorBillingIntentForCostCenter(question);
+        const billingTenant = resolveAdvisorBillingIntent(question);
+        const billingCcMention =
+          billingCcScope.status === 'FOUND' || billingCcScope.status === 'AMBIGUOUS'
+            ? billingCcScope.query
+            : extractAdvisorBillingCostCenterMention(question);
+        const wantsBillingCostCenter =
+          billingForCostCenter !== null &&
+          (billingCcScope.status === 'FOUND' ||
+            billingCcScope.status === 'AMBIGUOUS' ||
+            billingCcMention !== null);
+
+        if (wantsBillingCostCenter) {
+          if (billingCcScope.status === 'AMBIGUOUS') {
+            const content =
+              'Há mais de um centro de custo correspondente. Especifique o nome ou o código.';
+            const consultantMessage = await deps.conversations.createMessage(
+              tenantId,
+              conversation.id,
+              { senderType: 'CONSULTANT', content },
+            );
+            const analyticalOutcome = await recordTrail({
+              consultantMessageId: consultantMessage.id,
+              runId: null,
+              answerSource: 'BILLING',
+              toolRoundCount: 0,
+              traces: [],
+              facts: {
+                ...closedTrailFacts('AMBIGUOUS'),
+                clarificationRequired: true,
+              },
+            });
+            return {
+              conversationId: conversation.id,
+              userMessage,
+              consultantMessage,
+              run: null,
+              factualAnswer: {
+                classification: 'FACTUAL_CLOSED',
+                providerCalled: false,
+                intentKind: 'FACTUAL_LIMITATION',
+                factKind: 'BILLING_COST_CENTER_MONTH',
+                identityStatus: null,
+                returnedCount: null,
+                coveragePercent: null,
+                composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+              },
+              analyticalOutcome,
+            };
+          }
+
+          if (deps.dailyCashMovements === undefined) {
+            const content =
+              'Não consigo consultar o faturamento oficial por centro de custo neste momento (catálogo indisponível).';
+            const consultantMessage = await deps.conversations.createMessage(
+              tenantId,
+              conversation.id,
+              { senderType: 'CONSULTANT', content },
+            );
+            const analyticalOutcome = await recordTrail({
+              consultantMessageId: consultantMessage.id,
+              runId: null,
+              answerSource: 'BILLING',
+              toolRoundCount: 0,
+              traces: [],
+              facts: closedTrailFacts('UNAVAILABLE'),
+            });
+            return {
+              conversationId: conversation.id,
+              userMessage,
+              consultantMessage,
+              run: null,
+              factualAnswer: {
+                classification: 'FACTUAL_CLOSED',
+                providerCalled: false,
+                intentKind: 'FACTUAL_LIMITATION',
+                factKind: 'BILLING_COST_CENTER_MONTH',
+                identityStatus: null,
+                returnedCount: null,
+                coveragePercent: null,
+                composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+              },
+              analyticalOutcome,
+            };
+          }
+
+          const costCenterQueryForBilling =
+            billingCcScope.status === 'FOUND'
+              ? billingCcScope.query
+              : (billingCcMention ?? '');
+          // Sem menção resolvível: não inventa consolidado neste ramo.
+          if (costCenterQueryForBilling !== '') {
+            const billingCc = await runAdvisorBillingCostCenterAnswer({
+              content: question,
+              tenantId,
+              monthKey: period.monthKey,
+              costCenterQuery: costCenterQueryForBilling,
+              now: input.now,
+              cashFlow: deps.monthlyPlanning.cashFlow,
+              costCenters: deps.dailyCashMovements.costCenters,
+            });
+            if (billingCc !== null) {
+              const consultantMessage = await deps.conversations.createMessage(
+                tenantId,
+                conversation.id,
+                { senderType: 'CONSULTANT', content: billingCc.answer },
+              );
+              const billingSource: AnalyticalAnswerSource =
+                billingCc.intentKind === 'BILLING_SERIES' ? 'BILLING_SERIES' : 'BILLING';
+              const analyticalOutcome = await recordTrail({
+                consultantMessageId: consultantMessage.id,
+                runId: null,
+                answerSource: billingSource,
+                toolRoundCount: 0,
+                traces: [],
+                facts: closedTrailFacts(billingCc.structuredStatus),
+              });
+              // UNAVAILABLE / NOT_FOUND / AMBIGUOUS não promovem last — só OK.
+              if (billingCc.structuredStatus === 'OK') {
+                const billingCcLast = lastAnalyticalQueryFromBilling({
+                  capabilityKey: billingCc.capabilityKey,
+                  monthKey: period.monthKey,
+                  count:
+                    billingForCostCenter?.kind === 'MONTH_SERIES'
+                      ? billingForCostCenter.count
+                      : undefined,
+                  costCenterQuery: costCenterQueryForBilling,
+                  structuredStatus: 'OK',
+                });
+                if (billingCcLast !== null) {
+                  await persistBag(
+                    mergeAdvisorConversationBag(conversationBag, {
+                      lastAnalyticalQuery: billingCcLast,
+                    }),
+                  );
+                }
+              }
+              return {
+                conversationId: conversation.id,
+                userMessage,
+                consultantMessage,
+                run: null,
+                factualAnswer: {
+                  classification: 'FACTUAL_CLOSED',
+                  providerCalled: false,
+                  intentKind: billingCc.intentKind,
+                  factKind: billingCc.factKind,
+                  identityStatus: null,
+                  returnedCount: null,
+                  coveragePercent: null,
+                  composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+                },
+                analyticalOutcome,
+              };
+            }
+          }
+        } else if (
+          billingTenant !== null &&
+          billingCcScope.status === 'ABSENT' &&
+          billingCcMention === null
+        ) {
+          const billing = await runAdvisorBillingAnswer({
+            content: question,
+            tenantId,
+            monthKey: period.monthKey,
+            now: input.now,
+            cashFlow: deps.monthlyPlanning.cashFlow,
           });
-          const billingSource: AnalyticalAnswerSource =
-            billing.intentKind === 'BILLING_SERIES' ? 'BILLING_SERIES' : 'BILLING';
-          const analyticalOutcome = await recordTrail({
-            consultantMessageId: consultantMessage.id,
-            runId: null,
-            answerSource: billingSource,
-            toolRoundCount: 0,
-            traces: [],
-            facts: closedTrailFacts('OK'),
-          });
-          return {
-            conversationId: conversation.id,
-            userMessage,
-            consultantMessage,
-            run: null,
-            factualAnswer: {
-              classification: 'FACTUAL_CLOSED',
-              providerCalled: false,
-              intentKind: billing.intentKind,
-              factKind: billing.factKind,
-              identityStatus: null,
-              returnedCount: null,
-              coveragePercent: null,
-              composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
-            },
-            analyticalOutcome,
-          };
+          if (billing !== null) {
+            const consultantMessage = await deps.conversations.createMessage(
+              tenantId,
+              conversation.id,
+              {
+                senderType: 'CONSULTANT',
+                content: billing.answer,
+              },
+            );
+            const billingSource: AnalyticalAnswerSource =
+              billing.intentKind === 'BILLING_SERIES' ? 'BILLING_SERIES' : 'BILLING';
+            const analyticalOutcome = await recordTrail({
+              consultantMessageId: consultantMessage.id,
+              runId: null,
+              answerSource: billingSource,
+              toolRoundCount: 0,
+              traces: [],
+              facts: closedTrailFacts('OK'),
+            });
+            const billingLast = lastAnalyticalQueryFromBilling({
+              capabilityKey: billing.capabilityKey,
+              monthKey: period.monthKey,
+              count:
+                billingTenant.kind === 'MONTH_SERIES' ? billingTenant.count : undefined,
+              structuredStatus: 'OK',
+            });
+            if (billingLast !== null) {
+              await persistBag(
+                mergeAdvisorConversationBag(conversationBag, {
+                  lastAnalyticalQuery: billingLast,
+                }),
+              );
+            }
+            return {
+              conversationId: conversation.id,
+              userMessage,
+              consultantMessage,
+              run: null,
+              factualAnswer: {
+                classification: 'FACTUAL_CLOSED',
+                providerCalled: false,
+                intentKind: billing.intentKind,
+                factKind: billing.factKind,
+                identityStatus: null,
+                returnedCount: null,
+                coveragePercent: null,
+                composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+              },
+              analyticalOutcome,
+            };
+          }
         }
       }
       if (deps.dailyCashMovements !== undefined && !isAdvisorInterpretiveQuestion(question)) {
@@ -889,6 +1127,40 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
               analyticalOutcome: movementsAnswer.analyticalOutcome,
             };
           }
+        }
+      }
+
+      // C.2.4/C.2.5 — continuidade tipada sobre lastAnalyticalQuery (após C.1).
+      if (
+        !isAdvisorInterpretiveQuestion(question) &&
+        deps.monthlyPlanning !== undefined
+      ) {
+        const continuity = await answerAnalyticalContinuityTurn({
+          question,
+          period,
+          tenantId,
+          conversationId: conversation.id,
+          now: input.now,
+          conversationBag,
+          persistBag,
+          monthlyPlanning: deps.monthlyPlanning,
+          dailyCashMovements: deps.dailyCashMovements,
+          analyticalTools: deps.analyticalTools,
+          providers: deps.providers,
+          readyProvider: ready.provider,
+          model,
+          conversations: deps.conversations,
+          recordTrail,
+        });
+        if (continuity !== null) {
+          return {
+            conversationId: conversation.id,
+            userMessage,
+            consultantMessage: continuity.consultantMessage,
+            run: null,
+            factualAnswer: continuity.factualAnswer,
+            analyticalOutcome: continuity.analyticalOutcome,
+          };
         }
       }
 
@@ -2175,6 +2447,301 @@ function readWinnerFromToolContent(
   }
 }
 
+async function answerAnalyticalContinuityTurn(input: {
+  readonly question: string;
+  readonly period: ReturnType<typeof resolveAdvisorConversationalPeriod>;
+  readonly tenantId: string;
+  readonly conversationId: string;
+  readonly now?: Date;
+  readonly conversationBag: AdvisorConversationBag;
+  readonly persistBag: (next: AdvisorConversationBag) => Promise<void>;
+  readonly monthlyPlanning: MonthlyPlanningServices;
+  readonly dailyCashMovements?: SendAdvisorMessageDependencies['dailyCashMovements'];
+  readonly analyticalTools?: AdvisorAnalyticalToolExecutor;
+  readonly providers: IaProviderRegistry;
+  readonly readyProvider: GenerationInput['provider'];
+  readonly model: string;
+  readonly conversations: Pick<AdvisorConversationRepository, 'createMessage'>;
+  readonly recordTrail: (input: {
+    readonly consultantMessageId: string | null;
+    readonly runId: string | null;
+    readonly answerSource: AnalyticalAnswerSource;
+    readonly toolRoundCount: number;
+    readonly traces: readonly AnalyticalToolTraceDraft[];
+    readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+  }) => Promise<AnalyticalOutcome>;
+}): Promise<{
+  readonly consultantMessage: AiMessageRecord;
+  readonly factualAnswer: SendAdvisorMessageResult['factualAnswer'];
+  readonly analyticalOutcome: AnalyticalOutcome;
+} | null> {
+  const prior = input.conversationBag.slots.lastAnalyticalQuery;
+  let classified = classifyAnalyticalContinuity({
+    content: input.question,
+    period: input.period,
+    prior,
+  });
+
+  // C.2.5 — no máximo 1 chamada extra quando determinístico ficou CLARIFY.
+  if (
+    shouldAttemptSemanticContinuity({
+      content: input.question,
+      deterministicDecision: classified.decision,
+      prior,
+    }) &&
+    prior !== null
+  ) {
+    try {
+      const provider = input.providers.resolve(input.readyProvider);
+      if (provider.id === input.readyProvider) {
+        const semantic = await resolveSemanticAnalyticalContinuity({
+          provider,
+          providerId: input.readyProvider,
+          model: input.model,
+          tenantId: input.tenantId,
+          userMessage: input.question,
+          prior,
+        });
+        if (semantic.decision === 'CONTINUE') {
+          classified = {
+            decision: 'CONTINUE',
+            patch: semantic.patch,
+            inherited: true,
+          };
+        } else if (semantic.decision === 'NEW_QUERY') {
+          return null;
+        } else if (semantic.decision === 'CLARIFY') {
+          const content =
+            semantic.message ??
+            'Pode esclarecer o que deseja alterar na consulta anterior?';
+          const consultantMessage = await input.conversations.createMessage(
+            input.tenantId,
+            input.conversationId,
+            { senderType: 'CONSULTANT', content },
+          );
+          const analyticalOutcome = await input.recordTrail({
+            consultantMessageId: consultantMessage.id,
+            runId: null,
+            answerSource: 'CAPABILITY_DENIED',
+            toolRoundCount: 0,
+            traces: [],
+            facts: {
+              ...closedTrailFacts('UNRESOLVED'),
+              clarificationRequired: true,
+            },
+          });
+          return {
+            consultantMessage,
+            factualAnswer: {
+              classification: 'FACTUAL_CLOSED',
+              providerCalled: false,
+              intentKind: 'FACTUAL_LIMITATION',
+              factKind: 'CONTINUITY_CLARIFY',
+              identityStatus: null,
+              returnedCount: null,
+              coveragePercent: null,
+              composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+            },
+            analyticalOutcome,
+          };
+        }
+      }
+    } catch {
+      // Provider indisponível: cai para CLARIFY determinístico abaixo.
+    }
+  }
+
+  if (classified.decision === 'NEW_QUERY') {
+    // Política C.2.7: NEW_QUERY invalida last imediatamente.
+    // Se a nova investigação falhar depois, NÃO restaura o contexto antigo.
+    if (prior !== null) {
+      await input.persistBag(
+        mergeAdvisorConversationBag(input.conversationBag, {
+          lastAnalyticalQuery: null,
+        }),
+      );
+    }
+    return null;
+  }
+
+  if (classified.decision === 'CLARIFY') {
+    // Sem prior / ambíguo estrutural — só responde se parece continuação.
+    if (prior === null && classified.reason === 'FOLLOW_UP_WITHOUT_CONTEXT') {
+      const consultantMessage = await input.conversations.createMessage(
+        input.tenantId,
+        input.conversationId,
+        { senderType: 'CONSULTANT', content: classified.message },
+      );
+      const analyticalOutcome = await input.recordTrail({
+        consultantMessageId: consultantMessage.id,
+        runId: null,
+        answerSource: 'CAPABILITY_DENIED',
+        toolRoundCount: 0,
+        traces: [],
+        facts: {
+          ...closedTrailFacts('UNRESOLVED'),
+          clarificationRequired: true,
+        },
+      });
+      return {
+        consultantMessage,
+        factualAnswer: {
+          classification: 'FACTUAL_CLOSED',
+          providerCalled: false,
+          intentKind: 'FACTUAL_LIMITATION',
+          factKind: 'CONTINUITY_WITHOUT_CONTEXT',
+          identityStatus: null,
+          returnedCount: null,
+          coveragePercent: null,
+          composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+        },
+        analyticalOutcome,
+      };
+    }
+    if (prior !== null) {
+      const consultantMessage = await input.conversations.createMessage(
+        input.tenantId,
+        input.conversationId,
+        { senderType: 'CONSULTANT', content: classified.message },
+      );
+      const analyticalOutcome = await input.recordTrail({
+        consultantMessageId: consultantMessage.id,
+        runId: null,
+        answerSource: 'CAPABILITY_DENIED',
+        toolRoundCount: 0,
+        traces: [],
+        facts: {
+          ...closedTrailFacts('UNRESOLVED'),
+          clarificationRequired: true,
+        },
+      });
+      return {
+        consultantMessage,
+        factualAnswer: {
+          classification: 'FACTUAL_CLOSED',
+          providerCalled: false,
+          intentKind: 'FACTUAL_LIMITATION',
+          factKind: 'CONTINUITY_CLARIFY',
+          identityStatus: null,
+          returnedCount: null,
+          coveragePercent: null,
+          composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+        },
+        analyticalOutcome,
+      };
+    }
+    return null;
+  }
+
+  if (prior === null) {
+    return null;
+  }
+
+  const applied = applyAnalyticalDimensionPatch({
+    prior,
+    patch: classified.patch,
+  });
+  if (!applied.ok) {
+    const consultantMessage = await input.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      {
+        senderType: 'CONSULTANT',
+        content: `Não consigo aplicar essa continuação: ${applied.message}`,
+      },
+    );
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'CAPABILITY_DENIED',
+      toolRoundCount: 0,
+      traces: [],
+      facts: closedTrailFacts('DENIED'),
+    });
+    return {
+      consultantMessage,
+      factualAnswer: {
+        classification: 'FACTUAL_CLOSED',
+        providerCalled: false,
+        intentKind: 'FACTUAL_LIMITATION',
+        factKind: 'CONTINUITY_DENIED',
+        identityStatus: null,
+        returnedCount: null,
+        coveragePercent: null,
+        composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+      },
+      analyticalOutcome,
+    };
+  }
+
+  const executed = await runAnalyticalContinuityAnswer({
+    query: applied.query,
+    tenantId: input.tenantId,
+    now: input.now,
+    cashFlow: input.monthlyPlanning.cashFlow,
+    costCenters: input.dailyCashMovements?.costCenters,
+    analyticalTools: input.analyticalTools,
+  });
+  if (executed === null) {
+    return null;
+  }
+
+  const consultantMessage = await input.conversations.createMessage(
+    input.tenantId,
+    input.conversationId,
+    { senderType: 'CONSULTANT', content: executed.answer },
+  );
+  if (executed.nextState !== null) {
+    await input.persistBag(
+      mergeAdvisorConversationBag(input.conversationBag, {
+        lastAnalyticalQuery: executed.nextState,
+      }),
+    );
+  }
+  const answerSource: AnalyticalAnswerSource =
+    executed.intentKind === 'BILLING_SERIES'
+      ? 'BILLING_SERIES'
+      : executed.capabilityKey.startsWith('billing.')
+        ? 'BILLING'
+        : executed.capabilityKey.includes('movements')
+          ? 'COST_CENTER'
+          : 'CAPABILITY_DENIED';
+  const analyticalOutcome = await input.recordTrail({
+    consultantMessageId: consultantMessage.id,
+    runId: null,
+    answerSource,
+    toolRoundCount: 0,
+    traces: [],
+    facts: closedTrailFacts(executed.structuredStatus),
+  });
+  const continuityIntentKind =
+    executed.intentKind === 'BILLING_SERIES' ||
+    executed.intentKind === 'BILLING_MONTH' ||
+    executed.intentKind === 'FACTUAL_LIMITATION' ||
+    executed.intentKind === 'COST_CENTER_LOOKUP' ||
+    executed.intentKind === 'COST_CENTER_MOVEMENT_LINES'
+      ? executed.intentKind
+      : executed.capabilityKey.includes('movements')
+        ? ('COST_CENTER_MOVEMENT_LINES' as const)
+        : executed.capabilityKey.includes('lookup')
+          ? ('COST_CENTER_LOOKUP' as const)
+          : ('FACTUAL_LIMITATION' as const);
+  return {
+    consultantMessage,
+    factualAnswer: {
+      classification: 'FACTUAL_CLOSED',
+      providerCalled: false,
+      intentKind: continuityIntentKind,
+      factKind: executed.factKind,
+      identityStatus: null,
+      returnedCount: null,
+      coveragePercent: null,
+      composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+    },
+    analyticalOutcome,
+  };
+}
+
 async function answerCostCenterOutflowMovementsPlan(input: {
   readonly assembled: Exclude<
     ReturnType<typeof assembleCostCenterOutflowMovementsPlan>,
@@ -2456,6 +3023,12 @@ async function answerCostCenterOutflowMovementsPlan(input: {
     resolvedName !== null &&
     typeof input.conversations.saveAnalyticalContext === 'function'
   ) {
+    const lastAnalyticalQuery = lastAnalyticalQueryFromCostCenterMovements({
+      monthKey: slots.monthKey,
+      costCenterQuery: resolvedName,
+      limit: slots.limit,
+      structuredStatus,
+    });
     const next = mergeAdvisorConversationBag(input.existingBag ?? parseAdvisorConversationBag(null), {
       costCenterOutflowMovements: costCenterOutflowMovementsState({
         monthKey: slots.monthKey,
@@ -2463,6 +3036,7 @@ async function answerCostCenterOutflowMovementsPlan(input: {
         limit: slots.limit,
         costCenterQuery: resolvedName,
       }),
+      ...(lastAnalyticalQuery !== null ? { lastAnalyticalQuery } : {}),
     });
     await input.conversations.saveAnalyticalContext(
       input.tenantId,
@@ -3057,8 +3631,111 @@ async function tryHandlePendingAnalyticalAction(input: {
     };
   }
 
+  // Aceite genérico / MODIFY em oferta A OU B → clarificar; pending permanece ACTIVE.
+  // Nunca escolher A ou B arbitrariamente; nunca responder eco ("Pode seguir.").
+  if (
+    isPendingAlternativesOffer(pending) &&
+    (resolution.decision === 'AMBIGUOUS_ACCEPT' ||
+      resolution.decision === 'ACCEPT' ||
+      resolution.decision === 'MODIFY')
+  ) {
+    const clarification = buildPendingAlternativesClarification(pending);
+    console.info(
+      JSON.stringify({
+        event: 'advisor_pending_action_clarification',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        pendingId: pending.id,
+        offerKind: pending.offerKind,
+        alternativeCount: pending.alternatives?.length ?? 0,
+        resolveDecision: resolution.decision,
+        pendingKept: 'PENDING',
+      }),
+    );
+    const consultantMessage = await input.deps.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      {
+        senderType: 'CONSULTANT',
+        content: clarification,
+      },
+    );
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: 'PROVIDER',
+      toolRoundCount: 0,
+      traces: [],
+      facts: closedTrailFacts('OK'),
+    });
+    return {
+      conversationId: input.conversationId,
+      userMessage: input.userMessage,
+      consultantMessage,
+      run: null,
+      factualAnswer: null,
+      analyticalOutcome,
+    };
+  }
+
   let actionToRun: PendingAnalyticalAction = pending;
-  if (resolution.decision === 'MODIFY') {
+  if (resolution.decision === 'SELECT_ALTERNATIVE') {
+    if (
+      resolution.alternativeId === null ||
+      !isPendingAlternativesOffer(pending)
+    ) {
+      const clarification = isPendingAlternativesOffer(pending)
+        ? buildPendingAlternativesClarification(pending)
+        : 'Não consegui identificar qual caminho seguir. Pode escolher uma das opções oferecidas?';
+      const consultantMessage = await input.deps.conversations.createMessage(
+        input.tenantId,
+        input.conversationId,
+        { senderType: 'CONSULTANT', content: clarification },
+      );
+      const analyticalOutcome = await input.recordTrail({
+        consultantMessageId: consultantMessage.id,
+        runId: null,
+        answerSource: 'PROVIDER',
+        toolRoundCount: 0,
+        traces: [],
+        facts: closedTrailFacts('UNRESOLVED'),
+      });
+      return {
+        conversationId: input.conversationId,
+        userMessage: input.userMessage,
+        consultantMessage,
+        run: null,
+        factualAnswer: null,
+        analyticalOutcome,
+      };
+    }
+    const selected = materializePendingAlternative(pending, resolution.alternativeId);
+    if (selected === null) {
+      const clarification = buildPendingAlternativesClarification(pending);
+      const consultantMessage = await input.deps.conversations.createMessage(
+        input.tenantId,
+        input.conversationId,
+        { senderType: 'CONSULTANT', content: clarification },
+      );
+      const analyticalOutcome = await input.recordTrail({
+        consultantMessageId: consultantMessage.id,
+        runId: null,
+        answerSource: 'PROVIDER',
+        toolRoundCount: 0,
+        traces: [],
+        facts: closedTrailFacts('UNRESOLVED'),
+      });
+      return {
+        conversationId: input.conversationId,
+        userMessage: input.userMessage,
+        consultantMessage,
+        run: null,
+        factualAnswer: null,
+        analyticalOutcome,
+      };
+    }
+    actionToRun = selected;
+  } else if (resolution.decision === 'MODIFY') {
     const patched = applyPendingPatch(pending, resolution.patch);
     if (patched === null) {
       console.info(

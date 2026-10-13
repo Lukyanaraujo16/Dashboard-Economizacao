@@ -11,7 +11,10 @@ import {
 import type { CostCenterOutflowMovementsConversationState } from './cost-center-outflow-movements-conversation-state.js';
 import { isCostCenterEntityComparisonQuestion } from './plan-cost-center-entity-comparison.js';
 import { hasAdvisorCostCenterCue } from './resolve-advisor-cost-center-intent.js';
-import { extractAdvisorCostCenterMention } from './resolve-advisor-conversational-cost-center.js';
+import {
+  extractAdvisorCostCenterMention,
+  isAdvisorCostCenterPeriodFollowUp,
+} from './resolve-advisor-conversational-cost-center.js';
 import type { AdvisorConversationalPeriod } from './resolve-advisor-conversational-period.js';
 import { extractExplicitAdvisorTopNLimit } from './resolve-advisor-drilldown-intent.js';
 
@@ -78,6 +81,7 @@ export function assembleCostCenterOutflowMovementsPlan(input: {
     return { kind: 'UNMATCHED' };
   }
 
+  // Precedência: pergunta completa → entidade → período → UNMATCHED.
   const entityFollowUp = extractCostCenterEntityFollowUp(folded);
   if (entityFollowUp !== null) {
     if (input.priorState === null) {
@@ -90,6 +94,41 @@ export function assembleCostCenterOutflowMovementsPlan(input: {
       costCenterMention: entityFollowUp,
       inherited: true,
     });
+  }
+
+  if (isCostCenterOutflowMovementsPeriodFollowUp(input.content)) {
+    // Sem estado desta família: UNMATCHED (não inventa ranking).
+    // Deixa anáfora/período legados de outras famílias seguirem.
+    if (input.priorState === null) {
+      return { kind: 'UNMATCHED' };
+    }
+    return finalizeSlots({
+      monthKey: input.period.monthKey,
+      periodSource: input.period.source,
+      limit: input.priorState.limit,
+      costCenterMention: input.priorState.costCenterQuery,
+      inherited: true,
+    });
+  }
+
+  // C.2.7 G2/D — continuidade composta na mesma família com prior:
+  // "E os dez maiores de Jacaraípe em setembro?" / "E os dez maiores?"
+  if (input.priorState !== null) {
+    const priorState = input.priorState;
+    const composite = extractCompositeOutflowMovementsFollowUp(folded, {
+      content: input.content,
+      period: input.period,
+      priorState,
+    });
+    if (composite !== null) {
+      return finalizeSlots({
+        monthKey: composite.monthKey,
+        periodSource: composite.periodSource,
+        limit: composite.limit,
+        costCenterMention: composite.costCenterMention,
+        inherited: true,
+      });
+    }
   }
 
   if (!matchesOutflowMovementsFamily(folded)) {
@@ -131,7 +170,31 @@ export function matchesCostCenterOutflowMovementsFamily(content: string): boolea
   if (extractCostCenterEntityFollowUp(folded) !== null) {
     return true;
   }
+  if (isCostCenterOutflowMovementsPeriodFollowUp(content)) {
+    return true;
+  }
   return matchesOutflowMovementsFamily(folded);
+}
+
+/**
+ * Continuação estrutural só de período ("E em setembro?", "agora em agosto").
+ * Reusa o detector de família cost-center e exige que o restante seja
+ * exclusivamente um token de mês — não qualquer menção de mês em pergunta nova.
+ */
+export function isCostCenterOutflowMovementsPeriodFollowUp(content: string): boolean {
+  if (!isAdvisorCostCenterPeriodFollowUp(content)) {
+    return false;
+  }
+  const folded = foldPt(content).replace(/[?.!]+$/g, '').trim();
+  if (/^(?:e no mes|e nesse mes|e neste mes)$/.test(folded)) {
+    return true;
+  }
+  const match = /^(?:e|agora)\s+em\s+(.+)$/i.exec(folded);
+  if (match?.[1] === undefined) {
+    return false;
+  }
+  const rest = match[1].trim();
+  return isMonthToken(rest) || /^(?:esse|este|desse|deste)\s+mes$/.test(rest);
 }
 
 function finalizeSlots(input: {
@@ -198,10 +261,23 @@ function resolveOutflowMovementsLimit(folded: string): number {
   if (explicit !== null) {
     return explicit;
   }
+  // Cardinalidade por extenso em continuações ("e os dez maiores?").
+  const written = extractWrittenTopNLimit(folded);
+  if (written !== null) {
+    return written;
+  }
   if (SINGULAR_WINNER.test(folded) && !/\bmaiores\b/.test(folded)) {
     return 1;
   }
   return ADVISOR_DRILLDOWN_DEFAULT_LIMIT;
+}
+
+function extractWrittenTopNLimit(folded: string): number | null {
+  if (/\bdez\b/.test(folded)) return clampLimit(10);
+  if (/\bcinco\b/.test(folded)) return clampLimit(5);
+  if (/\btr[eê]s\b/.test(folded)) return clampLimit(3);
+  if (/\bvinte\b/.test(folded)) return clampLimit(20);
+  return null;
 }
 
 function clampLimit(limit: number): number {
@@ -273,6 +349,64 @@ export function extractCostCenterEntityFollowUp(folded: string): string | null {
     return null;
   }
   return cleaned;
+}
+
+/**
+ * Continuação composta herdando família OUTFLOW×MOVEMENTS×COST_CENTER.
+ * Ex.: "E os dez maiores?", "E os dez maiores de Jacaraípe em setembro?"
+ * Não exige repetir o noun "gastos" quando há prior factual da família.
+ */
+function extractCompositeOutflowMovementsFollowUp(
+  folded: string,
+  input: {
+    readonly content: string;
+    readonly period: AdvisorConversationalPeriod;
+    readonly priorState: CostCenterOutflowMovementsConversationState;
+  },
+): {
+  readonly monthKey: string;
+  readonly periodSource: AdvisorConversationalPeriod['source'];
+  readonly limit: number;
+  readonly costCenterMention: string;
+} | null {
+  if (!/^(?:e|agora)\b/.test(folded)) {
+    return null;
+  }
+  if (!/\b(?:maior(?:es)?|top\s+\d+)/.test(folded)) {
+    return null;
+  }
+  // Pergunta completa com noun de gasto + entidade: deixa o caminho ASSEMBLED novo.
+  if (
+    hasOutflowNoun(folded) &&
+    extractOutflowMovementsCostCenterMention(input.content) !== null
+  ) {
+    return null;
+  }
+
+  const limit = resolveOutflowMovementsLimit(folded);
+  const hasMonthCue = new RegExp(`\\bem\\s+${MONTH_NAME}\\b`).test(folded);
+  const entityMatch =
+    /(?:maior(?:es)?|top\s+\d+)\s+(?:gastos?|despesas?|saidas?)?\s*(?:de|em)\s+(.+?)(?:\s+em\s+|$)/i.exec(
+      folded,
+    ) ?? /\bde\s+(.+?)(?:\s+em\s+|$)/i.exec(folded);
+  let costCenterMention = input.priorState.costCenterQuery;
+  if (entityMatch?.[1] !== undefined) {
+    const cleaned = cleanMention(entityMatch[1]);
+    if (cleaned !== null && !isNoiseMention(cleaned) && !isMonthToken(cleaned)) {
+      costCenterMention = cleaned;
+    }
+  }
+
+  return {
+    monthKey: hasMonthCue ? input.period.monthKey : input.priorState.monthKey,
+    periodSource: hasMonthCue ? input.period.source : input.priorState.periodSource,
+    limit:
+      extractExplicitAdvisorTopNLimit(folded) !== null ||
+      /\b(?:dez|cinco|top\s+\d+|\d+\s+maior)/.test(folded)
+        ? limit
+        : input.priorState.limit,
+    costCenterMention,
+  };
 }
 
 function cleanMention(value: string): string | null {

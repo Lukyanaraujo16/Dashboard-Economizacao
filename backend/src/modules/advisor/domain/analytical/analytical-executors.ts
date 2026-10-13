@@ -16,6 +16,8 @@ import { Prisma } from '../../../../generated/prisma/client.js';
 import { monthlyBilling } from '../../../analytics/domain/monthly-cash-flow.js';
 import { formatCivilDateKey } from '../../../analytics/domain/civil-calendar.js';
 import {
+  BILLING_COST_CENTER_MONTH_FACT_KIND,
+  BILLING_COST_CENTER_SERIES_FACT_KIND,
   BILLING_SERIES_FACT_KIND,
   listBillingSeriesMonthKeys,
   officialBillingAverage,
@@ -448,7 +450,134 @@ export const executeBillingSeriesMonths: AnalyticalExecutor = async ({
   });
 };
 
+/**
+ * BILLING × COST_CENTER — MONTH ou MONTH_WINDOW.
+ * Reusa getMonthlyCashFlow + monthlyBilling; IDs só após resolução no tenant da sessão.
+ */
+export const executeBillingCostCenter: AnalyticalExecutor = async ({
+  validated,
+  runtime,
+}) => {
+  if (runtime.planningCashFlow === undefined) {
+    throw new Error('EXECUTOR_DEPENDENCY_MISSING:planningCashFlow');
+  }
+  if (runtime.costCenters === undefined) {
+    throw new Error('EXECUTOR_DEPENDENCY_MISSING:costCenters');
+  }
+  const costCenterQuery = validated.query.filters?.costCenterQuery?.trim() ?? '';
+  if (costCenterQuery === '') {
+    throw new Error('billingCostCenter exige filters.costCenterQuery.');
+  }
+  const centers = await runtime.costCenters.listByTenant(runtime.tenantId);
+  const resolved = resolveCatalogCostCenter(centers, costCenterQuery);
+  if (resolved.status !== 'FOUND') {
+    const periodMeta =
+      validated.query.period.kind === 'MONTH'
+        ? { monthKey: validated.query.period.monthKey }
+        : validated.query.period.kind === 'MONTH_WINDOW'
+          ? {
+              endMonthKey: validated.query.period.endMonthKey,
+              requestedCount: validated.query.period.count,
+            }
+          : {};
+    return success({
+      validated,
+      executorKey: 'billingCostCenter',
+      legacyFact: {
+        factKind:
+          validated.query.period.kind === 'MONTH_WINDOW'
+            ? BILLING_COST_CENTER_SERIES_FACT_KIND
+            : BILLING_COST_CENTER_MONTH_FACT_KIND,
+        status: resolved.status,
+        metric: 'BILLING',
+        dimension: 'COST_CENTER',
+        costCenterQuery,
+        costCenterName: null,
+        billing: null,
+        ...periodMeta,
+      },
+    });
+  }
+
+  if (validated.query.period.kind === 'MONTH') {
+    const monthKey = validated.query.period.monthKey;
+    const flow = await runtime.planningCashFlow.getMonthlyCashFlow({
+      tenantId: runtime.tenantId,
+      monthKey,
+      costCenterId: resolved.id,
+      now: runtime.now,
+    });
+    const billing = monthlyBilling(flow);
+    const available = billing !== null && flow.costCenterCashSplit;
+    return success({
+      validated,
+      executorKey: 'billingCostCenter',
+      legacyFact: {
+        factKind: BILLING_COST_CENTER_MONTH_FACT_KIND,
+        status: available ? 'OK' : 'UNAVAILABLE',
+        metric: 'BILLING',
+        dimension: 'COST_CENTER',
+        monthKey,
+        costCenterQuery,
+        costCenterName: resolved.name,
+        costCenterCashSplit: flow.costCenterCashSplit,
+        billing: available && billing !== null ? billing.toString() : null,
+        provenance:
+          'faturamento oficial do centro (realized.inflows + expected.receivables; vencido fora).',
+      },
+    });
+  }
+
+  if (validated.query.period.kind !== 'MONTH_WINDOW') {
+    throw new Error('billingCostCenter exige MONTH ou MONTH_WINDOW.');
+  }
+  const { endMonthKey, count } = validated.query.period;
+  const monthKeys = listBillingSeriesMonthKeys(endMonthKey, count);
+  const months = [];
+  for (const monthKey of monthKeys) {
+    const flow = await runtime.planningCashFlow.getMonthlyCashFlow({
+      tenantId: runtime.tenantId,
+      monthKey,
+      costCenterId: resolved.id,
+      now: runtime.now,
+    });
+    const billing = monthlyBilling(flow);
+    const available = billing !== null && flow.costCenterCashSplit;
+    months.push({
+      monthKey,
+      billing: available && billing !== null ? billing.toString() : null,
+      available,
+      costCenterCashSplit: flow.costCenterCashSplit,
+    });
+  }
+  const availableValues = months.flatMap((month) =>
+    month.billing === null ? [] : [new Prisma.Decimal(month.billing)],
+  );
+  const complete = availableValues.length === months.length;
+  return success({
+    validated,
+    executorKey: 'billingCostCenter',
+    legacyFact: {
+      factKind: BILLING_COST_CENTER_SERIES_FACT_KIND,
+      status: 'OK',
+      metric: 'BILLING',
+      dimension: 'COST_CENTER',
+      endMonthKey,
+      requestedCount: count,
+      validCount: availableValues.length,
+      complete,
+      average: complete ? officialBillingAverage(availableValues).toString() : null,
+      costCenterQuery,
+      costCenterName: resolved.name,
+      provenance:
+        'série mensal de faturamento oficial do centro (realized.inflows + expected.receivables; vencido fora).',
+      months,
+    },
+  });
+};
+
 export const executeRealizedCashDayMovements: AnalyticalExecutor = async ({
+
   validated,
   runtime,
 }) => {

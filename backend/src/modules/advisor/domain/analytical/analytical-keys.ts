@@ -89,6 +89,7 @@ export const ANALYTICAL_EXECUTOR_KEYS = [
   'currentSnapshot',
   'financialFactsMonth',
   'billingSeriesMonths',
+  'billingCostCenter',
   'monthlyPlanning',
   'payableTitles',
 ] as const;

@@ -55,6 +55,24 @@ export type PendingAnalyticalStep = {
   readonly filters: PendingAnalyticalFilters;
 };
 
+/**
+ * SINGLE = uma ação.
+ * COMPOUND = A+B (todos os steps na mesma execução).
+ * ALTERNATIVES = A OU B (usuário escolhe; não executar ambos por acidente).
+ */
+export const PENDING_OFFER_KINDS = ['SINGLE', 'COMPOUND', 'ALTERNATIVES'] as const;
+export type PendingOfferKind = (typeof PENDING_OFFER_KINDS)[number];
+
+/** Uma opção em oferta A OU B — mesmo contrato allowlisted de uma ação. */
+export type PendingAnalyticalAlternative = {
+  readonly id: string;
+  readonly label: string;
+  readonly domain: PendingAnalyticalDomain;
+  readonly operation: PendingAnalyticalOperation;
+  readonly steps: readonly PendingAnalyticalStep[];
+  readonly objective: string;
+};
+
 export type PendingAnalyticalAction = {
   readonly version: typeof PENDING_ANALYTICAL_ACTION_VERSION;
   readonly kind: typeof PENDING_ANALYTICAL_ACTION_KIND;
@@ -68,6 +86,10 @@ export type PendingAnalyticalAction = {
   readonly objective: string;
   readonly offerSnippet: string;
   readonly status: PendingAnalyticalStatus;
+  /** Default SINGLE/COMPOUND inferido de steps quando ausente (bags legados). */
+  readonly offerKind: PendingOfferKind;
+  /** Preenchido só quando offerKind=ALTERNATIVES (2..3 opções). */
+  readonly alternatives: readonly PendingAnalyticalAlternative[] | null;
 };
 
 export type PendingAnalyticalPatch = {
@@ -84,12 +106,18 @@ export const PENDING_RESOLUTION_DECISIONS = [
   'REJECT',
   'MODIFY',
   'UNRELATED',
+  /** Aceite genérico sem escolher A/B em oferta ALTERNATIVES. */
+  'AMBIGUOUS_ACCEPT',
+  /** Usuário escolheu uma alternativa explícita. */
+  'SELECT_ALTERNATIVE',
 ] as const;
 export type PendingResolutionDecision = (typeof PENDING_RESOLUTION_DECISIONS)[number];
 
 export type PendingResolutionResult = {
   readonly decision: PendingResolutionDecision;
   readonly patch: PendingAnalyticalPatch | null;
+  /** Obrigatório quando decision=SELECT_ALTERNATIVE. */
+  readonly alternativeId: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -175,6 +203,23 @@ export function parsePendingAnalyticalAction(value: unknown): PendingAnalyticalA
   if (!isCapabilityCompatible(value.domain, value.operation, steps)) {
     return null;
   }
+
+  const offerKind = resolveOfferKind(value.offerKind, steps.length);
+  if (offerKind === null) {
+    return null;
+  }
+
+  let alternatives: readonly PendingAnalyticalAlternative[] | null = null;
+  if (offerKind === 'ALTERNATIVES') {
+    alternatives = parseAlternativesList(value.alternatives);
+    if (alternatives === null) {
+      return null;
+    }
+  } else if (value.alternatives !== undefined && value.alternatives !== null) {
+    // SINGLE/COMPOUND não carregam alternatives.
+    return null;
+  }
+
   return {
     version: PENDING_ANALYTICAL_ACTION_VERSION,
     kind: PENDING_ANALYTICAL_ACTION_KIND,
@@ -188,6 +233,101 @@ export function parsePendingAnalyticalAction(value: unknown): PendingAnalyticalA
     objective: value.objective.trim(),
     offerSnippet: value.offerSnippet.trim(),
     status: value.status as PendingAnalyticalStatus,
+    offerKind,
+    alternatives,
+  };
+}
+
+function resolveOfferKind(raw: unknown, stepCount: number): PendingOfferKind | null {
+  if (raw === undefined || raw === null) {
+    // Bags legados: 1 step = SINGLE; 2+ = COMPOUND (AND).
+    return stepCount > 1 ? 'COMPOUND' : 'SINGLE';
+  }
+  if (typeof raw !== 'string' || !(PENDING_OFFER_KINDS as readonly string[]).includes(raw)) {
+    return null;
+  }
+  return raw as PendingOfferKind;
+}
+
+function parseAlternativesList(value: unknown): readonly PendingAnalyticalAlternative[] | null {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 3) {
+    return null;
+  }
+  const out: PendingAnalyticalAlternative[] = [];
+  const seenIds = new Set<string>();
+  for (const raw of value) {
+    const alt = parseAlternative(raw);
+    if (alt === null) {
+      // Integridade: uma inválida invalida a oferta inteira.
+      return null;
+    }
+    if (seenIds.has(alt.id)) {
+      return null;
+    }
+    seenIds.add(alt.id);
+    out.push(alt);
+  }
+  return out;
+}
+
+function parseAlternative(value: unknown): PendingAnalyticalAlternative | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (
+    'tenantId' in value ||
+    'costCenterId' in value ||
+    'userId' in value ||
+    'sql' in value
+  ) {
+    return null;
+  }
+  if (typeof value.id !== 'string' || value.id.trim() === '' || value.id.length > 40) {
+    return null;
+  }
+  if (typeof value.label !== 'string') {
+    return null;
+  }
+  const label = value.label.trim();
+  if (label === '' || label.length > 160) {
+    return null;
+  }
+  if (
+    typeof value.domain !== 'string' ||
+    !isPendingAnalyticalDomain(value.domain) ||
+    typeof value.operation !== 'string' ||
+    !isPendingAnalyticalOperation(value.operation)
+  ) {
+    return null;
+  }
+  if (typeof value.objective !== 'string') {
+    return null;
+  }
+  const objective = value.objective.trim();
+  if (objective === '' || objective.length > 200) {
+    return null;
+  }
+  if (!Array.isArray(value.steps) || value.steps.length === 0 || value.steps.length > 3) {
+    return null;
+  }
+  const steps: PendingAnalyticalStep[] = [];
+  for (const raw of value.steps) {
+    const step = parseStep(raw);
+    if (step === null) {
+      return null;
+    }
+    steps.push(step);
+  }
+  if (!isCapabilityCompatible(value.domain, value.operation, steps)) {
+    return null;
+  }
+  return {
+    id: value.id.trim(),
+    label,
+    domain: value.domain,
+    operation: value.operation,
+    steps,
+    objective,
   };
 }
 
@@ -342,12 +482,16 @@ export function createPendingAnalyticalAction(input: {
   readonly steps: readonly PendingAnalyticalStep[];
   readonly objective: string;
   readonly offerSnippet: string;
+  readonly offerKind?: PendingOfferKind;
+  readonly alternatives?: readonly PendingAnalyticalAlternative[] | null;
   readonly now?: Date;
   readonly ttlMs?: number;
 }): PendingAnalyticalAction | null {
   const now = input.now ?? new Date();
   const ttl = input.ttlMs ?? PENDING_ANALYTICAL_ACTION_TTL_MS;
-  const draft: PendingAnalyticalAction = {
+  const inferredKind: PendingOfferKind =
+    input.offerKind ?? (input.steps.length > 1 ? 'COMPOUND' : 'SINGLE');
+  const draft = {
     version: PENDING_ANALYTICAL_ACTION_VERSION,
     kind: PENDING_ANALYTICAL_ACTION_KIND,
     id: input.id.trim(),
@@ -359,9 +503,54 @@ export function createPendingAnalyticalAction(input: {
     steps: input.steps,
     objective: input.objective.trim().slice(0, 200),
     offerSnippet: input.offerSnippet.trim().slice(0, 400),
-    status: 'PENDING',
+    status: 'PENDING' as const,
+    offerKind: inferredKind,
+    alternatives: input.alternatives ?? null,
   };
   return parsePendingAnalyticalAction(draft);
+}
+
+/**
+ * Materializa a alternativa escolhida como ação SINGLE executável (mesma pending id).
+ */
+export function materializePendingAlternative(
+  pending: PendingAnalyticalAction,
+  alternativeId: string,
+): PendingAnalyticalAction | null {
+  if (pending.offerKind !== 'ALTERNATIVES' || pending.alternatives === null) {
+    return null;
+  }
+  const selected = pending.alternatives.find((row) => row.id === alternativeId);
+  if (selected === undefined) {
+    return null;
+  }
+  return parsePendingAnalyticalAction({
+    ...pending,
+    domain: selected.domain,
+    operation: selected.operation,
+    steps: selected.steps,
+    objective: selected.objective,
+    offerSnippet: selected.label.slice(0, 400),
+    offerKind: 'SINGLE',
+    alternatives: null,
+    status: 'PENDING',
+  });
+}
+
+/** Clarificação curta a partir do contrato (não reinventar opções). */
+export function buildPendingAlternativesClarification(
+  pending: PendingAnalyticalAction,
+): string {
+  const alts = pending.alternatives;
+  if (pending.offerKind !== 'ALTERNATIVES' || alts === null || alts.length < 2) {
+    return 'Claro. Qual dos caminhos você prefere que eu siga?';
+  }
+  const lines = alts.map((alt, index) => `${index + 1}. ${alt.label}`);
+  return ['Claro. Você prefere que eu:', ...lines].join('\n');
+}
+
+export function isPendingAlternativesOffer(action: PendingAnalyticalAction): boolean {
+  return action.offerKind === 'ALTERNATIVES' && (action.alternatives?.length ?? 0) >= 2;
 }
 
 export function isPendingActionExecutable(
@@ -447,14 +636,37 @@ export function parsePendingResolutionResult(value: unknown): PendingResolutionR
     if (Object.keys(patch).length === 0) {
       return null;
     }
-    return { decision: 'MODIFY', patch };
+    return { decision: 'MODIFY', patch, alternativeId: null };
+  }
+  if (value.decision === 'SELECT_ALTERNATIVE') {
+    if (typeof value.alternativeId !== 'string' || value.alternativeId.trim() === '') {
+      return null;
+    }
+    if (value.alternativeId.length > 40) {
+      return null;
+    }
+    if (value.patch !== undefined && value.patch !== null) {
+      return null;
+    }
+    return {
+      decision: 'SELECT_ALTERNATIVE',
+      patch: null,
+      alternativeId: value.alternativeId.trim(),
+    };
   }
   if (value.patch !== undefined && value.patch !== null) {
     return null;
   }
+  if (value.alternativeId !== undefined && value.alternativeId !== null) {
+    return null;
+  }
   return {
-    decision: value.decision as Exclude<PendingResolutionDecision, 'MODIFY'>,
+    decision: value.decision as Exclude<
+      PendingResolutionDecision,
+      'MODIFY' | 'SELECT_ALTERNATIVE'
+    >,
     patch: null,
+    alternativeId: null,
   };
 }
 

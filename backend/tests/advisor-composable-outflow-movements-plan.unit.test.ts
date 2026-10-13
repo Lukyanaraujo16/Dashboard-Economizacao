@@ -8,16 +8,23 @@ import {
   assembleCostCenterOutflowMovementsPlan,
   extractCostCenterEntityFollowUp,
   extractOutflowMovementsCostCenterMention,
+  isCostCenterOutflowMovementsPeriodFollowUp,
 } from '../src/modules/advisor/domain/assemble-cost-center-outflow-movements-plan.js';
 import {
   CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME,
   CASH_RESULT_COST_CENTER_LOOKUP_TOOL_NAME,
 } from '../src/modules/advisor/domain/advisor-cost-center-dimension.js';
+import {
+  mergeAdvisorConversationBag,
+  parseAdvisorConversationBag,
+  serializeAdvisorConversationBag,
+} from '../src/modules/advisor/domain/advisor-conversation-bag.js';
 import { composeAdvisorFactualAnswer } from '../src/modules/advisor/domain/compose-advisor-factual-answer.js';
 import {
   costCenterOutflowMovementsState,
   parseCostCenterOutflowMovementsConversationState,
 } from '../src/modules/advisor/domain/cost-center-outflow-movements-conversation-state.js';
+import { createPendingAnalyticalAction } from '../src/modules/advisor/domain/pending-analytical-action.js';
 import { resolveAdvisorConversationalPeriod } from '../src/modules/advisor/domain/resolve-advisor-conversational-period.js';
 import type {
   AiConversationRecord,
@@ -212,6 +219,144 @@ describe('assembler de maiores gastos por centro (Fase 1)', () => {
         priorState: null,
       }).kind,
     ).toBe('FOLLOW_UP_WITHOUT_CONTEXT');
+  });
+
+  it('C.1 T1/T2 — follow-up de período herda operação/CC/limit e troca só o mês', () => {
+    const prior = costCenterOutflowMovementsState({
+      monthKey: '2026-10',
+      periodSource: 'CURRENT',
+      limit: 1,
+      costCenterQuery: 'Clínica Life Jacaraípe',
+    });
+    const september = assembleCostCenterOutflowMovementsPlan({
+      content: 'E em setembro?',
+      period: periodFor('E em setembro?'),
+      priorState: prior,
+    });
+    expect(september.kind).toBe('ASSEMBLED');
+    if (september.kind === 'ASSEMBLED') {
+      expect(september.slots).toMatchObject({
+        monthKey: '2026-09',
+        limit: 1,
+        costCenterMention: 'Clínica Life Jacaraípe',
+        direction: 'OUTFLOW',
+        operation: 'MOVEMENTS',
+        inherited: true,
+      });
+    }
+
+    const top5Prior = costCenterOutflowMovementsState({
+      monthKey: '2026-10',
+      periodSource: 'CURRENT',
+      limit: 5,
+      costCenterQuery: 'Clínica Life Jacaraípe',
+    });
+    const august = assembleCostCenterOutflowMovementsPlan({
+      content: 'E em agosto?',
+      period: periodFor('E em agosto?'),
+      priorState: top5Prior,
+    });
+    expect(august.kind).toBe('ASSEMBLED');
+    if (august.kind === 'ASSEMBLED') {
+      expect(august.slots).toMatchObject({
+        monthKey: '2026-08',
+        limit: 5,
+        costCenterMention: 'Clínica Life Jacaraípe',
+        direction: 'OUTFLOW',
+        operation: 'MOVEMENTS',
+        inherited: true,
+      });
+    }
+  });
+
+  it('C.1 T3/T10 — entidade continua com precedência sobre período', () => {
+    const prior = costCenterOutflowMovementsState({
+      monthKey: '2026-10',
+      periodSource: 'CURRENT',
+      limit: 1,
+      costCenterQuery: 'Clínica Life Jacaraípe',
+    });
+    const entity = assembleCostCenterOutflowMovementsPlan({
+      content: 'E em Laranjeiras?',
+      period: periodFor('E em Laranjeiras?'),
+      priorState: prior,
+    });
+    expect(entity.kind).toBe('ASSEMBLED');
+    if (entity.kind === 'ASSEMBLED') {
+      expect(entity.slots).toMatchObject({
+        monthKey: '2026-10',
+        limit: 1,
+        costCenterMention: 'laranjeiras',
+        inherited: true,
+      });
+    }
+    expect(isCostCenterOutflowMovementsPeriodFollowUp('E em Laranjeiras?')).toBe(false);
+    expect(isCostCenterOutflowMovementsPeriodFollowUp('E em Jacaraípe?')).toBe(false);
+    expect(isCostCenterOutflowMovementsPeriodFollowUp('E em setembro?')).toBe(true);
+  });
+
+  it('C.1 T4 — período sem priorState não inventa operação/centro', () => {
+    expect(
+      assembleCostCenterOutflowMovementsPlan({
+        content: 'E em setembro?',
+        period: periodFor('E em setembro?'),
+        priorState: null,
+      }).kind,
+    ).toBe('UNMATCHED');
+  });
+
+  it('C.1 T5/T6 — pergunta nova de mês/faturamento não herda ranking OUTFLOW', () => {
+    const prior = costCenterOutflowMovementsState({
+      monthKey: '2026-10',
+      periodSource: 'CURRENT',
+      limit: 1,
+      costCenterQuery: 'Clínica Life Jacaraípe',
+    });
+    expect(
+      assembleCostCenterOutflowMovementsPlan({
+        content: 'Como foi o mês de setembro?',
+        period: periodFor('Como foi o mês de setembro?'),
+        priorState: prior,
+      }).kind,
+    ).toBe('UNMATCHED');
+    expect(
+      assembleCostCenterOutflowMovementsPlan({
+        content: 'Qual foi o faturamento de setembro?',
+        period: periodFor('Qual foi o faturamento de setembro?'),
+        priorState: prior,
+      }).kind,
+    ).toBe('UNMATCHED');
+    expect(isCostCenterOutflowMovementsPeriodFollowUp('Como foi o mês de setembro?')).toBe(false);
+    expect(isCostCenterOutflowMovementsPeriodFollowUp('Qual foi o faturamento de setembro?')).toBe(
+      false,
+    );
+    expect(
+      isCostCenterOutflowMovementsPeriodFollowUp('E em setembro o faturamento?'),
+    ).toBe(false);
+  });
+
+  it('C.1 T11/T12 — ACCEPT e premissa não são period follow-up', () => {
+    const prior = costCenterOutflowMovementsState({
+      monthKey: '2026-10',
+      periodSource: 'CURRENT',
+      limit: 1,
+      costCenterQuery: 'Clínica Life Jacaraípe',
+    });
+    for (const content of [
+      'quero sim',
+      'pode seguir',
+      'considera R$ 7 mil de aluguel',
+      'assumindo que o aluguel é 7000',
+    ]) {
+      expect(isCostCenterOutflowMovementsPeriodFollowUp(content)).toBe(false);
+      expect(
+        assembleCostCenterOutflowMovementsPlan({
+          content,
+          period: periodFor(content),
+          priorState: prior,
+        }).kind,
+      ).toBe('UNMATCHED');
+    }
   });
 
   it('estado rejeita tenant/id interno e tentativas inválidas', () => {
@@ -652,6 +797,382 @@ describe('envio — maiores gastos por centro (Fase 1)', () => {
     expect(executed).toEqual(['tenant-a']);
     expect(listed.every((tenantId) => tenantId === 'tenant-a')).toBe(true);
   });
+
+  it('C.1 T1/T8 — maior gasto → E em setembro? preserva ranking e atualiza slot', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const harness = createHarness({
+      async execute({ tenantId, call }) {
+        expect(tenantId).toBe('tenant-a');
+        calls.push(call.arguments);
+        return {
+          id: call.id,
+          name: call.name,
+          ok: true,
+          content: movementPayload({
+            name: 'Clínica Life Jacaraípe',
+            limit: 1,
+            lines: [
+              {
+                amount: call.arguments.monthKey === '2026-09' ? '9500.00' : '12000.00',
+                description: 'Aluguel',
+                partyName: 'Imobiliária',
+              },
+            ],
+          }),
+        };
+      },
+    });
+
+    const first = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual foi meu maior gasto em Jacaraípe em outubro de 2026?',
+      now: NOW,
+    });
+    expect(first.run).toBeNull();
+    expect(calls[0]).toMatchObject({
+      monthKey: '2026-10',
+      direction: 'OUTFLOW',
+      limit: 1,
+    });
+    expect(String(calls[0]?.costCenterQuery).toLowerCase()).toContain('jacar');
+
+    const follow = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em setembro?',
+      now: NOW,
+    });
+    expect(follow.run).toBeNull();
+    expect(follow.analyticalOutcome).toBe('ANSWERED');
+    expect(calls[1]).toMatchObject({
+      monthKey: '2026-09',
+      direction: 'OUTFLOW',
+      limit: 1,
+    });
+    expect(String(calls[1]?.costCenterQuery).toLowerCase()).toContain('jacar');
+    expect(follow.consultantMessage.content).toContain('9.500,00');
+    expect(follow.consultantMessage.content).not.toMatch(/resumo financeiro|faturamento/i);
+    expect(harness.openai.generateCalls).toHaveLength(0);
+    expect(harness.savedContexts.at(-1)).toMatchObject({
+      kind: 'ADVISOR_CONVERSATION_BAG',
+      slots: {
+        costCenterOutflowMovements: {
+          monthKey: '2026-09',
+          limit: 1,
+          costCenterQuery: 'Clínica Life Jacaraípe',
+        },
+      },
+    });
+  });
+
+  it('C.1 T2 — top 5 → E em agosto? preserva CC/limit', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const harness = createHarness({
+      async execute({ call }) {
+        calls.push(call.arguments);
+        const limit = Number(call.arguments.limit);
+        return {
+          id: call.id,
+          name: call.name,
+          ok: true,
+          content: movementPayload({
+            name: 'Clínica Life Jacaraípe',
+            limit,
+            lines: Array.from({ length: limit }, (_, index) => ({
+              amount: String(10000 - index * 1000) + '.00',
+              description: `Item ${index + 1}`,
+            })),
+          }),
+        };
+      },
+    });
+
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quais foram meus 5 maiores gastos em Jacaraípe em outubro de 2026?',
+      now: NOW,
+    });
+    const follow = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em agosto?',
+      now: NOW,
+    });
+    expect(follow.run).toBeNull();
+    expect(calls[1]).toMatchObject({
+      monthKey: '2026-08',
+      limit: 5,
+      direction: 'OUTFLOW',
+    });
+    expect(String(calls[1]?.costCenterQuery).toLowerCase()).toContain('jacar');
+    expect(harness.openai.generateCalls).toHaveLength(0);
+  });
+
+  it('C.1 T3/T10 — E em Laranjeiras? / E em Jacaraípe? entidade intacta', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const harness = createHarness({
+      async execute({ call }) {
+        calls.push(call.arguments);
+        const query = String(call.arguments.costCenterQuery).toLowerCase();
+        return {
+          id: call.id,
+          name: call.name,
+          ok: true,
+          content: movementPayload({
+            name: query.includes('laranj')
+              ? 'Clínica Life Laranjeiras'
+              : 'Clínica Life Jacaraípe',
+            limit: 1,
+            lines: [{ amount: '8000.00', description: 'Serviço' }],
+          }),
+        };
+      },
+    });
+
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual foi meu maior gasto em Jacaraípe em outubro de 2026?',
+      now: NOW,
+    });
+    const toLaranjeiras = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em Laranjeiras?',
+      now: NOW,
+    });
+    expect(toLaranjeiras.run).toBeNull();
+    expect(calls[1]).toMatchObject({ monthKey: '2026-10', limit: 1 });
+    expect(String(calls[1]?.costCenterQuery).toLowerCase()).toContain('laranj');
+
+    const backToJac = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em Jacaraípe?',
+      now: NOW,
+    });
+    expect(backToJac.run).toBeNull();
+    expect(calls[2]).toMatchObject({ monthKey: '2026-10', limit: 1 });
+    expect(String(calls[2]?.costCenterQuery).toLowerCase()).toContain('jacar');
+    expect(harness.openai.generateCalls).toHaveLength(0);
+  });
+
+  it('C.1 T4 — E em setembro? sem prior não inventa consulta de ranking', async () => {
+    const movementCalls: Array<Record<string, unknown>> = [];
+    const harness = createHarness({
+      async execute({ call }) {
+        if (call.name === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME) {
+          movementCalls.push(call.arguments);
+        }
+        return {
+          id: call.id,
+          name: call.name,
+          ok: true,
+          content: movementPayload({
+            name: 'Inventado',
+            limit: 1,
+            lines: [{ amount: '999.00', description: 'Não deveria' }],
+          }),
+        };
+      },
+    });
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em setembro?',
+      now: NOW,
+    });
+    expect(movementCalls).toHaveLength(0);
+  });
+
+  it('C.1 T5/T6 — mês genérico / faturamento não forçam ranking anterior', async () => {
+    const movementCalls: Array<Record<string, unknown>> = [];
+    const harness = createHarness({
+      async execute({ call }) {
+        if (call.name === CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME) {
+          movementCalls.push(call.arguments);
+        }
+        return {
+          id: call.id,
+          name: call.name,
+          ok: true,
+          content: movementPayload({
+            name: 'Clínica Life Jacaraípe',
+            limit: 1,
+            lines: [{ amount: '12000.00', description: 'Aluguel' }],
+          }),
+        };
+      },
+    });
+
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual foi meu maior gasto em Jacaraípe em outubro de 2026?',
+      now: NOW,
+    });
+    expect(movementCalls).toHaveLength(1);
+
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Como foi o mês de setembro?',
+      now: NOW,
+    });
+    expect(movementCalls).toHaveLength(1);
+
+    await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Qual foi o faturamento de setembro?',
+      now: NOW,
+    });
+    expect(movementCalls).toHaveLength(1);
+  });
+
+  it('C.1 T7 — centro não encontrado no tenant não inventa fato', async () => {
+    const initialBag = mergeAdvisorConversationBag(parseAdvisorConversationBag(null), {
+      costCenterOutflowMovements: costCenterOutflowMovementsState({
+        monthKey: '2026-10',
+        periodSource: 'CURRENT',
+        limit: 1,
+        costCenterQuery: 'Centro Fantasma',
+      }),
+    });
+    const seeded = createHarness({
+      initialAnalyticalContext: serializeAdvisorConversationBag(initialBag),
+      async execute({ tenantId, call }) {
+        expect(tenantId).toBe('tenant-a');
+        return {
+          id: call.id,
+          name: call.name,
+          ok: true,
+          content: movementPayload({ name: 'X', status: 'NOT_FOUND', limit: 1 }),
+        };
+      },
+    });
+    const follow = await seeded.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em setembro?',
+      now: NOW,
+    });
+    expect(follow.run).toBeNull();
+    expect(follow.consultantMessage.content).toMatch(/não encontrei/i);
+    expect(seeded.openai.generateCalls).toHaveLength(0);
+    expect(seeded.savedContexts).toHaveLength(0);
+  });
+
+  it('C.1 T9 — EMPTY_RESULT respeita semântica sem inventar valor', async () => {
+    const initialBag = mergeAdvisorConversationBag(parseAdvisorConversationBag(null), {
+      costCenterOutflowMovements: costCenterOutflowMovementsState({
+        monthKey: '2026-10',
+        periodSource: 'CURRENT',
+        limit: 1,
+        costCenterQuery: 'Clínica Life Jacaraípe',
+      }),
+    });
+    const harness = createHarness({
+      initialAnalyticalContext: serializeAdvisorConversationBag(initialBag),
+      async execute({ call }) {
+        return {
+          id: call.id,
+          name: call.name,
+          ok: true,
+          content: movementPayload({
+            name: 'Clínica Life Jacaraípe',
+            status: 'EMPTY_RESULT',
+            limit: 1,
+            lines: [],
+          }),
+        };
+      },
+    });
+    const follow = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'E em setembro?',
+      now: NOW,
+    });
+    expect(follow.run).toBeNull();
+    expect(follow.consultantMessage.content).toMatch(/não há lançamentos|sem lançamentos|nenhum lançamento/i);
+    expect(follow.consultantMessage.content).not.toMatch(/Aluguel|Imobiliária/);
+    expect(harness.openai.generateCalls).toHaveLength(0);
+  });
+
+  it('C.1 T11 — Pending ACCEPT não é tratado como period follow-up', async () => {
+    const pending = createPendingAnalyticalAction({
+      id: 'pending-c1-t11',
+      createdFromMessageId: 'msg-offer',
+      domain: 'PAYABLE',
+      operation: 'RANKING_TOPN',
+      steps: [
+        {
+          toolName: 'payable_titles',
+          filters: {
+            monthKey: '2026-10',
+            status: 'OPEN',
+            ordering: 'VALUE_DESC',
+            limit: 5,
+          },
+        },
+      ],
+      objective: 'Listar próximos maiores compromissos abertos do mês',
+      offerSnippet: 'Posso listar os próximos maiores compromissos deste mês.',
+      now: NOW,
+    });
+    expect(pending).not.toBeNull();
+    const initialBag = mergeAdvisorConversationBag(parseAdvisorConversationBag(null), {
+      costCenterOutflowMovements: costCenterOutflowMovementsState({
+        monthKey: '2026-10',
+        periodSource: 'CURRENT',
+        limit: 1,
+        costCenterQuery: 'Clínica Life Jacaraípe',
+      }),
+      pendingAnalyticalAction: pending!,
+    });
+    const toolNames: string[] = [];
+    const harness = createHarness({
+      initialAnalyticalContext: serializeAdvisorConversationBag(initialBag),
+      providerText: JSON.stringify({ decision: 'ACCEPT' }),
+      async execute({ call }) {
+        toolNames.push(call.name);
+        return {
+          id: call.id,
+          name: call.name,
+          ok: true,
+          content: JSON.stringify({
+            status: 'OK',
+            titles: [{ partyName: 'Fornecedor', amount: '100.00' }],
+          }),
+        };
+      },
+    });
+    const accept = await harness.send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'quero sim',
+      now: NOW,
+    });
+    expect(toolNames).not.toContain(CASH_COST_CENTER_MOVEMENT_LINES_TOOL_NAME);
+    expect(accept.consultantMessage.content).not.toMatch(/maior gasto|Jacaraípe/i);
+  });
 });
 
 function createHarness(input: {
@@ -668,8 +1189,13 @@ function createHarness(input: {
     content: string;
     resultCardinality?: number;
   }>;
+  readonly initialAnalyticalContext?: unknown;
+  readonly providerText?: string;
 }) {
-  const openai = createFakeIaProvider({ id: 'OPENAI', text: 'prosa inventada do provider' });
+  const openai = createFakeIaProvider({
+    id: 'OPENAI',
+    text: input.providerText ?? 'prosa inventada do provider',
+  });
   const messages: AiMessageRecord[] = [];
   const runs: AiRunRecord[] = [];
   const savedContexts: unknown[] = [];
@@ -681,7 +1207,7 @@ function createHarness(input: {
     userId: 'user-a',
     status: 'OPEN',
     title: 'titulo',
-    analyticalContext: null,
+    analyticalContext: (input.initialAnalyticalContext as AiConversationRecord['analyticalContext']) ?? null,
     startedAt: NOW,
     lastMessageAt: NOW,
     createdAt: NOW,

@@ -27,7 +27,21 @@ export type ExplicitCostCenterScope =
 export type AdvisorQuestionAnalyticalDemand = {
   readonly explicitCostCenter: ExplicitCostCenterScope;
   readonly wantsOutflow: boolean;
+  /**
+   * Entradas/recebimentos realizados de caixa (REALIZED_CASH INFLOW).
+   * Não inclui faturamento (BILLING).
+   */
   readonly wantsInflow: boolean;
+  /**
+   * Faturamento oficial (BILLING = realized.inflows + expected.receivables; vencido fora).
+   * Distinto de wantsInflow.
+   */
+  readonly wantsBilling: boolean;
+  /**
+   * Pedido de lucro contábil / EBITDA / margem líquida — sem capability oficial de competência.
+   * Não deve ser atendido por CASH_RESULT.
+   */
+  readonly wantsAccountingProfit: boolean;
   readonly wantsComparison: boolean;
   /** Pedido adicional de composição/explicação além de um agregado fechado. */
   readonly wantsCompositionOrDriver: boolean;
@@ -175,8 +189,21 @@ export function deriveQuestionAnalyticalDemand(input: {
     /\b(saidas?|gastos?|despesas?|pagamentos?|desembolsos?|consumiu caixa|gastou)\b/.test(
       folded,
     );
+  // Stem alinhado a resolveAdvisorBillingIntent (\bfaturament sem boundary no meio).
+  const wantsBilling =
+    (/\bfaturament/.test(folded) ||
+      /\b(faturei|faturamos|faturaram|faturou|faturado)\b/.test(folded)) &&
+    !wantsOutflow;
+  // REALIZED_CASH INFLOW — nunca colapsar faturamento aqui.
+  const wantsInflowCash =
+    /\b(entradas?|recebimentos?|entrou|entrar|recebi|recebeu)\b/.test(folded);
   const wantsInflow =
-    /\b(entradas?|recebimentos?|faturamento|receitas?)\b/.test(folded) && !wantsOutflow;
+    (wantsInflowCash || /\breceitas?\b/.test(folded)) &&
+    !wantsOutflow &&
+    (!wantsBilling || wantsInflowCash);
+  const wantsAccountingProfit =
+    /\b(lucro\s+(?:liquido|contabil|operacional)|ebitda|margem\s+liquida)\b/.test(folded) &&
+    !/\bresultado\s+de\s+caixa\b/.test(folded);
   const wantsCompositionOrDriver =
     /\be o que\b/.test(folded) ||
     (/\be qual\b/.test(folded) &&
@@ -195,6 +222,7 @@ export function deriveQuestionAnalyticalDemand(input: {
     /^(?:o que|como|por que|porque)\b/.test(folded) &&
     (wantsOutflow ||
       wantsInflow ||
+      wantsBilling ||
       /\b(caixa|resultado|moviment|categor|saidas?|gastos?)\b/.test(folded)) &&
     !/\b(?:maior|menores?|top\s*\d+|ranking)\b/.test(folded);
 
@@ -206,6 +234,8 @@ export function deriveQuestionAnalyticalDemand(input: {
     explicitCostCenter,
     wantsOutflow,
     wantsInflow,
+    wantsBilling,
+    wantsAccountingProfit,
     wantsComparison: input.comparison,
     wantsCompositionOrDriver,
     wantsOpenInvestigation,
@@ -299,7 +329,13 @@ export function canDeterministicPathFullyAnswer(input: {
       if (demand.explicitCostCenter.status !== 'ABSENT') {
         return false;
       }
-      if (demand.wantsOutflow || demand.wantsCompositionOrDriver || demand.wantsOpenInvestigation) {
+      if (
+        demand.wantsOutflow ||
+        demand.wantsBilling ||
+        demand.wantsAccountingProfit ||
+        demand.wantsCompositionOrDriver ||
+        demand.wantsOpenInvestigation
+      ) {
         return false;
       }
       if (demand.wantsComparison) {
@@ -307,6 +343,11 @@ export function canDeterministicPathFullyAnswer(input: {
       }
     }
     return true;
+  }
+
+  // Lucro contábil ≠ resultado de caixa — sem capability de competência publicada.
+  if (demand.wantsAccountingProfit) {
+    return false;
   }
 
   if (demand.explicitCostCenter.status === 'FOUND' || demand.explicitCostCenter.status === 'AMBIGUOUS') {
@@ -326,6 +367,26 @@ export function canDeterministicPathFullyAnswer(input: {
   }
 
   if (demand.wantsOutflow && path.metricFamily === 'BILLING') {
+    return false;
+  }
+
+  // BILLING não pode ser fechado por REALIZED_CASH / lookup de centro / nominal.
+  // LIMITATION já retornou acima; aqui só restam famílias de métrica.
+  if (demand.wantsBilling && path.metricFamily !== 'BILLING') {
+    return false;
+  }
+
+  // Pedido só de entradas realizadas não fecha com BILLING puro.
+  if (demand.wantsInflow && !demand.wantsBilling && path.metricFamily === 'BILLING') {
+    return false;
+  }
+
+  // Pedido conjunto: faturamento + entradas — um único path de uma métrica não basta.
+  if (
+    demand.wantsBilling &&
+    demand.wantsInflow &&
+    (path.metricFamily === 'BILLING' || path.metricFamily === 'REALIZED_CASH')
+  ) {
     return false;
   }
 

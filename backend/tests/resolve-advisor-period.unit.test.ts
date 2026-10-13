@@ -42,6 +42,33 @@ describe('resolveAdvisorPeriod (F13.6.1)', () => {
     ).toEqual({ monthKey: '2025-12', source: 'EXPLICIT' });
   });
 
+  it('não confunde "os dez maiores" com dezembro; preserva mês real citado', () => {
+    expect(
+      resolveAdvisorPeriod({
+        content: 'E os dez maiores?',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual({ monthKey: '2026-09', source: 'CURRENT' });
+    expect(
+      resolveAdvisorPeriod({
+        content: 'E os dez maiores de Jacaraípe em setembro?',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual({ monthKey: '2026-09', source: 'EXPLICIT' });
+    expect(
+      resolveAdvisorPeriod({
+        content: 'faturamento em dez',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual({ monthKey: '2026-12', source: 'EXPLICIT' });
+    expect(
+      resolveAdvisorPeriod({
+        content: 'faturamento em dezembro',
+        now: SEPTEMBER_2026,
+      }),
+    ).toEqual({ monthKey: '2026-12', source: 'EXPLICIT' });
+  });
+
   it('mês passado usa a referência civil e cruza o ano', () => {
     expect(
       resolveAdvisorPeriod({

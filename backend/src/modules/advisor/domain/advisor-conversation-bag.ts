@@ -19,6 +19,10 @@ import {
   type PendingAnalyticalAction,
 } from './pending-analytical-action.js';
 import {
+  parseLastAnalyticalQuery,
+  type LastAnalyticalQuery,
+} from './last-analytical-query.js';
+import {
   parseUserAnalyticalAssumptionList,
   type UserAnalyticalAssumption,
 } from './user-analytical-assumption.js';
@@ -33,6 +37,8 @@ export type AdvisorConversationBagSlots = {
   readonly pendingAnalyticalAction: PendingAnalyticalAction | null;
   /** Premissas explícitas do usuário (cenário). Nunca fatos oficiais. */
   readonly userAssumptions: readonly UserAnalyticalAssumption[];
+  /** Última investigação analítica coberta (C.2.3+). Sem IDs internos. */
+  readonly lastAnalyticalQuery: LastAnalyticalQuery | null;
 };
 
 export type AdvisorConversationBag = {
@@ -55,6 +61,7 @@ export function emptyAdvisorConversationBag(): AdvisorConversationBag {
       dailyCashMovement: null,
       pendingAnalyticalAction: null,
       userAssumptions: [],
+      lastAnalyticalQuery: null,
     },
   };
 }
@@ -87,6 +94,7 @@ export function parseAdvisorConversationBag(value: unknown): AdvisorConversation
           slots.pendingAnalyticalAction ?? null,
         ),
         userAssumptions: parseUserAnalyticalAssumptionList(slots.userAssumptions ?? []),
+        lastAnalyticalQuery: parseLastAnalyticalQuery(slots.lastAnalyticalQuery ?? null),
       },
     };
   }
@@ -149,6 +157,10 @@ export function mergeAdvisorConversationBag(
         patch.userAssumptions === undefined
           ? current.slots.userAssumptions
           : patch.userAssumptions,
+      lastAnalyticalQuery:
+        patch.lastAnalyticalQuery === undefined
+          ? current.slots.lastAnalyticalQuery
+          : patch.lastAnalyticalQuery,
     },
   };
 }
@@ -167,6 +179,7 @@ export function serializeAdvisorConversationBag(bag: AdvisorConversationBag): ob
         dailyCashMovement: bag.slots.dailyCashMovement,
         pendingAnalyticalAction: bag.slots.pendingAnalyticalAction,
         userAssumptions: bag.slots.userAssumptions,
+        lastAnalyticalQuery: bag.slots.lastAnalyticalQuery,
       },
     }),
   ) as object;

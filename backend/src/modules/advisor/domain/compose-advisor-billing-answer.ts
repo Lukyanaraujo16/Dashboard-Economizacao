@@ -1,4 +1,9 @@
-import { BILLING_SERIES_FACT_KIND, BILLING_SERIES_MAX_MONTHS } from './billing-month-series.js';
+import {
+  BILLING_COST_CENTER_MONTH_FACT_KIND,
+  BILLING_COST_CENTER_SERIES_FACT_KIND,
+  BILLING_SERIES_FACT_KIND,
+  BILLING_SERIES_MAX_MONTHS,
+} from './billing-month-series.js';
 import { formatAdvisorFactualBrl, formatAdvisorFactualMonth } from './advisor-factual-display.js';
 
 const ABSENT = 'ABSENT';
@@ -106,4 +111,111 @@ export function composeAdvisorBillingSeriesAnswer(input: {
 
 export function composeAdvisorBillingWindowLimitAnswer(count: number): string {
   return `A janela oficial de faturamento mensal vai até ${BILLING_SERIES_MAX_MONTHS} meses. Não consigo calcular a série dos últimos ${count} meses.`;
+}
+
+export function composeAdvisorBillingCostCenterEntityAnswer(input: {
+  readonly status: 'NOT_FOUND' | 'AMBIGUOUS' | string;
+}): string {
+  if (input.status === 'AMBIGUOUS') {
+    return 'Há mais de um centro de custo correspondente. Especifique o nome ou o código.';
+  }
+  return 'Não encontrei esse centro de custo.';
+}
+
+/**
+ * Faturamento oficial por centro — não apresenta entradas realizadas como faturamento.
+ */
+export function composeAdvisorBillingCostCenterMonthAnswer(
+  fact: Record<string, unknown>,
+): string | null {
+  if (fact.factKind !== BILLING_COST_CENTER_MONTH_FACT_KIND) {
+    return null;
+  }
+  if (fact.status === 'NOT_FOUND' || fact.status === 'AMBIGUOUS') {
+    return composeAdvisorBillingCostCenterEntityAnswer({ status: String(fact.status) });
+  }
+  const monthKey = typeof fact.monthKey === 'string' ? fact.monthKey : null;
+  const center =
+    typeof fact.costCenterName === 'string' && fact.costCenterName.trim() !== ''
+      ? fact.costCenterName.trim()
+      : 'esse centro';
+  const when = monthKey === null ? 'esse mês' : (formatAdvisorFactualMonth(monthKey) ?? 'esse mês');
+  if (fact.status === 'UNAVAILABLE' || typeof fact.billing !== 'string') {
+    return `Não há faturamento oficial atribuível a ${center} em ${when}. O rateio por centro está indisponível ou incompleto neste recorte.`;
+  }
+  const amount = formatAdvisorFactualBrl(fact.billing);
+  if (amount === null) {
+    return null;
+  }
+  return `Faturamento oficial de ${center} em ${when}: ${amount}.`;
+}
+
+export function composeAdvisorBillingCostCenterSeriesAnswer(input: {
+  readonly fact: Record<string, unknown>;
+  readonly wantsAverage: boolean;
+}): string | null {
+  const fact = input.fact;
+  if (fact.factKind !== BILLING_COST_CENTER_SERIES_FACT_KIND) {
+    return null;
+  }
+  if (fact.status === 'NOT_FOUND' || fact.status === 'AMBIGUOUS') {
+    return composeAdvisorBillingCostCenterEntityAnswer({ status: String(fact.status) });
+  }
+  const center =
+    typeof fact.costCenterName === 'string' && fact.costCenterName.trim() !== ''
+      ? fact.costCenterName.trim()
+      : 'esse centro';
+  const requested = typeof fact.requestedCount === 'number' ? fact.requestedCount : null;
+  const valid = typeof fact.validCount === 'number' ? fact.validCount : null;
+  const complete = fact.complete === true;
+  const months = Array.isArray(fact.months) ? fact.months : null;
+  if (requested === null || valid === null || months === null) {
+    return null;
+  }
+
+  const available: string[] = [];
+  const missing: string[] = [];
+  for (const entry of months) {
+    if (entry === null || typeof entry !== 'object') {
+      return null;
+    }
+    const row = entry as Record<string, unknown>;
+    const monthKey = typeof row.monthKey === 'string' ? row.monthKey : null;
+    const label = monthKey === null ? null : formatAdvisorFactualMonth(monthKey);
+    if (label === null) {
+      return null;
+    }
+    if (row.available === true && typeof row.billing === 'string') {
+      const formatted = formatAdvisorFactualBrl(row.billing);
+      if (formatted === null) {
+        return null;
+      }
+      available.push(`Faturamento oficial de ${center} em ${label}: ${formatted}.`);
+    } else {
+      missing.push(
+        `${label} não possui faturamento oficial atribuível a ${center} (rateio indisponível ou incompleto)`,
+      );
+    }
+  }
+
+  const lines = [
+    ...available,
+    ...missing.map((line) => `${line}.`),
+    `Meses com faturamento oficial do centro: ${valid} de ${requested}.`,
+  ];
+
+  if (input.wantsAverage && complete) {
+    const average = typeof fact.average === 'string' ? fact.average : null;
+    const formatted = average === null ? null : formatAdvisorFactualBrl(average);
+    if (formatted === null) {
+      return null;
+    }
+    lines.push(`Média dos ${requested} meses (${center}): ${formatted}.`);
+  } else if (input.wantsAverage) {
+    lines.push(
+      `Por isso não consigo calcular com segurança a média completa dos últimos ${requested} meses para ${center}.`,
+    );
+  }
+
+  return lines.join('\n');
 }

@@ -30,8 +30,9 @@ export const ANALYTICAL_DIMENSION_REGISTRY: readonly AnalyticalDimensionDefiniti
   {
     key: 'COST_CENTER',
     identityStrategy: 'OFFICIAL_COST_CENTER',
-    compatibleFamilies: ['FLOW'],
-    notes: 'Attribution/coverage próprios (FETCHED/EXACT); não fundir algoritmo com COUNTERPARTY.',
+    compatibleFamilies: ['FLOW', 'BILLING'],
+    notes:
+      'Attribution/coverage próprios (FETCHED/EXACT); BILLING por centro reusa monthlyBilling filtrado. Não fundir algoritmo com COUNTERPARTY.',
   },
   {
     key: 'COUNTERPARTY',

@@ -16,6 +16,7 @@ import type { AdvisorQuestionAnalyticalDemand } from './advisor-question-scope.j
 export const ANALYTICAL_OBLIGATIONS = [
   'ENTITY_SCOPE',
   'VALUE',
+  'BILLING',
   'COMPARISON',
   'COMPOSITION',
   'MOVEMENTS',
@@ -88,6 +89,13 @@ const OBLIGATION_TOOL_PROVIDERS: Record<AnalyticalObligation, readonly string[]>
     'cash_cost_center_ranking',
     'payable_titles',
   ],
+  /**
+   * BILLING ≠ REALIZED_CASH INFLOW.
+   * Tools de caixa realizado NÃO satisfazem faturamento.
+   * compare_cash_months cobre comparação de billing tenant-wide.
+   * Path determinístico C.2.1 cobre billing por centro antes do agente.
+   */
+  BILLING: ['compare_cash_months'],
   COMPARISON: ['compare_cash_months', 'compare_cash_cost_center', 'compare_cash_nominal'],
   // Composição/driver: ranking por categoria OU linhas (ambos explicam concentração).
   COMPOSITION: [
@@ -124,6 +132,8 @@ export function deriveAnalyticalObligations(
   const financial =
     demand.wantsOutflow ||
     demand.wantsInflow ||
+    demand.wantsBilling ||
+    demand.wantsAccountingProfit ||
     demand.wantsComparison ||
     demand.wantsCompositionOrDriver ||
     demand.wantsOpenInvestigation ||
@@ -144,7 +154,18 @@ export function deriveAnalyticalObligations(
     obligations.push('ENTITY_SCOPE');
   }
 
-  obligations.push('VALUE');
+  // Lucro contábil: obligation financeira genérica → incompleto sem capability.
+  if (demand.wantsAccountingProfit) {
+    obligations.push('VALUE');
+  } else if (demand.wantsBilling) {
+    obligations.push('BILLING');
+    // Dual: faturamento + entradas/recebimentos explícitos.
+    if (demand.wantsInflow) {
+      obligations.push('VALUE');
+    }
+  } else {
+    obligations.push('VALUE');
+  }
 
   // PAYABLE agregado (estoque) → VALUE via payable_stock / FINANCIAL_FACTS.
   // PAYABLE detalhe/ranking/listagem → exige payable_titles.
@@ -194,18 +215,23 @@ export function evaluateAnalyticalCompletion(input: {
   const evidenceRefs: AnalyticalEvidenceRef[] = [];
   const satisfied = new Set<AnalyticalObligation>();
 
-  // FINANCIAL_FACTS / fatos preload tenant-wide: VALUE sem ENTITY_SCOPE.
+  // FINANCIAL_FACTS / fatos preload tenant-wide: VALUE/BILLING sem ENTITY_SCOPE.
   // UNKNOWN trata-se como TENANT (marcação ausente = escopo empresa).
   // Agregado payable_stock / FINANCIAL_FACTS NÃO satisfaz PAYABLE_TITLES.
+  // FINANCIAL_FACTS NÃO satisfaz BILLING quando há escopo de centro (C.2.1).
+  const hasTenantPreload = (input.preloadFactScopes ?? []).some(
+    (scope) => scope === 'TENANT' || scope === 'UNKNOWN',
+  );
   if (
     !requiresEntity &&
     required.includes('VALUE') &&
     !required.includes('PAYABLE_TITLES') &&
-    (input.preloadFactScopes ?? []).some(
-      (scope) => scope === 'TENANT' || scope === 'UNKNOWN',
-    )
+    hasTenantPreload
   ) {
     satisfied.add('VALUE');
+  }
+  if (!requiresEntity && required.includes('BILLING') && hasTenantPreload) {
+    satisfied.add('BILLING');
   }
 
   for (const evidence of input.toolEvidence) {
@@ -330,6 +356,9 @@ export function analyzeToolEvidence(
   ) {
     satisfies.add('VALUE');
     satisfies.add('COMPARISON');
+    if (name === 'compare_cash_months') {
+      satisfies.add('BILLING');
+    }
   } else if (name === 'cash_movement_lines' || name === 'cash_cost_center_movement_lines') {
     satisfies.add('VALUE');
     satisfies.add('MOVEMENTS');
