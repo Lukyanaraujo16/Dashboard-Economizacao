@@ -1,9 +1,6 @@
 import { Prisma } from '../../../generated/prisma/client.js';
-import {
-  MAX_REPORT_INCLUSIVE_MONTHS,
-  listForwardInclusiveMonthKeys,
-  shiftCivilMonthKey,
-} from '../../analytics/domain/civil-calendar.js';
+import { MAX_REPORT_INCLUSIVE_MONTHS } from '../../analytics/domain/civil-calendar.js';
+import { listAdvisorMonthWindowKeys } from './advisor-question-interpretation.js';
 
 /** Mesmo teto inclusivo dos relatórios mensais. */
 export const BILLING_SERIES_MAX_MONTHS = MAX_REPORT_INCLUSIVE_MONTHS;
@@ -29,8 +26,7 @@ export function listBillingSeriesMonthKeys(
   if (!Number.isInteger(count) || count < 1 || count > BILLING_SERIES_MAX_MONTHS) {
     throw new Error('janela de faturamento inválida.');
   }
-  const start = shiftCivilMonthKey(endMonthKey, -(count - 1));
-  return listForwardInclusiveMonthKeys(start, count);
+  return listAdvisorMonthWindowKeys(endMonthKey, count);
 }
 
 /**

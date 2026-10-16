@@ -122,7 +122,11 @@ export function extractAdvisorCostCenterQuery(content: string): string | null {
 
 function isGenericCenterQuery(value: string): boolean {
   const folded = foldPt(value);
-  return /^(?:de custo|com maior|com maiores|que mais|maior|maiores)$/.test(folded);
+  // Predicado ("teve o maior gasto", "que mais gastou") não é nome de centro (Marco A2).
+  return (
+    /^(?:de custo|com maior|com maiores|que mais|maior|maiores)$/.test(folded) ||
+    /^(?:teve|tem|tinha|que|com|mais|gastou|gasta|registrou|apresentou)\b/.test(folded)
+  );
 }
 
 function resolveCostCenterDirection(folded: string): AdvisorCashDirection | null {

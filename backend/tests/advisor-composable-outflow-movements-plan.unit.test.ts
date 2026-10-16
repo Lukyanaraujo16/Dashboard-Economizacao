@@ -1078,7 +1078,12 @@ describe('envio — maiores gastos por centro (Fase 1)', () => {
       now: NOW,
     });
     expect(follow.run).toBeNull();
-    expect(follow.consultantMessage.content).toMatch(/não encontrei/i);
+    // Marco A2: centro herdado (já resolvido antes) nunca vira "não encontrei";
+    // a tool não o achou agora, então ele saiu do cadastro.
+    expect(follow.consultantMessage.content).toContain(
+      'O centro de custo Centro Fantasma, usado na consulta anterior, não aparece mais no cadastro desta empresa.',
+    );
+    expect(follow.consultantMessage.content).not.toMatch(/não encontrei/i);
     expect(seeded.openai.generateCalls).toHaveLength(0);
     expect(seeded.savedContexts).toHaveLength(0);
   });

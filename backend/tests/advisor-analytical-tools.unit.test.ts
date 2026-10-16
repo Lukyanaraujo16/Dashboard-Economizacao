@@ -51,6 +51,8 @@ describe('Analytical Tools do Consultor (F13.8.1D1)', () => {
       COMPARE_CASH_MONTHS_TOOL_NAME,
       'cash_realized_breakdown',
       'cash_movement_lines',
+      // Publicada em 97f1f4d (análise de contas a pagar).
+      'payable_titles',
       'cash_nominal_dimension_ranking',
       'cash_nominal_dimension_lookup',
       'compare_cash_nominal_dimension',

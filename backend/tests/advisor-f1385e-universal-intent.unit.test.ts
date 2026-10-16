@@ -54,8 +54,9 @@ function expectNoConvenio(intent: Extract<UniversalAnalyticalIntent, { kind: 'RE
 }
 
 describe('F13.8.5E universal intent', () => {
-  it('publica 31 capabilities, incluindo TOPN, lookup, share e planejamento', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(34);
+  it('publica 40 capabilities, incluindo TOPN, lookup, share e planejamento', () => {
+    // Inventário exato em advisor-f1385b-parity-wrappers (34 + billing×CC 2 + payable 3 + A2 1).
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(40);
   });
 
   it('não injeta convênio sem evidência na pergunta', () => {

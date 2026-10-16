@@ -5,6 +5,7 @@ import {
   buildBillingCostCenterMonthQuery,
   buildBillingCostCenterSeriesQuery,
   buildCostCenterMovementsQuery,
+  buildCostCenterMovementsWindowQuery,
 } from './analytical/build-analytical-query-from-tool.js';
 import type { AnalyticalQuery } from './analytical/analytical-query.js';
 import {
@@ -72,7 +73,21 @@ export function lastAnalyticalQueryFromCostCenterMovements(input: {
   readonly limit: number;
   readonly direction?: 'INFLOW' | 'OUTFLOW';
   readonly structuredStatus?: string;
+  /** Janela de meses terminando em `monthKey` (capability window.movements). */
+  readonly windowMonths?: number;
 }): LastAnalyticalQuery | null {
+  if (input.windowMonths !== undefined) {
+    return buildLastAnalyticalQuery({
+      query: buildCostCenterMovementsWindowQuery({
+        endMonthKey: input.monthKey,
+        count: input.windowMonths,
+        costCenterQuery: input.costCenterQuery,
+        limit: input.limit,
+      }),
+      capabilityKey: 'realized_cash.cost_center.window.movements',
+      executionStatus: input.structuredStatus ?? 'OK',
+    });
+  }
   const query = buildCostCenterMovementsQuery({
     monthKey: input.monthKey,
     direction: input.direction ?? 'OUTFLOW',

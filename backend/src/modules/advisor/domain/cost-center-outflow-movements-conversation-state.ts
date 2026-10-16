@@ -1,3 +1,4 @@
+import { ADVISOR_MONTH_WINDOW_MAX_MONTHS } from './advisor-question-interpretation.js';
 import type { AdvisorConversationalPeriodSource } from './resolve-advisor-conversational-period.js';
 
 /**
@@ -16,8 +17,11 @@ export type CostCenterOutflowMovementsConversationState = {
   readonly regime: 'REALIZED';
   readonly operation: 'MOVEMENTS';
   readonly dimension: 'COST_CENTER';
+  /** Mês da consulta; em janela, o mês final (inclusivo). */
   readonly monthKey: string;
   readonly periodSource: AdvisorConversationalPeriodSource;
+  /** Marco A2: janela de meses terminando em `monthKey`. Ausente = mês único (bags antigos). */
+  readonly windowMonths?: number;
   readonly limit: number;
   /** Nome oficial resolvido do centro — menção textual, nunca id interno. */
   readonly costCenterQuery: string;
@@ -66,6 +70,15 @@ export function parseCostCenterOutflowMovementsConversationState(
   if (typeof value.limit !== 'number' || !Number.isInteger(value.limit) || value.limit < 1) {
     return null;
   }
+  if (
+    value.windowMonths !== undefined &&
+    (typeof value.windowMonths !== 'number' ||
+      !Number.isInteger(value.windowMonths) ||
+      value.windowMonths < 1 ||
+      value.windowMonths > ADVISOR_MONTH_WINDOW_MAX_MONTHS)
+  ) {
+    return null;
+  }
   if (typeof value.costCenterQuery !== 'string') {
     return null;
   }
@@ -84,6 +97,7 @@ export function parseCostCenterOutflowMovementsConversationState(
     dimension: 'COST_CENTER',
     monthKey: value.monthKey,
     periodSource: value.periodSource as AdvisorConversationalPeriodSource,
+    ...(typeof value.windowMonths === 'number' ? { windowMonths: value.windowMonths } : {}),
     limit: value.limit,
     costCenterQuery,
   };
@@ -92,6 +106,7 @@ export function parseCostCenterOutflowMovementsConversationState(
 export function costCenterOutflowMovementsState(input: {
   readonly monthKey: string;
   readonly periodSource: AdvisorConversationalPeriodSource;
+  readonly windowMonths?: number;
   readonly limit: number;
   readonly costCenterQuery: string;
 }): CostCenterOutflowMovementsConversationState {
@@ -106,6 +121,7 @@ export function costCenterOutflowMovementsState(input: {
     dimension: 'COST_CENTER',
     monthKey: input.monthKey,
     periodSource: input.periodSource,
+    ...(input.windowMonths !== undefined ? { windowMonths: input.windowMonths } : {}),
     limit: input.limit,
     costCenterQuery: input.costCenterQuery.trim(),
   };

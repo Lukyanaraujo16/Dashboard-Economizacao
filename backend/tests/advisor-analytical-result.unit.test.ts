@@ -156,6 +156,10 @@ function createHarness(options?: {
           (item) => item.tenantId === tenantId && item.conversationId === conversationId,
         );
       },
+      // Contrato do repositório real (C.2.3+): o bag analítico é persistido por conversa.
+      async saveAnalyticalContext() {
+        return true;
+      },
     },
     runs: {
       async createRun(tenantId, input) {

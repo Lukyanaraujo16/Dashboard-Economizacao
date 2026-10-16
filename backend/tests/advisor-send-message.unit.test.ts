@@ -82,6 +82,32 @@ function message(
   };
 }
 
+/**
+ * B.1.1: após resposta analítica elegível, o orquestrador faz 1 chamada de extract
+ * de PendingAnalyticalAction (marcador `PENDING_ACTION_EXTRACT:`). Ela não é a
+ * geração da resposta; os asserts sobre a resposta olham só as chamadas de resposta.
+ */
+type FakeGenerateInput = ReturnType<typeof createFakeIaProvider>['generateCalls'][number];
+
+function isPendingExtractCall(input: FakeGenerateInput): boolean {
+  return input.blocks.some(
+    (block) =>
+      block.type === 'PLATFORM_INSTRUCTIONS' && block.content.startsWith('PENDING_ACTION_EXTRACT:'),
+  );
+}
+
+function answerGenerateCalls(
+  provider: ReturnType<typeof createFakeIaProvider>,
+): FakeGenerateInput[] {
+  return provider.generateCalls.filter((input) => !isPendingExtractCall(input));
+}
+
+function lastAnswerInput(
+  provider: ReturnType<typeof createFakeIaProvider>,
+): FakeGenerateInput | null {
+  return answerGenerateCalls(provider).at(-1) ?? null;
+}
+
 function builtContext(): AdvisorBuiltContext {
   return {
     tenantId: 'tenant-a',
@@ -167,6 +193,19 @@ function createHarness(options?: {
           (item) => item.tenantId === tenantId && item.conversationId === conversationId,
         );
       },
+      // Contrato do repositório real (C.2.3+): bag analítico por conversa e tenant.
+      async saveAnalyticalContext(tenantId, conversationId, context) {
+        const index = conversationRows.findIndex(
+          (item) => item.tenantId === tenantId && item.id === conversationId,
+        );
+        if (index < 0) {
+          throw new Error('conversa ausente neste tenant');
+        }
+        conversationRows[index] = {
+          ...conversationRows[index]!,
+          analyticalContext: context as AiConversationRecord['analyticalContext'],
+        };
+      },
     },
     runs: {
       async createRun(tenantId, input) {
@@ -234,7 +273,23 @@ function createHarness(options?: {
 
 describe('send-advisor-message (F13.3)', () => {
   it('executa fluxo reativo com sucesso e registra ai_run SUCCEEDED', async () => {
-    const { send, openai, messages, runs } = createHarness();
+    // Fato oficial no contexto: o completion gate (agente controlado) exige evidência
+    // para qualquer valor afirmado pelo provider.
+    const { send, openai, messages, runs } = createHarness({
+      context: {
+        build: async () => ({
+          ...builtContext(),
+          blocks: [
+            ...builtContext().blocks,
+            {
+              type: 'FINANCIAL_FACTS',
+              content: 'monthKey: 2026-09\nbilling.official: 0\nbilling.officialBrl: R$ 0,00',
+              trustLevel: 'PLATFORM',
+            },
+          ],
+        }),
+      },
+    });
     const result = await send.execute({
       tenantId: 'tenant-a',
       userId: 'user-a',
@@ -254,6 +309,20 @@ describe('send-advisor-message (F13.3)', () => {
     expect(runs[0]?.status).toBe('SUCCEEDED');
     expect(openai.lastInput?.tenantId).toBe('tenant-a');
     expect(openai.lastInput?.provider).toBe('OPENAI');
+  });
+
+  it('completion gate bloqueia valor do provider sem fato oficial no contexto', async () => {
+    const { send, runs } = createHarness();
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quanto faturou?',
+    });
+    expect(result.consultantMessage.content).not.toContain('Faturamento oficial: 0');
+    expect(result.consultantMessage.content).toContain('Não inventei valores');
+    expect(result.consultantMessage.content).toContain('BILLING');
+    expect(runs[0]?.status).toBe('SUCCEEDED');
   });
 
   it('em falha do provider atualiza ai_run e não cria resposta CONSULTANT', async () => {
@@ -481,7 +550,7 @@ describe('send-advisor-message (F13.3)', () => {
       monthKey: '2026-09',
       now: new Date('2026-09-24T18:00:00.000Z'),
     });
-    const facts = openai.lastInput?.blocks.find((block) => block.type === 'FINANCIAL_FACTS');
+    const facts = lastAnswerInput(openai)?.blocks.find((block) => block.type === 'FINANCIAL_FACTS');
     expect(cashFlowMonths).toEqual(['2026-08']);
     expect(facts?.content).toContain('monthKey: 2026-08');
     expect(facts?.content).toContain('billing: 224790.3');
@@ -803,7 +872,8 @@ describe('send-advisor-message (F13.3)', () => {
     expect(result.consultantMessage.content).toContain('R$ 136.659,99');
     expect(result.consultantMessage.content).toContain('R$ 224.790,30');
     expect(result.consultantMessage.content).toContain('64,49%');
-    expect(openai.generateCalls).toHaveLength(0);
+    expect(answerGenerateCalls(openai)).toHaveLength(0);
+    expect(openai.generateCalls.every(isPendingExtractCall)).toBe(true);
     expect(executeTool).not.toHaveBeenCalled();
   });
 
@@ -895,7 +965,9 @@ describe('send-advisor-message (F13.3)', () => {
       tenantId: 'tenant-a',
       userId: 'user-a',
       conversationId: 'conv-a',
-      question: 'Quais categorias mais faturaram em agosto?',
+      // Entradas de caixa por categoria (REALIZED_CASH INFLOW). "Faturaram" pediria
+      // BILLING, que o breakdown realizado não cobre (teste dedicado abaixo).
+      question: 'Quais categorias mais entraram no caixa em agosto?',
       monthKey: '2026-09',
       now: new Date('2026-09-24T18:00:00.000Z'),
     });
@@ -908,6 +980,53 @@ describe('send-advisor-message (F13.3)', () => {
     expect(executeTool).toHaveBeenCalled();
     // tool round + resposta + extract pending (B.1.1)
     expect(openai.generateCalls).toHaveLength(3);
+  });
+
+  it('categorias que mais faturaram: breakdown de caixa não fecha BILLING (limitação parcial)', async () => {
+    const openai = createFakeIaProvider({
+      id: 'OPENAI',
+      script: [
+        {
+          toolCalls: [
+            {
+              id: 'bd-1',
+              name: 'cash_realized_breakdown',
+              arguments: { monthKey: '2026-08', direction: 'INFLOW' },
+            },
+          ],
+        },
+        { text: 'As categorias oficiais de agosto foram ranqueadas no backend.' },
+      ],
+    });
+    const { send } = createHarness({
+      openai,
+      analyticalTools: {
+        tools: [{ name: 'cash_realized_breakdown', description: 'bd', inputSchema: {} }],
+        execute: vi.fn(async (input: { call: { id: string; name: string } }) => ({
+          id: input.call.id,
+          name: input.call.name,
+          ok: true,
+          content: JSON.stringify({
+            status: 'OK',
+            monthKey: '2026-08',
+            categories: [{ label: 'Atendimentos Convênio', rank: 1 }],
+          }),
+        })),
+      },
+    });
+    const result = await send.execute({
+      tenantId: 'tenant-a',
+      userId: 'user-a',
+      conversationId: 'conv-a',
+      question: 'Quais categorias mais faturaram em agosto?',
+      monthKey: '2026-09',
+      now: new Date('2026-09-24T18:00:00.000Z'),
+    });
+    expect(result.consultantMessage.content).toContain('Parte não determinada');
+    expect(result.consultantMessage.content).toContain('BILLING');
+    expect(result.consultantMessage.content).not.toBe(
+      'As categorias oficiais de agosto foram ranqueadas no backend.',
+    );
   });
 
   it('executa cash_movement_lines com julho herdado da conversa', async () => {
@@ -1112,7 +1231,8 @@ describe('send-advisor-message (F13.3)', () => {
     expect(result.run).toBeNull();
     expect(runs).toHaveLength(0);
     expect(withDocumentKnowledge).not.toHaveBeenCalled();
-    expect(openai.lastInput).toBeNull();
+    expect(lastAnswerInput(openai)).toBeNull();
+    expect(openai.generateCalls.every(isPendingExtractCall)).toBe(true);
     expect(result.consultantMessage.content).toContain('224.790,30');
     expect(result.consultantMessage.content).toContain('136.659,99');
   });
@@ -1155,7 +1275,7 @@ describe('send-advisor-message (F13.3)', () => {
     });
     expect(withDocumentKnowledge).toHaveBeenCalledOnce();
     expect(result.run?.status).toBe('SUCCEEDED');
-    const doc = openai.lastInput?.blocks.find((block) => block.type === 'DOCUMENT_KNOWLEDGE');
+    const doc = lastAnswerInput(openai)?.blocks.find((block) => block.type === 'DOCUMENT_KNOWLEDGE');
     expect(doc?.trustLevel).toBe('UNTRUSTED');
     expect(doc?.content).toContain('despesas fixas vezes N meses');
     expect(doc?.content).not.toContain('storageKey');
@@ -1231,9 +1351,9 @@ describe('send-advisor-message (F13.3)', () => {
       question:
         'Com base na metodologia da nossa base, como você interpreta meu faturamento de agosto de 2026?',
     });
-    const facts = openai.lastInput?.blocks.find((block) => block.type === 'FINANCIAL_FACTS');
-    const docs = openai.lastInput?.blocks.find((block) => block.type === 'DOCUMENT_KNOWLEDGE');
-    const platform = openai.lastInput?.blocks.find((block) => block.type === 'PLATFORM_INSTRUCTIONS');
+    const facts = lastAnswerInput(openai)?.blocks.find((block) => block.type === 'FINANCIAL_FACTS');
+    const docs = lastAnswerInput(openai)?.blocks.find((block) => block.type === 'DOCUMENT_KNOWLEDGE');
+    const platform = lastAnswerInput(openai)?.blocks.find((block) => block.type === 'PLATFORM_INSTRUCTIONS');
     expect(facts?.content).toContain('224790.3');
     expect(docs?.content).toContain('metodologia');
     expect(docs?.content).toContain('999999');

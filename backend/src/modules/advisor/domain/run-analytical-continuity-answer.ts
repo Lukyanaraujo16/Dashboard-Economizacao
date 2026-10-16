@@ -20,6 +20,11 @@ import {
 } from './compose-advisor-billing-answer.js';
 import { composeAdvisorFactualAnswer } from './compose-advisor-factual-answer.js';
 import {
+  COST_CENTER_MOVEMENTS_WINDOW_FACT_KIND,
+  composeCostCenterMovementsWindowAnswer,
+  runCostCenterMovementsWindow,
+} from './cost-center-movements-window.js';
+import {
   buildLastAnalyticalQuery,
   isLastAnalyticalQueryCoveredKey,
   type LastAnalyticalQuery,
@@ -83,6 +88,15 @@ export async function runAnalyticalContinuityAnswer(input: {
       );
     }
     return runCostCenterMovements(input, capabilityKey, input.analyticalTools);
+  }
+  if (capabilityKey === 'realized_cash.cost_center.window.movements') {
+    if (input.analyticalTools === undefined) {
+      return limitation(
+        input.query,
+        'Ferramenta de movimentos indisponível para continuar esta consulta.',
+      );
+    }
+    return runCostCenterMovementsWindowContinuity(input, capabilityKey, input.analyticalTools);
   }
   if (capabilityKey === 'realized_cash.cost_center.month.lookup') {
     if (input.analyticalTools === undefined) {
@@ -428,6 +442,66 @@ async function runCostCenterMovements(
     capabilityKey,
     intentKind: composed.meta?.intentKind ?? 'COST_CENTER_MOVEMENT_LINES',
     factKind: 'COST_CENTER_OUTFLOW_MOVEMENTS',
+    structuredStatus: status,
+  });
+}
+
+async function runCostCenterMovementsWindowContinuity(
+  input: {
+    readonly query: AnalyticalQuery;
+    readonly tenantId: string;
+    readonly now?: Date;
+  },
+  capabilityKey: string,
+  analyticalTools: AdvisorAnalyticalToolExecutor,
+): Promise<AnalyticalContinuityAnswer | null> {
+  const period = input.query.period;
+  const costCenterQuery = input.query.filters?.costCenterQuery?.trim() ?? '';
+  if (period.kind !== 'MONTH_WINDOW' || costCenterQuery === '') {
+    return null;
+  }
+  const { fact } = await runCostCenterMovementsWindow({
+    analyticalTools,
+    tenantId: input.tenantId,
+    now: input.now,
+    endMonthKey: period.endMonthKey,
+    count: period.count,
+    direction: 'OUTFLOW',
+    costCenterQuery,
+    limit: input.query.limit ?? 1,
+  });
+  const status = typeof fact.status === 'string' ? fact.status : 'UNAVAILABLE';
+  const answer = composeCostCenterMovementsWindowAnswer(fact);
+  if (answer === null) {
+    return finalize({
+      answer:
+        status === 'AMBIGUOUS'
+          ? 'Há mais de um centro de custo correspondente. Especifique o nome ou o código.'
+          : status === 'NOT_FOUND'
+            ? `Não encontrei o centro de custo "${costCenterQuery}" no cadastro desta empresa.`
+            : 'Não há atribuição oficial de saídas por centro de custo disponível para esse período.',
+      query: input.query,
+      capabilityKey,
+      intentKind: 'FACTUAL_LIMITATION',
+      factKind: COST_CENTER_MOVEMENTS_WINDOW_FACT_KIND,
+      structuredStatus: status,
+    });
+  }
+  // Last e outcome usam o próprio fato (resolvedCostCenter = nome oficial).
+  const resolvedName =
+    typeof fact.resolvedCostCenter === 'string' && fact.resolvedCostCenter !== 'NONE'
+      ? fact.resolvedCostCenter
+      : costCenterQuery;
+  return finalize({
+    answer,
+    query: {
+      ...input.query,
+      filters: { ...(input.query.filters ?? {}), costCenterQuery: resolvedName },
+    },
+    capabilityKey,
+    intentKind: 'COST_CENTER_MOVEMENT_LINES',
+    factKind: COST_CENTER_MOVEMENTS_WINDOW_FACT_KIND,
+    // PARTIAL é resposta factual com ressalva; não promove last (doc 21: só OK/EMPTY).
     structuredStatus: status,
   });
 }

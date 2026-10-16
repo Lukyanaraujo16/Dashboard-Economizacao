@@ -65,10 +65,12 @@ export type DeterministicPathCapability = {
   readonly operations: ReadonlySet<string>;
 };
 
-const STOP_NAME_TOKENS = new Set([
-  'clinica',
-  'clinic',
-  'life',
+/**
+ * Vocabulário estrutural genérico de centros de custo (vale para qualquer empresa).
+ * Nada de marca ou nome de cliente aqui: prefixos de marca saem pela regra do catálogo
+ * (token presente em todos os centros do tenant não discrimina nenhum).
+ */
+const STRUCTURAL_NAME_TOKENS = new Set([
   'centro',
   'centros',
   'custo',
@@ -76,6 +78,8 @@ const STOP_NAME_TOKENS = new Set([
   'filial',
   'matriz',
 ]);
+
+const MIN_DISTINCTIVE_TOKEN_LENGTH = 4;
 
 /**
  * Detecta se a pergunta referencia um centro de custo do catálogo do tenant.
@@ -115,20 +119,54 @@ export function detectExplicitCostCenterScope(
     readonly query: string;
   }> = [];
 
+  const distinctive = distinctiveTokensByCenter(catalog);
+  const fullNameHits = new Set<string>();
   for (const center of catalog) {
     const foldedName = foldAdvisorNominalText(center.name);
     const foldedCode = center.code === null ? '' : foldAdvisorNominalText(center.code);
-    if (foldedName !== '' && foldedQuestion.includes(foldedName)) {
+    if (foldedName !== '' && hasWholePhrase(foldedQuestion, foldedName)) {
       hits.push({ center, query: center.name });
+      fullNameHits.add(center.id);
       continue;
     }
     if (foldedCode !== '' && hasWholeToken(foldedQuestion, foldedCode)) {
       hits.push({ center, query: center.code ?? center.name });
       continue;
     }
-    const token = distinctiveNameToken(foldedName);
-    if (token !== null && hasWholeToken(foldedQuestion, token)) {
+    const token = (distinctive.get(center.id) ?? []).find((candidate) =>
+      hasWholeToken(foldedQuestion, candidate),
+    );
+    if (token !== undefined) {
       hits.push({ center, query: token });
+    }
+  }
+  // "Unidade Serra Sul" contém "Unidade Serra": vence o nome completo mais longo.
+  if (fullNameHits.size > 1) {
+    const names = hits
+      .filter((hit) => fullNameHits.has(hit.center.id))
+      .map((hit) => foldAdvisorNominalText(hit.center.name));
+    for (let index = hits.length - 1; index >= 0; index -= 1) {
+      const hit = hits[index]!;
+      if (!fullNameHits.has(hit.center.id)) {
+        continue;
+      }
+      const name = foldAdvisorNominalText(hit.center.name);
+      if (names.some((other) => other !== name && hasWholePhrase(other, name))) {
+        hits.splice(index, 1);
+      }
+    }
+  }
+
+  if (hits.length === 0) {
+    // Token compartilhado por parte dos centros (não por todos, que seria marca):
+    // a menção existe mas não identifica um só centro → AMBIGUOUS com candidatos.
+    const shared = sharedTokenCandidates(catalog, foldedQuestion);
+    if (shared !== null) {
+      return {
+        status: 'AMBIGUOUS',
+        query: shared.token,
+        candidates: shared.centers.map((row) => ({ name: row.name, code: row.code })),
+      };
     }
   }
 
@@ -496,16 +534,92 @@ export function toolsSupportingCostCenterQuery(): ReadonlySet<string> {
   ]);
 }
 
-function distinctiveNameToken(foldedName: string): string | null {
-  const tokens = foldedName
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 4 && !STOP_NAME_TOKENS.has(token));
-  if (tokens.length === 0) {
+/**
+ * Tokens que identificam um único centro dentro do catálogo DO TENANT.
+ * - token estrutural genérico (centro, unidade…) nunca discrimina;
+ * - token presente em todos os centros (prefixo de marca) não discrimina;
+ * - token compartilhado por alguns centros não identifica nenhum deles sozinho
+ *   (a ambiguidade fica para a resolução por menção, que lista candidatos).
+ * Catálogo de um centro só: vale o token mais longo (sem comparação possível).
+ * Ordenados do mais longo para o mais curto.
+ */
+function distinctiveTokensByCenter(
+  catalog: readonly AdvisorCostCenterCatalogItem[],
+): ReadonlyMap<string, readonly string[]> {
+  const tokensById = new Map<string, readonly string[]>();
+  const owners = new Map<string, Set<string>>();
+  for (const center of catalog) {
+    const tokens = [
+      ...new Set(
+        foldAdvisorNominalText(center.name)
+          .split(/\s+/)
+          .filter(
+            (token) =>
+              token.length >= MIN_DISTINCTIVE_TOKEN_LENGTH && !STRUCTURAL_NAME_TOKENS.has(token),
+          ),
+      ),
+    ];
+    tokensById.set(center.id, tokens);
+    for (const token of tokens) {
+      const set = owners.get(token) ?? new Set<string>();
+      set.add(center.id);
+      owners.set(token, set);
+    }
+  }
+  const result = new Map<string, readonly string[]>();
+  for (const [id, tokens] of tokensById) {
+    const unique =
+      catalog.length === 1
+        ? tokens.slice().sort((a, b) => b.length - a.length).slice(0, 1)
+        : tokens
+            .filter((token) => owners.get(token)?.size === 1)
+            .sort((a, b) => b.length - a.length);
+    result.set(id, unique);
+  }
+  return result;
+}
+
+/**
+ * Token da pergunta compartilhado por 2+ centros, mas não por todos.
+ * Preferência pelo token mais longo; null quando não houver.
+ */
+function sharedTokenCandidates(
+  catalog: readonly AdvisorCostCenterCatalogItem[],
+  foldedQuestion: string,
+): { readonly token: string; readonly centers: readonly AdvisorCostCenterCatalogItem[] } | null {
+  if (catalog.length < 3) {
+    // Com 2 centros, token comum aos dois é prefixo do catálogo inteiro (regra da marca).
     return null;
   }
-  // Prefer the longest distinctive token (ex.: "laranjeiras" em "clinica life laranjeiras").
-  return tokens.sort((a, b) => b.length - a.length)[0] ?? null;
+  const owners = new Map<string, AdvisorCostCenterCatalogItem[]>();
+  for (const center of catalog) {
+    const tokens = new Set(
+      foldAdvisorNominalText(center.name)
+        .split(/\s+/)
+        .filter(
+          (token) =>
+            token.length >= MIN_DISTINCTIVE_TOKEN_LENGTH && !STRUCTURAL_NAME_TOKENS.has(token),
+        ),
+    );
+    for (const token of tokens) {
+      owners.set(token, [...(owners.get(token) ?? []), center]);
+    }
+  }
+  const candidates = [...owners.entries()]
+    .filter(
+      ([token, centers]) =>
+        centers.length >= 2 &&
+        centers.length < catalog.length &&
+        hasWholeToken(foldedQuestion, token),
+    )
+    .sort((left, right) => right[0].length - left[0].length);
+  const best = candidates[0];
+  return best === undefined ? null : { token: best[0], centers: best[1] };
+}
+
+/** Frase inteira (limite de palavra), não substring: "serra" não casa "serrana". */
+function hasWholePhrase(haystack: string, phrase: string): boolean {
+  return hasWholeToken(haystack, phrase);
 }
 
 function hasWholeToken(haystack: string, token: string): boolean {
@@ -524,9 +638,11 @@ function extractStructuralEntitySpans(content: string): string[] {
     /\b(?:saidas?|gastos?|despesas?|entradas?)\s+de\s+([A-Za-zÀ-ÿ][\wÀ-ÿ-]{1,40}(?:\s+[A-Za-zÀ-ÿ][\wÀ-ÿ-]{1,40}){0,3})\s+em\b/i,
   ];
   for (const pattern of patterns) {
-    pattern.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(content)) !== null) {
+    // matchAll com flag global: sem `g`, `exec` em laço nunca avança (loop infinito).
+    const global = pattern.flags.includes('g')
+      ? pattern
+      : new RegExp(pattern.source, `${pattern.flags}g`);
+    for (const match of content.matchAll(global)) {
       const span = match[1]?.trim();
       if (span !== undefined && span.length >= 3) {
         spans.push(span);

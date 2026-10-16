@@ -87,8 +87,12 @@ describe('F13.8.5B executor registry', () => {
     ).toBe(false);
   });
 
-  it('publica 31 capabilities, com TOPN, lookup, share e planejamento mensal', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(34);
+  it('publica o inventário exato de capabilities, com TOPN, lookup, share e planejamento mensal', () => {
+    // Inventário explícito (deny by default): incluir capability exige atualizar esta lista.
+    // 34 até 22f05c2; +billing×CC (2), +payable_title (3, 97f1f4d), +window.movements (A2).
+    expect(ANALYTICAL_CAPABILITY_REGISTRY.map((capability) => capability.key).sort()).toEqual(
+      PUBLISHED_CAPABILITY_KEYS,
+    );
     expect(
       ANALYTICAL_CAPABILITY_REGISTRY.some(
         (capability) => capability.key === 'cash_result.cost_center.month.lookup',
@@ -318,3 +322,46 @@ describe('F13.8.5B parity harness — compare_cash_months', () => {
     void compareAdvisorCashMonths;
   });
 });
+
+const PUBLISHED_CAPABILITY_KEYS = [
+  'billing.compare.month_pair',
+  'billing.cost_center.month',
+  'billing.cost_center.series.months',
+  'billing.series.months',
+  'billing.value.month',
+  'cash_result.compare.month_pair',
+  'cash_result.cost_center.month.lookup',
+  'cash_result.value.month',
+  'delinquency.current.value',
+  'expense_ceiling.value.month',
+  'payable_stock.current.value',
+  'payable_title.month.movements',
+  'payable_title.month.ranking_topn',
+  'payable_title.month.ranking_winner',
+  'realized_cash.category.month.breakdown',
+  'realized_cash.compare.month_pair.category',
+  'realized_cash.compare.month_pair.totals',
+  'realized_cash.cost_center.compare.month_pair',
+  'realized_cash.cost_center.month.lookup',
+  'realized_cash.cost_center.month.movements',
+  'realized_cash.cost_center.month.ranking_topn',
+  'realized_cash.cost_center.month.ranking_winner',
+  'realized_cash.cost_center.window.movements',
+  'realized_cash.counterparty.inflow.compare.month_pair',
+  'realized_cash.counterparty.inflow.customer.lookup',
+  'realized_cash.counterparty.inflow.customer.ranking_topn',
+  'realized_cash.counterparty.inflow.customer.ranking_winner',
+  'realized_cash.counterparty.inflow.customer.share',
+  'realized_cash.counterparty.inflow.lookup',
+  'realized_cash.counterparty.inflow.ranking_topn',
+  'realized_cash.counterparty.inflow.ranking_winner',
+  'realized_cash.counterparty.outflow.supplier.lookup',
+  'realized_cash.counterparty.outflow.supplier.ranking_topn',
+  'realized_cash.counterparty.outflow.supplier.ranking_winner',
+  'realized_cash.counterparty.outflow.supplier.share',
+  'realized_cash.day.movements',
+  'realized_cash.movements.month',
+  'realized_cash.value.month',
+  'receivable_stock.current.value',
+  'revenue_goal.value.month',
+];

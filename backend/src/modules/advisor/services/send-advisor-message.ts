@@ -78,7 +78,10 @@ import {
   type AdvisorConversationBag,
 } from '../domain/advisor-conversation-bag.js';
 import { applyAnalyticalDimensionPatch } from '../domain/analytical-dimension-patch.js';
-import { classifyAnalyticalContinuity } from '../domain/classify-analytical-continuity.js';
+import {
+  classifyAnalyticalContinuity,
+  describeUnsupportedPeriod,
+} from '../domain/classify-analytical-continuity.js';
 import {
   lastAnalyticalQueryFromBilling,
   lastAnalyticalQueryFromCostCenterMovements,
@@ -192,6 +195,13 @@ import type {
   AiRunStatus,
   AiTenantSettingsRecord,
 } from '../domain/types.js';
+import {
+  COST_CENTER_MOVEMENTS_WINDOW_FACT_KIND,
+  composeCostCenterMovementsWindowAnswer,
+  runCostCenterMovementsWindow,
+} from '../domain/cost-center-movements-window.js';
+import { interpretAdvisorQuestion } from '../domain/advisor-question-interpretation.js';
+
 import { assertAdvisorTenantId } from '../repositories/assert-tenant-id.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
 import type { AdvisorAnalyticalResultRepository } from '../repositories/advisor-analytical-result.repository.js';
@@ -457,6 +467,46 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       });
       if (pendingGate !== null) {
         return pendingGate;
+      }
+
+      // Marco A2 — interpretação canônica, calculada uma vez e repassada aos handlers.
+      // "nesse período" herda o período da investigação mais recente (last, senão C.1).
+      const priorMovementsState = conversationBag.slots.costCenterOutflowMovements;
+      const inheritedPeriod =
+        conversationBag.slots.lastAnalyticalQuery?.query.period ??
+        (priorMovementsState === null
+          ? null
+          : priorMovementsState.windowMonths !== undefined
+            ? {
+                kind: 'MONTH_WINDOW' as const,
+                endMonthKey: priorMovementsState.monthKey,
+                count: priorMovementsState.windowMonths,
+              }
+            : { kind: 'MONTH' as const, monthKey: priorMovementsState.monthKey });
+      const interpretation = interpretAdvisorQuestion({
+        content: question,
+        conversationalPeriod: period,
+        demand: questionDemand,
+        inheritedPeriod,
+        referenceMonthKey: input.monthKey,
+        now: input.now,
+      });
+
+      // Marco A2 — invalidação centralizada (política C.2.7): uma NEW_QUERY explícita
+      // invalida o last antes de qualquer handler de família, para que uma falha
+      // posterior não deixe o contexto antigo vivo para o próximo "E de X?".
+      const priorLastQuery = conversationBag.slots.lastAnalyticalQuery;
+      if (priorLastQuery !== null && !isAdvisorInterpretiveQuestion(question)) {
+        const probe = classifyAnalyticalContinuity({
+          content: question,
+          period,
+          prior: priorLastQuery,
+        });
+        if (probe.decision === 'NEW_QUERY') {
+          await persistBag(
+            mergeAdvisorConversationBag(conversationBag, { lastAnalyticalQuery: null }),
+          );
+        }
       }
 
       // Premissas explícitas do usuário (cenário) — só quando há magnitude estrutural.
@@ -1096,11 +1146,11 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
       }
 
       if (!isAdvisorInterpretiveQuestion(question)) {
-        const priorMovementsState = conversationBag.slots.costCenterOutflowMovements;
         const assembled = assembleCostCenterOutflowMovementsPlan({
           content: question,
           period,
           priorState: priorMovementsState,
+          interpretation,
         });
         if (assembled.kind !== 'UNMATCHED') {
           const movementsAnswer = await answerCostCenterOutflowMovementsPlan({
@@ -1162,6 +1212,105 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             analyticalOutcome: continuity.analyticalOutcome,
           };
         }
+      }
+
+      // Marco A2.1 — "maior movimentação/lançamento" sem direção é ambíguo
+      // (entrada ou saída): esclarece em vez de arriscar resposta financeira.
+      if (
+        !isAdvisorInterpretiveQuestion(question) &&
+        isDirectionlessLargestMovementQuestion(question) &&
+        !questionDemand.wantsOutflow &&
+        !questionDemand.wantsInflow &&
+        !questionDemand.wantsBilling
+      ) {
+        const content =
+          'Você quer o maior lançamento de saída (gasto pago) ou de entrada (recebimento)? Informe a direção para eu consultar o valor oficial.';
+        const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+          senderType: 'CONSULTANT',
+          content,
+        });
+        const analyticalOutcome = await recordTrail({
+          consultantMessageId: consultantMessage.id,
+          runId: null,
+          answerSource: 'CAPABILITY_DENIED',
+          toolRoundCount: 0,
+          traces: [],
+          facts: {
+            ...closedTrailFacts('UNRESOLVED'),
+            clarificationRequired: true,
+          },
+        });
+        return {
+          conversationId: conversation.id,
+          userMessage,
+          consultantMessage,
+          run: null,
+          factualAnswer: {
+            classification: 'FACTUAL_CLOSED',
+            providerCalled: false,
+            intentKind: 'FACTUAL_LIMITATION',
+            factKind: null,
+            identityStatus: null,
+            returnedCount: null,
+            coveragePercent: null,
+            composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+          },
+          analyticalOutcome,
+        };
+      }
+
+      // Marco A2 — janela de meses de caixa realizado sem capability determinística:
+      // os caminhos seguintes (preload/provider) só fazem bind de UM mês. Não converte a
+      // janela em mês em silêncio: limitação explícita (BILLING em janela já foi atendido).
+      if (
+        !isAdvisorInterpretiveQuestion(question) &&
+        interpretation.metric === 'REALIZED_CASH' &&
+        interpretation.periodExpression.kind === 'MONTH_WINDOW'
+      ) {
+        const windowCount = interpretation.periodExpression.count;
+        const subject = interpretation.direction === 'INFLOW' ? 'entradas' : 'saídas';
+        const content =
+          `Ainda não consigo consultar ${subject} de caixa de uma janela de ${windowCount} meses de uma vez nesta pergunta. ` +
+          'Consigo responder mês a mês (por exemplo, "em setembro")' +
+          (interpretation.direction === 'INFLOW'
+            ? '.'
+            : ' ou, por centro de custo, apontar os maiores gastos individuais da janela (por exemplo, "qual o maior gasto de <centro> nos últimos 3 meses?").');
+        const consultantMessage = await deps.conversations.createMessage(tenantId, conversation.id, {
+          senderType: 'CONSULTANT',
+          content,
+        });
+        const analyticalOutcome = await recordTrail({
+          consultantMessageId: consultantMessage.id,
+          runId: null,
+          answerSource: 'CAPABILITY_DENIED',
+          toolRoundCount: 0,
+          traces: [],
+          facts: {
+            providerFailed: false,
+            capabilityDenied: true,
+            clarificationRequired: false,
+            factualClosed: true,
+            factualPartial: false,
+            structuredStatus: null,
+          },
+        });
+        return {
+          conversationId: conversation.id,
+          userMessage,
+          consultantMessage,
+          run: null,
+          factualAnswer: {
+            classification: 'FACTUAL_CLOSED',
+            providerCalled: false,
+            intentKind: 'FACTUAL_LIMITATION',
+            factKind: null,
+            identityStatus: null,
+            returnedCount: null,
+            coveragePercent: null,
+            composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+          },
+          analyticalOutcome,
+        };
       }
 
       const conversationalCostCenter = resolveAdvisorConversationalCostCenter({
@@ -2892,6 +3041,83 @@ async function answerCostCenterOutflowMovementsPlan(input: {
     };
   }
 
+  // Marco A2 — desfechos explícitos (nunca "não encontrei" para outra causa).
+  const limitationReply = async (reply: {
+    readonly content: string;
+    readonly structuredStatus: string;
+    readonly clarificationRequired: boolean;
+    readonly capabilityDenied?: boolean;
+    readonly traces?: readonly AnalyticalToolTraceDraft[];
+  }): Promise<{
+    readonly consultantMessage: AiMessageRecord;
+    readonly factualAnswer: AdvisorFactualAnswerMeta;
+    readonly analyticalOutcome: AnalyticalOutcome;
+  }> => {
+    const consultantMessage = await input.conversations.createMessage(
+      input.tenantId,
+      input.conversationId,
+      { senderType: 'CONSULTANT', content: reply.content },
+    );
+    const traces = [...(reply.traces ?? [])];
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: null,
+      answerSource: reply.capabilityDenied === true ? 'CAPABILITY_DENIED' : 'COST_CENTER',
+      toolRoundCount: traces.length > 0 ? 1 : 0,
+      traces,
+      facts: {
+        providerFailed: false,
+        capabilityDenied: reply.capabilityDenied === true,
+        clarificationRequired: reply.clarificationRequired,
+        factualClosed: true,
+        factualPartial: false,
+        structuredStatus: reply.structuredStatus,
+      },
+    });
+    return {
+      consultantMessage,
+      factualAnswer: {
+        classification: 'FACTUAL_CLOSED',
+        providerCalled: false,
+        intentKind: 'FACTUAL_LIMITATION',
+        factKind: null,
+        identityStatus: null,
+        returnedCount: null,
+        coveragePercent: null,
+        composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+      },
+      analyticalOutcome,
+    };
+  };
+
+  if (assembled.kind === 'AMBIGUOUS_ENTITY') {
+    const names = assembled.candidates.map((row) => row.name).slice(0, 5);
+    return limitationReply({
+      content:
+        names.length > 0
+          ? `Há mais de um centro de custo correspondente (${names.join(', ')}). Especifique qual deles.`
+          : 'Há mais de um centro de custo correspondente. Especifique o nome ou o código.',
+      structuredStatus: 'AMBIGUOUS',
+      clarificationRequired: true,
+    });
+  }
+  if (assembled.kind === 'UNSUPPORTED_PERIOD') {
+    return limitationReply({
+      content: describeUnsupportedPeriod(assembled.reason),
+      structuredStatus: 'UNSUPPORTED',
+      clarificationRequired: false,
+      capabilityDenied: true,
+    });
+  }
+  if (assembled.kind === 'PERIOD_WITHOUT_CONTEXT') {
+    return limitationReply({
+      content:
+        'Não há um período anterior nesta conversa para eu reutilizar. Informe o período (por exemplo, "nos últimos 3 meses" ou "em setembro").',
+      structuredStatus: 'UNRESOLVED',
+      clarificationRequired: true,
+    });
+  }
+
   const slots = assembled.slots;
   if (input.analyticalTools === undefined) {
     const content =
@@ -2932,6 +3158,15 @@ async function answerCostCenterOutflowMovementsPlan(input: {
     };
   }
 
+  if (slots.windowMonths !== undefined) {
+    return answerCostCenterOutflowMovementsWindow({
+      ...input,
+      slots: { ...slots, windowMonths: slots.windowMonths },
+      analyticalTools: input.analyticalTools,
+      limitationReply,
+    });
+  }
+
   const toolStartedAt = Date.now();
   const toolResult = await input.analyticalTools.execute({
     tenantId: input.tenantId,
@@ -2948,6 +3183,21 @@ async function answerCostCenterOutflowMovementsPlan(input: {
       },
     },
   });
+  const plannedStatus = readStructuredStatus(toolResult.content);
+  if (plannedStatus === 'NOT_FOUND') {
+    const trace = traceFromToolResult(toolResult, 1, Date.now() - toolStartedAt, {
+      monthKey: slots.monthKey,
+      direction: 'OUTFLOW',
+      costCenterQuery: slots.costCenterMention,
+      limit: slots.limit,
+    });
+    return limitationReply({
+      content: costCenterNotFoundMessage(slots),
+      structuredStatus: slots.entitySource === 'TEXT' ? 'NOT_FOUND' : 'UNRESOLVED',
+      clarificationRequired: slots.entitySource !== 'TEXT',
+      traces: trace === null ? [] : [trace],
+    });
+  }
   const composed = composeAdvisorFactualAnswer({
     content: input.question,
     anaphora: 'NONE',
@@ -3014,7 +3264,7 @@ async function answerCostCenterOutflowMovementsPlan(input: {
   const consultantMessage = await input.conversations.createMessage(
     input.tenantId,
     input.conversationId,
-    { senderType: 'CONSULTANT', content: composed.answer },
+    { senderType: 'CONSULTANT', content: withOutflowMetricNote(input.question, composed.answer) },
   );
   const resolvedName = readResolvedCostCenterName(toolResult.content);
   const structuredStatus = readStructuredStatus(toolResult.content) ?? 'OK';
@@ -3079,6 +3329,209 @@ async function answerCostCenterOutflowMovementsPlan(input: {
   return {
     consultantMessage,
     factualAnswer: composed.meta,
+    analyticalOutcome,
+  };
+}
+
+type CostCenterPlanSlots = Extract<
+  ReturnType<typeof assembleCostCenterOutflowMovementsPlan>,
+  { readonly kind: 'ASSEMBLED' }
+>['slots'];
+
+/** "Maior movimentação/lançamento" (sem entrada/saída explícita). */
+function isDirectionlessLargestMovementQuestion(question: string): boolean {
+  const folded = question.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  return (
+    /\bmaior(?:es)?\s+(?:movimentac\w*|movimentos?|lancamentos?)\b/.test(folded) ||
+    /\b(?:movimentac\w*|movimentos?|lancamentos?)\s+mais\s+(?:alt|car)\w*/.test(folded)
+  );
+}
+
+/**
+ * "Despesa" na pergunta: a família C.1 (homologada) responde com saída realizada de caixa
+ * por lançamento. Diz a métrica explicitamente para não confundir com a despesa oficial
+ * (doc 11: realized.outflows + expected.payables, por competência).
+ */
+function withOutflowMetricNote(question: string, answer: string): string {
+  const folded = question.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  if (!/\bdespesas?\b/.test(folded)) {
+    return answer;
+  }
+  return `${answer} Considerei saídas realizadas de caixa atribuídas ao centro (lançamentos pagos), não a despesa oficial por competência.`;
+}
+
+/**
+ * NOT_FOUND só afirma "não encontrei" quando o centro veio do texto e o catálogo
+ * não o reconheceu. Centro comprovado no catálogo (ou herdado) que falha na tool é
+ * falha de interpretação/execução, não centro inexistente.
+ */
+function costCenterNotFoundMessage(slots: Pick<CostCenterPlanSlots, 'entitySource' | 'costCenterMention'>): string {
+  if (slots.entitySource === 'TEXT') {
+    return `Não encontrei o centro de custo "${slots.costCenterMention}" no cadastro desta empresa.`;
+  }
+  if (slots.entitySource === 'INHERITED') {
+    return `O centro de custo ${slots.costCenterMention}, usado na consulta anterior, não aparece mais no cadastro desta empresa. Informe o centro que deseja consultar.`;
+  }
+  return `Não consegui confirmar o centro de custo ${slots.costCenterMention} nas movimentações desta consulta. Informe o nome ou o código do centro.`;
+}
+
+/**
+ * Marco A2 — maior(es) gasto(s) individual(is) do centro numa janela de meses.
+ * Usa a tool mensal oficial mês a mês (cost-center-movements-window).
+ */
+async function answerCostCenterOutflowMovementsWindow(input: {
+  readonly question: string;
+  readonly tenantId: string;
+  readonly conversationId: string;
+  readonly now?: Date;
+  readonly slots: CostCenterPlanSlots & { readonly windowMonths: number };
+  readonly analyticalTools: AdvisorAnalyticalToolExecutor;
+  readonly conversations: {
+    createMessage: SendAdvisorMessageDependencies['conversations']['createMessage'];
+    saveAnalyticalContext?: SendAdvisorMessageDependencies['conversations']['saveAnalyticalContext'];
+  };
+  readonly existingBag?: AdvisorConversationBag;
+  readonly onBagPersisted?: (bag: AdvisorConversationBag) => Promise<void>;
+  readonly recordTrail: (trailInput: {
+    readonly consultantMessageId: string;
+    readonly runId: string | null;
+    readonly answerSource: AnalyticalAnswerSource;
+    readonly toolRoundCount: number;
+    readonly traces: AnalyticalToolTraceDraft[];
+    readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+  }) => Promise<AnalyticalOutcome>;
+  readonly limitationReply: (reply: {
+    readonly content: string;
+    readonly structuredStatus: string;
+    readonly clarificationRequired: boolean;
+    readonly traces?: readonly AnalyticalToolTraceDraft[];
+  }) => Promise<{
+    readonly consultantMessage: AiMessageRecord;
+    readonly factualAnswer: AdvisorFactualAnswerMeta;
+    readonly analyticalOutcome: AnalyticalOutcome;
+  }>;
+}): Promise<{
+  readonly consultantMessage: AiMessageRecord;
+  readonly factualAnswer: AdvisorFactualAnswerMeta;
+  readonly analyticalOutcome: AnalyticalOutcome;
+}> {
+  const slots = input.slots;
+  const startedAt = Date.now();
+  const { fact, toolResults } = await runCostCenterMovementsWindow({
+    analyticalTools: input.analyticalTools,
+    tenantId: input.tenantId,
+    now: input.now,
+    endMonthKey: slots.monthKey,
+    count: slots.windowMonths,
+    direction: 'OUTFLOW',
+    costCenterQuery: slots.costCenterMention,
+    limit: slots.limit,
+  });
+  const durationMs = Date.now() - startedAt;
+  const traces = toolResults
+    .map((result) =>
+      traceFromToolResult(result, 1, Math.round(durationMs / Math.max(1, toolResults.length)), {
+        direction: 'OUTFLOW',
+        costCenterQuery: slots.costCenterMention,
+        limit: slots.limit,
+      }),
+    )
+    .filter((trace): trace is AnalyticalToolTraceDraft => trace !== null);
+  const status = typeof fact.status === 'string' ? fact.status : 'UNAVAILABLE';
+
+  if (status === 'NOT_FOUND') {
+    return input.limitationReply({
+      content: costCenterNotFoundMessage(slots),
+      structuredStatus: slots.entitySource === 'TEXT' ? 'NOT_FOUND' : 'UNRESOLVED',
+      clarificationRequired: slots.entitySource !== 'TEXT',
+      traces,
+    });
+  }
+  if (status === 'AMBIGUOUS') {
+    return input.limitationReply({
+      content: 'Há mais de um centro de custo correspondente. Especifique o nome ou o código.',
+      structuredStatus: 'AMBIGUOUS',
+      clarificationRequired: true,
+      traces,
+    });
+  }
+  const answer = composeCostCenterMovementsWindowAnswer(fact);
+  if (answer === null) {
+    // UNAVAILABLE em todos os meses (ou falha técnica): sem valor inventado.
+    return input.limitationReply({
+      content:
+        'Não há atribuição oficial de saídas por centro de custo disponível para os meses dessa janela, então não consigo apontar os maiores gastos com segurança.',
+      structuredStatus: 'UNAVAILABLE',
+      clarificationRequired: false,
+      traces,
+    });
+  }
+
+  const consultantMessage = await input.conversations.createMessage(
+    input.tenantId,
+    input.conversationId,
+    { senderType: 'CONSULTANT', content: withOutflowMetricNote(input.question, answer) },
+  );
+  const resolvedName =
+    typeof fact.resolvedCostCenter === 'string' && fact.resolvedCostCenter !== 'NONE'
+      ? fact.resolvedCostCenter
+      : null;
+  if (resolvedName !== null && typeof input.conversations.saveAnalyticalContext === 'function') {
+    // PARTIAL é factual com ressalva: mantém estado da família para follow-ups,
+    // mas só OK/EMPTY promovem LastAnalyticalQuery (doc 21).
+    const lastAnalyticalQuery =
+      status === 'OK' || status === 'EMPTY_RESULT'
+        ? lastAnalyticalQueryFromCostCenterMovements({
+            monthKey: slots.monthKey,
+            costCenterQuery: resolvedName,
+            limit: slots.limit,
+            structuredStatus: status,
+            windowMonths: slots.windowMonths,
+          })
+        : null;
+    const next = mergeAdvisorConversationBag(
+      input.existingBag ?? parseAdvisorConversationBag(null),
+      {
+        costCenterOutflowMovements: costCenterOutflowMovementsState({
+          monthKey: slots.monthKey,
+          periodSource: slots.periodSource,
+          windowMonths: slots.windowMonths,
+          limit: slots.limit,
+          costCenterQuery: resolvedName,
+        }),
+        lastAnalyticalQuery,
+      },
+    );
+    await input.conversations.saveAnalyticalContext(
+      input.tenantId,
+      input.conversationId,
+      serializeAdvisorConversationBag(next) as never,
+    );
+    if (input.onBagPersisted !== undefined) {
+      await input.onBagPersisted(next);
+    }
+  }
+  const analyticalOutcome = await input.recordTrail({
+    consultantMessageId: consultantMessage.id,
+    runId: null,
+    answerSource: 'COST_CENTER',
+    toolRoundCount: traces.length > 0 ? 1 : 0,
+    traces,
+    facts: closedTrailFacts(status, status === 'PARTIAL'),
+  });
+  const returnedCount = typeof fact.returnedCount === 'number' ? fact.returnedCount : null;
+  return {
+    consultantMessage,
+    factualAnswer: {
+      classification: 'FACTUAL_CLOSED',
+      providerCalled: false,
+      intentKind: 'COST_CENTER_MOVEMENT_LINES',
+      factKind: COST_CENTER_MOVEMENTS_WINDOW_FACT_KIND,
+      identityStatus: null,
+      returnedCount,
+      coveragePercent: null,
+      composerVersion: ADVISOR_FACTUAL_COMPOSER_VERSION,
+    },
     analyticalOutcome,
   };
 }

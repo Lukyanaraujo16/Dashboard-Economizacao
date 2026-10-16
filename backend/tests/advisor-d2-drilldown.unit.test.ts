@@ -88,6 +88,8 @@ describe('F13.8.1D2 drill-down analítico', () => {
       COMPARE_CASH_MONTHS_TOOL_NAME,
       CASH_REALIZED_BREAKDOWN_TOOL_NAME,
       CASH_MOVEMENT_LINES_TOOL_NAME,
+      // Publicada em 97f1f4d (análise de contas a pagar).
+      'payable_titles',
       'cash_nominal_dimension_ranking',
       'cash_nominal_dimension_lookup',
       'compare_cash_nominal_dimension',

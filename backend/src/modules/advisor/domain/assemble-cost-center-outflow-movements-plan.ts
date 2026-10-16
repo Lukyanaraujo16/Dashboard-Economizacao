@@ -2,7 +2,14 @@ import {
   ADVISOR_DRILLDOWN_DEFAULT_LIMIT,
   ADVISOR_DRILLDOWN_MAX_LIMIT,
 } from './advisor-cash-realized-breakdown.js';
-import { buildCostCenterMovementsQuery } from './analytical/build-analytical-query-from-tool.js';
+import {
+  buildCostCenterMovementsQuery,
+  buildCostCenterMovementsWindowQuery,
+} from './analytical/build-analytical-query-from-tool.js';
+import type {
+  AdvisorPeriodExpression,
+  AdvisorQuestionInterpretation,
+} from './advisor-question-interpretation.js';
 import type { AnalyticalQuery } from './analytical/analytical-query.js';
 import {
   validateAnalyticalCapability,
@@ -31,11 +38,16 @@ export type CostCenterOutflowMovementsPlanSlots = {
   readonly regime: 'REALIZED';
   readonly operation: 'MOVEMENTS';
   readonly dimension: 'COST_CENTER';
+  /** Mês da consulta; em janela, o mês final (inclusivo). */
   readonly monthKey: string;
   readonly periodSource: AdvisorConversationalPeriod['source'];
+  /** Janela de meses terminando em `monthKey` (Marco A2). Ausente = mês único. */
+  readonly windowMonths?: number;
   readonly limit: number;
   /** Menção textual do centro — nunca id interno. */
   readonly costCenterMention: string;
+  /** CATALOG = nome oficial já resolvido no catálogo do tenant (não reinterpretar). */
+  readonly entitySource: 'CATALOG' | 'TEXT' | 'INHERITED';
   readonly inherited: boolean;
 };
 
@@ -43,6 +55,15 @@ export type AssembleCostCenterOutflowMovementsPlanResult =
   | { readonly kind: 'UNMATCHED' }
   | { readonly kind: 'FOLLOW_UP_WITHOUT_CONTEXT' }
   | { readonly kind: 'MISSING_ENTITY' }
+  | {
+      readonly kind: 'AMBIGUOUS_ENTITY';
+      readonly candidates: readonly { readonly name: string; readonly code: string | null }[];
+    }
+  | {
+      readonly kind: 'UNSUPPORTED_PERIOD';
+      readonly reason: Extract<AdvisorPeriodExpression, { kind: 'UNSUPPORTED' }>['reason'];
+    }
+  | { readonly kind: 'PERIOD_WITHOUT_CONTEXT' }
   | {
       readonly kind: 'CAPABILITY_DENIED';
       readonly slots: CostCenterOutflowMovementsPlanSlots;
@@ -60,7 +81,7 @@ const MONTH_NAME =
 
 const OUTFLOW_NOUN = '(?:gastos?|despesas?|saidas?)';
 const RANKING_CUE = new RegExp(
-  `\\b(?:maior(?:es)?|top\\s+\\d{1,4}|\\d{1,4}\\s+maior(?:es)?)\\s+${OUTFLOW_NOUN}\\b`,
+  `\\b(?:maior(?:es)?|top\\s+\\d{1,4}|\\d{1,4}\\s+maior(?:es)?)\\s+${OUTFLOW_NOUN}\\b|\\b${OUTFLOW_NOUN}\\s+mais\\s+(?:alt[oa]s?|car[oa]s?)\\b`,
 );
 const PLURAL_WITHOUT_N = new RegExp(`\\bmaiores?\\s+${OUTFLOW_NOUN}\\b`);
 const SINGULAR_WINNER = new RegExp(`\\bmaior\\s+${OUTFLOW_NOUN}\\b`);
@@ -69,8 +90,18 @@ export function assembleCostCenterOutflowMovementsPlan(input: {
   readonly content: string;
   readonly period: AdvisorConversationalPeriod;
   readonly priorState: CostCenterOutflowMovementsConversationState | null;
+  /**
+   * Interpretação canônica (Marco A2). Quando presente: período estruturado,
+   * cardinalidade sem números de período e centro já resolvido no catálogo.
+   */
+  readonly interpretation?: AdvisorQuestionInterpretation;
 }): AssembleCostCenterOutflowMovementsPlanResult {
-  const folded = foldPt(input.content);
+  const interpretation = input.interpretation;
+  // Extratores de menção trabalham sobre o texto sem expressões de período.
+  const folded =
+    interpretation === undefined
+      ? foldPt(input.content)
+      : interpretation.maskedContent.replace(/\s+/g, ' ').trim();
   if (isCostCenterEntityComparisonQuestion(input.content)) {
     return { kind: 'UNMATCHED' };
   }
@@ -90,11 +121,19 @@ export function assembleCostCenterOutflowMovementsPlan(input: {
     if (input.priorState === null) {
       return { kind: 'UNMATCHED' };
     }
+    const entity = entityFromInterpretation(interpretation, entityFollowUp);
+    if (entity.kind !== 'MENTION') {
+      return entity.result;
+    }
+    const period = planPeriod(interpretation, input, { inheritWhenSilent: true });
+    if (period.kind !== 'PERIOD') {
+      return period.result;
+    }
     return finalizeSlots({
-      monthKey: input.priorState.monthKey,
-      periodSource: input.priorState.periodSource,
+      ...period.value,
       limit: input.priorState.limit,
-      costCenterMention: entityFollowUp,
+      costCenterMention: entity.mention,
+      entitySource: entity.source,
       inherited: true,
     });
   }
@@ -110,6 +149,7 @@ export function assembleCostCenterOutflowMovementsPlan(input: {
       periodSource: input.period.source,
       limit: input.priorState.limit,
       costCenterMention: input.priorState.costCenterQuery,
+      entitySource: 'INHERITED',
       inherited: true,
     });
   }
@@ -122,13 +162,31 @@ export function assembleCostCenterOutflowMovementsPlan(input: {
       content: input.content,
       period: input.period,
       priorState,
+      interpretation,
     });
     if (composite !== null) {
+      const entity =
+        composite.costCenterMention === priorState.costCenterQuery
+          ? ({ kind: 'MENTION', mention: composite.costCenterMention, source: 'INHERITED' } as const)
+          : entityFromInterpretation(interpretation, composite.costCenterMention);
+      if (entity.kind !== 'MENTION') {
+        return entity.result;
+      }
+      const period =
+        interpretation === undefined
+          ? ({
+              kind: 'PERIOD',
+              value: { monthKey: composite.monthKey, periodSource: composite.periodSource },
+            } as const)
+          : planPeriod(interpretation, input, { inheritWhenSilent: true });
+      if (period.kind !== 'PERIOD') {
+        return period.result;
+      }
       return finalizeSlots({
-        monthKey: composite.monthKey,
-        periodSource: composite.periodSource,
+        ...period.value,
         limit: composite.limit,
-        costCenterMention: composite.costCenterMention,
+        costCenterMention: entity.mention,
+        entitySource: entity.source,
         inherited: true,
       });
     }
@@ -146,23 +204,168 @@ export function assembleCostCenterOutflowMovementsPlan(input: {
     return { kind: 'MISSING_ENTITY' };
   }
 
-  const mention = extractOutflowMovementsCostCenterMention(input.content);
-  if (mention === 'AMBIGUOUS') {
-    return { kind: 'MISSING_ENTITY' };
-  }
-  if (mention === null) {
-    // Sem menção de centro: deixa drilldown tenant-wide / anáfora legada seguirem.
-    return { kind: 'UNMATCHED' };
+  const textMention = extractOutflowMovementsCostCenterMention(folded);
+  let mention: string;
+  let entitySource: CostCenterOutflowMovementsPlanSlots['entitySource'];
+  if (interpretation !== undefined && interpretation.entity.status !== 'ABSENT') {
+    // Centro decidido pelo catálogo do tenant: não reinterpretar por regex.
+    const entity = entityFromInterpretation(
+      interpretation,
+      typeof textMention === 'string' ? textMention : '',
+    );
+    if (entity.kind !== 'MENTION') {
+      return entity.result;
+    }
+    mention = entity.mention;
+    entitySource = entity.source;
+  } else {
+    if (textMention === 'AMBIGUOUS') {
+      return { kind: 'MISSING_ENTITY' };
+    }
+    if (textMention === null) {
+      // Sem menção de centro: deixa drilldown tenant-wide / anáfora legada seguirem.
+      return { kind: 'UNMATCHED' };
+    }
+    mention = textMention;
+    entitySource = 'TEXT';
   }
 
-  const limit = resolveOutflowMovementsLimit(folded);
+  // "E qual foi o maior gasto de <outro centro>?" após janela da mesma família herda a janela.
+  const period = planPeriod(interpretation, input, {
+    inheritWhenSilent: input.priorState !== null && /^(?:e|agora)\b/.test(folded),
+  });
+  if (period.kind !== 'PERIOD') {
+    return period.result;
+  }
+  const limit =
+    interpretation === undefined
+      ? resolveOutflowMovementsLimit(folded)
+      : interpretation.cardinality.kind === 'NONE'
+        ? resolveOutflowMovementsLimit(folded)
+        : interpretation.cardinality.limit;
   return finalizeSlots({
-    monthKey: input.period.monthKey,
-    periodSource: input.period.source,
+    ...period.value,
     limit,
     costCenterMention: mention,
+    entitySource,
     inherited: false,
   });
+}
+
+/** Candidato cujo nome ou código é exatamente a menção (dobrada). */
+function exactCatalogCandidate(
+  mention: string,
+  candidates: readonly { readonly name: string; readonly code: string | null }[],
+): string | null {
+  const folded = foldPt(mention).replace(/\s+/g, ' ').trim();
+  const hits = candidates.filter(
+    (row) =>
+      foldPt(row.name).replace(/\s+/g, ' ').trim() === folded ||
+      (row.code !== null && foldPt(row.code).trim() === folded),
+  );
+  return hits.length === 1 ? hits[0]!.name : null;
+}
+
+type PlannedPeriod = {
+  readonly monthKey: string;
+  readonly periodSource: AdvisorConversationalPeriod['source'];
+  readonly windowMonths?: number;
+};
+
+/**
+ * Período do plano a partir da interpretação canônica.
+ * Sem interpretação: comportamento legado (mês conversacional).
+ */
+function planPeriod(
+  interpretation: AdvisorQuestionInterpretation | undefined,
+  input: {
+    readonly period: AdvisorConversationalPeriod;
+    readonly priorState: CostCenterOutflowMovementsConversationState | null;
+  },
+  options: { readonly inheritWhenSilent: boolean },
+):
+  | { readonly kind: 'PERIOD'; readonly value: PlannedPeriod }
+  | { readonly kind: 'RESULT'; readonly result: AssembleCostCenterOutflowMovementsPlanResult } {
+  const fromPrior = (): PlannedPeriod | null =>
+    input.priorState === null
+      ? null
+      : {
+          monthKey: input.priorState.monthKey,
+          periodSource: input.priorState.periodSource,
+          ...(input.priorState.windowMonths !== undefined
+            ? { windowMonths: input.priorState.windowMonths }
+            : {}),
+        };
+  if (interpretation === undefined) {
+    const prior = options.inheritWhenSilent ? fromPrior() : null;
+    return {
+      kind: 'PERIOD',
+      value: prior ?? { monthKey: input.period.monthKey, periodSource: input.period.source },
+    };
+  }
+  const expression = interpretation.periodExpression;
+  if (expression.kind === 'UNSUPPORTED') {
+    return { kind: 'RESULT', result: { kind: 'UNSUPPORTED_PERIOD', reason: expression.reason } };
+  }
+  const resolved = interpretation.period;
+  if (resolved === null) {
+    return { kind: 'RESULT', result: { kind: 'PERIOD_WITHOUT_CONTEXT' } };
+  }
+  if (resolved.origin === 'CONVERSATION_DEFAULT' && options.inheritWhenSilent) {
+    const prior = fromPrior();
+    if (prior !== null) {
+      return { kind: 'PERIOD', value: prior };
+    }
+  }
+  if (resolved.kind === 'MONTH_WINDOW') {
+    return {
+      kind: 'PERIOD',
+      value: {
+        monthKey: resolved.endMonthKey,
+        periodSource:
+          resolved.origin === 'INHERITED' ? 'CONVERSATION_CONTEXT' : input.period.source,
+        windowMonths: resolved.count,
+      },
+    };
+  }
+  return {
+    kind: 'PERIOD',
+    value: {
+      monthKey: resolved.monthKey,
+      periodSource: resolved.origin === 'INHERITED' ? 'CONVERSATION_CONTEXT' : input.period.source,
+    },
+  };
+}
+
+/**
+ * Entidade: catálogo do tenant primeiro; menção textual só quando o catálogo não decidiu.
+ */
+function entityFromInterpretation(
+  interpretation: AdvisorQuestionInterpretation | undefined,
+  textMention: string,
+):
+  | {
+      readonly kind: 'MENTION';
+      readonly mention: string;
+      readonly source: CostCenterOutflowMovementsPlanSlots['entitySource'];
+    }
+  | { readonly kind: 'RESULT'; readonly result: AssembleCostCenterOutflowMovementsPlanResult } {
+  if (interpretation?.entity.status === 'RESOLVED') {
+    return { kind: 'MENTION', mention: interpretation.entity.officialName, source: 'CATALOG' };
+  }
+  if (interpretation?.entity.status === 'AMBIGUOUS') {
+    // Nome/código exato de um candidato desfaz a ambiguidade de token
+    // ("Unidade Serra" × "Unidade Serra Sul"), como a resolução exata da tool.
+    const exact = exactCatalogCandidate(textMention, interpretation.entity.candidates);
+    if (exact !== null) {
+      return { kind: 'MENTION', mention: exact, source: 'CATALOG' };
+    }
+    return {
+      kind: 'RESULT',
+      result: { kind: 'AMBIGUOUS_ENTITY', candidates: interpretation.entity.candidates },
+    };
+  }
+  return { kind: 'MENTION', mention: textMention, source: 'TEXT' };
 }
 
 export function matchesCostCenterOutflowMovementsFamily(content: string): boolean {
@@ -203,8 +406,10 @@ export function isCostCenterOutflowMovementsPeriodFollowUp(content: string): boo
 function finalizeSlots(input: {
   readonly monthKey: string;
   readonly periodSource: AdvisorConversationalPeriod['source'];
+  readonly windowMonths?: number;
   readonly limit: number;
   readonly costCenterMention: string;
+  readonly entitySource: CostCenterOutflowMovementsPlanSlots['entitySource'];
   readonly inherited: boolean;
 }): AssembleCostCenterOutflowMovementsPlanResult {
   const slots: CostCenterOutflowMovementsPlanSlots = {
@@ -216,16 +421,26 @@ function finalizeSlots(input: {
     dimension: 'COST_CENTER',
     monthKey: input.monthKey,
     periodSource: input.periodSource,
+    ...(input.windowMonths !== undefined ? { windowMonths: input.windowMonths } : {}),
     limit: clampLimit(input.limit),
     costCenterMention: input.costCenterMention,
+    entitySource: input.entitySource,
     inherited: input.inherited,
   };
-  const query = buildCostCenterMovementsQuery({
-    monthKey: slots.monthKey,
-    direction: 'OUTFLOW',
-    costCenterQuery: slots.costCenterMention,
-    limit: slots.limit,
-  });
+  const query =
+    slots.windowMonths !== undefined
+      ? buildCostCenterMovementsWindowQuery({
+          endMonthKey: slots.monthKey,
+          count: slots.windowMonths,
+          costCenterQuery: slots.costCenterMention,
+          limit: slots.limit,
+        })
+      : buildCostCenterMovementsQuery({
+          monthKey: slots.monthKey,
+          direction: 'OUTFLOW',
+          costCenterQuery: slots.costCenterMention,
+          limit: slots.limit,
+        });
   const validation = validateAnalyticalCapability(query);
   if (!validation.ok) {
     return {
@@ -240,6 +455,10 @@ function finalizeSlots(input: {
 
 function matchesOutflowMovementsFamily(folded: string): boolean {
   if (!hasOutflowNoun(folded)) {
+    return false;
+  }
+  // "categoria com maior despesa" é agregado por categoria, não lançamento individual.
+  if (/\bcategor/.test(folded)) {
     return false;
   }
   return RANKING_CUE.test(folded) || PLURAL_WITHOUT_N.test(folded);
@@ -301,11 +520,11 @@ export function extractOutflowMovementsCostCenterMention(
       'i',
     ),
     new RegExp(
-      `(?:quais\\s+(?:foram\\s+)?)?(?:os\\s+)?(?:\\d{1,4}\\s+)?maior(?:es)?\\s+${OUTFLOW_NOUN}\\s+de\\s+(.+?)(?:\\s+em\\s+${MONTH_NAME}|\\s+de\\s+\\d{4}|[?.!]|$)`,
+      `(?:quais\\s+(?:foram\\s+)?)?(?:os\\s+)?(?:\\d{1,4}\\s+)?maior(?:es)?\\s+${OUTFLOW_NOUN}\\s+d[aeo]\\s+(.+?)(?:\\s+em\\s+${MONTH_NAME}|\\s+de\\s+\\d{4}|[?.!]|$)`,
       'i',
     ),
     new RegExp(
-      `(?:maiores?|top\\s+\\d{1,4})\\s+${OUTFLOW_NOUN}\\s+de\\s+(.+?)(?:\\s+em\\s+|\\s+entre\\s+|$)`,
+      `(?:maiores?|top\\s+\\d{1,4})\\s+${OUTFLOW_NOUN}\\s+d[aeo]\\s+(.+?)(?:\\s+em\\s+|\\s+entre\\s+|$)`,
       'i',
     ),
   ];
@@ -365,6 +584,7 @@ function extractCompositeOutflowMovementsFollowUp(
     readonly content: string;
     readonly period: AdvisorConversationalPeriod;
     readonly priorState: CostCenterOutflowMovementsConversationState;
+    readonly interpretation?: AdvisorQuestionInterpretation;
   },
 ): {
   readonly monthKey: string;
@@ -379,35 +599,47 @@ function extractCompositeOutflowMovementsFollowUp(
     return null;
   }
   // Pergunta completa com noun de gasto + entidade: deixa o caminho ASSEMBLED novo.
-  if (
-    hasOutflowNoun(folded) &&
-    extractOutflowMovementsCostCenterMention(input.content) !== null
-  ) {
+  const hasEntity =
+    input.interpretation === undefined
+      ? extractOutflowMovementsCostCenterMention(input.content) !== null
+      : input.interpretation.entity.status !== 'ABSENT' ||
+        extractOutflowMovementsCostCenterMention(folded) !== null;
+  if (hasOutflowNoun(folded) && hasEntity) {
     return null;
   }
 
-  const limit = resolveOutflowMovementsLimit(folded);
-  const hasMonthCue = new RegExp(`\\bem\\s+${MONTH_NAME}\\b`).test(folded);
+  const cardinality = input.interpretation?.cardinality;
+  const limit =
+    cardinality !== undefined && cardinality.kind !== 'NONE'
+      ? cardinality.limit
+      : resolveOutflowMovementsLimit(folded);
+  // Com interpretação, o texto chega sem período: o mês vem da expressão estruturada.
+  const hasMonthCue =
+    input.interpretation === undefined
+      ? new RegExp(`\\bem\\s+${MONTH_NAME}\\b`).test(folded)
+      : input.interpretation.periodExpression.kind === 'MONTH';
   const entityMatch =
-    /(?:maior(?:es)?|top\s+\d+)\s+(?:gastos?|despesas?|saidas?)?\s*(?:de|em)\s+(.+?)(?:\s+em\s+|$)/i.exec(
+    /(?:maior(?:es)?|top\s+\d+)\s+(?:gastos?|despesas?|saidas?)?\s*(?:de|da|do|em)\s+(.+?)(?:\s+em\s+|$)/i.exec(
       folded,
-    ) ?? /\bde\s+(.+?)(?:\s+em\s+|$)/i.exec(folded);
+    ) ?? /\b(?:de|da|do)\s+(.+?)(?:\s+em\s+|$)/i.exec(folded);
   let costCenterMention = input.priorState.costCenterQuery;
-  if (entityMatch?.[1] !== undefined) {
+  if (input.interpretation?.entity.status === 'RESOLVED') {
+    costCenterMention = input.interpretation.entity.officialName;
+  } else if (entityMatch?.[1] !== undefined) {
     const cleaned = cleanMention(entityMatch[1]);
     if (cleaned !== null && !isNoiseMention(cleaned) && !isMonthToken(cleaned)) {
       costCenterMention = cleaned;
     }
   }
 
+  const explicitCardinality =
+    (cardinality !== undefined && cardinality.kind !== 'NONE' && cardinality.source !== 'DEFAULT_PLURAL') ||
+    extractExplicitAdvisorTopNLimit(folded) !== null ||
+    /\b(?:dez|cinco|top\s+\d+|\d+\s+maior)/.test(folded);
   return {
     monthKey: hasMonthCue ? input.period.monthKey : input.priorState.monthKey,
     periodSource: hasMonthCue ? input.period.source : input.priorState.periodSource,
-    limit:
-      extractExplicitAdvisorTopNLimit(folded) !== null ||
-      /\b(?:dez|cinco|top\s+\d+|\d+\s+maior)/.test(folded)
-        ? limit
-        : input.priorState.limit,
+    limit: explicitCardinality ? limit : input.priorState.limit,
     costCenterMention,
   };
 }

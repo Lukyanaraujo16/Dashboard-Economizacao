@@ -9,7 +9,14 @@ import {
 import type { AnalyticalDimensionPatch } from './analytical-dimension-patch.js';
 import { patchPeriodMonthKey } from './analytical-dimension-patch.js';
 import type { AnalyticalDirection, AnalyticalMetricKey } from './analytical/analytical-keys.js';
+import type { AnalyticalPeriod } from './analytical/analytical-period.js';
 import type { LastAnalyticalQuery } from './last-analytical-query.js';
+import {
+  foldAdvisorInterpretationText,
+  maskAdvisorTextSpans,
+  parseAdvisorPeriodExpression,
+  type AdvisorPeriodExpression,
+} from './advisor-question-interpretation.js';
 import { extractExplicitAdvisorTopNLimit } from './resolve-advisor-drilldown-intent.js';
 import type { AdvisorConversationalPeriod } from './resolve-advisor-conversational-period.js';
 import { isAdvisorCostCenterPeriodFollowUp } from './resolve-advisor-conversational-cost-center.js';
@@ -66,17 +73,55 @@ export function classifyAnalyticalContinuity(input: {
     };
   }
 
+  // Marco A2: período sai do texto antes de extrair entidade/limite.
+  const parsedPeriod = parseAdvisorPeriodExpression({
+    content: input.content,
+    anchorMonthKey: input.period.monthKey,
+  });
+  if (parsedPeriod.expression.kind === 'UNSUPPORTED') {
+    return {
+      decision: 'CLARIFY',
+      reason: 'UNSUPPORTED_PERIOD',
+      message: describeUnsupportedPeriod(parsedPeriod.expression.reason),
+    };
+  }
+  const maskedFolded = maskAdvisorTextSpans(
+    foldAdvisorInterpretationText(input.content),
+    parsedPeriod.spans,
+  )
+    .replace(/\s+/g, ' ')
+    .replace(/\s*[?.!]+\s*$/g, '')
+    .trim();
+  const windowPatch: AnalyticalPeriod | null =
+    parsedPeriod.expression.kind === 'MONTH_WINDOW'
+      ? {
+          kind: 'MONTH_WINDOW',
+          endMonthKey: parsedPeriod.expression.endMonthKey,
+          count: parsedPeriod.expression.count,
+        }
+      : null;
+
   // G2 / D — continuidade composta na família MOVEMENTS×OUTFLOW.
   if (isMovementsFamilyPrior(input.prior)) {
-    const composite = extractCompositeMovementsContinuation(folded, input.period, input.prior);
+    const composite = extractCompositeMovementsContinuation(
+      maskedFolded,
+      input.period,
+      input.prior,
+      parsedPeriod.expression.kind === 'MONTH',
+    );
     if (composite !== null) {
-      return { decision: 'CONTINUE', patch: composite, inherited: true };
+      return {
+        decision: 'CONTINUE',
+        patch: windowPatch !== null ? { ...composite, period: windowPatch } : composite,
+        inherited: true,
+      };
     }
   }
 
-  const limitPatch = extractLimitOnlyFollowUp(folded);
-  const entityPatch = extractContinuityEntityFollowUp(folded, input.content);
+  const limitPatch = extractLimitOnlyFollowUp(maskedFolded);
+  const entityPatch = extractContinuityEntityFollowUp(maskedFolded, input.content);
   const periodOnly =
+    windowPatch !== null ||
     isCostCenterOutflowMovementsPeriodFollowUp(input.content) ||
     isAdvisorCostCenterPeriodFollowUp(input.content) ||
     isBarePeriodContinuation(folded);
@@ -109,11 +154,13 @@ export function classifyAnalyticalContinuity(input: {
   const patch: AnalyticalDimensionPatch = {
     ...(limitPatch !== null ? { limit: limitPatch } : {}),
     ...(entityPatch !== null ? { costCenterQuery: entityPatch } : {}),
-    ...(periodOnly && entityPatch === null
-      ? {
-          period: patchPeriodMonthKey(input.prior.query.period, input.period.monthKey),
-        }
-      : {}),
+    ...(windowPatch !== null
+      ? { period: windowPatch }
+      : periodOnly && entityPatch === null
+        ? {
+            period: patchPeriodMonthKey(input.prior.query.period, input.period.monthKey),
+          }
+        : {}),
     ...(metricPatch !== null ? { metric: metricPatch } : {}),
     ...(directionPatch !== undefined ? { direction: directionPatch } : {}),
   };
@@ -141,9 +188,30 @@ export function classifyAnalyticalContinuity(input: {
   return { decision: 'CONTINUE', patch, inherited: true };
 }
 
+/** Texto de limitação para granularidade sem regra oficial (nunca vira mês em silêncio). */
+export function describeUnsupportedPeriod(
+  reason: Extract<AdvisorPeriodExpression, { kind: 'UNSUPPORTED' }>['reason'],
+): string {
+  switch (reason) {
+    case 'QUARTER':
+      return 'Ainda não tenho regra oficial para trimestre nesta consulta. Informe os meses (por exemplo, "nos últimos 3 meses" ou "de julho a setembro").';
+    case 'SEMESTER':
+      return 'Ainda não tenho regra oficial para semestre nesta consulta. Informe os meses (por exemplo, "nos últimos 6 meses").';
+    case 'YEAR':
+      return 'Ainda não consigo fazer esta consulta por ano. Informe os meses (até 24 meses).';
+    case 'AMBIGUOUS_LAST_MONTH':
+      return '"Último mês" pode ser o mês passado ou o mês atual. Informe o mês (por exemplo, "mês passado" ou "em setembro").';
+    case 'WINDOW_TOO_LARGE':
+      return 'A janela máxima é de 24 meses. Informe um período menor.';
+    case 'INVALID_RANGE':
+      return 'Não consegui interpretar esse intervalo de meses. Informe o mês inicial e o final.';
+  }
+}
+
 function isMovementsFamilyPrior(prior: LastAnalyticalQuery): boolean {
   return (
     prior.capabilityKey === 'realized_cash.cost_center.month.movements' ||
+    prior.capabilityKey === 'realized_cash.cost_center.window.movements' ||
     (prior.query.metric === 'REALIZED_CASH' &&
       prior.query.operation === 'MOVEMENTS' &&
       prior.query.dimension === 'COST_CENTER')
@@ -157,6 +225,8 @@ function extractCompositeMovementsContinuation(
   folded: string,
   period: AdvisorConversationalPeriod,
   prior: LastAnalyticalQuery,
+  /** Mês citado na pergunta (o texto chega com o período já mascarado). */
+  hasMonthCue: boolean,
 ): AnalyticalDimensionPatch | null {
   if (!/^(?:e|agora)\b/.test(folded)) {
     return null;
@@ -184,8 +254,6 @@ function extractCompositeMovementsContinuation(
     null;
   const cleanedEntity =
     entity === null ? null : cleanEntityToken(entity);
-  const hasMonthCue = new RegExp(`\\bem\\s+${MONTH_NAME}\\b`).test(folded);
-
   if (limit === null && cleanedEntity === null && !hasMonthCue) {
     return null;
   }

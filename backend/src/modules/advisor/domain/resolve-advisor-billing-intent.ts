@@ -1,4 +1,5 @@
 import { foldAdvisorNominalText } from './advisor-nominal-text.js';
+import { parseAdvisorLastMonthsCount } from './advisor-question-interpretation.js';
 import { BILLING_SERIES_MAX_MONTHS } from './billing-month-series.js';
 import { isAdvisorInterpretiveQuestion } from './classify-advisor-factual-response.js';
 import { isAdvisorMonthlyFactualCompareQuestion } from './resolve-advisor-conversational-period.js';
@@ -19,28 +20,6 @@ const OTHER_LENS_TENANT =
 const OTHER_LENS_COST_CENTER =
   /\bcategor|\bconvenio\b|\bfornecedor|\bclientes?\b|\branking\b|\bmaiores\b|\bem aberto\b|\bvencid|\binadimpl|\binterpret|\bmetodolog|\bcom base\b/;
 
-const COUNT_TOKEN =
-  '(?:\\d{1,3}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze)';
-
-const LAST_MONTHS = new RegExp(`\\bultim[oa]s?\\s+(${COUNT_TOKEN})\\s+meses\\b`);
-
-const WRITTEN_COUNTS: Readonly<Record<string, number>> = {
-  um: 1,
-  uma: 1,
-  dois: 2,
-  duas: 2,
-  tres: 3,
-  quatro: 4,
-  cinco: 5,
-  seis: 6,
-  sete: 7,
-  oito: 8,
-  nove: 9,
-  dez: 10,
-  onze: 11,
-  doze: 12,
-};
-
 export type AdvisorBillingIntent =
   | { readonly kind: 'MONTH_VALUE' }
   | {
@@ -49,23 +28,9 @@ export type AdvisorBillingIntent =
       readonly wantsAverage: boolean;
     };
 
-function parseCountToken(token: string): number | null {
-  if (/^\d+$/.test(token)) {
-    const value = Number(token);
-    if (!Number.isInteger(value) || value < 1) {
-      return null;
-    }
-    return value;
-  }
-  return WRITTEN_COUNTS[token] ?? null;
-}
-
+/** Fonte única de "últimos N meses" (mesma semântica em todas as famílias). */
 function parseLastMonthCount(folded: string): number | null {
-  const match = LAST_MONTHS.exec(folded);
-  if (match === null || match[1] === undefined) {
-    return null;
-  }
-  return parseCountToken(match[1]);
+  return parseAdvisorLastMonthsCount(folded);
 }
 
 export function hasAdvisorBillingNoun(content: string): boolean {

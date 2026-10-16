@@ -27,6 +27,7 @@ export const LAST_ANALYTICAL_QUERY_COVERED_KEYS = [
   'billing.cost_center.month',
   'billing.cost_center.series.months',
   'realized_cash.cost_center.month.movements',
+  'realized_cash.cost_center.window.movements',
   'realized_cash.cost_center.month.lookup',
   'realized_cash.value.month',
 ] as const;

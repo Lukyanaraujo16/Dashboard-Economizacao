@@ -24,6 +24,11 @@ import {
 } from '../billing-month-series.js';
 import { ADVISOR_DAILY_CASH_MOVEMENT_FACT_KIND } from '../compose-advisor-daily-cash-movement-answer.js';
 import { resolveCatalogCostCenter } from '../resolve-advisor-daily-cash-movement.js';
+import { listAdvisorMonthWindowKeys } from '../advisor-question-interpretation.js';
+import {
+  mergeCostCenterMovementsWindow,
+  type CostCenterMovementsMonthResult,
+} from '../cost-center-movements-window.js';
 
 function success(input: {
   readonly validated: Parameters<AnalyticalExecutor>[0]['validated'];
@@ -295,6 +300,38 @@ export const executeRealizedCashCostCenter: AnalyticalExecutor = async ({
       direction,
       costCenterQuery: costCenterQuery!,
       now: runtime.now,
+    });
+    return success({
+      validated,
+      executorKey: 'realizedCashCostCenter',
+      legacyFact,
+    });
+  }
+
+  if (op === 'MOVEMENTS' && validated.query.period.kind === 'MONTH_WINDOW') {
+    // Janela = o mesmo motor mensal chamado mês a mês (sem fórmula nova).
+    const period = validated.query.period;
+    const months: CostCenterMovementsMonthResult[] = [];
+    for (const monthKey of listAdvisorMonthWindowKeys(period.endMonthKey, period.count)) {
+      const fact = await runtime.cashCostCenter.movementLines({
+        tenantId: runtime.tenantId,
+        monthKey,
+        direction,
+        costCenterQuery: costCenterQuery!,
+        limit: validated.query.limit,
+        now: runtime.now,
+      });
+      months.push({ monthKey, fact });
+      if (fact.status === 'NOT_FOUND' || fact.status === 'AMBIGUOUS') {
+        break;
+      }
+    }
+    const legacyFact = mergeCostCenterMovementsWindow({
+      endMonthKey: period.endMonthKey,
+      count: period.count,
+      direction,
+      limit: validated.query.limit,
+      months,
     });
     return success({
       validated,

@@ -93,6 +93,20 @@ export function applyAnalyticalDimensionPatch(input: {
     }
   }
 
+  // Marco A2: janela não vira mês em silêncio. As capabilities de destino da troca
+  // de métrica (lookup INFLOW, CASH_RESULT) só existem por mês.
+  if (
+    metricChanged &&
+    (metric === 'REALIZED_CASH' || metric === 'CASH_RESULT') &&
+    period.kind === 'MONTH_WINDOW'
+  ) {
+    return {
+      ok: false,
+      reason: 'WINDOW_NOT_SUPPORTED_FOR_METRIC',
+      message: `${metric === 'CASH_RESULT' ? 'O resultado de caixa' : 'A entrada de caixa'} por centro ainda só está disponível mês a mês, não para uma janela de ${period.count} meses. Informe um mês.`,
+    };
+  }
+
   // C.2.7 F — BILLING → REALIZED_CASH INFLOW via capability oficial existente.
   if (metricChanged && prior.metric === 'BILLING' && metric === 'REALIZED_CASH') {
     direction = input.patch.direction ?? 'INFLOW';

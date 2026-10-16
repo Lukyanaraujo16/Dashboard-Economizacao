@@ -643,6 +643,25 @@ export const ANALYTICAL_CAPABILITY_REGISTRY: readonly AnalyticalCapability[] = [
     executorKey: 'realizedCashCostCenter',
     sourceToolOrSurface: 'cash_cost_center_movement_lines',
   },
+  // Marco A2: maior(es) gasto(s) individual(is) por centro numa janela de meses.
+  // Só OUTFLOW (não amplia janelas para outras métricas). Agrega o mesmo motor mensal.
+  {
+    key: 'realized_cash.cost_center.window.movements',
+    metric: 'REALIZED_CASH',
+    semanticFamily: 'FLOW',
+    directions: ['OUTFLOW'],
+    dimensions: ['COST_CENTER'],
+    periodKinds: ['MONTH_WINDOW'],
+    comparisonChildKinds: null,
+    operations: ['MOVEMENTS'],
+    allowedFilters: ['costCenterQuery'],
+    requiredFilters: ['costCenterQuery'],
+    identityRequired: false,
+    maxLimit: DRILL_MAX,
+    defaultLimit: DRILL_DEFAULT,
+    executorKey: 'realizedCashCostCenter',
+    sourceToolOrSurface: 'cash_cost_center_movement_lines',
+  },
 
   // --- current_financial_snapshot (preload) ---
   {

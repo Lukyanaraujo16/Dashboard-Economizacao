@@ -101,7 +101,8 @@ async function ask(
 
 describe('Lia — movimentos do dia', () => {
   it('publica uma capability DAY e o registry continua deny-by-default', () => {
-    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(34);
+    // Inventário exato em advisor-f1385b-parity-wrappers.
+    expect(ANALYTICAL_CAPABILITY_REGISTRY).toHaveLength(40);
     expect(
       ANALYTICAL_CAPABILITY_REGISTRY.filter((item) => item.periodKinds.includes('DAY')).map(
         (item) => item.key,

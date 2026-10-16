@@ -217,6 +217,25 @@ export function buildCostCenterMovementsQuery(input: {
   };
 }
 
+/** Lançamentos individuais de saída por centro numa janela (window.movements). */
+export function buildCostCenterMovementsWindowQuery(input: {
+  readonly endMonthKey: string;
+  readonly count: number;
+  readonly costCenterQuery: string;
+  readonly limit?: number;
+}): AnalyticalQuery {
+  return {
+    semanticFamily: 'FLOW',
+    metric: 'REALIZED_CASH',
+    direction: 'OUTFLOW',
+    period: { kind: 'MONTH_WINDOW', endMonthKey: input.endMonthKey, count: input.count },
+    dimension: 'COST_CENTER',
+    operation: 'MOVEMENTS',
+    filters: { costCenterQuery: input.costCenterQuery.trim() },
+    ...(input.limit !== undefined ? { limit: input.limit } : {}),
+  };
+}
+
 export function buildPayableTitlesQuery(input: {
   readonly monthKey: string;
   readonly ordering: 'VALUE_DESC' | 'DUE_DATE_ASC';
