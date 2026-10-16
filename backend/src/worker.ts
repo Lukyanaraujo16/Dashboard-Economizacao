@@ -1,7 +1,4 @@
-import { existsSync } from 'node:fs';
-import { loadEnvFile } from 'node:process';
-import { resolve } from 'node:path';
-
+import { loadRootEnvFile } from './config/load-env-file.js';
 import { loadEnvironment } from './config/env.js';
 import { createBullmqRedisOptions } from './infrastructure/jobs/bullmq-connection.js';
 import { createContaAzulManualSyncPublisher } from './infrastructure/jobs/conta-azul-manual-sync.queue.js';
@@ -36,13 +33,7 @@ import { createContaAzulInstallmentPresenceRepository } from './modules/integrat
 import { createProactiveEvaluationRuntime } from './modules/advisor/services/proactive-evaluation.runtime.js';
 import { runProactiveTenantEvaluation } from './modules/advisor/services/proactive-evaluation.service.js';
 
-const rootEnvPath = resolve(process.cwd(), '../.env');
-const localEnvPath = resolve(process.cwd(), '.env');
-if (existsSync(rootEnvPath)) {
-  loadEnvFile(rootEnvPath);
-} else if (existsSync(localEnvPath)) {
-  loadEnvFile(localEnvPath);
-}
+loadRootEnvFile();
 
 function logAutoSync(
   event: string,
