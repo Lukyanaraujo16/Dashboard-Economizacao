@@ -20,11 +20,20 @@ export type IaToolRound = {
   readonly results: readonly IaToolResult[];
 };
 
+/** Turno real da conversa (modo agente). Vai antes dos blocos do turno atual. */
+export type IaConversationTurn = {
+  readonly role: 'user' | 'assistant';
+  readonly content: string;
+};
+
 export type GenerationInput = {
   readonly tenantId: string;
   readonly provider: AiProviderId;
   readonly model: string;
   readonly blocks: readonly AdvisorContextBlock[];
+  readonly conversation?: readonly IaConversationTurn[];
+  /** Teto de saída; adapters usam seu default quando ausente. */
+  readonly maxOutputTokens?: number;
   readonly tools?: readonly IaToolDefinition[];
   readonly toolRounds?: readonly IaToolRound[];
 };

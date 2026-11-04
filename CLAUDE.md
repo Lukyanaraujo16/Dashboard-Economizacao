@@ -34,6 +34,8 @@ Em caso de conflito, `docs/` prevalece.
 
 ## Consultor (advisor)
 
+- Modo padrão é **agente** (`ADVISOR_MODE=agent`, ADR-051): LLM com histórico real + tools oficiais
+  (`services/run-advisor-agent.ts`, `domain/advisor-agent-tools.ts`). Pipeline abaixo só em `ADVISOR_MODE=legacy`.
 - Orquestrador: `backend/src/modules/advisor/services/send-advisor-message.ts`.
 - Interpretação estruturada compartilhada (período, cardinalidade, entidade):
   `backend/src/modules/advisor/domain/advisor-question-interpretation.ts`.

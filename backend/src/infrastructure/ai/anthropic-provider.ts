@@ -81,6 +81,10 @@ function appendAnthropicToolRounds(
 function toAnthropicMessages(input: GenerationInput): AnthropicChatMessage[] {
   const messages: AnthropicChatMessage[] = [];
 
+  for (const turn of input.conversation ?? []) {
+    pushOrMerge(messages, { role: turn.role, content: turn.content });
+  }
+
   for (const block of input.blocks) {
     if (isSystemContextBlock(block)) {
       continue;
@@ -163,7 +167,7 @@ function readAnthropicOutput(json: unknown): GenerationOutput {
     .filter((item) => item.type === 'text' && typeof item.text === 'string')
     .map((item) => String(item.text));
   const text = texts.join('\n');
-  if (toolCalls.length === 0 && typeof content[0]?.text !== 'string') {
+  if (toolCalls.length === 0 && texts.length === 0) {
     throw iaProviderError('PROVIDER_ERROR', 'O provedor de IA retornou uma resposta inválida.');
   }
   return {
@@ -198,7 +202,7 @@ export function createAnthropicProvider(config: IaHttpClientConfig): IaProvider 
         },
         body: {
           model: input.model,
-          max_tokens: ANTHROPIC_MAX_TOKENS,
+          max_tokens: input.maxOutputTokens ?? ANTHROPIC_MAX_TOKENS,
           ...(system ? { system } : {}),
           messages: toAnthropicMessages(input),
           ...(tools.length > 0 ? { tools: toAnthropicTools(tools) } : {}),

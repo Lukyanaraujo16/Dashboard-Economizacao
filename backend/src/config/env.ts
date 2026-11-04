@@ -16,6 +16,19 @@ export interface ContaAzulEnvironment {
 
 export type AiDefaultProvider = 'OPENAI' | 'ANTHROPIC';
 
+export type AdvisorMode = 'agent' | 'legacy';
+
+function parseAdvisorMode(value: string | undefined): AdvisorMode {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized === undefined || normalized === '' || normalized === 'agent') {
+    return 'agent';
+  }
+  if (normalized === 'legacy') {
+    return 'legacy';
+  }
+  throw new Error('ADVISOR_MODE deve ser agent ou legacy.');
+}
+
 export interface Environment {
   allowInsecureHttpSession: boolean;
   authSecret: string;
@@ -36,6 +49,8 @@ export interface Environment {
   openaiApiKey: string | null;
   /** Credencial da plataforma. Ausência não impede boot. Nunca persistir/logar. */
   anthropicApiKey: string | null;
+  /** ADR-051: 'agent' (default) = LLM conduz a conversa; 'legacy' = pipeline determinístico. */
+  advisorMode: AdvisorMode;
   /**
    * Default apenas para criação/configuração nova.
    * Provider efetivo da execução vem de ai_tenant_settings.provider.
@@ -283,5 +298,6 @@ export function loadEnvironment(source: NodeJS.ProcessEnv = process.env): Enviro
     openaiApiKey: parseOptionalSecret(source.OPENAI_API_KEY),
     anthropicApiKey: parseOptionalSecret(source.ANTHROPIC_API_KEY),
     aiDefaultProvider: parseAiDefaultProvider(source.AI_PROVIDER),
+    advisorMode: parseAdvisorMode(source.ADVISOR_MODE),
   };
 }

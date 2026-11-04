@@ -44,6 +44,9 @@ import { createAdvisorCostCenterDimensionService } from '../domain/advisor-cost-
 import { createAdvisorPayableTitlesService } from '../domain/advisor-payable-titles-tools.js';
 import { createCounterpartyIdentityService } from '../domain/load-counterparty-identity-population.js';
 import { createBuildAdvisorContext } from '../services/build-advisor-context.js';
+import { createAdvisorAgentToolExecutor } from '../domain/advisor-agent-tools.js';
+import { createAdvisorDashboardToolExecutor } from '../domain/advisor-dashboard-tools.js';
+import { buildDashboardOverviewFacade } from '../../dashboard/services/build-dashboard-overview-facade.js';
 import {
   createAllowAllConsultantRateLimiter,
   createFailingConsultantRateLimiter,
@@ -62,7 +65,7 @@ export type AdvisorRuntimeEnvironment = Pick<
   Environment,
   'nodeEnv' | 'openaiApiKey' | 'anthropicApiKey'
 > &
-  Partial<Pick<Environment, 'integrationEncryptionKey'>>;
+  Partial<Pick<Environment, 'integrationEncryptionKey' | 'advisorMode'>>;
 
 export type AdvisorRuntime = {
   readonly settings: AdvisorSettingsRepository;
@@ -228,6 +231,13 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
     cashCostCenter,
     payableTitles,
   });
+  const agentTools = createAdvisorDashboardToolExecutor({
+    base: createAdvisorAgentToolExecutor({
+      base: analyticalTools,
+      deps: { cashFlow, analytics, costCenters },
+    }),
+    deps: { facade: buildDashboardOverviewFacade({ prisma }), costCenters, categories },
+  });
   const context = createBuildAdvisorContext({
     settings,
     knowledge,
@@ -278,6 +288,7 @@ export function createAdvisorRuntime(options: CreateAdvisorRuntimeOptions = {}):
         }),
         costCenters,
       },
+      ...((environment.advisorMode ?? 'agent') === 'agent' ? { agent: { tools: agentTools } } : {}),
     });
 
   return {

@@ -32,6 +32,9 @@ function toOpenAiMessages(input: GenerationInput): OpenAiChatMessage[] {
   if (system) {
     messages.push({ role: 'system', content: system });
   }
+  for (const turn of input.conversation ?? []) {
+    messages.push({ role: turn.role, content: turn.content });
+  }
   for (const block of input.blocks) {
     if (isSystemContextBlock(block)) {
       continue;
@@ -183,6 +186,9 @@ export function createOpenAiProvider(config: IaHttpClientConfig): IaProvider {
         body: {
           model: input.model,
           messages: toOpenAiMessages(input),
+          ...(input.maxOutputTokens !== undefined
+            ? { max_completion_tokens: input.maxOutputTokens }
+            : {}),
           ...(tools.length > 0 ? { tools: toOpenAiTools(tools), tool_choice: 'auto' } : {}),
         },
       });

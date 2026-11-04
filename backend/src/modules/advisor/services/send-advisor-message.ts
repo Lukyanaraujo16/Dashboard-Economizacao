@@ -201,6 +201,14 @@ import {
   runCostCenterMovementsWindow,
 } from '../domain/cost-center-movements-window.js';
 import { interpretAdvisorQuestion } from '../domain/advisor-question-interpretation.js';
+import { buildAdvisorAgentInstructions } from '../domain/advisor-agent-instructions.js';
+import { civilTodayInSaoPaulo } from '../../analytics/domain/analytical-timezone.js';
+import { civilMonthKey, formatCivilDateKey } from '../../analytics/domain/civil-calendar.js';
+import {
+  buildAdvisorAgentBlocks,
+  buildAdvisorAgentConversation,
+  runAdvisorAgentLoop,
+} from './run-advisor-agent.js';
 
 import { assertAdvisorTenantId } from '../repositories/assert-tenant-id.js';
 import type { AdvisorConversationRepository } from '../repositories/advisor-conversation.repository.js';
@@ -264,6 +272,11 @@ export type SendAdvisorMessageDependencies = {
     readonly details: Pick<CashRealizedDetailsService, 'getCashRealizedDayDetails'>;
     readonly costCenters: Pick<CostCenterReadRepository, 'listByTenant'>;
   };
+  /**
+   * Modo agente (ADR-051): presente = o LLM conduz a conversa com histórico real e tools
+   * oficiais; o pipeline determinístico legado não roda. Ausente = pipeline legado.
+   */
+  readonly agent?: { readonly tools: AdvisorAnalyticalToolExecutor };
 };
 
 /**
@@ -366,6 +379,23 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
           conversation.id,
           deriveConsultantConversationTitle(question),
         );
+      }
+
+      if (deps.agent !== undefined) {
+        return answerWithAdvisorAgent({
+          deps,
+          agentTools: deps.agent.tools,
+          tenantId,
+          userId,
+          conversationId: conversation.id,
+          userMessage,
+          question,
+          monthKey: input.monthKey,
+          now: input.now,
+          provider: ready.provider,
+          model,
+          recordTrail,
+        });
       }
 
       const history = await deps.conversations.listMessages(tenantId, conversation.id);
@@ -1880,6 +1910,162 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
 }
 
 export type SendAdvisorMessage = ReturnType<typeof createSendAdvisorMessage>;
+
+type RecordAdvisorTrail = (input: {
+  readonly consultantMessageId: string | null;
+  readonly runId: string | null;
+  readonly answerSource: AnalyticalAnswerSource;
+  readonly toolRoundCount: number;
+  readonly traces: readonly AnalyticalToolTraceDraft[];
+  readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+}) => Promise<AnalyticalOutcome>;
+
+/** Turno no modo agente: contexto oficial + histórico real + loop de tools. */
+async function answerWithAdvisorAgent(input: {
+  readonly deps: SendAdvisorMessageDependencies;
+  readonly agentTools: AdvisorAnalyticalToolExecutor;
+  readonly tenantId: string;
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly userMessage: AiMessageRecord;
+  readonly question: string;
+  readonly monthKey?: string;
+  readonly now?: Date;
+  readonly provider: GenerationInput['provider'];
+  readonly model: string;
+  readonly recordTrail: RecordAdvisorTrail;
+}): Promise<SendAdvisorMessageResult> {
+  const { deps, tenantId, userMessage } = input;
+  const now = input.now ?? new Date();
+  const today = civilTodayInSaoPaulo(now);
+  const currentMonthKey = civilMonthKey(today);
+
+  const [built, messages] = await Promise.all([
+    deps.context.build({
+      tenantId,
+      userId: input.userId,
+      conversationId: input.conversationId,
+      question: input.question,
+      monthKey: input.monthKey,
+      now: input.now,
+    }),
+    deps.conversations.listMessages(tenantId, input.conversationId),
+  ]);
+  const conversation = buildAdvisorAgentConversation({
+    tenantId,
+    conversationId: input.conversationId,
+    currentMessageId: userMessage.id,
+    messages,
+  });
+  const withDocuments =
+    typeof deps.context.withDocumentKnowledge === 'function'
+      ? await deps.context.withDocumentKnowledge(built, {
+          question: input.question,
+          recentUserMessages: conversation
+            .filter((turn) => turn.role === 'user')
+            .map((turn) => turn.content),
+        })
+      : built;
+  const blocks = buildAdvisorAgentBlocks(
+    withDocuments.blocks,
+    buildAdvisorAgentInstructions({
+      todayKey: formatCivilDateKey(today),
+      currentMonthKey,
+      selectedMonthKey: built.monthKey,
+    }),
+  );
+
+  let run = await deps.runs.createRun(tenantId, {
+    userId: input.userId,
+    conversationId: input.conversationId,
+    messageId: userMessage.id,
+    provider: input.provider,
+    model: input.model,
+    status: 'STARTED',
+  });
+  const startedAt = Date.now();
+  let traces: AnalyticalToolTraceDraft[] = [];
+  let roundCount = 0;
+  try {
+    const provider = deps.providers.resolve(input.provider);
+    if (provider.id !== input.provider) {
+      throw new IaProviderError('PROVIDER_ERROR', 'Registry devolveu provider diferente do configurado.');
+    }
+    const result = await runAdvisorAgentLoop({
+      tenantId,
+      provider: input.provider,
+      model: input.model,
+      blocks,
+      conversation,
+      tools: input.agentTools,
+      resolvedMonthKey: built.monthKey,
+      now: input.now,
+      generate: (payload) => provider.generate(payload),
+    });
+    roundCount = result.rounds.length;
+    traces = result.rounds.flatMap((round, index) =>
+      round.results.flatMap((toolResult) => {
+        const trace = traceFromToolResult(toolResult, index + 1);
+        return trace === null ? [] : [trace];
+      }),
+    );
+    console.info(
+      JSON.stringify({
+        event: 'advisor_agent_answered',
+        tenantId,
+        conversationId: input.conversationId,
+        toolRounds: roundCount,
+        toolCalls: result.rounds.map((round) => round.calls.map((call) => call.name)),
+        historyTurns: conversation.length,
+      }),
+    );
+    const consultantMessage = await deps.conversations.createMessage(tenantId, input.conversationId, {
+      senderType: 'CONSULTANT',
+      content: sanitizeConsultantText(result.text),
+    });
+    run = await deps.runs.updateRun(tenantId, run.id, {
+      status: 'SUCCEEDED',
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      durationMs: Date.now() - startedAt,
+      finishedAt: new Date(),
+      messageId: consultantMessage.id,
+    });
+    const analyticalOutcome = await input.recordTrail({
+      consultantMessageId: consultantMessage.id,
+      runId: run.id,
+      answerSource: 'PROVIDER',
+      toolRoundCount: roundCount,
+      traces,
+      facts: openProviderFacts(false),
+    });
+    return {
+      conversationId: input.conversationId,
+      userMessage,
+      consultantMessage,
+      run,
+      factualAnswer: null,
+      analyticalOutcome,
+    };
+  } catch (error) {
+    const { status, errorCode, message } = normalizeExecutionFailure(error);
+    run = await deps.runs.updateRun(tenantId, run.id, {
+      status,
+      errorCode,
+      durationMs: Date.now() - startedAt,
+      finishedAt: new Date(),
+    });
+    await input.recordTrail({
+      consultantMessageId: null,
+      runId: run.id,
+      answerSource: 'PROVIDER',
+      toolRoundCount: roundCount,
+      traces,
+      facts: openProviderFacts(true),
+    });
+    throw new AdvisorExecutionError(errorCode, message, run, userMessage);
+  }
+}
 
 function requireActiveSettings(
   settings: AiTenantSettingsRecord | null,
