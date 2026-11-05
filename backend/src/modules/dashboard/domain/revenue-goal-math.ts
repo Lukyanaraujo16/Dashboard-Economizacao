@@ -113,6 +113,36 @@ function resolveStatus(
 }
 
 /**
+ * Meta de centro de custo cujo faturamento por centro está UNAVAILABLE (CC1.3):
+ * não vira zero nem progresso — só a meta cadastrada é exibida.
+ * O geral nunca chega aqui: billing company-level null é falha explícita.
+ */
+export type UnavailableRevenueGoalProgress = {
+  readonly monthKey: string;
+  readonly target: Prisma.Decimal | null;
+  readonly actual: null;
+  readonly achievementRate: null;
+  readonly remaining: null;
+  readonly exceeded: null;
+  readonly status: 'UNAVAILABLE';
+};
+
+export function unavailableRevenueGoalProgress(
+  monthKey: string,
+  target: Prisma.Decimal | null,
+): UnavailableRevenueGoalProgress {
+  return {
+    monthKey,
+    target,
+    actual: null,
+    achievementRate: null,
+    remaining: null,
+    exceeded: null,
+    status: 'UNAVAILABLE',
+  };
+}
+
+/**
  * Meta válida para gravação: decimal-string estritamente positivo.
  * `null` sinaliza recusa — a fronteira HTTP converte em 400 e nada é persistido.
  */

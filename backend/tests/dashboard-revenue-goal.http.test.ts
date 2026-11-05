@@ -17,6 +17,8 @@ import { buildSessionKeyPrefix } from '../src/modules/auth/session/redis-session
 import { shiftRevenueGoalMonthKey } from '../src/modules/dashboard/domain/revenue-goal-math.js';
 import { createRevenueGoalRepository } from '../src/modules/dashboard/repositories/revenue-goal.repository.js';
 import { mapSettlement } from '../src/modules/integrations/conta-azul/domain/conta-azul-settlement-mappers.js';
+import { createExpenseCeilingRepository } from '../src/modules/dashboard/repositories/expense-ceiling.repository.js';
+import { createContaAzulCostCenterRepository } from '../src/modules/integrations/conta-azul/repositories/cost-center.repository.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
 import { createContaAzulLedgerRepository } from '../src/modules/integrations/conta-azul/repositories/ledger.repository.js';
@@ -36,6 +38,8 @@ const ledgerWrite = createContaAzulLedgerRepository(prisma);
 const users = createUserRepository(prisma);
 const credentials = createUserCredentialRepository(prisma);
 const goals = createRevenueGoalRepository(prisma);
+const ceilings = createExpenseCeilingRepository(prisma);
+const costCenterRepo = createContaAzulCostCenterRepository(prisma);
 const passwordHasher = createArgon2idPasswordHasher();
 
 beforeAll(() => {
@@ -668,5 +672,312 @@ describe('PUT /dashboard/revenue-goal', () => {
     });
     expect(response.statusCode).toBe(400);
     expect(await goals.findByTenantMonth(b.tenant.id, monthKey)).toBeNull();
+  });
+});
+
+describe('meta e teto por centro de custo', () => {
+  /**
+   * cc-1 recebe 80 (rateio 100%); `sem-centro` recebe 20 sem rateio (NO_ALLOCATION).
+   * Geral = 100; cc-1 = 80; Σ centros < Todos é a semântica oficial (CC1).
+   */
+  async function seedTwoCenters(name: string) {
+    const { from } = currentBounds();
+    const seeded = await seedConnected(name);
+    const scope = {
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      syncedAt: new Date(),
+    };
+    await costCenterRepo.upsertCostCenters(scope, [
+      { externalId: 'cc-1', name: 'Centro 1', code: null, active: true },
+      { externalId: 'cc-2', name: 'Centro 2', code: null, active: true },
+    ]);
+    const ids = await costCenterRepo.findCostCenterIdsByExternal(scope, ['cc-1', 'cc-2']);
+    await financial.upsertReceivables(scope, [
+      installment({
+        externalId: 'cc1-full',
+        status: 'PAID',
+        total: '80',
+        paid: '80',
+        unpaid: '0',
+        competenceDate: from,
+      }),
+      installment({
+        externalId: 'sem-centro',
+        status: 'PAID',
+        total: '20',
+        paid: '20',
+        unpaid: '0',
+        competenceDate: from,
+      }),
+    ]);
+    const full = await prisma.receivable.findFirstOrThrow({
+      where: { tenantId: seeded.tenant.id, externalId: 'cc1-full' },
+    });
+    await costCenterRepo.replaceAllocationsForReceivable(
+      seeded.tenant.id,
+      full.id,
+      [{ costCenterId: ids.get('cc-1')!, amount: new Prisma.Decimal('80') }],
+      scope.syncedAt,
+    );
+    await costCenterRepo.markReceivableCostCenterDetailState(seeded.tenant.id, full.id, {
+      status: 'FETCHED',
+      syncedAt: scope.syncedAt,
+      ruleVersion: 1,
+    });
+    for (const [externalId, amount] of [
+      ['cc1-full', '80'],
+      ['sem-centro', '20'],
+    ] as const) {
+      await seedReceipt({
+        tenantId: seeded.tenant.id,
+        integrationId: seeded.integration.id,
+        installmentExternalId: externalId,
+        amount,
+        occurredOn: from,
+      });
+    }
+    return { ...seeded, scope, cc1: ids.get('cc-1')!, cc2: ids.get('cc-2')! };
+  }
+
+  async function loggedUser(tenantId: string, email: string) {
+    await createUser({ email, role: 'USER', tenantId });
+    const app = await buildTestApp();
+    const cookie = await loginAs(app, email);
+    return { app, cookie };
+  }
+
+  it('meta geral e meta do centro coexistem; realizado do centro usa o filtro oficial', async () => {
+    const { monthKey } = currentBounds();
+    const seeded = await seedTwoCenters('goal-cc');
+    const { app, cookie } = await loggedUser(seeded.tenant.id, 'cc@goal.test');
+
+    const putGeneral = await app.inject({
+      method: 'PUT',
+      url: '/dashboard/revenue-goal',
+      headers: { cookie },
+      payload: { month: monthKey, target: '500' },
+    });
+    expect(putGeneral.statusCode).toBe(200);
+    expect(putGeneral.json()).toMatchObject({ costCenterId: null, target: '500', actual: '100' });
+
+    const putCenter = await app.inject({
+      method: 'PUT',
+      url: '/dashboard/revenue-goal',
+      headers: { cookie },
+      payload: { month: monthKey, target: '200', costCenter: seeded.cc1 },
+    });
+    expect(putCenter.statusCode).toBe(200);
+    expect(putCenter.json()).toMatchObject({
+      costCenterId: seeded.cc1,
+      target: '200',
+      actual: '80',
+      remaining: '120',
+    });
+
+    // Regravar o centro sobrescreve só o centro.
+    await app.inject({
+      method: 'PUT',
+      url: '/dashboard/revenue-goal',
+      headers: { cookie },
+      payload: { month: monthKey, target: '250', costCenter: seeded.cc1 },
+    });
+
+    const general = await app.inject({
+      method: 'GET',
+      url: '/dashboard/revenue-goal',
+      headers: { cookie },
+    });
+    expect(general.json()).toMatchObject({ costCenterId: null, target: '500', actual: '100' });
+
+    const center = await app.inject({
+      method: 'GET',
+      url: `/dashboard/revenue-goal?costCenter=${seeded.cc1}`,
+      headers: { cookie },
+    });
+    expect(center.statusCode).toBe(200);
+    const centerBody = center.json();
+    expect(centerBody).toMatchObject({ costCenterId: seeded.cc1, target: '250', actual: '80' });
+    expect(centerBody.history.at(-1)).toMatchObject({ monthKey, target: '250', actual: '80' });
+
+    const other = await app.inject({
+      method: 'GET',
+      url: `/dashboard/revenue-goal?costCenter=${seeded.cc2}`,
+      headers: { cookie },
+    });
+    expect(other.json()).toMatchObject({ costCenterId: seeded.cc2, status: 'NO_TARGET', target: null });
+
+    const rows = await prisma.revenueGoal.findMany({ where: { tenantId: seeded.tenant.id } });
+    expect(rows).toHaveLength(2);
+    expect((await goals.findByTenantMonth(seeded.tenant.id, monthKey))!.targetAmount.equals(500)).toBe(
+      true,
+    );
+    expect(
+      (await goals.findByTenantMonth(seeded.tenant.id, monthKey, seeded.cc1))!.targetAmount.equals(250),
+    ).toBe(true);
+  });
+
+  it('faturamento do centro indisponível vira UNAVAILABLE, nunca zero', async () => {
+    const { from, monthKey } = currentBounds();
+    const seeded = await seedTwoCenters('goal-cc-unavailable');
+    await financial.upsertReceivables(seeded.scope, [
+      installment({
+        externalId: 'multi-parcial',
+        status: 'PARTIALLY_PAID',
+        total: '1000',
+        paid: '400',
+        unpaid: '600',
+        competenceDate: from,
+      }),
+    ]);
+    const partial = await prisma.receivable.findFirstOrThrow({
+      where: { tenantId: seeded.tenant.id, externalId: 'multi-parcial' },
+    });
+    await costCenterRepo.replaceAllocationsForReceivable(
+      seeded.tenant.id,
+      partial.id,
+      [
+        { costCenterId: seeded.cc1, amount: new Prisma.Decimal('600') },
+        { costCenterId: seeded.cc2, amount: new Prisma.Decimal('400') },
+      ],
+      seeded.scope.syncedAt,
+    );
+    await costCenterRepo.markReceivableCostCenterDetailState(seeded.tenant.id, partial.id, {
+      status: 'FETCHED',
+      syncedAt: seeded.scope.syncedAt,
+      ruleVersion: 1,
+    });
+    await seedReceipt({
+      tenantId: seeded.tenant.id,
+      integrationId: seeded.integration.id,
+      installmentExternalId: 'multi-parcial',
+      amount: '400',
+      occurredOn: from,
+    });
+    await goals.upsert(seeded.tenant.id, monthKey, new Prisma.Decimal('300'), seeded.cc1);
+    const { app, cookie } = await loggedUser(seeded.tenant.id, 'unavailable@goal.test');
+
+    const center = await app.inject({
+      method: 'GET',
+      url: `/dashboard/revenue-goal?costCenter=${seeded.cc1}`,
+      headers: { cookie },
+    });
+    expect(center.statusCode).toBe(200);
+    expect(center.json()).toMatchObject({
+      costCenterId: seeded.cc1,
+      status: 'UNAVAILABLE',
+      target: '300',
+      actual: null,
+      achievementRate: null,
+      remaining: null,
+    });
+
+    // Geral continua calculado (sem filtro, billing nunca é null).
+    const general = await app.inject({
+      method: 'GET',
+      url: '/dashboard/revenue-goal',
+      headers: { cookie },
+    });
+    expect(general.statusCode).toBe(200);
+    expect(general.json().actual).not.toBeNull();
+  });
+
+  it('centro de outra empresa retorna 404 e não grava; UUID inválido retorna 400', async () => {
+    const { monthKey } = currentBounds();
+    const mine = await seedConnected('goal-cc-mine');
+    const foreign = await seedTwoCenters('goal-cc-foreign');
+    const { app, cookie } = await loggedUser(mine.tenant.id, 'foreign@goal.test');
+
+    for (const path of ['/dashboard/revenue-goal', '/dashboard/expense-ceiling']) {
+      const read = await app.inject({
+        method: 'GET',
+        url: `${path}?costCenter=${foreign.cc1}`,
+        headers: { cookie },
+      });
+      expect(read.statusCode).toBe(404);
+
+      const invalid = await app.inject({
+        method: 'GET',
+        url: `${path}?costCenter=nao-e-uuid`,
+        headers: { cookie },
+      });
+      expect(invalid.statusCode).toBe(400);
+    }
+
+    const write = await app.inject({
+      method: 'PUT',
+      url: '/dashboard/revenue-goal',
+      headers: { cookie },
+      payload: { month: monthKey, target: '100', costCenter: foreign.cc1 },
+    });
+    expect(write.statusCode).toBe(404);
+    const writeCeiling = await app.inject({
+      method: 'PUT',
+      url: '/dashboard/expense-ceiling',
+      headers: { cookie },
+      payload: { month: monthKey, ceiling: '100', costCenter: foreign.cc1 },
+    });
+    expect(writeCeiling.statusCode).toBe(404);
+    const invalidBody = await app.inject({
+      method: 'PUT',
+      url: '/dashboard/revenue-goal',
+      headers: { cookie },
+      payload: { month: monthKey, target: '100', costCenter: 123 },
+    });
+    expect(invalidBody.statusCode).toBe(400);
+    expect(await prisma.revenueGoal.count()).toBe(0);
+    expect(await prisma.expenseCeiling.count()).toBe(0);
+  });
+
+  it('teto geral e teto do centro coexistem e são lidos no escopo certo', async () => {
+    const { monthKey } = currentBounds();
+    const seeded = await seedTwoCenters('ceiling-cc');
+    const { app, cookie } = await loggedUser(seeded.tenant.id, 'ceiling@goal.test');
+
+    const putGeneral = await app.inject({
+      method: 'PUT',
+      url: '/dashboard/expense-ceiling',
+      headers: { cookie },
+      payload: { month: monthKey, ceiling: '1000' },
+    });
+    expect(putGeneral.statusCode).toBe(200);
+    expect(putGeneral.json()).toMatchObject({ costCenterId: null, ceiling: '1000' });
+
+    const putCenter = await app.inject({
+      method: 'PUT',
+      url: '/dashboard/expense-ceiling',
+      headers: { cookie },
+      payload: { month: monthKey, ceiling: '300', costCenter: seeded.cc2 },
+    });
+    expect(putCenter.statusCode).toBe(200);
+    expect(putCenter.json()).toMatchObject({ costCenterId: seeded.cc2, ceiling: '300' });
+
+    const general = await app.inject({
+      method: 'GET',
+      url: '/dashboard/expense-ceiling',
+      headers: { cookie },
+    });
+    expect(general.json()).toMatchObject({ costCenterId: null, ceiling: '1000' });
+
+    const center = await app.inject({
+      method: 'GET',
+      url: `/dashboard/expense-ceiling?costCenter=${seeded.cc2}`,
+      headers: { cookie },
+    });
+    expect(center.json()).toMatchObject({ costCenterId: seeded.cc2, ceiling: '300' });
+
+    const cc1 = await app.inject({
+      method: 'GET',
+      url: `/dashboard/expense-ceiling?costCenter=${seeded.cc1}`,
+      headers: { cookie },
+    });
+    expect(cc1.json()).toMatchObject({ costCenterId: seeded.cc1, status: 'NO_TARGET', ceiling: null });
+
+    expect(await prisma.expenseCeiling.count({ where: { tenantId: seeded.tenant.id } })).toBe(2);
+    expect(
+      (await ceilings.findByTenantMonth(seeded.tenant.id, monthKey, seeded.cc2))!.ceilingAmount.equals(
+        300,
+      ),
+    ).toBe(true);
   });
 });

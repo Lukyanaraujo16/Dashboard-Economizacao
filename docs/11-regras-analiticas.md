@@ -504,6 +504,23 @@ ou monthlyExpenses + overdue.payables.
 
 Meta usa `loadBillingActual` / `monthlyBilling` (CASH-4B).
 
+Meta e teto por centro de custo (05/11/2026; supersede "meta company-level"):
+
+* cada tenant tem uma meta/teto **geral** por mês (`cost_center_id` NULL) e,
+  opcionalmente, uma meta/teto **por centro** por mês. São independentes:
+  nenhuma validação de Σ centros = geral (Σ centros pode ser < Todos, ver §19);
+* realizado do centro = mesma fórmula (`monthlyBilling` / `monthlyExpenses`) com o
+  filtro oficial `costCenterId` do `MonthlyCashFlowService`; sem fórmula nova;
+* billing do centro null (cash split UNAVAILABLE, CC1.3) → meta com status
+  `UNAVAILABLE` e `actual` null; nunca zero. No geral, billing null segue falha explícita;
+* centro sem meta → `NO_TARGET`; não herda a meta geral;
+* `situation` e `category` continuam ignorados por meta e teto;
+* HTTP: `GET ?costCenter=<uuid>` e `PUT { costCenter }` em `/dashboard/revenue-goal`
+  e `/dashboard/expense-ceiling`; ausente = geral;
+* gatilhos proativos, planning fact do Consultor legado e capabilities
+  `revenue_goal.value.month` / `expense_ceiling.value.month` usam só o geral.
+  As tools do agente (`dashboard_revenue_goal`, `dashboard_expense_ceiling`) aceitam `costCenter`.
+
 Faturamento fiscal (NF-e/NFS-e): capacidade futura separada — NÃO IMPLEMENTADO.
 
 Home legado F1-G — SUPERSEDED nos KPIs (CASH-4B). Endpoints de competência
@@ -877,7 +894,8 @@ para o escopo da parcela**:
   - multi-centro e paid≈0 → outstanding=allocation.amount;
   - multi-centro parcialmente liquidado → UNAVAILABLE (não proporcionalizar);
 * se qualquer título do mês for UNAVAILABLE, o cash split do KPI fica null;
-* meta de faturamento permanece **consolidada da empresa** (ignora filtro).
+* meta de faturamento e teto: geral sem filtro; com filtro, a meta/teto do centro (ver §Meta).
+  (Até 05/11/2026 a meta era só consolidada da empresa.)
 * seletor Home: tabs horizontais (Todos | centros), overflow com setas; 0 centros → oculto.
 
 CC1 / CC1.1: HOMOLOGADAS. Controle 2026-08 (0 OVER; Jac+Lar=Todos);
@@ -905,8 +923,8 @@ Home = competência mensal civil.
 * agregação principal: `competenceDate`;
 * centro de custo: `?costCenter=<uuid>` (ausente = Todos); CC1.x homologado;
 * comparação oficial: mês selecionado × mês civil imediatamente anterior;
-* meta de faturamento: company-level — não filtrar por centro, categoria
-  nem situação;
+* meta de faturamento e teto: seguem o centro (geral em Todos); não filtrar
+  por categoria nem situação;
 * forecast, upcoming e pressão de caixa: P1.1 (âncora hoje + `dueDate`);
   não reinterpretar como competência mensal.
 

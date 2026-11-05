@@ -12,6 +12,7 @@ import { parseAmount, signedSharePercent, subtractDecimalStrings } from './chart
 /**
  * Estado visual do widget — espelha os status da API em vocabulário de apresentação.
  * `behind` = mês atual abaixo; `missed` = mês passado abaixo; `planned` = futuro.
+ * `unavailable` = faturamento do centro de custo indisponível (nunca vira zero).
  */
 export type GoalProgressStatus =
   | 'unconfigured'
@@ -19,7 +20,8 @@ export type GoalProgressStatus =
   | 'missed'
   | 'planned'
   | 'met'
-  | 'exceeded';
+  | 'exceeded'
+  | 'unavailable';
 
 export type GoalProgressView = {
   readonly status: GoalProgressStatus;
@@ -48,6 +50,7 @@ const STATUS_BY_API: Record<RevenueGoalStatus, GoalProgressStatus> = {
   ACHIEVED: 'met',
   EXCEEDED: 'exceeded',
   PLANNED: 'planned',
+  UNAVAILABLE: 'unavailable',
 };
 
 const STATUS_LABEL_BY_API: Record<RevenueGoalStatus, string | null> = {
@@ -57,6 +60,7 @@ const STATUS_LABEL_BY_API: Record<RevenueGoalStatus, string | null> = {
   ACHIEVED: 'Meta atingida',
   EXCEEDED: 'Meta superada',
   PLANNED: 'Meta planejada',
+  UNAVAILABLE: 'Faturamento do centro indisponível',
 };
 
 /** Caption compacta do histórico por competência. */
@@ -67,6 +71,7 @@ const HISTORY_CAPTION_BY_API: Record<RevenueGoalStatus, string> = {
   ACHIEVED: '✓ atingida',
   EXCEEDED: 'superada',
   PLANNED: 'planejada',
+  UNAVAILABLE: 'indisponível',
 };
 
 export function goalProgressStatusFromApi(status: RevenueGoalStatus): GoalProgressStatus {

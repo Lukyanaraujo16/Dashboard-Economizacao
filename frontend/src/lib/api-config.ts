@@ -483,14 +483,20 @@ export function dashboardExecutiveInsightsPath(
   })}`;
 }
 
-/** Meta mensal de faturamento (F2) — sempre consolidada; sem `costCenter`. */
-export function dashboardRevenueGoalPath(monthKey?: string | null): string {
-  return `${DASHBOARD_API_PREFIX}/revenue-goal${dashboardQueryString({ monthKey })}`;
+/** Meta mensal de faturamento (F2) — geral sem `costCenter`; com `costCenter`, a meta do centro. */
+export function dashboardRevenueGoalPath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/revenue-goal${dashboardQueryString({ monthKey, costCenterId })}`;
 }
 
-/** Teto mensal de gastos — sempre consolidado; sem `costCenter`. */
-export function dashboardExpenseCeilingPath(monthKey?: string | null): string {
-  return `${DASHBOARD_API_PREFIX}/expense-ceiling${dashboardQueryString({ monthKey })}`;
+/** Teto mensal de gastos — geral sem `costCenter`; com `costCenter`, o teto do centro. */
+export function dashboardExpenseCeilingPath(
+  monthKey?: string | null,
+  costCenterId?: string | null,
+): string {
+  return `${DASHBOARD_API_PREFIX}/expense-ceiling${dashboardQueryString({ monthKey, costCenterId })}`;
 }
 
 export function reportsRevenuePath(options: {

@@ -1,7 +1,8 @@
 /**
  * Contrato de Meta de Faturamento (F2 / CASH-4B).
  *
- * `actual` = MonthlyCashFlow.billing (caixa, company-level).
+ * `actual` = MonthlyCashFlow.billing (caixa) no escopo da meta: empresa ou centro de custo.
+ * Por centro, `actual` pode vir null com status UNAVAILABLE (faturamento do centro indisponível).
  * `achievementRate` já vem × 100, como as demais taxas da Dashboard.
  *
  * Status temporal (F2.0.1):
@@ -18,13 +19,14 @@ export type RevenueGoalStatus =
   | 'NOT_ACHIEVED'
   | 'ACHIEVED'
   | 'EXCEEDED'
-  | 'PLANNED';
+  | 'PLANNED'
+  | 'UNAVAILABLE';
 
 export type RevenueGoalHistoryPoint = {
   readonly monthKey: string;
   /** null = competência sem meta cadastrada. */
   readonly target: string | null;
-  readonly actual: string;
+  readonly actual: string | null;
   readonly achievementRate: string | null;
   readonly status: RevenueGoalStatus;
 };
@@ -32,7 +34,7 @@ export type RevenueGoalHistoryPoint = {
 export type RevenueGoalSnapshot = {
   readonly monthKey: string;
   readonly target: string | null;
-  readonly actual: string;
+  readonly actual: string | null;
   readonly achievementRate: string | null;
   readonly remaining: string | null;
   readonly exceeded: string | null;

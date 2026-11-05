@@ -112,11 +112,13 @@ async function request(
   return snapshot;
 }
 
+/** `costCenterId` null/ausente = teto geral da empresa. */
 export async function getDashboardExpenseCeiling(
   monthKey?: string | null,
+  costCenterId?: string | null,
 ): Promise<ExpenseCeilingSnapshot> {
   return request(
-    dashboardExpenseCeilingPath(monthKey),
+    dashboardExpenseCeilingPath(monthKey, costCenterId),
     { method: 'GET' },
     'Não foi possível carregar o teto de gastos.',
   );
@@ -126,13 +128,19 @@ export async function getDashboardExpenseCeiling(
 export async function putDashboardExpenseCeiling(input: {
   readonly month: string;
   readonly ceiling: string;
+  /** null/ausente = teto geral da empresa. */
+  readonly costCenterId?: string | null;
 }): Promise<ExpenseCeilingSnapshot> {
   return request(
     dashboardExpenseCeilingPath(),
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ month: input.month, ceiling: input.ceiling }),
+      body: JSON.stringify({
+        month: input.month,
+        ceiling: input.ceiling,
+        ...(input.costCenterId ? { costCenter: input.costCenterId } : {}),
+      }),
     },
     'Não foi possível salvar o teto de gastos.',
   );

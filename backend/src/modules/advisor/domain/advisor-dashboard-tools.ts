@@ -147,15 +147,17 @@ export const ADVISOR_DASHBOARD_TOOLS: readonly DashboardTool[] = [
   },
   {
     name: 'dashboard_revenue_goal',
-    description: 'Meta de faturamento do mês, realizado x meta, % atingido e histórico dos últimos 6 meses.',
-    params: ['month'],
-    run: (f, a, q) => f.getRevenueGoal(a, parseDashboardMonth(q)),
+    description:
+      'Meta de faturamento do mês, realizado x meta, % atingido e histórico dos últimos 6 meses. Sem costCenter = meta geral da empresa; com costCenter = meta daquele centro (status UNAVAILABLE = faturamento do centro indisponível).',
+    params: ['month', 'costCenter'],
+    run: (f, a, q) => f.getRevenueGoal(a, parseDashboardMonth(q), parseDashboardCostCenterQuery(q)),
   },
   {
     name: 'dashboard_expense_ceiling',
-    description: 'Teto de despesas do mês e consumo atual.',
-    params: ['month'],
-    run: (f, a, q) => f.getExpenseCeiling(a, parseDashboardMonth(q)),
+    description:
+      'Teto de despesas do mês e consumo atual. Sem costCenter = teto geral da empresa; com costCenter = teto daquele centro.',
+    params: ['month', 'costCenter'],
+    run: (f, a, q) => f.getExpenseCeiling(a, parseDashboardMonth(q), parseDashboardCostCenterQuery(q)),
   },
   {
     name: 'dashboard_executive_insights',

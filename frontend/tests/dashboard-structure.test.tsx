@@ -383,7 +383,7 @@ describe('Dashboard V2 structure', () => {
     expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-07', null, null);
   });
 
-  it('exibe nota de meta consolidada quando centro de custo está selecionado', async () => {
+  it('meta e teto seguem o centro de custo selecionado', async () => {
     dashboardSearchParams = new URLSearchParams(
       'costCenter=11111111-1111-4111-8111-111111111111',
     );
@@ -403,13 +403,16 @@ describe('Dashboard V2 structure', () => {
       expect(document.querySelector('[data-overview-state="ready"]')).toBeTruthy();
     });
     expect(await screen.findByText('Visão executiva · Operações')).toBeTruthy();
-    expect(await screen.findAllByText(/Consolidado da empresa/)).toHaveLength(2);
     expect(getOverview).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
-    expect(getRevenueGoal).toHaveBeenCalledWith(null);
-    expect(getExpenseCeiling).toHaveBeenCalledWith(null);
+    await waitFor(() => {
+      expect(getRevenueGoal).toHaveBeenCalledWith(null, '11111111-1111-4111-8111-111111111111');
+      expect(getExpenseCeiling).toHaveBeenCalledWith(null, '11111111-1111-4111-8111-111111111111');
+    });
+    // Subtítulo dos cards deixa claro o escopo (mês · centro).
+    expect((await screen.findAllByText(/· Operações$/)).length).toBeGreaterThanOrEqual(2);
   });
 
-  it('propaga category aos widgets mensais e preserva meta consolidada', async () => {
+  it('propaga category aos widgets mensais; meta e teto seguem só o centro', async () => {
     const categoryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     const centerId = '11111111-1111-4111-8111-111111111111';
     dashboardSearchParams = new URLSearchParams(
@@ -435,16 +438,17 @@ describe('Dashboard V2 structure', () => {
     });
     expect(document.querySelector('[data-situation-selector]')).toBeNull();
     expect(screen.getByRole('button', { name: /Categoria: Serviços/ })).toBeTruthy();
-    expect(await screen.findAllByText(/Consolidado da empresa/)).toHaveLength(2);
     expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, centerId, categoryId);
-    expect(getExpenseCeiling).toHaveBeenCalledWith(null);
+    await waitFor(() => {
+      expect(getExpenseCeiling).toHaveBeenCalledWith(null, centerId);
+    });
     expect(getMonthlyCashFlow).not.toHaveBeenCalledWith('2026-07', centerId, categoryId);
     expect(getMonthEnd).not.toHaveBeenCalled();
     expect(getOverview).toHaveBeenCalledWith(centerId);
-    expect(getRevenueGoal).toHaveBeenCalledWith(null);
+    expect(getRevenueGoal).toHaveBeenCalledWith(null, centerId);
   });
 
-  it('nota de meta consolidada aparece com categoria selecionada', async () => {
+  it('só categoria selecionada: meta e teto ficam no geral', async () => {
     const categoryId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     dashboardSearchParams = new URLSearchParams(`category=${categoryId}`);
     getOverview.mockResolvedValue(syncedOverview);
@@ -461,10 +465,11 @@ describe('Dashboard V2 structure', () => {
       status: 'IN_PROGRESS',
     });
     renderDashboard();
-    expect(await screen.findAllByText(/Consolidado da empresa/)).toHaveLength(2);
-    expect(getRevenueGoal).toHaveBeenCalledWith(null);
-    expect(getExpenseCeiling).toHaveBeenCalledWith(null);
-    expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, categoryId);
+    await waitFor(() => {
+      expect(getRevenueGoal).toHaveBeenCalledWith(null, null);
+      expect(getExpenseCeiling).toHaveBeenCalledWith(null, null);
+      expect(getMonthlyCashFlow).toHaveBeenCalledWith(null, null, categoryId);
+    });
   });
 
   it('sem caixa no mês os KPIs ficam vazios com copy honesta', async () => {

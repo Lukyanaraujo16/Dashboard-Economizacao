@@ -227,12 +227,14 @@ export type DashboardExpenseCeilingStatus =
   | 'UNAVAILABLE';
 
 /**
- * Teto mensal de gastos, consolidado da empresa.
+ * Teto mensal de gastos no escopo do teto: empresa (`costCenterId` null) ou centro de custo.
  * `monthlyExpenses` = realized.outflows + expected.payables. null = indisponível.
  * `consumedRate` já vem × 100.
  */
 export type DashboardExpenseCeilingResponse = {
   readonly monthKey: string;
+  /** null = teto geral da empresa. */
+  readonly costCenterId: string | null;
   readonly ceiling: string | null;
   readonly monthlyExpenses: string | null;
   readonly consumedRate: string | null;
@@ -247,25 +249,32 @@ export type DashboardRevenueGoalStatus =
   | 'NOT_ACHIEVED'
   | 'ACHIEVED'
   | 'EXCEEDED'
-  | 'PLANNED';
+  | 'PLANNED'
+  /** Só com centro de custo: faturamento do centro indisponível (CC1.3). */
+  | 'UNAVAILABLE';
 
 export type DashboardRevenueGoalHistoryPoint = {
   readonly monthKey: string;
   /** null = competência sem meta cadastrada. */
   readonly target: string | null;
-  readonly actual: string;
+  /** null só com centro de custo e status UNAVAILABLE. */
+  readonly actual: string | null;
   readonly achievementRate: string | null;
   readonly status: DashboardRevenueGoalStatus;
 };
 
 /**
  * Meta mensal de faturamento (F2 / CASH-4B). `actual` = MonthlyCashFlow.billing
- * (caixa, company-level); `achievementRate` já vem × 100.
+ * (caixa) no escopo da meta: empresa (`costCenterId` null) ou centro de custo.
+ * `achievementRate` já vem × 100.
  */
 export type DashboardRevenueGoalResponse = {
   readonly monthKey: string;
+  /** null = meta geral da empresa. */
+  readonly costCenterId: string | null;
   readonly target: string | null;
-  readonly actual: string;
+  /** null só com centro de custo e status UNAVAILABLE. */
+  readonly actual: string | null;
   readonly achievementRate: string | null;
   readonly remaining: string | null;
   readonly exceeded: string | null;

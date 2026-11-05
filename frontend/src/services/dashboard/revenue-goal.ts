@@ -17,6 +17,7 @@ const STATUSES = [
   'ACHIEVED',
   'EXCEEDED',
   'PLANNED',
+  'UNAVAILABLE',
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -35,7 +36,7 @@ function isHistoryPoint(value: unknown): value is RevenueGoalHistoryPoint {
   return (
     isRecord(value) &&
     typeof value.monthKey === 'string' &&
-    typeof value.actual === 'string' &&
+    isNullableDecimal(value.actual) &&
     isNullableDecimal(value.target) &&
     isNullableDecimal(value.achievementRate) &&
     isStatus(value.status)
@@ -48,7 +49,7 @@ function isSnapshot(value: unknown): value is RevenueGoalSnapshot {
   }
   return (
     typeof value.monthKey === 'string' &&
-    typeof value.actual === 'string' &&
+    isNullableDecimal(value.actual) &&
     isNullableDecimal(value.target) &&
     isNullableDecimal(value.achievementRate) &&
     isNullableDecimal(value.remaining) &&
@@ -139,11 +140,13 @@ async function request(
   return body;
 }
 
+/** `costCenterId` null/ausente = meta geral da empresa. */
 export async function getDashboardRevenueGoal(
   monthKey?: string | null,
+  costCenterId?: string | null,
 ): Promise<RevenueGoalSnapshot> {
   return request(
-    dashboardRevenueGoalPath(monthKey),
+    dashboardRevenueGoalPath(monthKey, costCenterId),
     { method: 'GET' },
     'Não foi possível carregar a meta de faturamento.',
   );
@@ -153,13 +156,19 @@ export async function getDashboardRevenueGoal(
 export async function putDashboardRevenueGoal(input: {
   readonly month: string;
   readonly target: string;
+  /** null/ausente = meta geral da empresa. */
+  readonly costCenterId?: string | null;
 }): Promise<RevenueGoalSnapshot> {
   return request(
     dashboardRevenueGoalPath(),
     {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ month: input.month, target: input.target }),
+      body: JSON.stringify({
+        month: input.month,
+        target: input.target,
+        ...(input.costCenterId ? { costCenter: input.costCenterId } : {}),
+      }),
     },
     'Não foi possível salvar a meta de faturamento.',
   );

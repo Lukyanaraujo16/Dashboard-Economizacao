@@ -23,6 +23,7 @@ import { getDashboardMonthlyExpenses } from '../src/services/dashboard/monthly-e
 import { getDashboardMonthlyRevenue } from '../src/services/dashboard/monthly-revenue';
 import { getDashboardMonthlyCashFlow } from '../src/services/dashboard/monthly-cash-flow';
 import { getDashboardRevenueGoal } from '../src/services/dashboard/revenue-goal';
+import { getDashboardExpenseCeiling } from '../src/services/dashboard/expense-ceiling';
 import { getDashboardCostCenters } from '../src/services/dashboard/cost-centers';
 import { getDashboardCategories } from '../src/services/dashboard/categories';
 import type { DashboardMonthlyRevenueResponse } from '../src/services/dashboard/monthly-revenue.types';
@@ -114,6 +115,7 @@ const getMonthlyExpenses = vi.mocked(getDashboardMonthlyExpenses);
 const getMonthlyRevenue = vi.mocked(getDashboardMonthlyRevenue);
 const getMonthlyCashFlow = vi.mocked(getDashboardMonthlyCashFlow);
 const getRevenueGoal = vi.mocked(getDashboardRevenueGoal);
+const getExpenseCeiling = vi.mocked(getDashboardExpenseCeiling);
 const getCostCenters = vi.mocked(getDashboardCostCenters);
 const getCategories = vi.mocked(getDashboardCategories);
 
@@ -290,6 +292,11 @@ describe('CC1.3.1 soft filter refresh', () => {
     await waitFor(() => {
       expect(getOverview).toHaveBeenCalledWith(CENTER_A);
     });
+    // Meta e teto seguem o filtro de centro.
+    await waitFor(() => {
+      expect(getRevenueGoal).toHaveBeenCalledWith(null, CENTER_A);
+      expect(getExpenseCeiling).toHaveBeenCalledWith(null, CENTER_A);
+    });
   });
 
   it('empresa sem centros não exibe seletor', async () => {
@@ -387,6 +394,7 @@ describe('CC1.3.1 soft filter refresh', () => {
     });
     expect(getMonthlyRevenue).not.toHaveBeenCalled();
     expect(getMonthlyExpenses).not.toHaveBeenCalled();
-    expect(getRevenueGoal.mock.calls.every((call) => call.length === 1)).toBe(true);
+    // Meta segue só mês + centro; categoria não entra.
+    expect(getRevenueGoal.mock.calls.every((call) => call[1] === null)).toBe(true);
   });
 });

@@ -81,6 +81,40 @@ describe('dashboard revenue goal service', () => {
     expect(JSON.parse(init.body)).toEqual({ month: '2026-08', target: '180000.00' });
   });
 
+  it('meta por centro: costCenter na query e no corpo', async () => {
+    const centerId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const fetchMock = vi.fn().mockResolvedValue(okResponse(body));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getDashboardRevenueGoal(null, centerId);
+    await putDashboardRevenueGoal({ month: '2026-08', target: '100', costCenterId: centerId });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`/dashboard/revenue-goal?costCenter=${centerId}`);
+    expect(JSON.parse(fetchMock.mock.calls[1]?.[1].body)).toEqual({
+      month: '2026-08',
+      target: '100',
+      costCenter: centerId,
+    });
+  });
+
+  it('aceita meta de centro com faturamento indisponível (actual null)', async () => {
+    const unavailable = {
+      ...body,
+      actual: null,
+      achievementRate: null,
+      remaining: null,
+      exceeded: null,
+      status: 'UNAVAILABLE',
+      history: [{ ...body.history[1], actual: null, achievementRate: null, status: 'UNAVAILABLE' }],
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okResponse(unavailable)));
+
+    const result = await getDashboardRevenueGoal();
+
+    expect(result.status).toBe('UNAVAILABLE');
+    expect(result.actual).toBeNull();
+  });
+
   it('403 vira erro de contexto de empresa', async () => {
     vi.stubGlobal(
       'fetch',

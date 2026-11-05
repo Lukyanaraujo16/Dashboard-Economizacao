@@ -33,7 +33,7 @@ import { resolveFinancialCategoryListVisibility } from '../domain/resolve-financ
 import {
   calculateRevenueGoalProgress,
   listRevenueGoalHistoryMonthKeys,
-  type RevenueGoalProgress,
+  unavailableRevenueGoalProgress,
 } from '../domain/revenue-goal-math.js';
 import { calculateExpenseCeilingProgress } from '../domain/expense-ceiling-math.js';
 import type { RevenueGoalRepository } from '../repositories/revenue-goal.repository.js';
@@ -263,25 +263,31 @@ export type DashboardOverviewFacade = {
     costCenterId?: string | null,
     categoryId?: string | null,
   ): Promise<DashboardMonthEndCashPressureResponse>;
+  /** `costCenterId` null/ausente = meta geral da empresa. */
   getRevenueGoal(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
+    costCenterId?: string | null,
     historyMonths?: number,
   ): Promise<DashboardRevenueGoalResponse>;
   upsertRevenueGoal(
     auth: AuthenticatedRequestContext,
     monthKey: string,
     targetAmount: Prisma.Decimal,
+    costCenterId?: string | null,
     historyMonths?: number,
   ): Promise<DashboardRevenueGoalResponse>;
+  /** `costCenterId` null/ausente = teto geral da empresa. */
   getExpenseCeiling(
     auth: AuthenticatedRequestContext,
     monthKey: string | null,
+    costCenterId?: string | null,
   ): Promise<DashboardExpenseCeilingResponse>;
   upsertExpenseCeiling(
     auth: AuthenticatedRequestContext,
     monthKey: string,
     ceilingAmount: Prisma.Decimal,
+    costCenterId?: string | null,
   ): Promise<DashboardExpenseCeilingResponse>;
 };
 
@@ -705,65 +711,81 @@ export function createDashboardOverviewFacade(
     },
 
     /**
-     * Meta permanece consolidada da empresa — `costCenter`, `situation` e
-     * `category` na query são ignorados (actual/target sempre company-level).
+     * Meta geral (sem centro) ou do centro de custo. `situation` e `category`
+     * da Home não entram: meta e realizado ficam no escopo empresa ou centro.
      */
-    async getRevenueGoal(auth, monthKey, historyMonths = REVENUE_GOAL_HISTORY_MONTHS) {
+    async getRevenueGoal(
+      auth,
+      monthKey,
+      costCenterId = null,
+      historyMonths = REVENUE_GOAL_HISTORY_MONTHS,
+    ) {
       const tenantId = requireOperationalTenantId(auth);
-      return loadRevenueGoal(deps, tenantId, monthKey, historyMonths);
+      const resolved = (await resolveCostCenterId(deps, tenantId, costCenterId)) ?? null;
+      return loadRevenueGoal(deps, tenantId, monthKey, resolved, historyMonths);
     },
 
     async upsertRevenueGoal(
       auth,
       monthKey,
       targetAmount,
+      costCenterId = null,
       historyMonths = REVENUE_GOAL_HISTORY_MONTHS,
     ) {
       const tenantId = requireOperationalTenantId(auth);
-      await deps.revenueGoals.upsert(tenantId, monthKey, targetAmount);
+      const resolved = (await resolveCostCenterId(deps, tenantId, costCenterId)) ?? null;
+      await deps.revenueGoals.upsert(tenantId, monthKey, targetAmount, resolved);
       await scheduleProactiveEvaluationForSavedMonth({
         monthKey,
         now: deps.clock?.() ?? new Date(),
         tenantId,
         schedule: deps.scheduleProactiveEvaluation,
       });
-      return loadRevenueGoal(deps, tenantId, monthKey, historyMonths);
+      return loadRevenueGoal(deps, tenantId, monthKey, resolved, historyMonths);
     },
 
     /**
-     * Teto permanece consolidado da empresa — filtros da Home não entram.
+     * Teto geral (sem centro) ou do centro de custo. `situation` e `category`
+     * da Home não entram.
      */
-    async getExpenseCeiling(auth, monthKey) {
+    async getExpenseCeiling(auth, monthKey, costCenterId = null) {
       const tenantId = requireOperationalTenantId(auth);
-      return loadExpenseCeiling(deps, tenantId, monthKey);
+      const resolved = (await resolveCostCenterId(deps, tenantId, costCenterId)) ?? null;
+      return loadExpenseCeiling(deps, tenantId, monthKey, resolved);
     },
 
-    async upsertExpenseCeiling(auth, monthKey, ceilingAmount) {
+    async upsertExpenseCeiling(auth, monthKey, ceilingAmount, costCenterId = null) {
       const tenantId = requireOperationalTenantId(auth);
-      await deps.expenseCeilings.upsert(tenantId, monthKey, ceilingAmount);
+      const resolved = (await resolveCostCenterId(deps, tenantId, costCenterId)) ?? null;
+      await deps.expenseCeilings.upsert(tenantId, monthKey, ceilingAmount, resolved);
       await scheduleProactiveEvaluationForSavedMonth({
         monthKey,
         now: deps.clock?.() ?? new Date(),
         tenantId,
         schedule: deps.scheduleProactiveEvaluation,
       });
-      return loadExpenseCeiling(deps, tenantId, monthKey);
+      return loadExpenseCeiling(deps, tenantId, monthKey, resolved);
     },
   };
 }
 
-/** Realizado da Meta = MonthlyCashFlow.billing (caixa), company-level — sem filtro CC. */
+/**
+ * Realizado da Meta = MonthlyCashFlow.billing (caixa) no escopo da meta.
+ * Por centro, billing null = UNAVAILABLE (CC1.3), nunca zero.
+ */
 async function loadBillingActual(
   deps: DashboardOverviewFacadeDependencies,
   tenantId: string,
   monthKey: string | null,
-): Promise<{ readonly monthKey: string; readonly actual: Prisma.Decimal }> {
+  costCenterId: string | null,
+): Promise<{ readonly monthKey: string; readonly actual: Prisma.Decimal | null }> {
   const flow = await requireCashFlow(deps).getMonthlyCashFlow({
     tenantId,
     ...(monthKey === null ? {} : { monthKey }),
+    ...(costCenterId === null ? {} : { costCenterId }),
   });
   const billing = monthlyBilling(flow);
-  if (billing === null) {
+  if (billing === null && costCenterId === null) {
     // Sem costCenterId o split company-level não deveria anular billing.
     // Não converter null → progresso 0%: falha explícita.
     throw new Error('Faturamento de caixa indisponível para a meta (billing null).');
@@ -775,48 +797,53 @@ async function loadRevenueGoal(
   deps: DashboardOverviewFacadeDependencies,
   tenantId: string,
   monthKey: string | null,
+  costCenterId: string | null,
   historyMonths: number,
 ): Promise<DashboardRevenueGoalResponse> {
-  const selectedActual = await loadBillingActual(deps, tenantId, monthKey);
+  const selectedActual = await loadBillingActual(deps, tenantId, monthKey, costCenterId);
   const referenceMonthKey = civilMonthKey(civilTodayInSaoPaulo(new Date()));
   const historyKeys = listRevenueGoalHistoryMonthKeys(selectedActual.monthKey, historyMonths);
-  const goals = await deps.revenueGoals.listByTenantMonths(tenantId, historyKeys);
+  const goals = await deps.revenueGoals.listByTenantMonths(tenantId, historyKeys, costCenterId);
   const targetsByMonth = new Map(goals.map((goal) => [goal.monthKey, goal.targetAmount] as const));
 
   const actuals = await Promise.all(
     historyKeys.map(async (key) =>
-      key === selectedActual.monthKey ? selectedActual : loadBillingActual(deps, tenantId, key),
+      key === selectedActual.monthKey
+        ? selectedActual
+        : loadBillingActual(deps, tenantId, key, costCenterId),
     ),
   );
 
-  const history: readonly RevenueGoalProgress[] = actuals.map((entry) =>
-    calculateRevenueGoalProgress({
-      monthKey: entry.monthKey,
-      target: targetsByMonth.get(entry.monthKey) ?? null,
-      actual: entry.actual,
-      referenceMonthKey,
-    }),
+  const progressOf = (entry: (typeof actuals)[number]) => {
+    const target = targetsByMonth.get(entry.monthKey) ?? null;
+    return entry.actual === null
+      ? unavailableRevenueGoalProgress(entry.monthKey, target)
+      : calculateRevenueGoalProgress({
+          monthKey: entry.monthKey,
+          target,
+          actual: entry.actual,
+          referenceMonthKey,
+        });
+  };
+
+  return toDashboardRevenueGoalResponse(
+    progressOf(selectedActual),
+    actuals.map(progressOf),
+    costCenterId,
   );
-
-  const selected = calculateRevenueGoalProgress({
-    monthKey: selectedActual.monthKey,
-    target: targetsByMonth.get(selectedActual.monthKey) ?? null,
-    actual: selectedActual.actual,
-    referenceMonthKey,
-  });
-
-  return toDashboardRevenueGoalResponse(selected, history);
 }
 
-/** Despesas da Home, company-level — sem filtro de centro de custo. */
+/** Despesas da Home no escopo do teto (empresa ou centro de custo). */
 async function loadMonthlyExpensesActual(
   deps: DashboardOverviewFacadeDependencies,
   tenantId: string,
   monthKey: string | null,
+  costCenterId: string | null,
 ): Promise<{ readonly monthKey: string; readonly monthlyExpenses: Prisma.Decimal | null }> {
   const flow = await requireCashFlow(deps).getMonthlyCashFlow({
     tenantId,
     ...(monthKey === null ? {} : { monthKey }),
+    ...(costCenterId === null ? {} : { costCenterId }),
   });
   return { monthKey: flow.monthKey, monthlyExpenses: monthlyExpenses(flow) };
 }
@@ -825,10 +852,15 @@ async function loadExpenseCeiling(
   deps: DashboardOverviewFacadeDependencies,
   tenantId: string,
   monthKey: string | null,
+  costCenterId: string | null,
 ): Promise<DashboardExpenseCeilingResponse> {
-  const actual = await loadMonthlyExpensesActual(deps, tenantId, monthKey);
+  const actual = await loadMonthlyExpensesActual(deps, tenantId, monthKey, costCenterId);
   const referenceMonthKey = civilMonthKey(civilTodayInSaoPaulo(new Date()));
-  const row = await deps.expenseCeilings.findByTenantMonth(tenantId, actual.monthKey);
+  const row = await deps.expenseCeilings.findByTenantMonth(
+    tenantId,
+    actual.monthKey,
+    costCenterId,
+  );
   return toDashboardExpenseCeilingResponse(
     calculateExpenseCeilingProgress({
       monthKey: actual.monthKey,
@@ -836,6 +868,7 @@ async function loadExpenseCeiling(
       monthlyExpenses: actual.monthlyExpenses,
       referenceMonthKey,
     }),
+    costCenterId,
   );
 }
 

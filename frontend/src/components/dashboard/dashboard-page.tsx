@@ -910,10 +910,18 @@ export function DashboardPage() {
   );
 
   const loadRevenueGoal = useCallback(
-    async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      costCenterId: string | null,
+    ) => {
       setRevenueGoalView({ kind: 'loading' });
       try {
-        const data = await getDashboardRevenueGoal(monthKey === todayMonthKey ? null : monthKey);
+        const data = await getDashboardRevenueGoal(
+          monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
+        );
         if (signal.aborted) {
           return;
         }
@@ -933,10 +941,18 @@ export function DashboardPage() {
   );
 
   const loadExpenseCeiling = useCallback(
-    async (signal: AbortSignal, monthKey: string, todayMonthKey: string) => {
+    async (
+      signal: AbortSignal,
+      monthKey: string,
+      todayMonthKey: string,
+      costCenterId: string | null,
+    ) => {
       setExpenseCeilingView({ kind: 'loading' });
       try {
-        const data = await getDashboardExpenseCeiling(monthKey === todayMonthKey ? null : monthKey);
+        const data = await getDashboardExpenseCeiling(
+          monthKey === todayMonthKey ? null : monthKey,
+          costCenterId,
+        );
         if (signal.aborted) {
           return;
         }
@@ -1233,18 +1249,23 @@ export function DashboardPage() {
       return;
     }
     const controller = new AbortController();
-    void loadRevenueGoal(controller.signal, selectedMonthKey, todayMonthKey);
+    void loadRevenueGoal(controller.signal, selectedMonthKey, todayMonthKey, selectedCostCenterId);
     return () => controller.abort();
-  }, [loadRevenueGoal, selectedMonthKey, todayMonthKey, view.kind]);
+  }, [loadRevenueGoal, selectedCostCenterId, selectedMonthKey, todayMonthKey, view.kind]);
 
   useEffect(() => {
     if (view.kind !== 'ready') {
       return;
     }
     const controller = new AbortController();
-    void loadExpenseCeiling(controller.signal, selectedMonthKey, todayMonthKey);
+    void loadExpenseCeiling(
+      controller.signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
     return () => controller.abort();
-  }, [loadExpenseCeiling, selectedMonthKey, todayMonthKey, view.kind]);
+  }, [loadExpenseCeiling, selectedCostCenterId, selectedMonthKey, todayMonthKey, view.kind]);
 
   useEffect(() => {
     if (periodMode !== 'monthly' || view.kind !== 'ready') {
@@ -1465,7 +1486,12 @@ export function DashboardPage() {
   };
 
   const retryRevenueGoal = () => {
-    void loadRevenueGoal(new AbortController().signal, selectedMonthKey, todayMonthKey);
+    void loadRevenueGoal(
+      new AbortController().signal,
+      selectedMonthKey,
+      todayMonthKey,
+      selectedCostCenterId,
+    );
   };
 
   const selectPeriodMode = (mode: PeriodMode) => {
@@ -1489,7 +1515,11 @@ export function DashboardPage() {
     (target: string) => {
       setGoalSaving(true);
       setGoalSaveError(null);
-      void putDashboardRevenueGoal({ month: selectedMonthKey, target })
+      void putDashboardRevenueGoal({
+        month: selectedMonthKey,
+        target,
+        costCenterId: selectedCostCenterId,
+      })
         .then((data) => {
           setRevenueGoalView({ kind: 'ready', data });
           setGoalEditOpen(false);
@@ -1503,7 +1533,7 @@ export function DashboardPage() {
         })
         .finally(() => setGoalSaving(false));
     },
-    [selectedMonthKey],
+    [selectedCostCenterId, selectedMonthKey],
   );
 
   const openCeilingEditor = useCallback(() => {
@@ -1515,7 +1545,11 @@ export function DashboardPage() {
     (ceiling: string) => {
       setCeilingSaving(true);
       setCeilingSaveError(null);
-      void putDashboardExpenseCeiling({ month: selectedMonthKey, ceiling })
+      void putDashboardExpenseCeiling({
+        month: selectedMonthKey,
+        ceiling,
+        costCenterId: selectedCostCenterId,
+      })
         .then((data) => {
           setExpenseCeilingView({ kind: 'ready', data });
           setCeilingEditOpen(false);
@@ -1529,7 +1563,7 @@ export function DashboardPage() {
         })
         .finally(() => setCeilingSaving(false));
     },
-    [selectedMonthKey],
+    [selectedCostCenterId, selectedMonthKey],
   );
 
   const lastSyncAt = view.kind === 'ready' ? view.data.integration.lastSuccessfulSyncAt : null;
@@ -1537,6 +1571,9 @@ export function DashboardPage() {
   const integrationStatus = view.kind === 'ready' ? view.data.integration.status : null;
   const gate = widgetGate(view);
   const monthLabel = formatMonthKeyPtBr(selectedMonthKey);
+  // Meta e teto seguem o filtro de centro: o rótulo deixa claro de qual escopo é o valor.
+  const goalScopeLabel =
+    selectedCostCenterName === null ? monthLabel : `${monthLabel} · ${selectedCostCenterName}`;
   const pageSubtitle = [
     selectedCostCenterName !== null
       ? `Visão executiva · ${selectedCostCenterName}`
@@ -2298,7 +2335,7 @@ export function DashboardPage() {
           id="meta-faturamento"
           sectionId="meta-faturamento"
           title="Meta de faturamento"
-          subtitle={monthLabel}
+          subtitle={goalScopeLabel}
           expandable={canExpandGoal}
           onExpand={canExpandGoal ? () => setExpandKind('goal') : undefined}
         >
@@ -2310,7 +2347,7 @@ export function DashboardPage() {
             pending={revenueGoalData === null}
           >
             <RevenueGoalCard
-              monthLabel={monthLabel}
+              monthLabel={goalScopeLabel}
               snapshot={revenueGoalData}
               onEdit={openGoalEditor}
             />
@@ -2321,19 +2358,24 @@ export function DashboardPage() {
           id="teto-gastos"
           sectionId="teto-gastos"
           title="Teto de gastos"
-          subtitle={monthLabel}
+          subtitle={goalScopeLabel}
         >
           <WidgetBody
             gate={gate}
             loadingLabel="Carregando teto de gastos"
             error={expenseCeilingError}
             onRetry={() => {
-              void loadExpenseCeiling(new AbortController().signal, selectedMonthKey, todayMonthKey);
+              void loadExpenseCeiling(
+                new AbortController().signal,
+                selectedMonthKey,
+                todayMonthKey,
+                selectedCostCenterId,
+              );
             }}
             pending={expenseCeilingData === null && expenseCeilingError === null}
           >
             <ExpenseCeilingCard
-              monthLabel={monthLabel}
+              monthLabel={goalScopeLabel}
               snapshot={expenseCeilingData}
               onEdit={openCeilingEditor}
             />
@@ -2864,14 +2906,16 @@ export function DashboardPage() {
         <WidgetExpandDialog
           open
           title="Meta de faturamento"
-          subtitle={monthLabel}
+          subtitle={goalScopeLabel}
           onClose={closeExpand}
         >
           <div className={styles.expandBody}>
             <dl className={styles.statsRow}>
               <div className={styles.statsItem}>
                 <dt className={styles.statsLabel}>Realizado</dt>
-                <dd className={styles.statsValue}>{formatMoneyBrl(revenueGoalData.actual)}</dd>
+                <dd className={styles.statsValue}>
+                  {revenueGoalData.actual === null ? '—' : formatMoneyBrl(revenueGoalData.actual)}
+                </dd>
               </div>
               <div className={styles.statsItem}>
                 <dt className={styles.statsLabel}>Meta</dt>
@@ -2905,7 +2949,7 @@ export function DashboardPage() {
 
       <ExpenseCeilingEditDialog
         open={ceilingEditOpen}
-        monthLabel={monthLabel}
+        monthLabel={goalScopeLabel}
         currentCeiling={expenseCeilingData?.ceiling ?? null}
         saving={ceilingSaving}
         error={ceilingSaveError}
@@ -2919,7 +2963,7 @@ export function DashboardPage() {
 
       <RevenueGoalEditDialog
         open={goalEditOpen}
-        monthLabel={monthLabel}
+        monthLabel={goalScopeLabel}
         currentTarget={revenueGoalData?.target ?? null}
         saving={goalSaving}
         error={goalSaveError}

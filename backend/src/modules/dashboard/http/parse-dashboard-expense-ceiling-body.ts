@@ -2,15 +2,19 @@ import type { Prisma } from '../../../generated/prisma/client.js';
 import { ValidationError } from '../../../shared/errors/application-error.js';
 import { isValidMonthKey } from '../../analytics/domain/civil-calendar.js';
 import { parseExpenseCeilingAmount } from '../domain/expense-ceiling-math.js';
+import { parseDashboardCostCenterQuery } from './parse-dashboard-cost-center-query.js';
 
 export type DashboardExpenseCeilingCommand = {
   readonly monthKey: string;
   readonly ceilingAmount: Prisma.Decimal;
+  /** null = teto geral da empresa. */
+  readonly costCenterId: string | null;
 };
 
 /**
  * Corpo de `PUT /dashboard/expense-ceiling`.
  * `month` é obrigatório. `ceiling` só aceita decimal-string positivo.
+ * `costCenter` (UUID) opcional: ausente/vazio = teto geral da empresa.
  */
 export function parseDashboardExpenseCeilingBody(body: unknown): DashboardExpenseCeilingCommand {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
@@ -44,5 +48,6 @@ export function parseDashboardExpenseCeilingBody(body: unknown): DashboardExpens
     });
   }
 
-  return { monthKey: raw.month.trim(), ceilingAmount };
+  const costCenterId = parseDashboardCostCenterQuery(body);
+  return { monthKey: raw.month.trim(), ceilingAmount, costCenterId };
 }

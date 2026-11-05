@@ -75,7 +75,9 @@ export function RevenueGoalCard({
       <dl className={styles.facts}>
         <div className={styles.fact}>
           <dt>Realizado</dt>
-          <dd data-tone="revenue">{formatMoneyBrl(snapshot.actual)}</dd>
+          <dd data-tone="revenue">
+            {snapshot.actual === null ? '—' : formatMoneyBrl(snapshot.actual)}
+          </dd>
         </div>
         <div className={styles.fact}>
           <dt>Meta</dt>
@@ -157,7 +159,9 @@ export function RevenueGoalHistoryList({ points, limit }: RevenueGoalHistoryList
         return (
           <li key={point.monthKey} className={styles.historyRow} data-status={visual}>
             <span className={styles.historyMonth}>{point.monthKey.slice(5)}</span>
-            <span className={styles.historyAmount}>{formatMoneyBrl(point.actual)}</span>
+            <span className={styles.historyAmount}>
+              {point.actual === null ? '—' : formatMoneyBrl(point.actual)}
+            </span>
             <span className={styles.historyPct}>{revenueGoalHistoryCaption(point.status)}</span>
           </li>
         );

@@ -8,9 +8,11 @@ function serializeNullable(value: ExpenseCeilingProgress['ceiling']): string | n
 
 export function toDashboardExpenseCeilingResponse(
   progress: ExpenseCeilingProgress,
+  costCenterId: string | null = null,
 ): DashboardExpenseCeilingResponse {
   return {
     monthKey: progress.monthKey,
+    costCenterId,
     ceiling: serializeNullable(progress.ceiling),
     monthlyExpenses: serializeNullable(progress.monthlyExpenses),
     consumedRate: serializeNullable(progress.consumedRate),

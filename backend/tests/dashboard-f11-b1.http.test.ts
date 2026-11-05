@@ -724,9 +724,10 @@ describe('F11-B1 situation/category contract', () => {
     expect(pressureSettled.json()).toEqual(pressure.json());
     expect(pressureCat.json()).not.toEqual(pressure.json());
 
+    // Meta segue o centro; situation e category continuam ignorados.
     const goal = await app.inject({
       method: 'GET',
-      url: '/dashboard/revenue-goal',
+      url: `/dashboard/revenue-goal?costCenter=${center.id}`,
       headers: { cookie },
     });
     const goalFiltered = await app.inject({

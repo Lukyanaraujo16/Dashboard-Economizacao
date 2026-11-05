@@ -483,9 +483,10 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      // Meta é sempre company-level — costCenter/situation/category, se presentes, são ignorados.
+      // Meta geral ou por centro (`costCenter`); situation/category, se presentes, são ignorados.
       const monthKey = parseDashboardMonth(request.query);
-      const body = await dashboard.getRevenueGoal(auth, monthKey);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getRevenueGoal(auth, monthKey, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -500,7 +501,12 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
       }
       assertNoTenantIdQuery(request.query);
       const command = parseDashboardRevenueGoalBody(request.body);
-      const body = await dashboard.upsertRevenueGoal(auth, command.monthKey, command.targetAmount);
+      const body = await dashboard.upsertRevenueGoal(
+        auth,
+        command.monthKey,
+        command.targetAmount,
+        command.costCenterId,
+      );
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -514,9 +520,10 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         throw new UnauthenticatedError();
       }
       assertNoTenantIdQuery(request.query);
-      // Teto é sempre company-level — costCenter/situation/category, se presentes, são ignorados.
+      // Teto geral ou por centro (`costCenter`); situation/category, se presentes, são ignorados.
       const monthKey = parseDashboardMonth(request.query);
-      const body = await dashboard.getExpenseCeiling(auth, monthKey);
+      const costCenterId = parseDashboardCostCenterQuery(request.query);
+      const body = await dashboard.getExpenseCeiling(auth, monthKey, costCenterId);
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },
   );
@@ -535,6 +542,7 @@ export async function registerDashboardOverviewRoutes(app: FastifyInstance): Pro
         auth,
         command.monthKey,
         command.ceilingAmount,
+        command.costCenterId,
       );
       return reply.status(200).header('Cache-Control', 'private, no-store').send(body);
     },

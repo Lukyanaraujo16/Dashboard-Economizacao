@@ -2,16 +2,20 @@ import type { Prisma } from '../../../generated/prisma/client.js';
 import { ValidationError } from '../../../shared/errors/application-error.js';
 import { isValidMonthKey } from '../../analytics/domain/civil-calendar.js';
 import { parseRevenueGoalTargetAmount } from '../domain/revenue-goal-math.js';
+import { parseDashboardCostCenterQuery } from './parse-dashboard-cost-center-query.js';
 
 export type DashboardRevenueGoalCommand = {
   readonly monthKey: string;
   readonly targetAmount: Prisma.Decimal;
+  /** null = meta geral da empresa. */
+  readonly costCenterId: string | null;
 };
 
 /**
  * Corpo de `PUT /dashboard/revenue-goal`.
  * `month` é obrigatório e explícito — a gravação nunca infere a competência.
  * `target` só aceita decimal-string positivo; número em ponto flutuante é recusado.
+ * `costCenter` (UUID) opcional: ausente/vazio = meta geral da empresa.
  */
 export function parseDashboardRevenueGoalBody(body: unknown): DashboardRevenueGoalCommand {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
@@ -45,5 +49,6 @@ export function parseDashboardRevenueGoalBody(body: unknown): DashboardRevenueGo
     });
   }
 
-  return { monthKey: raw.month.trim(), targetAmount };
+  const costCenterId = parseDashboardCostCenterQuery(body);
+  return { monthKey: raw.month.trim(), targetAmount, costCenterId };
 }

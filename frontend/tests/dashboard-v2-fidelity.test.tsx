@@ -382,7 +382,11 @@ describe('Dashboard V2.3 fidelidade', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Salvar meta' }));
 
     await waitFor(() => {
-      expect(putRevenueGoal).toHaveBeenCalledWith({ month: '2026-08', target: '40000.00' });
+      expect(putRevenueGoal).toHaveBeenCalledWith({
+        month: '2026-08',
+        target: '40000.00',
+        costCenterId: null,
+      });
     });
     await waitFor(() => {
       expect(document.querySelector('[data-revenue-goal="behind"]')).toBeTruthy();

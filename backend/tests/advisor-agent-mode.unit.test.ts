@@ -424,6 +424,18 @@ describe('dashboard tools — leitura completa da Dashboard', () => {
     expect(calls[0]!.args[1]).toMatchObject({ date: '2026-10-15', direction: 'inflows', costCenterId: CC_ID });
   });
 
+  it('meta e teto aceitam centro de custo; sem centro = geral', async () => {
+    const { run, calls } = harness();
+    await run('dashboard_revenue_goal', { month: '2026-10', costCenter: 'JAC' });
+    await run('dashboard_expense_ceiling', { month: '2026-10', costCenter: 'jacaraipe' });
+    await run('dashboard_revenue_goal', { month: '2026-10' });
+    expect(calls.map((c) => [c.method, c.args[1], c.args[2]])).toEqual([
+      ['getRevenueGoal', '2026-10', CC_ID],
+      ['getExpenseCeiling', '2026-10', CC_ID],
+      ['getRevenueGoal', '2026-10', null],
+    ]);
+  });
+
   it('validação volta ao modelo; erro interno não vaza', async () => {
     const { run } = harness();
     const invalid = await run('dashboard_upcoming_dues', { days: 9 });
