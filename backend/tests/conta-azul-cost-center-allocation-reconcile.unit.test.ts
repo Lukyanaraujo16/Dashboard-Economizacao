@@ -39,6 +39,12 @@ function createRepoMock(
     markAbsentInactive: vi.fn(async () => 0),
     upsertCostCenterByExternal: vi.fn(async () => 'cc-local-b'),
     findCostCenterIdsByExternal: vi.fn(async () => new Map()),
+    purgeCatalogAbsentCostCenters: vi.fn(async () => ({
+      markedAbsent: 0,
+      allocationsPurged: 0,
+      installmentsRequeued: 0,
+    })),
+    findCatalogAbsentExternalIds: vi.fn(async () => new Set<string>()),
     findCostCentersByTenant: vi.fn(async () => []),
     replaceAllocationsForReceivable: vi.fn(async () => undefined),
     replaceAllocationsForPayable: vi.fn(async () => undefined),
@@ -59,6 +65,44 @@ function createRepoMock(
 }
 
 describe('cost center allocation reuse / reconcile (unit)', () => {
+  it('reconsulta não recria rateio para centro excluído no Conta Azul', async () => {
+    const persist = vi.fn(async () => ({ mutation: 'replaced' as const }));
+    const upsertByExternal = vi.fn(async () => 'cc-local-gone');
+    const repo = createRepoMock({
+      persistInstallmentCostCenterDetail: persist,
+      upsertCostCenterByExternal: upsertByExternal,
+      findCostCenterIdsByExternal: vi.fn(
+        async () => new Map([['cc-keep', 'cc-local-keep'], ['cc-gone', 'cc-local-gone']]),
+      ),
+      findCatalogAbsentExternalIds: vi.fn(async () => new Set(['cc-gone'])),
+    });
+    const service = createContaAzulCostCenterSyncService({
+      costCenters: repo,
+      apiClient: {
+        getInstallmentDetail: async () =>
+          detailWithCenters([
+            { id: 'cc-keep', name: 'Keep', amount: 60 },
+            { id: 'cc-gone', name: 'Gone', amount: 40 },
+          ]),
+      } as never,
+    });
+
+    await service.syncAllocationsForInstallments({
+      scope,
+      installments: [
+        { kind: 'PAYABLE', localId: 'local-1', externalId: 'ext-1', total: new Prisma.Decimal('100') },
+      ],
+      requestWithAuth: async (work) => work('token'),
+      gatedGet: async (work) => work(),
+      heartbeat: async () => undefined,
+    });
+
+    expect(upsertByExternal).not.toHaveBeenCalled();
+    expect(persist).toHaveBeenCalledTimes(1);
+    const written = (persist.mock.calls[0] as unknown as [{ allocations: unknown[] }])[0].allocations;
+    expect(written).toEqual([{ costCenterId: 'cc-local-keep', amount: new Prisma.Decimal('60') }]);
+  });
+
   it('reusa payload do 11-E.1 sem segundo GET', async () => {
     const persist = vi.fn(async () => ({ mutation: 'opened' as const }));
     const findActive = vi.fn(async () => ({

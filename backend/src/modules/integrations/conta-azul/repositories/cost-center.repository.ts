@@ -49,6 +49,28 @@ export type ContaAzulCostCenterRepository = {
     readonly syncedAt: Date;
   }): Promise<number>;
   /**
+   * Centro excluído no Conta Azul = ausente do snapshot completo (TODOS inclui inativos).
+   * Marca `catalogAbsentSince`, descarta os rateios para centros excluídos e devolve os
+   * títulos afetados a UNKNOWN (reconsulta imediata, fora do teto de revalidação stale).
+   * Idempotente: sem rateio para centro excluído, nada muda.
+   * Snapshot vazio → não faz nada (falha upstream não pode apagar rateios).
+   */
+  purgeCatalogAbsentCostCenters(input: {
+    readonly tenantId: string;
+    readonly integrationId: string;
+    readonly presentExternalIds: readonly string[];
+    readonly syncedAt: Date;
+  }): Promise<{
+    readonly markedAbsent: number;
+    readonly allocationsPurged: number;
+    readonly installmentsRequeued: number;
+  }>;
+  /** externalIds (entre os informados) de centros excluídos no Conta Azul. */
+  findCatalogAbsentExternalIds(
+    scope: { readonly tenantId: string; readonly integrationId: string },
+    externalIds: readonly string[],
+  ): Promise<Set<string>>;
+  /**
    * Materializa centro visto só em rateio histórico.
    * Create: active=false (sem evidência de catálogo).
    * Update: não reativa inactive; atualiza nome/syncedAt apenas.
@@ -183,6 +205,8 @@ export function createContaAzulCostCenterRepository(
               code: item.code,
               name: item.name,
               active: item.active,
+              // Presente no catálogo de novo → deixa de ser excluído.
+              catalogAbsentSince: null,
               syncedAt: scope.syncedAt,
             },
           }),
@@ -213,6 +237,78 @@ export function createContaAzulCostCenterRepository(
         },
       });
       return result.count;
+    },
+
+    async purgeCatalogAbsentCostCenters(input) {
+      const present = [...new Set(input.presentExternalIds.filter(Boolean))];
+      if (present.length === 0) {
+        return { markedAbsent: 0, allocationsPurged: 0, installmentsRequeued: 0 };
+      }
+      return prisma.$transaction(async (tx) => {
+        const marked = await tx.costCenter.updateMany({
+          where: {
+            tenantId: input.tenantId,
+            integrationId: input.integrationId,
+            catalogAbsentSince: null,
+            externalId: { notIn: present },
+          },
+          data: { catalogAbsentSince: input.syncedAt },
+        });
+        const absentAllocationWhere = {
+          tenantId: input.tenantId,
+          costCenter: {
+            integrationId: input.integrationId,
+            catalogAbsentSince: { not: null },
+          },
+        };
+        const stale = await tx.installmentCostCenterAllocation.findMany({
+          where: absentAllocationWhere,
+          select: { receivableId: true, payableId: true },
+        });
+        if (stale.length === 0) {
+          return { markedAbsent: marked.count, allocationsPurged: 0, installmentsRequeued: 0 };
+        }
+        const receivableIds = [
+          ...new Set(stale.flatMap((row) => (row.receivableId ? [row.receivableId] : []))),
+        ];
+        const payableIds = [
+          ...new Set(stale.flatMap((row) => (row.payableId ? [row.payableId] : []))),
+        ];
+        const purged = await tx.installmentCostCenterAllocation.deleteMany({
+          where: absentAllocationWhere,
+        });
+        const requeue = { costCenterDetailStatus: 'UNKNOWN' as const };
+        const receivables = await tx.receivable.updateMany({
+          where: { tenantId: input.tenantId, id: { in: receivableIds } },
+          data: requeue,
+        });
+        const payables = await tx.payable.updateMany({
+          where: { tenantId: input.tenantId, id: { in: payableIds } },
+          data: requeue,
+        });
+        return {
+          markedAbsent: marked.count,
+          allocationsPurged: purged.count,
+          installmentsRequeued: receivables.count + payables.count,
+        };
+      });
+    },
+
+    async findCatalogAbsentExternalIds(scope, externalIds) {
+      const unique = [...new Set(externalIds.filter(Boolean))];
+      if (unique.length === 0) {
+        return new Set();
+      }
+      const rows = await prisma.costCenter.findMany({
+        where: {
+          tenantId: scope.tenantId,
+          integrationId: scope.integrationId,
+          externalId: { in: unique },
+          catalogAbsentSince: { not: null },
+        },
+        select: { externalId: true },
+      });
+      return new Set(rows.map((row) => row.externalId));
     },
 
     async upsertCostCenterByExternal(scope, item) {

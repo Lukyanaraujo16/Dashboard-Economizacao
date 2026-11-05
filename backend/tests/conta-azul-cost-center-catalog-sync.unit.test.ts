@@ -39,6 +39,12 @@ function createRepoMock(
     markAbsentInactive: vi.fn(async () => 0),
     upsertCostCenterByExternal: vi.fn(async () => 'id'),
     findCostCenterIdsByExternal: vi.fn(async () => new Map()),
+    purgeCatalogAbsentCostCenters: vi.fn(async () => ({
+      markedAbsent: 0,
+      allocationsPurged: 0,
+      installmentsRequeued: 0,
+    })),
+    findCatalogAbsentExternalIds: vi.fn(async () => new Set<string>()),
     findCostCentersByTenant: vi.fn(async () => []),
     replaceAllocationsForReceivable: vi.fn(async () => undefined),
     replaceAllocationsForPayable: vi.fn(async () => undefined),
@@ -98,6 +104,10 @@ describe('Cost center catalog sync reconcile (11-A pagination)', () => {
     const present = markAbsentInactive.mock.calls[0]![0].presentExternalIds as string[];
     expect(present).toHaveLength(120);
     expect(present).toEqual(expect.arrayContaining(['p1-0', 'p2-19']));
+    // Purga de excluídos recebe o mesmo snapshot completo.
+    const purge = repo.purgeCatalogAbsentCostCenters as ReturnType<typeof vi.fn>;
+    expect(purge).toHaveBeenCalledTimes(1);
+    expect(purge.mock.calls[0]![0].presentExternalIds).toHaveLength(120);
   });
 
   it('B) page1 100 + totalItems=100 → ainda busca page2 []; só então reconcile', async () => {
@@ -134,6 +144,7 @@ describe('Cost center catalog sync reconcile (11-A pagination)', () => {
 
     await expect(run(service)).rejects.toBeInstanceOf(ContaAzulMappingError);
     expect(markAbsentInactive).not.toHaveBeenCalled();
+    expect(repo.purgeCatalogAbsentCostCenters).not.toHaveBeenCalled();
   });
 
   it('D) totalItems=null + page1 100 + page2 [] → reconcile ocorre', async () => {

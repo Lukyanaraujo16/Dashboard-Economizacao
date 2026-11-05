@@ -888,6 +888,13 @@ para o escopo da parcela**:
   - **Todos** = universo financeiro da empresa (títulos);
   - **Centro** = somente valor explicitamente atribuído;
   - portanto **Σ centros pode ser < Todos** quando houver NO_ALLOCATION;
+* centro **excluído no Conta Azul** (05/11/2026): ausente do snapshot completo do
+  catálogo (`filtroRapido=TODOS` inclui inativos) → `cost_centers.catalog_absent_since`.
+  A cada snapshot completo, rateios para centros excluídos são descartados e os títulos
+  afetados voltam a `UNKNOWN` (reconsulta imediata, fora do teto stale). Reconsulta não
+  recria rateio para centro excluído. Efeito: o centro some de todos os meses, inclusive
+  passados (sem histórico de excluído). Snapshot vazio não descarta nada;
+  centro **inativo** no Conta Azul (presente no catálogo) mantém histórico;
 * paid/unpaid **por centro** só quando DERIVABLE sem rateio na baixa (CC1.3):
   - 1 centro com allocation ≈ total → received=paid, outstanding=unpaid;
   - multi-centro e título 100% quitado → received=allocation.amount;

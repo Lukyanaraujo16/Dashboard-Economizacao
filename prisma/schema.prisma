@@ -611,6 +611,10 @@ model CostCenter {
   code          String?
   name          String
   active        Boolean  @default(true)
+  /// Excluído no Conta Azul: ausente do snapshot completo do catálogo desde esta data.
+  /// null = presente no catálogo (ativo ou inativo upstream) ou ainda não reconciliado.
+  /// Rateios para centro excluído são descartados (cliente não mantém histórico de excluído).
+  catalogAbsentSince DateTime? @map("catalog_absent_since") @db.Timestamptz(3)
   syncedAt      DateTime @map("synced_at") @db.Timestamptz(3)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)

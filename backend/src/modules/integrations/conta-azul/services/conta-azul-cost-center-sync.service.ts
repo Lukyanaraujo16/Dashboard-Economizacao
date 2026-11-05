@@ -283,6 +283,22 @@ export function createContaAzulCostCenterSyncService(deps: {
               presentExternalIds: [...presentExternalIds],
               syncedAt: input.scope.syncedAt,
             });
+            const purge = await deps.costCenters.purgeCatalogAbsentCostCenters({
+              tenantId: input.scope.tenantId,
+              integrationId: input.scope.integrationId,
+              presentExternalIds: [...presentExternalIds],
+              syncedAt: input.scope.syncedAt,
+            });
+            if (purge.markedAbsent > 0 || purge.allocationsPurged > 0) {
+              process.stdout.write(
+                `${JSON.stringify({
+                  event: 'conta_azul_cost_center_catalog_absent_purge',
+                  tenantId: input.scope.tenantId,
+                  integrationId: input.scope.integrationId,
+                  ...purge,
+                })}\n`,
+              );
+            }
 
             logCatalogReconcile({
               tenantId: input.scope.tenantId,
@@ -361,16 +377,26 @@ export function createContaAzulCostCenterSyncService(deps: {
           });
         }
 
+        const catalogScope = {
+          tenantId: input.scope.tenantId,
+          integrationId: input.scope.integrationId,
+        };
+        const externalIds = normalized.allocations.map((item) => item.externalCostCenterId);
         const knownIds = await deps.costCenters.findCostCenterIdsByExternal(
-          {
-            tenantId: input.scope.tenantId,
-            integrationId: input.scope.integrationId,
-          },
-          normalized.allocations.map((item) => item.externalCostCenterId),
+          catalogScope,
+          externalIds,
+        );
+        // Centro excluído no Conta Azul não recebe rateio (sem histórico de excluído).
+        const absentExternalIds = await deps.costCenters.findCatalogAbsentExternalIds(
+          catalogScope,
+          externalIds,
         );
 
         const writes: Array<{ costCenterId: string; amount: Prisma.Decimal }> = [];
         for (const item of normalized.allocations) {
+          if (absentExternalIds.has(item.externalCostCenterId)) {
+            continue;
+          }
           let costCenterId = knownIds.get(item.externalCostCenterId);
           if (!costCenterId) {
             costCenterId = await deps.costCenters.upsertCostCenterByExternal(input.scope, {
