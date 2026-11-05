@@ -36,4 +36,10 @@ Arquivos: `services/run-advisor-agent.ts` (loop), `domain/advisor-agent-tools.ts
   (mesmos parsers e `DashboardOverviewFacade`, montada por `buildDashboardOverviewFacade`), incluindo saldo bancário,
   projeção, metas, teto, títulos e lançamentos por dia. Escritas (metas/teto) não são expostas ao agente.
   Rota GET nova da Dashboard deve ganhar a tool correspondente nessa tabela.
+  Exceção: os cards legados de competência (`getMonthlyRevenue`/`getMonthlyExpenses`, F1-G) não são expostos,
+  porque não alimentam a Home e divergem dos cards de caixa (CASH-4B).
+- Herança de filtros (05/11/2026): cada resposta grava em `ai_analytical_results.scope_summary` os filtros das tool calls
+  (centro de custo, categoria, situação, período; `summarizeAdvisorAgentScope`). Ao montar o histórico, a resposta anterior
+  recebe a linha `[Filtros usados nesta resposta: ...]`, visível só ao modelo, para continuações como "e de outubro?" herdarem
+  o centro. A linha é removida se o modelo a ecoar.
 - Reverter: `ADVISOR_MODE=legacy`.

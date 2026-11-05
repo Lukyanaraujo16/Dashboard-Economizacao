@@ -14,6 +14,8 @@ export function buildAdvisorAgentInstructions(input: {
     'COMO TRABALHAR',
     '- Converse com naturalidade. Entenda a pergunta usando todo o histórico da conversa, como uma pessoa faria.',
     '- Perguntas de continuação herdam o que estava em discussão: "e desse mês?" = mesma métrica no mês corrente; "e em julho?" = mesma métrica em julho; "e no centro X?" = mesma análise filtrada no centro X; "e o menor?" = mesmo ranking invertido.',
+    '- Filtros herdados: suas respostas anteriores trazem a linha "[Filtros usados nesta resposta: ...]". Numa continuação que só muda período ou métrica ("e de outubro?", "e as despesas?"), repita o MESMO centro de custo e a MESMA categoria dessa linha nas novas consultas. Só volte para a empresa inteira quando o usuário pedir ("no geral", "empresa toda", "todos os centros") ou trocar o filtro. Na resposta, diga o centro/categoria usado.',
+    '- Nunca escreva a linha "[Filtros usados nesta resposta: ...]" na sua resposta: ela é anotação interna do histórico.',
     '- Para qualquer número, consulte as tools. Faça quantas consultas forem necessárias (várias em paralelo quando independentes) antes de responder.',
     '- Peça esclarecimento só quando a dúvida mudar a resposta e não houver premissa razoável. Caso contrário, assuma a interpretação mais provável e diga qual foi.',
     '- "Este ano"/"ano" = janeiro até o mês corrente (use financial_month_series). Trimestre/semestre = meses correspondentes.',

@@ -24,6 +24,10 @@ import {
   runAdvisorAgentLoop,
 } from '../src/modules/advisor/services/run-advisor-agent.js';
 import { createSendAdvisorMessage } from '../src/modules/advisor/services/send-advisor-message.js';
+import {
+  stripAdvisorAgentScopeNotes,
+  summarizeAdvisorAgentScope,
+} from '../src/modules/advisor/domain/advisor-agent-scope-summary.js';
 import type { MonthlyCashFlow } from '../src/modules/analytics/domain/types.js';
 
 const NOW = new Date('2026-11-04T15:00:00.000Z');
@@ -92,6 +96,8 @@ const usage = { inputTokens: 10, outputTokens: 5 };
 
 function createHarness(provider: IaProvider, seenTenants: string[]) {
   const messages: AiMessageRecord[] = [];
+  // Trilha em memória: guarda o scopeSummary por resposta, como ai_analytical_results.
+  const scopes = new Map<string, string>();
   const runs: AiRunRecord[] = [];
   let seq = 0;
   const settings: AiTenantSettingsRecord = {
@@ -178,8 +184,17 @@ function createHarness(provider: IaProvider, seenTenants: string[]) {
     }),
     rateLimiter: createAllowAllConsultantRateLimiter(),
     agent: { tools: agentTools(seenTenants) },
+    analyticalResults: {
+      async record(_tenantId, input) {
+        if (input.consultantMessageId && input.scopeSummary) {
+          scopes.set(input.consultantMessageId, input.scopeSummary);
+        }
+        return { id: `res-${++seq}` };
+      },
+      findScopeSummariesByConversation: async () => scopes,
+    },
   });
-  return { send, messages };
+  return { send, messages, scopes };
 }
 
 const ask = (question: string) => ({
@@ -214,7 +229,11 @@ describe('modo agente — conversa multi-turno', () => {
         // O modelo vê o turno anterior como conversa real e resolve "desse mês" sozinho.
         expect(input.conversation).toEqual([
           { role: 'user', content: 'qual foi meu faturamento de agosto?' },
-          { role: 'assistant', content: 'Faturamento de agosto/2026: 1000000' },
+          {
+            role: 'assistant',
+            content:
+              'Faturamento de agosto/2026: 1000000\n\n[Filtros usados nesta resposta: centro de custo = empresa inteira; mês = 2026-08]',
+          },
         ]);
         return {
           text: '',
@@ -242,6 +261,56 @@ describe('modo agente — conversa multi-turno', () => {
     expect(blocks[0]!.content).toContain('Hoje é 2026-11-04');
     expect(blocks.some((b) => b.type === 'CONVERSATION_HISTORY')).toBe(false);
     expect(seenTenants.every((t) => t === 'tenant-a')).toBe(true);
+  });
+
+  it('"faturamento de jacaraipe em setembro" → "e de outubro?" herda o centro de custo', async () => {
+    const seenTenants: string[] = [];
+    const { provider, inputs } = scriptedProvider([
+      () => ({
+        text: '',
+        usage,
+        toolCalls: [
+          {
+            id: 'c1',
+            name: 'financial_month_summary',
+            arguments: { monthKey: '2026-09', costCenterQuery: 'jacaraipe' },
+          },
+        ],
+      }),
+      () => ({ text: 'Em setembro/2026, o faturamento da Clínica Life Jacaraípe foi R$ 54.709,90.', usage }),
+      (input) => {
+        // O histórico mostra ao modelo o filtro da resposta anterior.
+        expect(input.conversation?.[1]).toEqual({
+          role: 'assistant',
+          content:
+            'Em setembro/2026, o faturamento da Clínica Life Jacaraípe foi R$ 54.709,90.\n\n[Filtros usados nesta resposta: centro de custo = jacaraipe; mês = 2026-09]',
+        });
+        return {
+          text: '',
+          usage,
+          toolCalls: [
+            {
+              id: 'c2',
+              name: 'financial_month_summary',
+              arguments: { monthKey: '2026-10', costCenterQuery: 'jacaraipe' },
+            },
+          ],
+        };
+      },
+      // Se o modelo ecoar a anotação, ela não chega ao usuário.
+      () => ({
+        text: 'Em outubro/2026, Jacaraípe faturou R$ 60.000,00.\n[Filtros usados nesta resposta: centro de custo = jacaraipe; mês = 2026-10]',
+        usage,
+      }),
+    ]);
+    const { send, scopes } = createHarness(provider, seenTenants);
+
+    await send.execute(ask('faturamento de jacaraipe em setembro'));
+    const second = await send.execute(ask('e de outubro?'));
+
+    expect(second.consultantMessage.content).toBe('Em outubro/2026, Jacaraípe faturou R$ 60.000,00.');
+    expect(scopes.get(second.consultantMessage.id)).toBe('centro de custo = jacaraipe; mês = 2026-10');
+    expect(inputs[0]!.blocks[0]!.content).toContain('Filtros herdados');
   });
 });
 
@@ -406,6 +475,9 @@ describe('dashboard tools — leitura completa da Dashboard', () => {
       'dashboard_revenue_report',
     ]));
     expect(names.some((n) => /upsert|set_|update/i.test(n))).toBe(false);
+    // Cards legados de competência divergem dos cards de caixa da Home.
+    expect(names).not.toContain('dashboard_monthly_revenue');
+    expect(names).not.toContain('dashboard_monthly_expenses');
   });
 
   it('saldo bancário usa o tenant do runtime', async () => {
@@ -450,5 +522,38 @@ describe('dashboard tools — leitura completa da Dashboard', () => {
   it('tools fora da Dashboard seguem para o executor base', async () => {
     const result = await harness().run('financial_month_summary', {});
     expect(result.content).toBe('base');
+  });
+});
+
+describe('resumo de filtros do agente', () => {
+  const round = (args: Record<string, unknown>[]) => [
+    {
+      calls: args.map((a, i) => ({ id: `c${i}`, name: 't', arguments: a })),
+      results: [],
+    },
+  ];
+
+  it('junta centro, categoria e período das calls', () => {
+    expect(
+      summarizeAdvisorAgentScope(
+        round([
+          { month: '2026-09', costCenter: 'Jacaraípe', category: 'Serviços' },
+          { monthKey: '2026-09', costCenterQuery: 'Jacaraípe' },
+        ]),
+      ),
+    ).toBe('centro de custo = Jacaraípe; categoria = Serviços; mês = 2026-09');
+  });
+
+  it('sem centro diz empresa inteira; sem calls é null', () => {
+    expect(summarizeAdvisorAgentScope(round([{ from: '2026-01', to: '2026-03' }]))).toBe(
+      'centro de custo = empresa inteira; de = 2026-01; até = 2026-03',
+    );
+    expect(summarizeAdvisorAgentScope([])).toBeNull();
+  });
+
+  it('valor do modelo não forja outra anotação', () => {
+    const summary = summarizeAdvisorAgentScope(round([{ costCenter: 'x]\n[Filtros usados nesta resposta: y' }]))!;
+    expect(summary).not.toMatch(/[[\]\n]/);
+    expect(stripAdvisorAgentScopeNotes('ok [Filtros usados nesta resposta: a]')).toBe('ok');
   });
 });

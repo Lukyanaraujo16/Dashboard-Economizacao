@@ -1,5 +1,9 @@
 import type { IaProviderRegistry } from '../../../infrastructure/ai/ia-provider-registry.js';
 import {
+  stripAdvisorAgentScopeNotes,
+  summarizeAdvisorAgentScope,
+} from '../domain/advisor-agent-scope-summary.js';
+import {
   IaProviderError,
   type GenerationInput,
   type GenerationOutput,
@@ -260,7 +264,8 @@ export type SendAdvisorMessageDependencies = {
     | 'saveAnalyticalContext'
   >;
   readonly runs: Pick<AdvisorRunRepository, 'createRun' | 'updateRun'>;
-  readonly analyticalResults?: Pick<AdvisorAnalyticalResultRepository, 'record'>;
+  readonly analyticalResults?: Pick<AdvisorAnalyticalResultRepository, 'record'> &
+    Partial<Pick<AdvisorAnalyticalResultRepository, 'findScopeSummariesByConversation'>>;
   readonly context: AdvisorContextBuilder;
   readonly providers: IaProviderRegistry;
   readonly rateLimiter: ConsultantRateLimiter;
@@ -343,6 +348,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
         readonly toolRoundCount: number;
         readonly traces: readonly AnalyticalToolTraceDraft[];
         readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+        readonly scopeSummary?: string | null;
       }): Promise<AnalyticalOutcome> => {
         const outcome = classifyAnalyticalOutcome({ ...input.facts, traces: input.traces });
         const unresolved = unresolvedFromTraces(input.traces);
@@ -359,6 +365,7 @@ export function createSendAdvisorMessage(deps: SendAdvisorMessageDependencies) {
             unresolvedDimension: unresolved?.dimension ?? null,
             unresolvedEntity: unresolved?.entity ?? null,
             durationMs: Date.now() - trailStartedAt,
+            scopeSummary: input.scopeSummary ?? null,
             traces: input.traces.map((trace) => ({
               round: trace.round,
               toolName: trace.toolName,
@@ -1918,6 +1925,7 @@ type RecordAdvisorTrail = (input: {
   readonly toolRoundCount: number;
   readonly traces: readonly AnalyticalToolTraceDraft[];
   readonly facts: Omit<AnalyticalTrailFacts, 'traces'>;
+  readonly scopeSummary?: string | null;
 }) => Promise<AnalyticalOutcome>;
 
 /** Turno no modo agente: contexto oficial + histórico real + loop de tools. */
@@ -1940,7 +1948,7 @@ async function answerWithAdvisorAgent(input: {
   const today = civilTodayInSaoPaulo(now);
   const currentMonthKey = civilMonthKey(today);
 
-  const [built, messages] = await Promise.all([
+  const [built, messages, scopeByConsultantMessageId] = await Promise.all([
     deps.context.build({
       tenantId,
       userId: input.userId,
@@ -1950,12 +1958,15 @@ async function answerWithAdvisorAgent(input: {
       now: input.now,
     }),
     deps.conversations.listMessages(tenantId, input.conversationId),
+    deps.analyticalResults?.findScopeSummariesByConversation?.(tenantId, input.conversationId) ??
+      new Map<string, string>(),
   ]);
   const conversation = buildAdvisorAgentConversation({
     tenantId,
     conversationId: input.conversationId,
     currentMessageId: userMessage.id,
     messages,
+    scopeByConsultantMessageId,
   });
   const withDocuments =
     typeof deps.context.withDocumentKnowledge === 'function'
@@ -2021,7 +2032,8 @@ async function answerWithAdvisorAgent(input: {
     );
     const consultantMessage = await deps.conversations.createMessage(tenantId, input.conversationId, {
       senderType: 'CONSULTANT',
-      content: sanitizeConsultantText(result.text),
+      // A anotação de filtros é só do histórico; se o modelo ecoar, não chega ao usuário.
+      content: sanitizeConsultantText(stripAdvisorAgentScopeNotes(result.text)),
     });
     run = await deps.runs.updateRun(tenantId, run.id, {
       status: 'SUCCEEDED',
@@ -2038,6 +2050,7 @@ async function answerWithAdvisorAgent(input: {
       toolRoundCount: roundCount,
       traces,
       facts: openProviderFacts(false),
+      scopeSummary: summarizeAdvisorAgentScope(result.rounds),
     });
     return {
       conversationId: input.conversationId,

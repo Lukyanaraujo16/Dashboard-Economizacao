@@ -37,6 +37,8 @@ export type RecordAnalyticalResultInput = {
   readonly unresolvedEntity: string | null;
   readonly durationMs: number | null;
   readonly traces: readonly RecordAnalyticalToolTraceInput[];
+  /** Filtros das tool calls do modo agente (ver summarizeAdvisorAgentScope). */
+  readonly scopeSummary?: string | null;
 };
 
 export type AnalyticalResultListItem = {
@@ -81,6 +83,11 @@ function assertMember<T extends string>(value: string, allowed: readonly T[], co
 
 export type AdvisorAnalyticalResultRepository = {
   record(tenantId: string, input: RecordAnalyticalResultInput): Promise<{ id: string }>;
+  /** consultantMessageId → scopeSummary, só desta conversa/tenant e só resumos não nulos. */
+  findScopeSummariesByConversation(
+    tenantId: string,
+    conversationId: string,
+  ): Promise<ReadonlyMap<string, string>>;
   list(query: {
     readonly tenantId?: string;
     readonly outcome?: AnalyticalOutcome;
@@ -171,6 +178,7 @@ export function createAdvisorAnalyticalResultRepository(
           unresolvedDimension: input.unresolvedDimension,
           unresolvedEntity: input.unresolvedEntity,
           durationMs: input.durationMs,
+          scopeSummary: input.scopeSummary ?? null,
           toolTraces: {
             create: input.traces.map((trace) => ({
               tenantId: scopedTenantId,
@@ -187,6 +195,26 @@ export function createAdvisorAnalyticalResultRepository(
         select: { id: true },
       });
       return created;
+    },
+
+    async findScopeSummariesByConversation(tenantId, conversationId) {
+      assertAdvisorTenantId(tenantId);
+      const rows = await prisma.aiAnalyticalResult.findMany({
+        where: {
+          tenantId: tenantId.trim(),
+          conversationId,
+          consultantMessageId: { not: null },
+          scopeSummary: { not: null },
+        },
+        select: { consultantMessageId: true, scopeSummary: true },
+      });
+      return new Map(
+        rows.flatMap((row) =>
+          row.consultantMessageId && row.scopeSummary
+            ? [[row.consultantMessageId, row.scopeSummary] as const]
+            : [],
+        ),
+      );
     },
 
     async list(query) {

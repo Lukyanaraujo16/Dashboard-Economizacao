@@ -1,3 +1,4 @@
+import { formatAdvisorAgentScopeNote } from '../domain/advisor-agent-scope-summary.js';
 import type {
   GenerationInput,
   GenerationOutput,
@@ -38,6 +39,8 @@ export function buildAdvisorAgentConversation(input: {
   readonly conversationId: string;
   readonly currentMessageId: string;
   readonly messages: readonly AiMessageRecord[];
+  /** consultantMessageId → filtros usados naquela resposta (ai_analytical_results.scope_summary). */
+  readonly scopeByConsultantMessageId?: ReadonlyMap<string, string>;
 }): IaConversationTurn[] {
   return input.messages
     .filter(
@@ -48,10 +51,18 @@ export function buildAdvisorAgentConversation(input: {
         message.content.trim() !== '',
     )
     .slice(-ADVISOR_AGENT_HISTORY_LIMIT)
-    .map((message) => ({
-      role: message.senderType === 'USER' ? ('user' as const) : ('assistant' as const),
-      content: message.content.slice(0, ADVISOR_AGENT_HISTORY_TURN_MAX_CHARS),
-    }));
+    .map((message) => {
+      const content = message.content.slice(0, ADVISOR_AGENT_HISTORY_TURN_MAX_CHARS);
+      if (message.senderType === 'USER') {
+        return { role: 'user' as const, content };
+      }
+      // Os filtros da resposta anterior ficam explícitos para o follow-up herdar (ex.: centro).
+      const scope = input.scopeByConsultantMessageId?.get(message.id);
+      return {
+        role: 'assistant' as const,
+        content: scope ? `${content}\n\n${formatAdvisorAgentScopeNote(scope)}` : content,
+      };
+    });
 }
 
 export type AdvisorAgentLoopResult = {

@@ -105,9 +105,12 @@ export const ADVISOR_DASHBOARD_TOOLS: readonly DashboardTool[] = [
     params: FILTERS,
     run: (f, a, q) => f.getCashFlowForecast(a, parseDashboardCostCenterQuery(q), parseDashboardCategoryQuery(q)),
   },
+  // Os cards legados de competência (getMonthlyRevenue/getMonthlyExpenses, F1-G) não são expostos:
+  // não alimentam a Home e divergem dos cards de caixa (CASH-4B).
   {
     name: 'dashboard_monthly_cash_flow',
-    description: 'Card de fluxo de caixa do mês: realizado, previsto, vencidos, composição por categoria (com categoryKey) e série diária.',
+    description:
+      'Cards do mês da Home (Faturamento, A receber, Despesas, Contas a pagar): realizado (recebido/pago), previsto no prazo (a receber/a pagar), vencidos, composição por categoria (com categoryKey) e série diária. Faturamento = recebido + a receber no prazo; Despesas = pago + a pagar no prazo.',
     params: ['month', ...FILTERS],
     run: (f, a, q) =>
       f.getMonthlyCashFlow(a, parseDashboardMonth(q), parseDashboardCostCenterQuery(q), parseDashboardCategoryQuery(q)),
@@ -118,20 +121,6 @@ export const ADVISOR_DASHBOARD_TOOLS: readonly DashboardTool[] = [
     params: ['month', ...FILTERS],
     run: (f, a, q) =>
       f.getCashMovementHistory(a, parseDashboardMonth(q), parseDashboardCostCenterQuery(q), parseDashboardCategoryQuery(q)),
-  },
-  {
-    name: 'dashboard_monthly_revenue',
-    description: 'Card de faturamento do mês (competência), com filtro de situação.',
-    params: ['month', 'situation', ...FILTERS],
-    run: (f, a, q) =>
-      f.getMonthlyRevenue(a, parseDashboardMonth(q), parseDashboardCostCenterQuery(q), parseDashboardSituationQuery(q), parseDashboardCategoryQuery(q)),
-  },
-  {
-    name: 'dashboard_monthly_expenses',
-    description: 'Card de despesas do mês, com filtro de situação.',
-    params: ['month', 'situation', ...FILTERS],
-    run: (f, a, q) =>
-      f.getMonthlyExpenses(a, parseDashboardMonth(q), parseDashboardCostCenterQuery(q), parseDashboardSituationQuery(q), parseDashboardCategoryQuery(q)),
   },
   {
     name: 'dashboard_expense_composition',

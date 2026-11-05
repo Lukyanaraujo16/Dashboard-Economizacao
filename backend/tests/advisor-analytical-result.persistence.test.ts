@@ -137,6 +137,48 @@ describe('persistência da trilha analítica', () => {
     expect(answered.total).toBe(0);
   });
 
+  it('grava e lê os filtros da resposta só da conversa e tenant certos', async () => {
+    const first = await seedQuestion('scope-a');
+    const second = await seedQuestion('scope-b');
+    const base = {
+      outcome: 'ANSWERED' as const,
+      answerSource: 'PROVIDER' as const,
+      toolCallCount: 1,
+      toolRoundCount: 1,
+      unresolvedDimension: null,
+      unresolvedEntity: null,
+      durationMs: 10,
+      traces: [],
+    };
+    await results.record(first.tenant.id, {
+      ...base,
+      conversationId: first.conversation.id,
+      userMessageId: first.userMessage.id,
+      consultantMessageId: first.consultantMessage.id,
+      runId: first.run.id,
+      scopeSummary: 'centro de custo = jacaraipe; mês = 2026-09',
+    });
+    await results.record(second.tenant.id, {
+      ...base,
+      conversationId: second.conversation.id,
+      userMessageId: second.userMessage.id,
+      consultantMessageId: second.consultantMessage.id,
+      runId: second.run.id,
+    });
+
+    const scopes = await results.findScopeSummariesByConversation(first.tenant.id, first.conversation.id);
+    expect([...scopes]).toEqual([
+      [first.consultantMessage.id, 'centro de custo = jacaraipe; mês = 2026-09'],
+    ]);
+    // Outro tenant não lê a conversa do primeiro.
+    expect(
+      (await results.findScopeSummariesByConversation(second.tenant.id, first.conversation.id)).size,
+    ).toBe(0);
+    expect(
+      (await results.findScopeSummariesByConversation(second.tenant.id, second.conversation.id)).size,
+    ).toBe(0);
+  });
+
   it('recusa vínculo com mensagem de outro tenant', async () => {
     const first = await seedQuestion('trail-c');
     const second = await seedQuestion('trail-d');

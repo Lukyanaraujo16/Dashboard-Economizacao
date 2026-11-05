@@ -1155,6 +1155,8 @@ model AiAnalyticalResult {
   toolRoundCount      Int                            @map("tool_round_count")
   unresolvedDimension AnalyticalUnresolvedDimension? @map("unresolved_dimension")
   unresolvedEntity    String?                        @map("unresolved_entity") @db.VarChar(80)
+  /// Filtros usados nas tool calls do modo agente (centro, categoria, período), para o follow-up herdar.
+  scopeSummary        String?                        @map("scope_summary") @db.VarChar(300)
   durationMs          Int?                           @map("duration_ms")
   createdAt           DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
   tenant              Tenant                         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
