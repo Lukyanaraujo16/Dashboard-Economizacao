@@ -512,6 +512,7 @@ export function DashboardPage() {
   const catalogTenantIdRef = useRef<string | null>(null);
   const catalogLoadGenerationRef = useRef(0);
   const costCenterLoadGenerationRef = useRef(0);
+  const costCentersTenantIdRef = useRef<string | null>(null);
 
   const loadOverview = useCallback(
     async (signal: AbortSignal, costCenterId: string | null, options?: SoftLoadOptions) => {
@@ -1064,12 +1065,18 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (status !== 'authenticated' || operationalTenantId === null) {
+      costCentersTenantIdRef.current = null;
       setCostCenters([]);
       setCostCentersLoading(false);
       return;
     }
 
-    setCostCenters([]);
+    // Troca de mês mantém a lista atual visível (seletor com loading) até a do novo mês chegar;
+    // só troca de empresa limpa, para nunca mostrar centros de outro tenant.
+    if (costCentersTenantIdRef.current !== operationalTenantId) {
+      setCostCenters([]);
+    }
+    costCentersTenantIdRef.current = operationalTenantId;
     setCostCentersLoading(true);
     costCenterLoadGenerationRef.current += 1;
     const generation = costCenterLoadGenerationRef.current;

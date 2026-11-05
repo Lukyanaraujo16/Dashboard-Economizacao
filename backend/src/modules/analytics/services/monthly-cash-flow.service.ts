@@ -1,3 +1,4 @@
+import { memoizeShortLived } from '../../../shared/short-lived-memo.js';
 import { assertTenantId } from '../../finance/repositories/read-query.js';
 import type { CostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
 import type { FinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
@@ -7,7 +8,11 @@ import type { ReceivableReadRepository } from '../../finance/repositories/receiv
 import type { FinancialInstallmentReadRecord } from '../../finance/domain/types.js';
 import { civilTodayInSaoPaulo } from '../domain/analytical-timezone.js';
 import { collectCashCategoryExternalIds } from '../domain/cash-realized-category-composition.js';
-import { civilMonthBounds, civilMonthBoundsFromKey } from '../domain/civil-calendar.js';
+import {
+  civilMonthBounds,
+  civilMonthBoundsFromKey,
+  formatCivilDateKey,
+} from '../domain/civil-calendar.js';
 import { calculateMonthlyCashFlow } from '../domain/monthly-cash-flow.js';
 import type { GetMonthlyCashFlowInput, MonthlyCashFlow } from '../domain/types.js';
 
@@ -181,5 +186,35 @@ export function createMonthlyCashFlowService(
         },
       });
     },
+  };
+}
+
+/** Janela do cache de leitura do fluxo mensal (dados só mudam no sync, que roda de hora em hora). */
+export const MONTHLY_CASH_FLOW_CACHE_TTL_MS = 15_000;
+
+/**
+ * Deduplica e guarda por poucos segundos o mesmo fluxo mensal. Uma navegação da Home pede o
+ * mesmo (tenant, mês, centro, categoria) várias vezes em paralelo — cards, histórico de 12 meses,
+ * meta (6 meses) e teto. Chave inclui tenant e o dia civil (vencido depende de hoje).
+ * shortcut: até 15 s de defasagem logo após um sync; trocar por invalidação no fim do sync se incomodar.
+ */
+export function withShortLivedMonthlyCashFlowCache(
+  service: MonthlyCashFlowService,
+  options: { readonly ttlMs?: number; readonly clock?: () => number } = {},
+): MonthlyCashFlowService {
+  return {
+    getMonthlyCashFlow: memoizeShortLived((input: GetMonthlyCashFlowInput) => service.getMonthlyCashFlow(input), {
+      ttlMs: options.ttlMs ?? MONTHLY_CASH_FLOW_CACHE_TTL_MS,
+      ...(options.clock ? { clock: options.clock } : {}),
+      keyOf: (input, now) =>
+        JSON.stringify([
+          input.tenantId.trim(),
+          input.integrationId ?? null,
+          input.monthKey ?? null,
+          input.costCenterId ?? null,
+          input.categoryFilter ?? null,
+          formatCivilDateKey(civilTodayInSaoPaulo(input.now ?? new Date(now))),
+        ]),
+    }),
   };
 }

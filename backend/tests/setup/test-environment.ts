@@ -14,6 +14,8 @@ process.env.DATABASE_URL = resolveTestDatabaseUrl(process.env);
 process.env.TEST_STORAGE_PATH = resolveTestStoragePath(process.env);
 process.env.STORAGE_PATH = process.env.TEST_STORAGE_PATH;
 process.env.NODE_ENV = 'test';
+// Testes gravam e releem dados no mesmo segundo: sem cache de leitura da Dashboard.
+process.env.DASHBOARD_READ_CACHE_TTL_MS = '0';
 // Homologação real preenche o .env da raiz. A suíte usa fixtures oficiais,
 // não as credenciais/APP_URL do ambiente DEV.
 delete process.env.APP_URL;

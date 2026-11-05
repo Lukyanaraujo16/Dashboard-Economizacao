@@ -299,6 +299,22 @@ describe('CC1.3.1 soft filter refresh', () => {
     });
   });
 
+  it('troca de mês mantém o seletor de centros visível enquanto o novo mês carrega', async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByRole('tablist', { name: 'Centros de custo' })).toBeTruthy();
+    });
+
+    // Lista do mês anterior fica pendente: o seletor não pode sumir nesse intervalo.
+    getCostCenters.mockImplementation(() => new Promise(() => {}));
+    fireEvent.click(screen.getByRole('button', { name: 'Mês anterior' }));
+    await waitFor(() => {
+      expect(paramsStore.get('month')).not.toBeNull();
+    });
+    expect(screen.getByRole('tablist', { name: 'Centros de custo' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Jacaraípe' })).toBeTruthy();
+  });
+
   it('empresa sem centros não exibe seletor', async () => {
     getCostCenters.mockResolvedValue({ items: [] });
     renderDashboard();

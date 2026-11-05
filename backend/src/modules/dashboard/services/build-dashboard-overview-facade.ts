@@ -4,7 +4,13 @@ import { createExpectedReceivableDetailsService } from '../../analytics/services
 import { createExpectedPayableDetailsService } from '../../analytics/services/expected-payable-details.service.js';
 import { createCashRealizedDetailsService } from '../../analytics/services/cash-realized-details.service.js';
 import { createCashExpectedHorizonService } from '../../analytics/services/cash-expected-horizon.service.js';
-import { createMonthlyCashFlowService } from '../../analytics/services/monthly-cash-flow.service.js';
+import {
+  createMonthlyCashFlowService,
+  MONTHLY_CASH_FLOW_CACHE_TTL_MS,
+  withShortLivedMonthlyCashFlowCache,
+} from '../../analytics/services/monthly-cash-flow.service.js';
+import type { FinanceReadScope, FinancialInstallmentReadRecord } from '../../finance/domain/types.js';
+import { memoizeShortLived } from '../../../shared/short-lived-memo.js';
 import { createCostCenterAllocationReadRepository } from '../../finance/repositories/cost-center-allocation-read.repository.js';
 import { createCostCenterReadRepository } from '../../finance/repositories/cost-center-read.repository.js';
 import { createFinancialCategoryReadRepository } from '../../finance/repositories/financial-category-read.repository.js';
@@ -25,6 +31,25 @@ import {
   type DashboardOverviewFacade,
 } from './dashboard-overview.facade.js';
 
+/** `DASHBOARD_READ_CACHE_TTL_MS` (0 desliga; testes usam 0). Padrão 15 s. */
+function readCacheTtlMs(): number {
+  const value = process.env.DASHBOARD_READ_CACHE_TTL_MS?.trim();
+  const raw = value ? Number(value) : Number.NaN;
+  return Number.isFinite(raw) && raw >= 0 ? raw : MONTHLY_CASH_FLOW_CACHE_TTL_MS;
+}
+
+function withSharedActiveInstallments<
+  R extends { findActiveByTenant(scope: FinanceReadScope): Promise<readonly FinancialInstallmentReadRecord[]> },
+>(repository: R, ttlMs: number): R {
+  return {
+    ...repository,
+    findActiveByTenant: memoizeShortLived((scope: FinanceReadScope) => repository.findActiveByTenant(scope), {
+      ttlMs,
+      keyOf: (scope) => JSON.stringify([scope.tenantId.trim(), scope.integrationId ?? null]),
+    }),
+  };
+}
+
 /**
  * Facade completa da Dashboard (Home, saldo bancário, detalhes, metas).
  * Compartilhada pelas rotas HTTP e pelo Consultor em modo agente (mesmos números).
@@ -36,8 +61,10 @@ export function buildDashboardOverviewFacade(input: {
   const { prisma } = input;
   const costCenters = createCostCenterReadRepository(prisma);
   const categories = createFinancialCategoryReadRepository(prisma);
-  const receivables = createReceivableReadRepository(prisma);
-  const payables = createPayableReadRepository(prisma);
+  // Cada fluxo mensal lê todos os títulos ativos do tenant; meses em paralelo compartilham a leitura.
+  const cacheTtlMs = readCacheTtlMs();
+  const receivables = withSharedActiveInstallments(createReceivableReadRepository(prisma), cacheTtlMs);
+  const payables = withSharedActiveInstallments(createPayableReadRepository(prisma), cacheTtlMs);
   const parties = createPartyReadRepository(prisma);
   const costCenterAllocations = createCostCenterAllocationReadRepository(prisma);
   const cashBalanceHistory = createCashBalanceHistoryService({
@@ -50,13 +77,16 @@ export function buildDashboardOverviewFacade(input: {
       categories,
       costCenterAllocations,
     }),
-    cashFlow: createMonthlyCashFlowService({
-      ledger: createLedgerReadRepository(prisma),
-      receivables,
-      payables,
-      categories,
-      costCenterAllocations,
-    }),
+    cashFlow: withShortLivedMonthlyCashFlowCache(
+      createMonthlyCashFlowService({
+        ledger: createLedgerReadRepository(prisma),
+        receivables,
+        payables,
+        categories,
+        costCenterAllocations,
+      }),
+      { ttlMs: cacheTtlMs },
+    ),
     cashExpectedHorizon: createCashExpectedHorizonService({
       receivables,
       payables,
