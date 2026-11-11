@@ -76,7 +76,8 @@ export const ADVISOR_DASHBOARD_TOOLS: readonly DashboardTool[] = [
   },
   {
     name: 'dashboard_cash_projection',
-    description: 'Projeção de caixa para os próximos 3, 6 ou 12 meses: previsto a receber e a pagar por mês e saldo bancário projetado a partir do saldo oficial.',
+    description:
+      'Projeção de caixa para os próximos 3, 6 ou 12 meses: previsto a receber e a pagar por mês e saldo bancário projetado a partir do saldo oficial. Considera só títulos já lançados: receita recorrente ainda não faturada não entra, então meses distantes tendem a sair subestimados.',
     params: ['month', 'horizon', ...FILTERS],
     required: ['horizon'],
     run: (f, a, q) =>

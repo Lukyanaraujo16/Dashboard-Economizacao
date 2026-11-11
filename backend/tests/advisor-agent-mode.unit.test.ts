@@ -10,7 +10,11 @@ import { createOpenAiProvider } from '../src/infrastructure/ai/openai-provider.j
 import { createAnthropicProvider } from '../src/infrastructure/ai/anthropic-provider.js';
 import type { GenerationInput, GenerationOutput, IaProvider } from '../src/infrastructure/ai/types.js';
 import { createAdvisorAgentToolExecutor } from '../src/modules/advisor/domain/advisor-agent-tools.js';
-import { createAdvisorDashboardToolExecutor } from '../src/modules/advisor/domain/advisor-dashboard-tools.js';
+import {
+  createAdvisorDashboardToolExecutor,
+  listAdvisorDashboardToolDefinitions,
+} from '../src/modules/advisor/domain/advisor-dashboard-tools.js';
+import { buildAdvisorAgentInstructions } from '../src/modules/advisor/domain/advisor-agent-instructions.js';
 import { AI_PROVIDER_MODEL_CATALOG } from '../src/modules/advisor/domain/ai-provider-models.js';
 import type {
   AiMessageRecord,
@@ -570,5 +574,19 @@ describe('resumo de filtros do agente', () => {
     const summary = summarizeAdvisorAgentScope(round([{ costCenter: 'x]\n[Filtros usados nesta resposta: y' }]))!;
     expect(summary).not.toMatch(/[[\]\n]/);
     expect(stripAdvisorAgentScopeNotes('ok [Filtros usados nesta resposta: a]')).toBe('ok');
+  });
+});
+
+describe('consultoria — projeção com ressalva e média histórica', () => {
+  it('instruções e tool de projeção avisam que só títulos lançados entram', () => {
+    const text = buildAdvisorAgentInstructions({
+      todayKey: '2026-11-11',
+      currentMonthKey: '2026-11',
+      selectedMonthKey: '2026-11',
+    });
+    expect(text).toMatch(/JÁ LANÇADOS/);
+    expect(text).toMatch(/média mensal real dos últimos 3–6 meses/);
+    const projection = listAdvisorDashboardToolDefinitions().find((t) => t.name === 'dashboard_cash_projection')!;
+    expect(projection.description).toMatch(/só títulos já lançados/);
   });
 });
