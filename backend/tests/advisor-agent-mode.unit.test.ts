@@ -46,6 +46,10 @@ function flow(monthKey: string, inflows: string, receivables: string): MonthlyCa
       ofMonth: { receivables: d('0'), payables: d('0') },
     },
     realizedByCategory: { inflows: null, outflows: null },
+    stock: {
+      receivables: { open: d('187526.07'), overdue: d('0'), dueToday: d('0'), upcoming: d('187526.07') },
+      payables: { open: d('174601.67'), overdue: d('0'), dueToday: d('0'), upcoming: d('174601.67') },
+    },
   } as unknown as MonthlyCashFlow;
 }
 
@@ -377,6 +381,17 @@ describe('agent tools', () => {
     const payload = JSON.parse(result.content) as { months: Array<{ monthKey: string; billing: string }> };
     expect(payload.months.map((m) => m.monthKey)).toEqual(['2026-08', '2026-09', '2026-10', '2026-11']);
     expect(payload.months[0]!.billing).toBe('1000000');
+  });
+
+  it('resumo do mês traz os cards A receber/Contas a pagar do mês, não o estoque total', async () => {
+    const tools = agentTools([]);
+    const result = await tools.execute(call('financial_month_summary', { monthKey: '2026-11' }));
+    const payload = JSON.parse(result.content) as Record<string, string>;
+    expect(payload.monthPendingPayables).toBe('174601.67');
+    expect(payload.monthPendingReceivables).toBe('187526.07');
+    const position = tools.tools.find((t) => t.name === 'current_financial_position')!;
+    expect(position.description).toMatch(/TODOS os vencimentos/);
+    expect(position.description).toMatch(/NÃO é o card/);
   });
 
   it('entrada inválida volta como erro legível ao modelo', async () => {

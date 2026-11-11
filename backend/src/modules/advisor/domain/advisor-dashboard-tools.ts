@@ -63,7 +63,8 @@ const FILTERS: readonly ParamKey[] = ['costCenter', 'category'];
 export const ADVISOR_DASHBOARD_TOOLS: readonly DashboardTool[] = [
   {
     name: 'dashboard_overview',
-    description: 'Visão geral de hoje: contas a receber e a pagar em aberto e vencidas, inadimplência e status/data da última sincronização com a Conta Azul.',
+    description:
+      'Estoque TOTAL em aberto hoje (a receber e a pagar de TODOS os vencimentos, inclusive meses e anos futuros), vencidos, inadimplência e última sincronização com a Conta Azul. NÃO é o card "Contas a pagar"/"A receber" do mês: para isso use dashboard_monthly_cash_flow (stock.payables.open/stock.receivables.open).',
     params: ['costCenter'],
     run: (f, a, q) => f.getOverview(a, parseDashboardCostCenterQuery(q)),
   },

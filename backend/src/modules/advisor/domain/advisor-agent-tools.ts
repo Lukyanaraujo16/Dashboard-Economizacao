@@ -43,7 +43,7 @@ export const AGENT_EXTRA_TOOLS: readonly AdvisorAnalyticalToolDefinition[] = [
   {
     name: AGENT_MONTH_SUMMARY_TOOL_NAME,
     description:
-      'Resumo oficial de UM mês da empresa inteira: faturamento, despesas, entradas/saídas realizadas, resultado de caixa, previsto a receber/pagar no prazo, vencidos do mês e principais categorias realizadas. Funciona para meses passados, atual e futuros (futuro = projeção pelos títulos em aberto).',
+      'Resumo oficial de UM mês da empresa inteira: faturamento, despesas, entradas/saídas realizadas, resultado de caixa, previsto a receber/pagar no prazo, vencidos do mês, cards "A receber" e "Contas a pagar" do mês (monthPendingReceivables/monthPendingPayables) e principais categorias realizadas. Funciona para meses passados, atual e futuros (futuro = projeção pelos títulos em aberto).',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
@@ -68,7 +68,7 @@ export const AGENT_EXTRA_TOOLS: readonly AdvisorAnalyticalToolDefinition[] = [
   {
     name: AGENT_CURRENT_POSITION_TOOL_NAME,
     description:
-      'Posição atual (hoje) da empresa: contas a receber e a pagar em aberto (vencido, vence hoje, a vencer) e inadimplência. Não inclui saldo bancário.',
+      'Estoque TOTAL em aberto hoje, de TODOS os vencimentos (inclui parcelas de meses e anos futuros), e inadimplência. NÃO é o card "Contas a pagar"/"A receber" do mês: para isso use financial_month_summary (monthPendingPayables/monthPendingReceivables).',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
   },
   {
@@ -130,6 +130,9 @@ export function summarizeAgentMonth(flow: MonthlyCashFlow, withCategories: boole
     expectedResult: amount(flow.expected.result),
     overdueOfMonthReceivables: amount(flow.overdue.ofMonth.receivables),
     overdueOfMonthPayables: amount(flow.overdue.ofMonth.payables),
+    // Cards "A receber"/"Contas a pagar" da Home: pendências com vencimento no mês (vencidos do mês + hoje + a vencer).
+    monthPendingReceivables: amount(flow.stock.receivables.open),
+    monthPendingPayables: amount(flow.stock.payables.open),
     ...(withCategories
       ? {
           topRealizedInflowCategories: topCategories(flow.realizedByCategory.inflows),
