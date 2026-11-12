@@ -223,6 +223,9 @@ function isSyncErrorCode(value: unknown): value is ContaAzulSyncRun['errorCode']
     value === 'sync_unauthorized' ||
     value === 'sync_rate_limited' ||
     value === 'sync_upstream_unavailable' ||
+    value === 'sync_upstream_rejected' ||
+    value === 'sync_network_error' ||
+    value === 'sync_internal_error' ||
     value === 'sync_invalid_payload' ||
     value === 'sync_persistence_failed' ||
     value === 'sync_tenant_disabled' ||

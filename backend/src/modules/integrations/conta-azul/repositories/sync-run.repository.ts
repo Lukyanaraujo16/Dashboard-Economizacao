@@ -18,6 +18,12 @@ export type SyncRunRecord = {
   readonly counts: ContaAzulSyncCounts | null;
 };
 
+/** Falhas registradas depois do último sucesso da integração (base do backoff). */
+export type SyncFailureStreak = {
+  readonly consecutiveFailures: number;
+  readonly lastFailureAt: Date | null;
+};
+
 export type ContaAzulSyncRunRepository = {
   createPending(input: {
     readonly tenantId: string;
@@ -29,6 +35,12 @@ export type ContaAzulSyncRunRepository = {
   findActiveByIntegrationId(integrationId: string): Promise<SyncRunRecord | null>;
   findActive(limit?: number): Promise<readonly SyncRunRecord[]>;
   findLatestByIntegrationId(integrationId: string): Promise<SyncRunRecord | null>;
+  /**
+   * Conta runs FAILED da integração iniciados depois de `since` (último sucesso),
+   * exceto `sync_enqueue_failed` (falha da fila local, não da execução).
+   * `since = null` (sem baseline) conta todos. Leitura derivada: sem coluna nova.
+   */
+  summarizeFailuresSince(integrationId: string, since: Date | null): Promise<SyncFailureStreak>;
   markRunning(id: string, at: Date): Promise<void>;
   heartbeat(id: string, at: Date): Promise<void>;
   markSuccess(input: {
@@ -203,6 +215,30 @@ export function createContaAzulSyncRunRepository(prisma: PrismaClient): ContaAzu
         select: runSelect,
       });
       return row ? mapRun(row) : null;
+    },
+
+    async summarizeFailuresSince(integrationId, since) {
+      const result = await prisma.syncRun.aggregate({
+        where: {
+          integrationId,
+          status: 'FAILED',
+          // Falha ao enfileirar é da fila local (Redis), não da execução: não pune a integração.
+          // OR explícito: NOT sobre coluna nula também descartaria runs legados sem error_code.
+          OR: [{ errorCode: null }, { errorCode: { not: 'sync_enqueue_failed' } }],
+          ...(since ? { startedAt: { gt: since } } : {}),
+        },
+        _count: { _all: true },
+        _max: { finishedAt: true, startedAt: true },
+      });
+      // finished_at >= started_at na mesma linha; o maior dos dois cobre runs legados sem finished_at.
+      const instants = [result._max.finishedAt, result._max.startedAt].filter(
+        (value): value is Date => value !== null,
+      );
+      return {
+        consecutiveFailures: result._count._all,
+        lastFailureAt:
+          instants.length > 0 ? new Date(Math.max(...instants.map((value) => value.getTime()))) : null,
+      };
     },
 
     async markRunning(id, at) {

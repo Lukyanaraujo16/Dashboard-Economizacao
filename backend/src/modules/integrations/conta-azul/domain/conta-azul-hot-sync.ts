@@ -10,10 +10,12 @@ import type { CostCenterDetailStatusValue } from './conta-azul-cost-center-detai
 import { COST_CENTER_DETAIL_RULE_VERSION } from './conta-azul-cost-center-detail-fetch.js';
 import {
   buildDueDateWindows,
+  splitCivilDateRange,
   type DueDateWindow,
 } from './conta-azul-dates.js';
 import type { MappedInstallment } from './conta-azul-financial-mappers.js';
 import {
+  CONTA_AZUL_MAX_DUE_RANGE_DAYS,
   CONTA_AZUL_SYNC_LOOKAHEAD_YEARS,
   CONTA_AZUL_SYNC_LOOKBACK_YEARS,
   CONTA_AZUL_SYNC_WINDOW_DAYS,
@@ -58,8 +60,8 @@ export function buildHotSyncCivilWindow(now: Date): DueDateWindow {
 
 /**
  * Envelope externo do horizonte histórico (5 anos + 2), numa faixa só.
- * A API aceitou esse intervalo em uma consulta junto com data_pagamento.
- * Não fatia em janelas de 90 dias.
+ * Não enviar como uma consulta: a API recusa vencimento acima de 365 dias.
+ * Use `buildHistoricalDueWindows` para as chamadas.
  */
 export function buildHistoricalDueHorizon(now: Date): DueDateWindow {
   const windows = buildDueDateWindows(now, {
@@ -73,6 +75,16 @@ export function buildHistoricalDueHorizon(now: Date): DueDateWindow {
     throw new Error('Horizonte histórico de vencimento vazio.');
   }
   return { from: first.from, to: last.to };
+}
+
+/**
+ * Horizonte histórico inteiro (mesmo envelope de `buildHistoricalDueHorizon`) fatiado
+ * em janelas inclusivas de até `CONTA_AZUL_MAX_DUE_RANGE_DAYS`, contíguas e disjuntas.
+ * Cada parcela tem um só vencimento, então cai em exatamente uma janela.
+ */
+export function buildHistoricalDueWindows(now: Date): DueDateWindow[] {
+  const horizon = buildHistoricalDueHorizon(now);
+  return splitCivilDateRange(horizon.from, horizon.to, CONTA_AZUL_MAX_DUE_RANGE_DAYS);
 }
 
 /** Braço do pagamento sobrescreve o do vencimento quando o mesmo externalId aparece nos dois. */

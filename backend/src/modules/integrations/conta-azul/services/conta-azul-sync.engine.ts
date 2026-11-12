@@ -20,6 +20,7 @@ import {
 } from '../domain/conta-azul-financial-mappers.js';
 import {
   buildHistoricalDueHorizon,
+  buildHistoricalDueWindows,
   buildHotSyncCivilWindow,
   dedupeHotInstallments,
   hotCostCenterRotationBudget,
@@ -64,6 +65,10 @@ import type { ContaAzulLedgerSyncService } from './conta-azul-ledger-sync.servic
 import type { ContaAzulTransferSyncService } from './conta-azul-transfer-sync.service.js';
 import type { LedgerInstallmentCandidate } from '../domain/conta-azul-settlement-mappers.js';
 import { captureActiveAccountBalanceSnapshots } from './conta-azul-balance-capture.js';
+import {
+  buildSyncFailureDiagnostic,
+  type ContaAzulSyncStage,
+} from './conta-azul-sync-failure-diagnostic.js';
 import { createContaAzulFinancialAccountCatalogSyncService } from './conta-azul-financial-account-catalog-sync.service.js';
 import { createContaAzulFinancialCategoryCatalogSyncService } from './conta-azul-financial-category-catalog-sync.service.js';
 import { createContaAzulPartyCatalogSyncService } from './conta-azul-party-catalog-sync.service.js';
@@ -104,7 +109,7 @@ function diagnosticFromCause(error: unknown): ContaAzulPayloadDiagnostic | undef
   return undefined;
 }
 
-function mapUpstreamError(error: unknown): ContaAzulSyncExecutionError {
+export function mapUpstreamError(error: unknown): ContaAzulSyncExecutionError {
   if (error instanceof ContaAzulSyncExecutionError) {
     return error;
   }
@@ -133,6 +138,18 @@ function mapUpstreamError(error: unknown): ContaAzulSyncExecutionError {
       return new ContaAzulSyncExecutionError('sync_invalid_payload', error.message, {
         cause: error,
         diagnostic,
+      });
+    }
+    if (error.httpStatus === undefined) {
+      // Sem resposta HTTP: DNS, TLS, conexão recusada/encerrada.
+      return new ContaAzulSyncExecutionError('sync_network_error', error.message, {
+        cause: error,
+      });
+    }
+    if (error.httpStatus < 500) {
+      // 400/403/404/422…: a origem respondeu e recusou a consulta. Não é indisponibilidade.
+      return new ContaAzulSyncExecutionError('sync_upstream_rejected', error.message, {
+        cause: error,
       });
     }
     return new ContaAzulSyncExecutionError('sync_upstream_unavailable', error.message, {
@@ -307,6 +324,7 @@ export function createContaAzulManualSyncEngine(deps: {
 
       const hotDetailCandidates: CostCenterAllocationCandidate[] = [];
       let hotLog: Record<string, unknown> | null = null;
+      let stage: ContaAzulSyncStage = 'setup';
 
       try {
         const tenant = await deps.tenants.findById(input.tenantId);
@@ -408,6 +426,7 @@ export function createContaAzulManualSyncEngine(deps: {
           financial: deps.financial,
           apiClient: deps.apiClient,
         });
+        stage = 'categories';
         processed.categories = await financialCategoryCatalogSync.syncCatalog({
           scope: scopeOf(),
           requestWithAuth,
@@ -421,6 +440,7 @@ export function createContaAzulManualSyncEngine(deps: {
           financial: deps.financial,
           apiClient: deps.apiClient,
         });
+        stage = 'financial_accounts';
         processed.financialAccounts = await financialAccountCatalogSync.syncCatalog({
           scope: scopeOf(),
           requestWithAuth,
@@ -430,6 +450,7 @@ export function createContaAzulManualSyncEngine(deps: {
 
         // 08-C1: saldo-atual oficial por conta ativa (após catálogo de contas).
         // Falha de uma conta não aborta o sync nem grava zero.
+        stage = 'balances';
         const balanceCapture = await captureActiveAccountBalanceSnapshots({
           scope: scopeOf(),
           apiClient: deps.apiClient,
@@ -559,12 +580,16 @@ export function createContaAzulManualSyncEngine(deps: {
             baselineAt,
             executionStartedAt: startedAt,
           });
+          stage = 'people';
           processed.parties = await peopleWindow(peopleRange);
           await advanceCursor('PEOPLE', peopleRange.to, externalAccountId);
           // Hot sync não baixa o catálogo completo de pessoas e não inativa por ausência parcial.
 
           const hotWindow = buildHotSyncCivilWindow(startedAt);
           const dueHorizon = buildHistoricalDueHorizon(startedAt);
+          // A API recusa vencimento > 365 dias por consulta: o envelope de 7 anos
+          // vai em janelas contíguas e disjuntas, sem reduzir o horizonte.
+          const dueHorizonWindows = buildHistoricalDueWindows(startedAt);
           const hotStats = {
             duePages: 0,
             paymentPages: 0,
@@ -608,16 +633,24 @@ export function createContaAzulManualSyncEngine(deps: {
           }
 
           for (const kind of ['receivables', 'payables'] as const) {
+            stage = kind === 'receivables' ? 'hot_receivables_due' : 'hot_payables_due';
             const due = await collectHotSearch(kind, {
               dataVencimentoDe: hotWindow.from,
               dataVencimentoAte: hotWindow.to,
             });
-            const payment = await collectHotSearch(kind, {
-              dataVencimentoDe: dueHorizon.from,
-              dataVencimentoAte: dueHorizon.to,
-              dataPagamentoDe: hotWindow.from,
-              dataPagamentoAte: hotWindow.to,
-            });
+            stage = kind === 'receivables' ? 'hot_receivables_payment' : 'hot_payables_payment';
+            const payment: { items: MappedInstallment[]; pages: number } = { items: [], pages: 0 };
+            for (const dueWindow of dueHorizonWindows) {
+              const slice = await collectHotSearch(kind, {
+                dataVencimentoDe: dueWindow.from,
+                dataVencimentoAte: dueWindow.to,
+                dataPagamentoDe: hotWindow.from,
+                dataPagamentoAte: hotWindow.to,
+              });
+              payment.items.push(...slice.items);
+              payment.pages += slice.pages;
+            }
+            stage = kind === 'receivables' ? 'hot_receivables_persist' : 'hot_payables_persist';
             hotStats.duePages += due.pages;
             hotStats.paymentPages += payment.pages;
             hotStats.dueFound += due.items.length;
@@ -714,17 +747,21 @@ export function createContaAzulManualSyncEngine(deps: {
             to: hotWindow.to,
             dueHorizonFrom: dueHorizon.from,
             dueHorizonTo: dueHorizon.to,
+            dueHorizonWindows: dueHorizonWindows.length,
             ...hotStats,
           };
         } else {
           // MANUAL/full: um único snapshot completo (substitui peopleWindow(null)).
+          stage = 'parties_full';
           processed.parties = await partyCatalogSync.syncCatalog({
             scope: scopeOf(),
             requestWithAuth,
             gatedGet,
             heartbeat,
           });
+          stage = 'receivables_full';
           processed.receivables = await installmentWindows('receivables', null);
+          stage = 'payables_full';
           processed.payables = await installmentWindows('payables', null);
         }
 
@@ -733,6 +770,7 @@ export function createContaAzulManualSyncEngine(deps: {
         // Ausência no full/incremental NÃO tombstona — só HTTP 404 explícito.
         const reusedInstallmentDetails: ReusedInstallmentDetail[] = [];
         if (deps.installmentPresenceSync) {
+          stage = 'installment_presence';
           for (const kind of ['RECEIVABLE', 'PAYABLE'] as const) {
             const presence = await deps.installmentPresenceSync.maintainPresence({
               scope: scopeOf(),
@@ -752,6 +790,7 @@ export function createContaAzulManualSyncEngine(deps: {
         }
 
         if (deps.costCenterSync) {
+          stage = 'cost_centers';
           processed.costCenters = await deps.costCenterSync.syncCatalog({
             scope: scopeOf(),
             requestWithAuth,
@@ -778,6 +817,7 @@ export function createContaAzulManualSyncEngine(deps: {
         }
 
         if (deps.ledgerSync) {
+          stage = 'ledger';
           const firstWindow = dueWindows[0];
           const lastWindow = dueWindows[dueWindows.length - 1];
           const ledgerResult = await deps.ledgerSync.sync({
@@ -805,6 +845,7 @@ export function createContaAzulManualSyncEngine(deps: {
         // Depois do ledger para que ghosts tipados já existam quando applyMatches roda.
         // Falha propaga como as demais etapas (não engolir).
         if (deps.transferSync) {
+          stage = 'transfers';
           const transferWindow =
             incremental && hotLog && typeof hotLog.from === 'string' && typeof hotLog.to === 'string'
               ? {
@@ -884,6 +925,7 @@ export function createContaAzulManualSyncEngine(deps: {
           );
         }
 
+        stage = 'finalize';
         const finalCounts: ContaAzulSyncCounts = { ...processed };
         await deps.syncRuns.markSuccess({
           id: runId,
@@ -894,6 +936,19 @@ export function createContaAzulManualSyncEngine(deps: {
         await runAfterSyncSuccess(input.tenantId, deps.onSyncSucceeded);
       } catch (error) {
         const mapped = mapUpstreamError(error);
+        process.stdout.write(
+          `${JSON.stringify(
+            buildSyncFailureDiagnostic({
+              syncRunId: runId,
+              tenantId: input.tenantId,
+              integrationId: input.integrationId,
+              trigger: triggerType,
+              stage,
+              errorCode: mapped.code,
+              error,
+            }),
+          )}\n`,
+        );
         if (hotLog) {
           process.stdout.write(
             `${JSON.stringify({

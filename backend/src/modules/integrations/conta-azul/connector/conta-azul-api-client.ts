@@ -24,6 +24,10 @@ export class ContaAzulApiError extends Error {
   readonly kind: ContaAzulApiFailureKind;
   readonly httpStatus?: number;
   readonly retryAfterMs?: number;
+  /** Path chamado, sem query string e com identificadores mascarados. */
+  readonly endpoint?: string;
+  /** Código de erro da origem já sanitizado (token curto ou motivo conhecido). */
+  readonly upstreamCode?: string;
 
   constructor(
     kind: ContaAzulApiFailureKind,
@@ -32,6 +36,8 @@ export class ContaAzulApiError extends Error {
       readonly httpStatus?: number;
       readonly retryAfterMs?: number;
       readonly cause?: unknown;
+      readonly endpoint?: string;
+      readonly upstreamCode?: string;
     },
   ) {
     super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
@@ -39,7 +45,60 @@ export class ContaAzulApiError extends Error {
     this.kind = kind;
     this.httpStatus = options?.httpStatus;
     this.retryAfterMs = options?.retryAfterMs;
+    this.endpoint = options?.endpoint;
+    this.upstreamCode = options?.upstreamCode;
   }
+}
+
+const ID_SEGMENT = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d+|(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{16,})$/i;
+
+/** Path sem query string (filtros e datas) e sem identificadores de registro. */
+export function sanitizeContaAzulEndpoint(url: string): string {
+  let pathname: string;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return 'unknown';
+  }
+  return pathname
+    .split('/')
+    .map((segment) => (ID_SEGMENT.test(segment) ? ':id' : segment))
+    .join('/');
+}
+
+// Começa por letra/underscore: descarta documento, telefone ou valor só numérico.
+const UPSTREAM_CODE_TOKEN = /^[A-Za-z_][A-Za-z0-9_.:-]{0,63}$/;
+const KNOWN_UPSTREAM_REASONS: ReadonlyArray<{ readonly pattern: RegExp; readonly code: string }> = [
+  { pattern: /intervalo de data de vencimento excede/i, code: 'due_date_range_exceeded' },
+];
+
+/**
+ * Extrai um código de erro seguro do corpo de erro da origem.
+ * Só devolve tokens curtos sem espaço ou um motivo conhecido mapeado;
+ * nunca a mensagem livre (pode conter nome, documento ou valor).
+ */
+export function sanitizeContaAzulUpstreamCode(body: unknown): string | undefined {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return undefined;
+  }
+  const record = body as Record<string, unknown>;
+  for (const key of ['code', 'codigo', 'error_code', 'errorCode', 'error']) {
+    const value = record[key];
+    if (typeof value === 'string' && UPSTREAM_CODE_TOKEN.test(value)) {
+      return value;
+    }
+  }
+  for (const key of ['error', 'message', 'mensagem']) {
+    const value = record[key];
+    if (typeof value !== 'string') {
+      continue;
+    }
+    const known = KNOWN_UPSTREAM_REASONS.find((reason) => reason.pattern.test(value));
+    if (known) {
+      return known.code;
+    }
+  }
+  return undefined;
 }
 
 export type ContaAzulPageQuery = {
@@ -139,6 +198,7 @@ async function getJsonOnce(
   const timeoutMs = config.timeoutMs ?? CONTA_AZUL_HTTP_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const endpoint = sanitizeContaAzulEndpoint(url);
 
   let response: Response;
   try {
@@ -152,10 +212,11 @@ async function getJsonOnce(
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new ContaAzulApiError('timeout', 'A Conta Azul não respondeu a tempo.');
+      throw new ContaAzulApiError('timeout', 'A Conta Azul não respondeu a tempo.', { endpoint });
     }
     throw new ContaAzulApiError('unavailable', 'Não foi possível falar com a Conta Azul.', {
       cause: error,
+      endpoint,
     });
   } finally {
     clearTimeout(timer);
@@ -170,7 +231,7 @@ async function getJsonOnce(
       throw new ContaAzulApiError(
         'invalid_response',
         'A Conta Azul retornou uma resposta inválida.',
-        { httpStatus: response.status },
+        { httpStatus: response.status, endpoint },
       );
     }
   }
@@ -178,6 +239,7 @@ async function getJsonOnce(
   if (response.status === 401) {
     throw new ContaAzulApiError('unauthorized', 'A autorização da Conta Azul foi recusada.', {
       httpStatus: 401,
+      endpoint,
     });
   }
   if (response.status === 429) {
@@ -187,6 +249,7 @@ async function getJsonOnce(
       {
         httpStatus: 429,
         retryAfterMs: parseRetryAfterMs(response.headers.get('Retry-After')),
+        endpoint,
       },
     );
   }
@@ -194,9 +257,18 @@ async function getJsonOnce(
     return { kind: 'not_found' } satisfies ContaAzulSettlementLookup;
   }
   if (!response.ok) {
-    throw new ContaAzulApiError('unavailable', 'A Conta Azul está temporariamente indisponível.', {
-      httpStatus: response.status,
-    });
+    const rejected = response.status < 500;
+    throw new ContaAzulApiError(
+      'unavailable',
+      rejected
+        ? 'A Conta Azul recusou a consulta.'
+        : 'A Conta Azul está temporariamente indisponível.',
+      {
+        httpStatus: response.status,
+        endpoint,
+        upstreamCode: sanitizeContaAzulUpstreamCode(json),
+      },
+    );
   }
 
   if (options?.notFoundAsLookup === true) {

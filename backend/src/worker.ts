@@ -212,7 +212,7 @@ worker.on('failed', (job, error) => {
       errorCode:
         error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
           ? error.code
-          : 'sync_upstream_unavailable',
+          : 'sync_internal_error',
     });
   }
 });

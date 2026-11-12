@@ -241,6 +241,20 @@ aprovada 19/08/2026; não bloqueia Fases 8, 9 ou 10).
 - 401 durante sync: um `forceRefresh` + retry; segundo 401 → run FAILED e
   Integration ERROR `identity_unauthorized`. Cobertura automatizada; não
   forçada na conta real.
+- Backoff após falha (S2, 12/11/2026): além de `lastSuccessfulSyncAt +
+  intervalo`, a integração só volta a ser elegível em
+  `última falha + min(intervalo × 2^(N-1), max(intervalo, 2h))`, onde N =
+  runs FAILED iniciados depois do último sucesso. Skip reason `backoff`
+  (log com `consecutiveFailures` e `nextAttemptAt`). Derivado de `sync_runs`,
+  sem coluna nova; sucesso zera N. Não desativa integração nem exige reconexão.
+- Erros de sync (S2): HTTP 4xx (exceto 401/429) → `sync_upstream_rejected`;
+  5xx → `sync_upstream_unavailable`; sem resposta HTTP → `sync_network_error`;
+  erro fora do engine (job stalled, lock) → `sync_internal_error`. Códigos
+  históricos permanecem válidos. Cada falha registra
+  `conta_azul_sync_failure_diagnostic` (runId, etapa, status HTTP, path sem
+  query com ids mascarados, código sanitizado da origem); sem token,
+  header, query string, mensagem livre ou payload.
+- Recuperação pós-deploy da S2 (incidente de 12/11/2026): ver roteiro abaixo.
 - Deletes: ausência ≠ remoção física. Sem tombstone. Limitação conhecida.
 - UI: card existente; frequência somente leitura; sem próxima execução;
   sem histórico. DTO: `autoSyncEligible`, `autoSyncIntervalMinutes`.
@@ -249,4 +263,33 @@ Observação de homologação (não é produção): a segunda `SCHEDULED` real
 simulou due avançando o relógio da avaliação do planner.
 `SyncRun.startedAt` refletiu esse relógio; engine/cursor/`finishedAt`
 usaram wall-clock. Produção usa `Date` real.
+
+### Roteiro de recuperação pós-deploy S2 (limite de 365 dias)
+
+Contexto: em 12/11/2026 a Conta Azul passou a recusar vencimento > 365 dias;
+cada integração acumulou centenas de runs FAILED desde o último sucesso.
+
+1. Primeira tentativa automática: com N ≥ 2 falhas e intervalo 60 min, o
+   planner espera `max(intervalo, 2h)` = **2 h após a última falha** (a última
+   gravada pelo worker antigo, perto do restart). Não há tentativa por minuto.
+2. Confirmar backoff (somente leitura): no journal do worker,
+   `conta_azul_auto_sync_skipped` com `reason":"backoff"`,
+   `consecutiveFailures` e `nextAttemptAt`; em `sync_runs`, nenhum run novo por
+   integração até `nextAttemptAt`.
+3. Antecipar a recuperação: o único mecanismo oficial é a sincronização
+   **manual** do card da empresa. Ela é FULL (pessoas em snapshot, AR/AP em
+   janelas de vencimento de 90 dias, transferências 5+2 em 90 dias), não o hot
+   sync; não usa o braço de pagamento afetado. Respeita o lock de run ativo
+   (índice único de PENDING/RUNNING), o tenant do runtime e upsert idempotente.
+   Sucesso grava `lastSuccessfulSyncAt` e zera o backoff; o próximo hot sync
+   ocorre em `sucesso + intervalo`. Não há gatilho incremental avulso — não
+   criar bypass, não editar cursores nem `sync_runs`.
+4. Sem tempestade: worker com concurrency 1 processa um job por vez, rate
+   limiter de 125 ms entre chamadas. Disparar a manual de **uma empresa por
+   vez**, esperar SUCCESS antes da próxima; ou simplesmente aguardar as 2 h.
+5. Critério por empresa: run SUCCESS, `lastSuccessfulSyncAt` atualizado; no
+   próximo hot sync, `conta_azul_hot_sync` com `dueHorizonWindows: 8` e
+   nenhum `conta_azul_sync_failure_diagnostic`.
+6. Acompanhar 24 h: taxa de `sync_rate_limited`, ausência de `backoff`
+   contínuo, contador de falhas do painel estável.
 

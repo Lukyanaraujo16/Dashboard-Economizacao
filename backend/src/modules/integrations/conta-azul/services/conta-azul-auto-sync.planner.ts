@@ -1,9 +1,15 @@
-import { autoSyncSpreadDelayMs } from '../domain/conta-azul-auto-sync-schedule.js';
+import {
+  autoSyncRetryNotBefore,
+  autoSyncSpreadDelayMs,
+} from '../domain/conta-azul-auto-sync-schedule.js';
 import {
   resolveAutoSyncSkipReason,
   type AutoSyncSkipReason,
 } from '../domain/conta-azul-auto-sync-eligibility.js';
-import type { ContaAzulManualSyncJobPayload } from '../domain/conta-azul-sync.js';
+import {
+  CONTA_AZUL_AUTO_SYNC_BACKOFF_MAX_MS,
+  type ContaAzulManualSyncJobPayload,
+} from '../domain/conta-azul-sync.js';
 import type { ContaAzulIntegrationRepository } from '../repositories/integration.repository.js';
 import type { ContaAzulSyncCursorRepository } from '../repositories/sync-cursor.repository.js';
 import {
@@ -17,6 +23,8 @@ export type AutoSyncLogFields = {
   readonly syncRunId?: string;
   readonly reason?: AutoSyncSkipReason | string;
   readonly errorCode?: string;
+  readonly consecutiveFailures?: number;
+  readonly nextAttemptAt?: string;
 };
 
 export type ContaAzulAutoSyncPlanner = {
@@ -34,11 +42,13 @@ export function createContaAzulAutoSyncPlanner(deps: {
     ): Promise<void>;
   };
   readonly intervalMinutes: number;
+  readonly maxBackoffMs?: number;
   readonly clock?: () => Date;
   readonly log?: (event: string, fields: AutoSyncLogFields) => void;
 }): ContaAzulAutoSyncPlanner {
   const now = deps.clock ?? (() => new Date());
   const intervalMs = deps.intervalMinutes * 60_000;
+  const maxBackoffMs = deps.maxBackoffMs ?? CONTA_AZUL_AUTO_SYNC_BACKOFF_MAX_MS;
   const log = deps.log ?? (() => undefined);
 
   return {
@@ -47,6 +57,12 @@ export function createContaAzulAutoSyncPlanner(deps: {
       for (const candidate of candidates) {
         const active = await deps.syncRuns.findActiveByIntegrationId(candidate.integrationId);
         const cursors = await deps.cursors.listByIntegrationId(candidate.integrationId);
+        const failures = candidate.lastSuccessfulSyncAt
+          ? await deps.syncRuns.summarizeFailuresSince(
+              candidate.integrationId,
+              candidate.lastSuccessfulSyncAt,
+            )
+          : { consecutiveFailures: 0, lastFailureAt: null };
         const reason = resolveAutoSyncSkipReason({
           status: candidate.status,
           tenantStatus: candidate.tenantStatus,
@@ -57,7 +73,26 @@ export function createContaAzulAutoSyncPlanner(deps: {
           intervalMs,
           hasActiveRun: Boolean(active),
           cursors,
+          consecutiveFailures: failures.consecutiveFailures,
+          lastFailureAt: failures.lastFailureAt,
+          maxBackoffMs,
         });
+        if (reason === 'backoff') {
+          const notBefore = autoSyncRetryNotBefore({
+            consecutiveFailures: failures.consecutiveFailures,
+            lastFailureAt: failures.lastFailureAt,
+            intervalMs,
+            maxBackoffMs,
+          });
+          log('conta_azul_auto_sync_skipped', {
+            tenantId: candidate.tenantId,
+            integrationId: candidate.integrationId,
+            reason,
+            consecutiveFailures: failures.consecutiveFailures,
+            ...(notBefore ? { nextAttemptAt: notBefore.toISOString() } : {}),
+          });
+          continue;
+        }
         if (reason) {
           log('conta_azul_auto_sync_skipped', {
             tenantId: candidate.tenantId,

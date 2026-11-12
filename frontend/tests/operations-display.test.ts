@@ -52,3 +52,12 @@ describe('apresentação operacional', () => {
     });
   });
 });
+
+describe('rótulos de falha de sincronização (S2)', () => {
+  it('recusa da origem, rede e erro interno não aparecem como indisponibilidade', () => {
+    expect(syncErrorLabel('sync_upstream_rejected')).toBe('Consulta recusada pela origem');
+    expect(syncErrorLabel('sync_network_error')).toBe('Falha de comunicação com a origem');
+    expect(syncErrorLabel('sync_internal_error')).toBe('Erro interno na sincronização');
+    expect(syncErrorLabel('sync_upstream_unavailable')).toBe('Serviço de origem indisponível');
+  });
+});

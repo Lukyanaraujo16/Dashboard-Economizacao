@@ -469,6 +469,16 @@ alteração (API real aceitou a combinação; sem fallback silencioso
 `data_alteracao`. Ausência de registro não é delete (sem tombstone) —
 limitação conhecida. Nenhuma operação de escrita no ERP.
 
+**Limite de intervalo de vencimento (observado em produção, 12/11/2026).**
+`contas-a-receber/buscar` e `contas-a-pagar/buscar` passaram a responder
+HTTP 400 `{"error":"O intervalo de data de vencimento excede o limite máximo
+permitido de 365 dias. ..."}` quando `data_vencimento_de..ate` excede 365 dias.
+Toda consulta de vencimento usa no máximo 365 dias civis inclusivos
+(`CONTA_AZUL_MAX_DUE_RANGE_DAYS`). O braço de pagamento do hot sync e a
+descoberta de pagamentos do ledger fatiam o horizonte 5+2 em janelas
+contíguas e disjuntas (`splitCivilDateRange` / `buildHistoricalDueWindows`);
+o horizonte não foi reduzido.
+
 Carga real homologada (duas SUCCESS, mesma identidade): categorias 48,
 contas 1, pessoas 0, a receber 12, a pagar 1266; duração ~33 s.
 Horizonte 5+2 classificado operacionalmente como **adequado** (sem alteração

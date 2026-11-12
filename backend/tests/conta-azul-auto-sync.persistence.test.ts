@@ -11,6 +11,7 @@ import { createContaAzulSyncCursorRepository } from '../src/modules/integrations
 import { createContaAzulSyncRunRepository } from '../src/modules/integrations/conta-azul/repositories/sync-run.repository.js';
 import {
   buildHistoricalDueHorizon,
+  buildHistoricalDueWindows,
   buildHotSyncCivilWindow,
 } from '../src/modules/integrations/conta-azul/domain/conta-azul-hot-sync.js';
 import { createContaAzulRateLimiter } from '../src/modules/integrations/conta-azul/services/conta-azul-rate-limiter.js';
@@ -183,18 +184,24 @@ describe('Cursors e engine incremental', () => {
     });
     const hot = buildHotSyncCivilWindow(STARTED);
     const horizon = buildHistoricalDueHorizon(STARTED);
-    expect(captured.receivableQueries).toHaveLength(2);
-    expect(captured.payableQueries).toHaveLength(2);
+    const dueWindows = buildHistoricalDueWindows(STARTED);
+    expect(captured.receivableQueries).toHaveLength(1 + dueWindows.length);
+    expect(captured.payableQueries).toHaveLength(1 + dueWindows.length);
     expect(captured.receivableQueries[0]).toMatchObject({
       dataVencimentoDe: hot.from,
       dataVencimentoAte: hot.to,
     });
-    expect(captured.receivableQueries[1]).toMatchObject({
-      dataVencimentoDe: horizon.from,
-      dataVencimentoAte: horizon.to,
-      dataPagamentoDe: hot.from,
-      dataPagamentoAte: hot.to,
-    });
+    // Braço de pagamento: horizonte 5+2 inteiro, em janelas ≤ 365 dias (S2).
+    for (const [index, window] of dueWindows.entries()) {
+      expect(captured.receivableQueries[1 + index]).toMatchObject({
+        dataVencimentoDe: window.from,
+        dataVencimentoAte: window.to,
+        dataPagamentoDe: hot.from,
+        dataPagamentoAte: hot.to,
+      });
+    }
+    expect(captured.receivableQueries[1]?.dataVencimentoDe).toBe(horizon.from);
+    expect(captured.receivableQueries.at(-1)?.dataVencimentoAte).toBe(horizon.to);
     expect(captured.payableQueries[0]).toMatchObject({
       dataVencimentoDe: hot.from,
       dataVencimentoAte: hot.to,

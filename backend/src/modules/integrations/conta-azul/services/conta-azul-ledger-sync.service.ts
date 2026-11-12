@@ -4,7 +4,7 @@ import {
   LIFECYCLE_PROBE_OCCURRED_ON_LOOKBACK_DAYS,
   MAX_LIFECYCLE_PROBE_CANDIDATES_PER_SYNC,
 } from '../domain/conta-azul-ledger.js';
-import { addUtcDays, utcCivilDate } from '../domain/conta-azul-dates.js';
+import { addUtcDays, splitCivilDateRange, utcCivilDate } from '../domain/conta-azul-dates.js';
 import { ContaAzulMappingError } from '../domain/conta-azul-mapping.js';
 import {
   extractSearchInstallmentIds,
@@ -16,7 +16,7 @@ import {
   emptyLedgerLifecycleCounters,
   type LedgerLifecycleCounters,
 } from '../domain/conta-azul-ledger-lifecycle.js';
-import { CONTA_AZUL_SYNC_PAGE_SIZE } from '../domain/conta-azul-sync.js';
+import { CONTA_AZUL_MAX_DUE_RANGE_DAYS, CONTA_AZUL_SYNC_PAGE_SIZE } from '../domain/conta-azul-sync.js';
 import type { FinancialSyncScope } from '../repositories/financial.repository.js';
 import {
   reconcileInstallmentLedger,
@@ -104,27 +104,36 @@ export function createContaAzulLedgerSyncService(deps: {
         ? deps.apiClient.searchReceivables.bind(deps.apiClient)
         : deps.apiClient.searchPayables.bind(deps.apiClient);
     const ids: string[] = [];
-    let pagina = 1;
-    for (;;) {
-      const payload = await input.requestWithAuth((accessToken) =>
-        input.gatedGet(() =>
-          search(accessToken, {
-            pagina,
-            dataVencimentoDe: input.dueHorizon.de,
-            dataVencimentoAte: input.dueHorizon.ate,
-            dataPagamentoDe: input.window.de,
-            dataPagamentoAte: input.window.ate,
-          }),
-        ),
-      );
-      const pageIds = extractSearchInstallmentIds(payload);
-      ids.push(...pageIds);
-      await input.heartbeat();
-      if (pageIds.length === 0 || pageIds.length < CONTA_AZUL_SYNC_PAGE_SIZE) {
-        return ids;
+    // A API recusa vencimento > 365 dias por consulta: fatia o horizonte sem reduzi-lo.
+    const dueWindows = splitCivilDateRange(
+      input.dueHorizon.de,
+      input.dueHorizon.ate,
+      CONTA_AZUL_MAX_DUE_RANGE_DAYS,
+    );
+    for (const dueWindow of dueWindows) {
+      let pagina = 1;
+      for (;;) {
+        const payload = await input.requestWithAuth((accessToken) =>
+          input.gatedGet(() =>
+            search(accessToken, {
+              pagina,
+              dataVencimentoDe: dueWindow.from,
+              dataVencimentoAte: dueWindow.to,
+              dataPagamentoDe: input.window.de,
+              dataPagamentoAte: input.window.ate,
+            }),
+          ),
+        );
+        const pageIds = extractSearchInstallmentIds(payload);
+        ids.push(...pageIds);
+        await input.heartbeat();
+        if (pageIds.length === 0 || pageIds.length < CONTA_AZUL_SYNC_PAGE_SIZE) {
+          break;
+        }
+        pagina += 1;
       }
-      pagina += 1;
     }
+    return ids;
   }
 
   return {

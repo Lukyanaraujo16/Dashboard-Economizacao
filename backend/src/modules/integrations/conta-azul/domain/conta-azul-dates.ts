@@ -149,6 +149,32 @@ export type DueDateWindow = {
   readonly to: string;
 };
 
+/**
+ * Fatia o intervalo civil inclusivo [from, to] (YYYY-MM-DD) em janelas contíguas,
+ * sem lacuna nem sobreposição, cada uma com no máximo `maxDays` dias civis inclusivos.
+ * A união das janelas é exatamente [from, to]. `from > to` devolve lista vazia.
+ */
+export function splitCivilDateRange(
+  from: string,
+  to: string,
+  maxDays: number,
+): DueDateWindow[] {
+  if (!Number.isInteger(maxDays) || maxDays < 1) {
+    throw new ContaAzulDateError('Tamanho máximo de janela inválido.');
+  }
+  const start = parseCivilDate(from, 'from');
+  const end = parseCivilDate(to, 'to');
+  const windows: DueDateWindow[] = [];
+  let cursor = start;
+  while (cursor.getTime() <= end.getTime()) {
+    const candidate = addUtcDays(cursor, maxDays - 1);
+    const windowEnd = candidate.getTime() > end.getTime() ? end : candidate;
+    windows.push({ from: formatCivilDate(cursor), to: formatCivilDate(windowEnd) });
+    cursor = addUtcDays(windowEnd, 1);
+  }
+  return windows;
+}
+
 export function buildDueDateWindows(
   now: Date,
   options: {

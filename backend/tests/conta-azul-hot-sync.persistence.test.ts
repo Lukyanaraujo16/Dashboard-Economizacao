@@ -1,11 +1,19 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { loadEnvironment } from '../src/config/env.js';
 import { Prisma } from '../src/generated/prisma/client.js';
 import { encryptSecret } from '../src/infrastructure/crypto/secret-box.js';
 import { disconnectPrisma, getPrismaClient } from '../src/infrastructure/database/prisma.js';
-import type { ContaAzulApiClient } from '../src/modules/integrations/conta-azul/connector/conta-azul-api-client.js';
-import { buildHistoricalDueHorizon } from '../src/modules/integrations/conta-azul/domain/conta-azul-hot-sync.js';
+import {
+  ContaAzulApiError,
+  type ContaAzulApiClient,
+  type ContaAzulInstallmentSearchQuery,
+} from '../src/modules/integrations/conta-azul/connector/conta-azul-api-client.js';
+import {
+  buildHistoricalDueHorizon,
+  buildHistoricalDueWindows,
+} from '../src/modules/integrations/conta-azul/domain/conta-azul-hot-sync.js';
+import { CONTA_AZUL_MAX_DUE_RANGE_DAYS } from '../src/modules/integrations/conta-azul/domain/conta-azul-sync.js';
 import { createContaAzulCostCenterRepository } from '../src/modules/integrations/conta-azul/repositories/cost-center.repository.js';
 import { createContaAzulFinancialRepository } from '../src/modules/integrations/conta-azul/repositories/financial.repository.js';
 import { createContaAzulIntegrationRepository } from '../src/modules/integrations/conta-azul/repositories/integration.repository.js';
@@ -104,6 +112,28 @@ function baixa(installmentId: string) {
   ];
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Reproduz a validação da API (12/11/2026): vencimento acima de 365 dias → HTTP 400. */
+function assertDueRangeAccepted(query: ContaAzulInstallmentSearchQuery): void {
+  const days =
+    (Date.parse(`${query.dataVencimentoAte}T00:00:00Z`) -
+      Date.parse(`${query.dataVencimentoDe}T00:00:00Z`)) /
+      DAY_MS +
+    1;
+  if (days > CONTA_AZUL_MAX_DUE_RANGE_DAYS) {
+    throw new ContaAzulApiError('unavailable', 'A Conta Azul recusou a consulta.', {
+      httpStatus: 400,
+      endpoint: '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar',
+      upstreamCode: 'due_date_range_exceeded',
+    });
+  }
+}
+
+function dueInQuery(query: ContaAzulInstallmentSearchQuery, due: string): boolean {
+  return query.dataVencimentoDe <= due && due <= query.dataVencimentoAte;
+}
+
 describe('Hot sync agendado', () => {
   it('une vencimento quente e pagamento com vencimento amplo, sem as 29 janelas', async () => {
     const { tenant, integration } = await seedConnected('hot-discovery', true);
@@ -190,11 +220,15 @@ describe('Hot sync agendado', () => {
       },
       getCostCenters: async () => ({ itens_totais: 0, itens: [] }),
       searchReceivables: async (_token, query) => {
+        assertDueRangeAccepted(query);
         searches.push({ kind: 'receivables', ...query });
         if (query.pagina > 1) {
           return { itens_totais: 2, itens: [] };
         }
         if (query.dataPagamentoDe) {
+          if (!dueInQuery(query, '2026-08-15')) {
+            return { itens_totais: 0, itens: [] };
+          }
           return {
             itens_totais: 1,
             itens: [
@@ -214,6 +248,7 @@ describe('Hot sync agendado', () => {
         };
       },
       searchPayables: async (_token, query) => {
+        assertDueRangeAccepted(query);
         searches.push({ kind: 'payables', ...query });
         if (query.pagina > 1 || query.dataPagamentoDe) {
           return { itens_totais: 0, itens: [] };
@@ -277,14 +312,24 @@ describe('Hot sync agendado', () => {
       dataVencimentoDe: '2026-09-01',
       dataVencimentoAte: '2026-10-31',
     });
-    expect(paymentSearches).toHaveLength(1);
+    const dueHorizonWindows = buildHistoricalDueWindows(NOW);
+    expect(paymentSearches).toHaveLength(dueHorizonWindows.length);
+    expect(
+      paymentSearches.map((query) => ({ from: query.dataVencimentoDe, to: query.dataVencimentoAte })),
+    ).toEqual(dueHorizonWindows);
     expect(paymentSearches[0]).toMatchObject({
       dataPagamentoDe: '2026-09-01',
       dataPagamentoAte: '2026-10-31',
       dataVencimentoDe: horizon.from,
+    });
+    expect(paymentSearches[paymentSearches.length - 1]).toMatchObject({
       dataVencimentoAte: horizon.to,
     });
-    expect(receivableSearches.length).toBeLessThan(10);
+    expect(receivableSearches).toHaveLength(1 + dueHorizonWindows.length);
+    const payablePaymentSearches = searches.filter(
+      (query) => query.kind === 'payables' && query.dataPagamentoDe === '2026-09-01',
+    );
+    expect(payablePaymentSearches).toHaveLength(dueHorizonWindows.length);
 
     const outside = await prisma.receivable.findFirstOrThrow({
       where: { integrationId: integration.id, externalId: 'r-outside' },
@@ -359,6 +404,160 @@ describe('Hot sync agendado', () => {
       integrationId: integration.id,
     });
     expect(details.length).toBeGreaterThan(0);
+  });
+
+  describe('S2 — horizonte de pagamento fatiado em janelas de até 365 dias', () => {
+    function baseClient(overrides: Partial<ContaAzulApiClient>): ContaAzulApiClient {
+      return {
+        getConnectedCompany: async () => ({}),
+        getCategories: async () => ({ itens_totais: 0, itens: [] }),
+        getFinancialAccounts: async () => ({ itens_totais: 0, itens: [] }),
+        getFinancialAccountCurrentBalance: async () => ({ saldo_atual: 0 }),
+        getPeople: async () => ({ itens_totais: 0, itens: [] }),
+        getCostCenters: async () => ({ itens_totais: 0, itens: [] }),
+        searchReceivables: async () => ({ itens_totais: 0, itens: [] }),
+        searchPayables: async () => ({ itens_totais: 0, itens: [] }),
+        getInstallmentDetail: async (_token, id) => ({ id, evento: { rateio: [] } }),
+        getInstallmentSettlements: async () => [],
+        getSettlementById: async () => ({ kind: 'not_found' as const }),
+        searchTransfers: async () => ({ itens_totais: 0, itens: [] }),
+        ...overrides,
+      };
+    }
+
+    async function runScheduled(name: string, client: ContaAzulApiClient) {
+      const { tenant, integration } = await seedConnected(name, true);
+      const run = await syncRuns.createPending({
+        tenantId: tenant.id,
+        integrationId: integration.id,
+        startedAt: NOW,
+        triggerType: 'SCHEDULED',
+      });
+      const execution = createContaAzulManualSyncEngine({
+        tenants,
+        integrations,
+        syncRuns,
+        financial,
+        apiClient: client,
+        getValidAccessToken: async () => 'access-token-secreto',
+        rateLimiter: createContaAzulRateLimiter(0, async () => undefined),
+        clock: () => NOW,
+      }).execute({ syncRunId: run.id, tenantId: tenant.id, integrationId: integration.id });
+      return { tenant, integration, run, execution };
+    }
+
+    it('fronteiras inclusivas: sem lacuna, sem duplicidade, com paginação por janela e dedupe entre braços', async () => {
+      const windows = buildHistoricalDueWindows(NOW);
+      const boundaryEnd = windows[2]!.to;
+      const boundaryStart = windows[3]!.from;
+      const paged = windows[5]!;
+      const payablesPaymentWindows: string[] = [];
+      const pagesByWindow = new Map<string, number[]>();
+      const receivablesInPaymentArm = [
+        installment({ id: 'r-edge-end', due: boundaryEnd, paid: '10.00' }),
+        installment({ id: 'r-edge-start', due: boundaryStart, paid: '10.00' }),
+        installment({ id: 'r-first-day', due: windows[0]!.from, paid: '10.00' }),
+        installment({ id: 'r-last-day', due: windows[windows.length - 1]!.to, paid: '10.00' }),
+        ...Array.from({ length: 101 }, (_, index) =>
+          installment({ id: `r-page-${index}`, due: paged.from, paid: '10.00' }),
+        ),
+        // Também volta no braço de vencimento quente: deve virar uma linha só.
+        { ...installment({ id: 'r-both', due: '2026-10-05', paid: '10.00' }), descricao: 'versao-pagamento' },
+      ];
+      const client = baseClient({
+        searchReceivables: async (_token, query) => {
+          assertDueRangeAccepted(query);
+          if (!query.dataPagamentoDe) {
+            return query.pagina === 1
+              ? {
+                  itens_totais: 1,
+                  itens: [{ ...installment({ id: 'r-both', due: '2026-10-05' }), descricao: 'versao-vencimento' }],
+                }
+              : { itens_totais: 1, itens: [] };
+          }
+          const key = `${query.dataVencimentoDe}..${query.dataVencimentoAte}`;
+          pagesByWindow.set(key, [...(pagesByWindow.get(key) ?? []), query.pagina]);
+          const inWindow = receivablesInPaymentArm.filter((item) => dueInQuery(query, item.data_vencimento));
+          const page = inWindow.slice((query.pagina - 1) * 100, query.pagina * 100);
+          return { itens_totais: inWindow.length, itens: page };
+        },
+        searchPayables: async (_token, query) => {
+          assertDueRangeAccepted(query);
+          if (query.dataPagamentoDe) {
+            payablesPaymentWindows.push(`${query.dataVencimentoDe}..${query.dataVencimentoAte}`);
+          }
+          return { itens_totais: 0, itens: [] };
+        },
+      });
+
+      const { integration, run, execution } = await runScheduled('s2-boundaries', client);
+      await execution;
+
+      expect((await syncRuns.findById(run.id))?.status).toBe('SUCCESS');
+      const rows = await prisma.receivable.findMany({
+        where: { integrationId: integration.id },
+        select: { externalId: true, description: true },
+      });
+      const ids = rows.map((row) => row.externalId);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toEqual(
+        expect.arrayContaining(['r-edge-end', 'r-edge-start', 'r-first-day', 'r-last-day', 'r-both']),
+      );
+      expect(ids.filter((id) => id.startsWith('r-page-'))).toHaveLength(101);
+      expect(rows).toHaveLength(receivablesInPaymentArm.length);
+      expect(rows.find((row) => row.externalId === 'r-both')?.description).toBe('versao-pagamento');
+      expect(pagesByWindow.get(`${paged.from}..${paged.to}`)).toEqual([1, 2]);
+      expect(payablesPaymentWindows).toEqual(windows.map((window) => `${window.from}..${window.to}`));
+    });
+
+    it('recusa 400 da origem vira sync_upstream_rejected com diagnóstico seguro da etapa', async () => {
+      const writes: string[] = [];
+      const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+        writes.push(String(chunk));
+        return true;
+      });
+      try {
+        const client = baseClient({
+          searchReceivables: async (_token, query) => {
+            if (query.dataPagamentoDe) {
+              throw new ContaAzulApiError('unavailable', 'A Conta Azul recusou a consulta.', {
+                httpStatus: 400,
+                endpoint: '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar',
+                upstreamCode: 'due_date_range_exceeded',
+              });
+            }
+            return { itens_totais: 0, itens: [] };
+          },
+        });
+        const { tenant, integration, run, execution } = await runScheduled('s2-rejected', client);
+        await expect(execution).rejects.toMatchObject({ code: 'sync_upstream_rejected' });
+
+        const stored = await syncRuns.findById(run.id);
+        expect(stored).toMatchObject({ status: 'FAILED', errorCode: 'sync_upstream_rejected' });
+        const lines = writes
+          .flatMap((chunk) => chunk.split('\n'))
+          .filter((line) => line.includes('conta_azul_sync_failure_diagnostic'));
+        expect(lines).toHaveLength(1);
+        expect(JSON.parse(lines[0]!)).toEqual({
+          event: 'conta_azul_sync_failure_diagnostic',
+          syncRunId: run.id,
+          tenantId: tenant.id,
+          integrationId: integration.id,
+          trigger: 'SCHEDULED',
+          stage: 'hot_receivables_payment',
+          errorCode: 'sync_upstream_rejected',
+          failureKind: 'unavailable',
+          httpStatus: 400,
+          endpoint: '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar',
+          upstreamCode: 'due_date_range_exceeded',
+        });
+        expect(lines[0]).not.toMatch(/access-token-secreto|Bearer|dataVencimento|data_vencimento/);
+        const integrationRow = await prisma.integration.findUniqueOrThrow({ where: { id: integration.id } });
+        expect(integrationRow.status).toBe('CONNECTED');
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   it('manual continua varrendo o horizonte amplo de vencimento', async () => {

@@ -15,14 +15,16 @@ import {
   ContaAzulSyncExecutionError,
   type ContaAzulManualSyncEngine,
 } from '../../modules/integrations/conta-azul/services/conta-azul-sync.engine.js';
+import { buildSyncFailureDiagnostic } from '../../modules/integrations/conta-azul/services/conta-azul-sync-failure-diagnostic.js';
 import type { ContaAzulSyncRunRepository } from '../../modules/integrations/conta-azul/repositories/sync-run.repository.js';
 import { bullmqPrefix, type BullmqRedisOptions } from './bullmq-connection.js';
 
-function failedCode(error: unknown): ContaAzulSyncErrorCode {
+export function failedCode(error: unknown): ContaAzulSyncErrorCode {
   if (error instanceof ContaAzulSyncExecutionError) {
     return error.code;
   }
-  return 'sync_upstream_unavailable';
+  // Erro fora do engine (job stalled, lock perdido, bug): não é falha da origem.
+  return 'sync_internal_error';
 }
 
 function diagnosticFromError(error: unknown): ContaAzulPayloadDiagnostic | undefined {
@@ -81,10 +83,13 @@ export function createContaAzulManualSyncWorker(input: {
   readonly stalledIntervalMs?: number;
   readonly maxStalledCount?: number;
   readonly logInvalidPayload?: (line: string) => void;
+  readonly logDiagnostic?: (line: string) => void;
 }): Worker<ContaAzulManualSyncJobPayload> {
   const now = input.clock ?? (() => new Date());
   const logInvalidPayload =
     input.logInvalidPayload ?? ((line: string) => process.stdout.write(`${line}\n`));
+  const logDiagnostic =
+    input.logDiagnostic ?? ((line: string) => process.stdout.write(`${line}\n`));
   const worker = new Worker<ContaAzulManualSyncJobPayload>(
     CONTA_AZUL_MANUAL_SYNC_JOB_NAME,
     async (job) => {
@@ -122,9 +127,27 @@ export function createContaAzulManualSyncWorker(input: {
     if (typeof syncRunId !== 'string') {
       return;
     }
+    const errorCode = failedCode(error);
+    if (!(error instanceof ContaAzulSyncExecutionError)) {
+      // O engine já registra o diagnóstico das falhas que ele mapeia.
+      logDiagnostic(
+        JSON.stringify(
+          buildSyncFailureDiagnostic({
+            syncRunId,
+            tenantId: typeof payload?.tenantId === 'string' ? payload.tenantId : 'unknown',
+            integrationId:
+              typeof payload?.integrationId === 'string' ? payload.integrationId : 'unknown',
+            trigger: typeof payload?.trigger === 'string' ? payload.trigger : null,
+            stage: 'worker',
+            errorCode,
+            error,
+          }),
+        ),
+      );
+    }
     void input.syncRuns.markFailed({
       id: syncRunId,
-      errorCode: failedCode(error),
+      errorCode,
       at: now(),
     });
   });

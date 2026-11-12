@@ -608,3 +608,48 @@ describe('Correção 10-C — candidatos multi-ACTIVE no incremental', () => {
     expect(second.lifecycle.deleted).toBe(0);
   });
 });
+
+describe('S2 — descoberta de pagamentos do ledger respeita 365 dias de vencimento', () => {
+  it('fatia o horizonte de vencimento sem lacuna e pagina cada janela', async () => {
+    const { tenant, integration } = await seedConnected('s2-ledger-discovery');
+    const base = createMockContaAzulApiClient();
+    const queries: Array<{ de: string; ate: string; pagina: number }> = [];
+    const client: ContaAzulApiClient = {
+      ...base,
+      searchReceivables: async (_token, query) => {
+        const days =
+          (Date.parse(`${query.dataVencimentoAte}T00:00:00Z`) -
+            Date.parse(`${query.dataVencimentoDe}T00:00:00Z`)) /
+            86_400_000 +
+          1;
+        if (days > 365) {
+          throw new ContaAzulApiError('unavailable', 'A Conta Azul recusou a consulta.', {
+            httpStatus: 400,
+          });
+        }
+        expect(query.dataPagamentoDe).toBe('2026-10-01');
+        expect(query.dataPagamentoAte).toBe('2026-11-30');
+        queries.push({ de: query.dataVencimentoDe, ate: query.dataVencimentoAte, pagina: query.pagina });
+        return { itens_totais: 0, itens: [] };
+      },
+      searchPayables: async () => ({ itens_totais: 0, itens: [] }),
+    };
+    await createContaAzulLedgerSyncService({ prisma, ledger, apiClient: client }).sync({
+      scope: { tenantId: tenant.id, integrationId: integration.id, syncedAt: new Date() },
+      mode: 'incremental',
+      changedInstallments: [],
+      paymentDiscoveryWindow: { de: '2026-10-01', ate: '2026-11-30' },
+      dueHorizon: { de: '2021-11-12', ate: '2028-11-12' },
+      requestWithAuth: async (work) => work('token'),
+      gatedGet: async (work) => work(),
+      heartbeat: async () => undefined,
+    });
+    expect(queries.length).toBe(8);
+    expect(queries[0]).toEqual({ de: '2021-11-12', ate: '2022-11-11', pagina: 1 });
+    expect(queries.at(-1)?.ate).toBe('2028-11-12');
+    for (let index = 1; index < queries.length; index += 1) {
+      const previousEnd = Date.parse(`${queries[index - 1]!.ate}T00:00:00Z`);
+      expect(Date.parse(`${queries[index]!.de}T00:00:00Z`)).toBe(previousEnd + 86_400_000);
+    }
+  });
+});

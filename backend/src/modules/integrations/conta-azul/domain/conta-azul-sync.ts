@@ -42,6 +42,14 @@ export const CONTA_AZUL_CATEGORIES_ONLY_CHILDREN = false;
 export const CONTA_AZUL_SYNC_WINDOW_DAYS = 90;
 
 /**
+ * Teto de dias civis por consulta de data_vencimento em contas-a-receber/buscar e
+ * contas-a-pagar/buscar. Desde 12/11/2026 a API responde HTTP 400 ("O intervalo de data
+ * de vencimento excede o limite máximo permitido de 365 dias") acima disso.
+ * Janelas inclusivas de 365 dias civis (ate - de = 364) cabem em qualquer leitura do limite.
+ */
+export const CONTA_AZUL_MAX_DUE_RANGE_DAYS = 365;
+
+/**
  * Horizonte MVP default configurável:
  * 5 anos anteriores + 2 anos futuros.
  * Não é regra rígida de domínio; ajustável só por constante, não por UI.
@@ -71,10 +79,19 @@ export const CONTA_AZUL_SYNC_JOB_TIMEOUT_MS = 30 * 60 * 1000;
 /** Evita write storm de heartbeat em páginas curtas. */
 export const CONTA_AZUL_SYNC_HEARTBEAT_MIN_INTERVAL_MS = 5_000;
 
+/**
+ * Teto do backoff automático após falhas consecutivas. O efetivo é
+ * max(intervalo configurado, este teto): nunca tenta com mais frequência que o intervalo.
+ */
+export const CONTA_AZUL_AUTO_SYNC_BACKOFF_MAX_MS = 2 * 60 * 60 * 1000;
+
 export type ContaAzulSyncErrorCode =
   | 'sync_unauthorized'
   | 'sync_rate_limited'
   | 'sync_upstream_unavailable'
+  | 'sync_upstream_rejected'
+  | 'sync_network_error'
+  | 'sync_internal_error'
   | 'sync_invalid_payload'
   | 'sync_persistence_failed'
   | 'sync_tenant_disabled'
@@ -207,6 +224,9 @@ export function isContaAzulSyncErrorCode(value: string | null): value is ContaAz
     value === 'sync_unauthorized' ||
     value === 'sync_rate_limited' ||
     value === 'sync_upstream_unavailable' ||
+    value === 'sync_upstream_rejected' ||
+    value === 'sync_network_error' ||
+    value === 'sync_internal_error' ||
     value === 'sync_invalid_payload' ||
     value === 'sync_persistence_failed' ||
     value === 'sync_tenant_disabled' ||
