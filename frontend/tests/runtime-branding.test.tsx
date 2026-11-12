@@ -11,6 +11,7 @@ import { BrandingCurrentRequestError } from '../src/services/branding/current.ty
 import type { CurrentBranding } from '../src/services/branding/current.types';
 import type { logout } from '../src/services/auth/logout';
 import { lightColorTokens, RuntimeThemeProvider, useRuntimeTheme, useTheme } from '../src/theme';
+import { useAuth } from '../src/auth';
 import { runtimeBrandingSessionKey } from '../src/theme/provider/runtime-theme-provider';
 import {
   createAuthenticatedGetCurrentUser,
@@ -200,8 +201,11 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
     expect(screen.getByTestId('icon-url').textContent).toBe('/files/icon-acme');
     expect(screen.getByTestId('primary').textContent).toBe('#112233');
     const sidebarBrand = screen.getByTestId('app-sidebar-brand');
-    expect(sidebarBrand.querySelector('img')?.getAttribute('src')).toBe('/files/icon-acme');
+    expect(
+      within(sidebarBrand).getByRole('img', { name: 'Economização' }).getAttribute('src'),
+    ).toBe('/brand/economizacao-logo-480.webp');
     expect(sidebarBrand.querySelector('img[src="/files/logo-acme"]')).toBeNull();
+    expect(sidebarBrand.querySelector('img[src="/files/icon-acme"]')).toBeNull();
     expect(within(sidebarBrand).getByText('Acme Runtime')).toBeTruthy();
     expect(document.title).toBe('Acme Runtime');
     expect(
@@ -253,9 +257,11 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
     expect(screen.getByTestId('primary').textContent).toBe(lightColorTokens.primary);
     expect(screen.getByTestId('logo-url').textContent).toBe('null');
     expect(screen.getByTestId('icon-url').textContent).toBe('null');
-    expect(within(screen.getByTestId('app-sidebar-brand')).getByText('Empresa Sem Branding')).toBeTruthy();
     expect(
-      screen.getByTestId('app-sidebar-brand').querySelector('[data-brand-placeholder="true"]'),
+      within(screen.getByTestId('app-sidebar-brand')).getByText('Empresa Sem Branding'),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByTestId('app-sidebar-brand')).getByRole('img', { name: 'Economização' }),
     ).toBeTruthy();
   });
 
@@ -369,7 +375,9 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
     await waitFor(() => {
       expect(screen.getByTestId('brand-name').textContent).toBe('null');
     });
-    expect(screen.getByText('Economização')).toBeTruthy();
+    expect(
+      within(screen.getByTestId('app-sidebar-brand')).getByRole('img', { name: 'Economização' }),
+    ).toBeTruthy();
     expect(logoutAction).not.toHaveBeenCalled();
     expect(replaceMock).not.toHaveBeenCalledWith('/login');
   });
@@ -439,5 +447,175 @@ describe('Runtime branding pós-login (1.3F / 1.5E)', () => {
 
     expect(JSON.stringify(localStorage)).not.toMatch(/Acme|branding|logo-acme|112233/i);
     expect(JSON.stringify(sessionStorage)).not.toMatch(/Acme|branding|logo-acme|112233/i);
+  });
+});
+
+const COLLAPSED_KEY = 'dashboard-economizacao:sidebar';
+const ECONOMIZACAO_LOGO = '/brand/economizacao-logo-480.webp';
+
+const supportTenantA: SupportState = {
+  active: true,
+  tenantId: 'tenant-a',
+  tenantDisplayName: 'Acme',
+  startedAt: '2026-08-17T12:00:00.000Z',
+  supportSessionId: 'support-1',
+};
+
+function sidebarBrand() {
+  return screen.getByTestId('app-sidebar-brand');
+}
+
+function compactIcon() {
+  return sidebarBrand().querySelector('[data-brand-role="compact"] img');
+}
+
+function SupportSwitchProbe() {
+  const { user, applySession } = useAuth();
+  return (
+    <button type="button" onClick={() => user && applySession({ user, support: supportTenantA })}>
+      Entrar em suporte (teste)
+    </button>
+  );
+}
+
+describe('Sidebar — ícone compacto do branding em runtime', () => {
+  it('expandida mantém a logo Economização mesmo com ícone personalizado', async () => {
+    renderRuntime({ user: tenantUser, brandingAction: vi.fn().mockResolvedValue(tenantBranding) });
+
+    await waitFor(() => {
+      expect(within(sidebarBrand()).getByText('Acme Runtime')).toBeTruthy();
+    });
+    expect(compactIcon()).toBeNull();
+    expect(sidebarBrand().querySelector(`img[src="${ECONOMIZACAO_LOGO}"]`)).toBeTruthy();
+    expect(sidebarBrand().querySelector('img[src="/files/icon-acme"]')).toBeNull();
+  });
+
+  it('recolhida usa o ícone da empresa; falha de carga volta ao símbolo Economização', async () => {
+    localStorage.setItem(COLLAPSED_KEY, 'collapsed');
+    renderRuntime({ user: tenantUser, brandingAction: vi.fn().mockResolvedValue(tenantBranding) });
+
+    await waitFor(() => {
+      expect(compactIcon()?.getAttribute('src')).toBe('/files/icon-acme');
+    });
+    // Nome da empresa já é lido como texto oculto: ícone decorativo, sem nome duplicado.
+    expect(compactIcon()?.getAttribute('alt')).toBe('');
+    expect(within(sidebarBrand()).getByText('Acme Runtime')).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Expandir menu' }).getAttribute('aria-expanded'),
+    ).toBe('false');
+
+    fireEvent.error(compactIcon() as Element);
+
+    await waitFor(() => {
+      expect(compactIcon()).toBeNull();
+    });
+    expect(sidebarBrand().querySelectorAll(`img[src="${ECONOMIZACAO_LOGO}"]`)).toHaveLength(2);
+    expect(within(sidebarBrand()).getAllByRole('img', { name: 'Economização' })).toHaveLength(2);
+  });
+
+  it('empresa sem ícone usa o símbolo Economização na sidebar recolhida', async () => {
+    localStorage.setItem(COLLAPSED_KEY, 'collapsed');
+    renderRuntime({
+      user: tenantUser,
+      brandingAction: vi.fn().mockResolvedValue({ ...tenantBranding, iconUrl: null }),
+    });
+
+    await waitFor(() => {
+      expect(within(sidebarBrand()).getByText('Acme Runtime')).toBeTruthy();
+    });
+    expect(compactIcon()).toBeNull();
+    expect(sidebarBrand().querySelectorAll(`img[src="${ECONOMIZACAO_LOGO}"]`)).toHaveLength(2);
+  });
+
+  it('plataforma com ícone próprio usa esse ícone na sidebar recolhida', async () => {
+    localStorage.setItem(COLLAPSED_KEY, 'collapsed');
+    renderRuntime({ user: adminUser });
+
+    await waitFor(() => {
+      expect(compactIcon()?.getAttribute('src')).toBe('/files/icon-platform');
+    });
+    expect(sidebarBrand().querySelector('img[src="/files/logo-platform"]')).toBeNull();
+  });
+
+  it('plataforma sem ícone usa o símbolo Economização com nome acessível', async () => {
+    localStorage.setItem(COLLAPSED_KEY, 'collapsed');
+    renderRuntime({
+      user: adminUser,
+      platformBrandingAction: vi.fn().mockResolvedValue({
+        ...adminPlatformBranding,
+        name: null,
+        iconUrl: null,
+      }),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('primary').textContent).toBe('#334455');
+    });
+    expect(compactIcon()).toBeNull();
+    expect(within(sidebarBrand()).getAllByRole('img', { name: 'Economização' })).toHaveLength(2);
+  });
+
+  it('troca de admin para suporte substitui o ícone da plataforma pelo da empresa', async () => {
+    localStorage.setItem(COLLAPSED_KEY, 'collapsed');
+    const currentAction = vi.fn().mockResolvedValue(tenantBranding);
+    renderWithAuth(
+      <RuntimeThemeProvider
+        getCurrentBrandingAction={currentAction as typeof getCurrentBranding}
+        getPlatformBrandingAction={
+          vi.fn().mockResolvedValue(adminPlatformBranding) as typeof getPlatformBranding
+        }
+      >
+        <AuthenticatedLayout>
+          <AuthenticatedHomePage />
+          <SupportSwitchProbe />
+        </AuthenticatedLayout>
+      </RuntimeThemeProvider>,
+      {
+        getCurrentUserAction: createAuthenticatedGetCurrentUser(superAdminUser),
+        hydrateOnMount: true,
+      },
+    );
+
+    await waitFor(() => {
+      expect(compactIcon()?.getAttribute('src')).toBe('/files/icon-platform');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar em suporte (teste)' }));
+
+    await waitFor(() => {
+      expect(compactIcon()?.getAttribute('src')).toBe('/files/icon-acme');
+    });
+    expect(currentAction).toHaveBeenCalled();
+    expect(sidebarBrand().querySelector('img[src="/files/icon-platform"]')).toBeNull();
+    // Preferência de recolhimento sobrevive à troca de contexto.
+    expect(localStorage.getItem(COLLAPSED_KEY)).toBe('collapsed');
+    expect(screen.getByRole('button', { name: 'Expandir menu' })).toBeTruthy();
+  });
+
+  it('ícone de uma empresa não vaza para outra empresa sem ícone', async () => {
+    localStorage.setItem(COLLAPSED_KEY, 'collapsed');
+    renderRuntime({ user: tenantUser, brandingAction: vi.fn().mockResolvedValue(tenantBranding) });
+    await waitFor(() => {
+      expect(compactIcon()?.getAttribute('src')).toBe('/files/icon-acme');
+    });
+
+    cleanup();
+    renderRuntime({
+      user: { ...tenantUser, id: 'user-tenant-b', tenantId: 'tenant-b' },
+      brandingAction: vi.fn().mockResolvedValue({
+        ...tenantBranding,
+        tenantId: 'tenant-b',
+        name: 'Beta Co',
+        logoUrl: null,
+        iconUrl: null,
+      }),
+    });
+
+    await waitFor(() => {
+      expect(within(sidebarBrand()).getByText('Beta Co')).toBeTruthy();
+    });
+    expect(compactIcon()).toBeNull();
+    expect(document.querySelector('img[src="/files/icon-acme"]')).toBeNull();
+    expect(localStorage.getItem(COLLAPSED_KEY)).toBe('collapsed');
   });
 });

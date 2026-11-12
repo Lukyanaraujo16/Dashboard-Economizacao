@@ -457,7 +457,7 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     expect(JSON.stringify(sessionStorage)).not.toMatch(/token|session|jwt|refresh|userId/i);
   });
 
-  it('sidebar usa ícone compacto e não a logo principal', async () => {
+  it('sidebar usa a logo oficial da Economização e não os assets do tenant', async () => {
     const branded: CurrentBranding = {
       ...platformBranding,
       logoUrl: '/files/logo-wide',
@@ -477,13 +477,54 @@ describe('RequireSession + AppShell (1.1F-E.4)', () => {
     );
 
     await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' });
-    await waitFor(() => {
-      expect(screen.getByTestId('app-sidebar-brand').querySelector('img')?.getAttribute('src')).toBe(
-        '/files/icon-square',
-      );
-    });
     const brand = screen.getByTestId('app-sidebar-brand');
+    expect(within(brand).getByRole('img', { name: 'Economização' }).getAttribute('src')).toBe(
+      '/brand/economizacao-logo-480.webp',
+    );
     expect(brand.querySelector('img[src="/files/logo-wide"]')).toBeNull();
+    expect(brand.querySelector('img[src="/files/icon-square"]')).toBeNull();
     expect(brand.querySelector('img[src=""]')).toBeNull();
+  });
+
+  it('recolhe e expande a sidebar com tooltips e persiste a preferência', async () => {
+    renderShell({
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(),
+      hydrateOnMount: true,
+    });
+
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' });
+    const collapse = screen.getByRole('button', { name: 'Recolher menu' });
+    expect(collapse.getAttribute('aria-expanded')).toBe('true');
+    expect(collapse.getAttribute('aria-controls')).toBe('app-sidebar');
+    const navigation = screen.getByRole('navigation', { name: 'Seções' });
+    expect(within(navigation).queryAllByText('Dashboard')).toHaveLength(1);
+
+    fireEvent.click(collapse);
+
+    const expand = screen.getByRole('button', { name: 'Expandir menu' });
+    expect(expand.getAttribute('aria-expanded')).toBe('false');
+    expect(localStorage.getItem('dashboard-economizacao:sidebar')).toBe('collapsed');
+    expect(document.querySelector('[data-sidebar="collapsed"]')).toBeTruthy();
+    // Nome acessível do link continua sendo o rótulo; o tooltip é só visual.
+    const dashboardLink = within(navigation).getByRole('link', { name: 'Dashboard' });
+    expect(dashboardLink.getAttribute('aria-current')).toBe('page');
+    const tooltip = within(dashboardLink)
+      .getAllByText('Dashboard')
+      .find((el) => el.getAttribute('aria-hidden') === 'true');
+    expect(tooltip).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sair' })).toBeTruthy();
+    expect(
+      within(screen.getByTestId('app-sidebar-brand')).getAllByRole('img', { name: 'Economização' }),
+    ).toHaveLength(2);
+
+    cleanup();
+    renderShell({
+      getCurrentUserAction: createAuthenticatedGetCurrentUser(),
+      hydrateOnMount: true,
+    });
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard financeiro' });
+    fireEvent.click(screen.getByRole('button', { name: 'Expandir menu' }));
+    expect(screen.getByRole('button', { name: 'Recolher menu' })).toBeTruthy();
+    expect(localStorage.getItem('dashboard-economizacao:sidebar')).toBe('expanded');
   });
 });

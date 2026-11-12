@@ -585,8 +585,8 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
                   Logo principal
                 </Typography>
                 <Typography as="p" variant="caption" className={styles.appearanceHelp}>
-                  Usada em áreas de destaque. PNG, JPEG ou WebP · máximo 2 MB. SVG não é aceito.
-                  Não é reutilizada no menu lateral.
+                  Usada em áreas de destaque. PNG, JPEG ou WebP · máximo 2 MB. SVG não é aceito. Não
+                  é reutilizada no menu lateral.
                 </Typography>
               </div>
 
@@ -685,7 +685,7 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
                   Ícone da empresa
                 </Typography>
                 <Typography as="p" variant="caption" className={styles.appearanceHelp}>
-                  Usado em áreas compactas, como o menu lateral. PNG, JPEG ou WebP · máximo 2 MB.
+                  Usado no menu lateral recolhido. PNG, JPEG ou WebP · máximo 2 MB.
                 </Typography>
               </div>
 
@@ -716,7 +716,7 @@ export function CompanyAppearancePage({ companyId }: CompanyAppearancePageProps)
                     </Typography>
                   ) : (
                     <Typography as="p" variant="caption" className={styles.appearanceHelp}>
-                      Selecione uma imagem quadrada para o menu lateral.
+                      Selecione uma imagem quadrada para o menu lateral recolhido.
                     </Typography>
                   )}
                   <div className={styles.appearanceLogoSubmit}>

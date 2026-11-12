@@ -1,7 +1,25 @@
+/*
+ * Sidebar com a identidade da Sessão Patrimonial (painel administrativo):
+ * superfície deep/marinho e destaque dourado nos dois temas — o tema claro/escuro
+ * vale para o conteúdo principal. Valores extraídos de PanelShell/AdminNav/globals.css.
+ */
 .shell {
+  --sidebar-deep: #080f25;
+  --sidebar-navy: #141452;
+  --sidebar-gold: #f2c200;
+  --sidebar-muted: #c9c9e4;
+  --sidebar-white: #ffffff;
+  --sidebar-line: color-mix(in oklab, var(--sidebar-muted) 16%, transparent);
+  --sidebar-hover: rgb(255 255 255 / 0.05);
+  --sidebar-active: rgb(255 255 255 / 0.1);
+  --sidebar-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --sidebar-shadow: 0 30px 60px -30px color-mix(in oklab, var(--sidebar-deep) 60%, transparent);
+  --sidebar-width: 16rem;
+  --sidebar-width-collapsed: 5rem;
+
   min-height: 100svh;
   display: grid;
-  grid-template-columns: 13.75rem minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   background: var(--color-background);
   color: var(--color-text-primary);
 }
@@ -9,69 +27,128 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-5) var(--space-3) var(--space-4);
-  border-right: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
-  background: color-mix(in srgb, var(--color-background) 55%, var(--color-surface));
+  gap: 2rem;
+  padding: 1.75rem 1.25rem;
+  background: var(--sidebar-deep);
+  color: var(--sidebar-white);
+  color-scheme: dark;
+}
+
+.sidebar :focus-visible {
+  outline: 2px solid var(--sidebar-gold);
+  outline-offset: 3px;
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .sidebarBrand {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: 0.75rem;
   min-width: 0;
 }
 
-.brandMark {
-  box-sizing: border-box;
+.brandLogo {
+  display: block;
+  width: 148px;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Recorte circular da moeda: centro (439, 40), diâmetro 60 no arquivo 480×87. */
+.brandSymbol {
+  display: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+.brandSymbolImg {
+  position: absolute;
+  top: -6.67px;
+  left: -272.67px;
+  width: 320px;
+  max-width: none;
+  height: 58px;
+}
+
+.brandIcon {
+  border-radius: 0.5rem;
+}
+
+.brandIconImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.brandContext {
+  overflow: hidden;
+  color: var(--sidebar-gold);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebarToggle {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
   width: 2.25rem;
   height: 2.25rem;
-  max-width: 2.25rem;
-  max-height: 2.25rem;
-  flex-shrink: 0;
-  object-fit: contain;
-  object-position: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--sidebar-muted);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
-.brandText {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.brandName {
-  letter-spacing: -0.02em;
-}
-
-.brandTag {
-  color: var(--color-text-muted);
+.sidebarToggle:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-white);
 }
 
 .nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  flex: 1;
+  gap: 0.25rem;
 }
 
 .navItem {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--color-text-secondary);
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.875rem;
+  border-radius: 0.75rem;
+  color: var(--sidebar-muted);
+  font-size: 0.95rem;
+  font-weight: 700;
   text-decoration: none;
-  background: transparent;
-  border: 1px solid transparent;
-  font: inherit;
-  font-weight: 500;
+  white-space: nowrap;
   transition:
-    background-color var(--duration-fast) ease,
-    color var(--duration-fast) ease,
-    border-color var(--duration-fast) ease,
-    box-shadow var(--duration-fast) ease;
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
 .navItemIcon {
@@ -79,10 +156,8 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  color: var(--color-text-muted);
-  transition: color var(--duration-fast) ease;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 .navItemLabel {
@@ -90,43 +165,55 @@
 }
 
 .navItem:hover {
-  color: var(--color-text-primary);
-  background: color-mix(in srgb, var(--color-text-muted) 7%, transparent);
-}
-
-.navItem:hover .navItemIcon {
-  color: var(--color-text-secondary);
+  background: var(--sidebar-hover);
+  color: var(--sidebar-white);
 }
 
 .navItem[aria-current='page'] {
-  color: var(--color-text-primary);
-  font-weight: 600;
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  border-color: transparent;
-  box-shadow: inset 2px 0 0 var(--color-primary);
+  background: var(--sidebar-active);
+  color: var(--sidebar-white);
 }
 
 .navItem[aria-current='page'] .navItemIcon {
-  color: var(--color-primary);
+  color: var(--sidebar-gold);
 }
 
-.navItem[aria-current='page']:hover {
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+/* Tooltip do menu recolhido (somente desktop/tablet; ver media queries). */
+.tip {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  z-index: 20;
+  display: none;
+  margin-left: 0.75rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--sidebar-navy);
+  box-shadow: var(--sidebar-shadow);
+  color: var(--sidebar-white);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 150ms ease;
 }
 
-.navItem:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
+.navItem:hover .tip,
+.navItem:focus-visible .tip,
+.sidebarToggle:hover .tip,
+.sidebarToggle:focus-visible .tip,
+.logoutButton:hover .tip,
+.logoutButton:focus-visible .tip {
+  opacity: 1;
 }
 
 .sidebarFooter {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
   margin-top: auto;
-  padding-top: var(--space-4);
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--sidebar-line);
 }
 
 .userIdentity {
@@ -136,16 +223,58 @@
 .userName {
   margin: 0;
   overflow: hidden;
+  color: var(--sidebar-white);
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .userEmail {
   margin: 0.15rem 0 0;
-  color: var(--color-text-muted);
   overflow: hidden;
+  color: var(--sidebar-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.logoutButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  margin-top: 1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--sidebar-muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.logoutButton:hover {
+  color: var(--sidebar-white);
+}
+
+.logoutButton:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.logoutError {
+  margin: var(--space-2) 0 0;
+  color: color-mix(in oklab, #c7402f 55%, white);
+  font-size: 0.8125rem;
 }
 
 .workspace {
@@ -297,24 +426,6 @@
   flex-shrink: 0;
 }
 
-.logoutError {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--color-danger);
-  max-width: 14rem;
-}
-
-.logoutButton {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.logoutButton svg {
-  width: 1.125rem;
-  height: 1.125rem;
-}
-
 .main {
   display: flex;
   flex: 1 0 auto;
@@ -340,6 +451,10 @@
 }
 
 @media (min-width: 768px) {
+  .shell {
+    transition: grid-template-columns 200ms var(--sidebar-ease);
+  }
+
   .sidebar {
     position: sticky;
     top: 0;
@@ -349,21 +464,91 @@
     overflow-y: auto;
   }
 
+  .tip {
+    display: block;
+  }
+
   .main {
     padding-top: var(--space-8);
   }
 }
 
+/* Recolhida (somente ≥768px): símbolo, ícones centralizados e tooltips. */
+@media (min-width: 768px) {
+  .shell[data-sidebar='collapsed'] {
+    grid-template-columns: var(--sidebar-width-collapsed) minmax(0, 1fr);
+  }
+
+  /* Tooltips saem da coluna; recolhida não precisa de rolagem interna. */
+  .shell[data-sidebar='collapsed'] .sidebar {
+    padding-inline: 0.75rem;
+    overflow: visible;
+  }
+
+  .shell[data-sidebar='collapsed'] .sidebarHeader {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .shell[data-sidebar='collapsed'] .sidebarBrand {
+    align-items: center;
+  }
+
+  .shell[data-sidebar='collapsed'] .brandLogo {
+    display: none;
+  }
+
+  .shell[data-sidebar='collapsed'] .brandSymbol {
+    display: block;
+  }
+
+  .shell[data-sidebar='collapsed'] .navItem {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .shell[data-sidebar='collapsed'] .sidebarFooter {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .shell[data-sidebar='collapsed'] .logoutButton {
+    justify-content: center;
+    min-width: 2.75rem;
+    margin-top: 0;
+  }
+
+  .shell[data-sidebar='collapsed'] .logoutButton:hover {
+    background: var(--sidebar-hover);
+  }
+
+  .shell[data-sidebar='collapsed'] .brandContext,
+  .shell[data-sidebar='collapsed'] .navItemLabel,
+  .shell[data-sidebar='collapsed'] .userIdentity,
+  .shell[data-sidebar='collapsed'] .logoutLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
 @media (min-width: 768px) and (max-width: 1023px) {
   .shell {
-    grid-template-columns: 13.25rem minmax(0, 1fr);
+    --sidebar-width: 13.25rem;
   }
 
   .sidebar {
     padding-inline: var(--space-3);
   }
 
-  .brandTag,
   .userEmail {
     display: none;
   }
@@ -377,15 +562,20 @@
 
   .sidebar {
     min-width: 0;
-    border-right: none;
-    border-bottom: 1px solid var(--color-border);
     padding: var(--space-4);
     gap: var(--space-4);
   }
 
+  .sidebarHeader {
+    align-items: center;
+  }
+
+  .sidebarToggle {
+    display: none;
+  }
+
   .nav {
     flex-direction: row;
-    flex: 0;
     min-width: 0;
     overflow-x: auto;
   }
@@ -428,6 +618,21 @@
   }
 
   .sidebarFooter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
     margin-top: 0;
+    padding-top: var(--space-3);
+  }
+
+  .logoutButton {
+    flex-shrink: 0;
+    margin-top: 0;
+  }
+
+  .logoutError {
+    flex-basis: 100%;
   }
 }

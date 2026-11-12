@@ -9,6 +9,7 @@ import { AppSidebar } from './app-sidebar';
 import { InstitutionalFooter } from './institutional-footer';
 import styles from './app-shell.module.css';
 import { ShellBreadcrumbProvider } from './shell-breadcrumb-context';
+import { useSidebarCollapsed } from './sidebar-preference';
 import { SupportModeBanner } from './support-mode-banner';
 
 export type { ShellPageMeta, ShellSystemBarMeta, ShellBreadcrumb } from './shell-page-meta';
@@ -28,11 +29,12 @@ type AppShellProps = {
  */
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const [sidebarCollapsed, toggleSidebar] = useSidebarCollapsed();
 
   return (
     <ShellBreadcrumbProvider>
-      <div className={styles.shell}>
-        <AppSidebar />
+      <div className={styles.shell} data-sidebar={sidebarCollapsed ? 'collapsed' : 'expanded'}>
+        <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
         <div className={styles.workspace}>
           <AppHeader pathname={pathname} />
           <SupportModeBanner />

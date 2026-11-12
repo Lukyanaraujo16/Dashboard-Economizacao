@@ -19,6 +19,8 @@ import {
   LogOut,
   Monitor,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   PencilLine,
   RefreshCw,
   ScrollText,
@@ -67,6 +69,12 @@ export function IconSettings2(props: UiIconProps = {}) {
 }
 export function IconLogOut(props: UiIconProps = {}) {
   return withDefaults(LogOut, props);
+}
+export function IconPanelLeftClose(props: UiIconProps = {}) {
+  return withDefaults(PanelLeftClose, props);
+}
+export function IconPanelLeftOpen(props: UiIconProps = {}) {
+  return withDefaults(PanelLeftOpen, props);
 }
 export function IconHeadphones(props: UiIconProps = {}) {
   return withDefaults(Headphones, props);

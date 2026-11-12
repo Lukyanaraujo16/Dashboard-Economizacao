@@ -856,8 +856,8 @@ export function PlatformAppearancePage() {
                   aria-label="Confirmar remoção da logo"
                 >
                   <Typography as="p" variant="body">
-                    Remover a logo principal? A remoção só será aplicada ao salvar as
-                    alterações. Nome, cores, ícone e favicon serão mantidos.
+                    Remover a logo principal? A remoção só será aplicada ao salvar as alterações.
+                    Nome, cores, ícone e favicon serão mantidos.
                   </Typography>
                   <div className={companyStyles.formActions}>
                     <Button
@@ -890,8 +890,8 @@ export function PlatformAppearancePage() {
                   Ícone da plataforma
                 </Typography>
                 <Typography as="p" variant="caption" className={companyStyles.appearanceHelp}>
-                  Usado em áreas compactas, como menu lateral e identificação da aplicação. PNG,
-                  JPEG ou WebP · máximo 2 MB. SVG não é aceito.
+                  Usado no menu lateral recolhido. PNG, JPEG ou WebP · máximo 2 MB. SVG não é
+                  aceito.
                 </Typography>
                 <Typography
                   as="p"
